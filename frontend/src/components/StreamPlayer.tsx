@@ -10,6 +10,7 @@ import {
   setNativePlaybackPauseHandler,
   setNativePlaybackReleaseHandler,
   setSessionPhase,
+  stopFullscreenSession,
   subscribePlaybackOwnership,
   type SessionFailReason,
   type SessionRole,
@@ -135,11 +136,9 @@ export function StreamPlayer({
       // expired - that's the only case where re-downloading the whole
       // playlist to find a new URL can actually help. For an ordinary
       // stall/freeze/live-edge hiccup on a static m3u URL, the channel's URL
-      // hasn't changed, so re-fetching thousands of playlist rows here just
-      // burns the native side's 10s source-refresh timeout for nothing and
-      // forces the recovery ladder to fail out to "stream-error". Answer
-      // those cases immediately with the URL we already have so recovery can
-      // proceed to actually rebuild the player instead of stalling here.
+      // hasn't changed, so re-fetching thousands of playlist rows just burns
+      // the native source-refresh timeout for nothing. Answer those cases
+      // immediately with the URL already in use.
       if (!event.authenticationFailure) {
         const current = currentSourceRef.current;
         resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, null);
@@ -181,8 +180,14 @@ export function StreamPlayer({
   useEffect(() => {
     if (!playbackFocused || !uri || Platform.OS !== "android" || !nativePlaybackAvailable()) {
       generationRef.current = 0;
-      if (role === "preview") void stopNativePreview();
-      else if (!appActive || !isFocused) void stopNativeFullscreen(true);
+      if (role === "preview") {
+        void stopNativePreview();
+      } else if (!appActive) {
+        // Background teardown still releases the decoder, but navigation blur
+        // is owned by stopFullscreenSession at the route/session layer. Do not
+        // race a second direct native release against Guide remount.
+        void stopFullscreenSession();
+      }
       return;
     }
     const generation = beginSession(role);
