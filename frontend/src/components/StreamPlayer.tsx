@@ -52,6 +52,8 @@ setNativePlaybackPauseHandler((role) => { if (role === "fullscreen") pauseNative
 type Props = {
   uri: string;
   channelKey?: string;
+  /** Native playlist classification (for example ts/hls) for extensionless provider URLs. */
+  streamTypeHint?: string | null;
   onStatus: (s: StreamStatus, reason?: SessionFailReason | null) => void;
   style?: StyleProp<ViewStyle>;
   mode?: "preview" | "full";
@@ -68,6 +70,7 @@ type Props = {
 export function StreamPlayer({
   uri: rawUri,
   channelKey,
+  streamTypeHint,
   onStatus,
   style,
   mode = "full",
@@ -94,10 +97,10 @@ export function StreamPlayer({
   onTracksRef.current = onTracksAvailable;
 
   const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri), [rawUri]);
-  const kind = useMemo(() => detectStreamKind(uri), [uri]);
+  const kind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
-  const currentSourceRef = useRef({ uri, headers, contentType });
-  currentSourceRef.current = { uri, headers, contentType };
+  const currentSourceRef = useRef({ uri, headers, contentType, streamTypeHint });
+  currentSourceRef.current = { uri, headers, contentType, streamTypeHint };
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => setAppActive(state !== "background" && state !== "inactive"));
@@ -114,8 +117,10 @@ export function StreamPlayer({
         if (role === "fullscreen") setNativePlaybackStarting(false);
         onStatusRef.current("playing", null);
       } else if (event.state === "loading") {
-        setSessionPhase(role, generation, event.reason === "native-reprepare" ? "recovering" : "preparing", event.reason === "native-reprepare" ? "stream-error" : null);
-        onStatusRef.current("loading", event.reason === "native-reprepare" ? "stream-error" : null);
+        setSessionPhase(role, generation, event.reason === "native-reprepare" ? "recovering" : "preparing", null);
+        // Native reconnects are still loading. Do not pre-label them as terminal
+        // stream errors while Media3 is actively attempting recovery.
+        onStatusRef.current("loading", null);
       } else {
         const reason: SessionFailReason = event.reason === "start-timeout" ? "start-timeout" : "stream-error";
         setSessionPhase(role, generation, "failed", reason);
@@ -145,7 +150,7 @@ export function StreamPlayer({
             return;
           }
           const fresh = parsePipeHeaders(channel.url);
-          const freshType = media3ContentType(detectStreamKind(fresh.uri));
+          const freshType = media3ContentType(detectStreamKind(fresh.uri, channel.stream_type));
           resolveNativePlaybackFreshSource(event.requestId, fresh.uri, fresh.headers, freshType, null);
         })
         .catch((error: unknown) => {
