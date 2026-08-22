@@ -30,8 +30,9 @@ test("native recovery escalates through fresh source and full player rebuild wit
   assert.match(native, /3 -> requestFreshSource\(instance, source\)/);
   assert.match(native, /4 -> fullPlayerAndSourceRecovery\(instance, source\)/);
   assert.match(native, /forceFreshSource && recoveryAttempts < 2/);
+  assert.match(native, /skipBarePrepare && recoveryAttempts < 1/);
   assert.match(native, /isAuthenticationFailure\(error\)/);
-  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(created\)/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(created, skipBarePrepare = true\)/);
   assert.match(native, /HlsMediaSource\.Factory\(dataSource\)\.createMediaSource\(item\)/);
   assert.match(native, /trimNonEssentialForPlaybackRecovery\(\)/);
   assert.match(memory, /fun trimNonEssentialForPlaybackRecovery/);
