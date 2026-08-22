@@ -112,6 +112,7 @@ object NativePlaybackManager {
   private var firstFrameRendered = false
   private var recoveryAttempts = 0
   private var stableSinceMs = 0L
+
   private val startupTimeout = Runnable {
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
