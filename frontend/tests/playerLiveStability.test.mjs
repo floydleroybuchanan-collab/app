@@ -29,7 +29,9 @@ test("Media3 uses the hardened live-TV buffers and bounded native recovery polic
 test("direct MPEG-TS uses an explicit TS extractor without forcing legacy TV codecs async", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)\.createMediaSource\(item\)/);
-  assert.match(native, /DefaultExtractorsFactory\(\)\.setTsExtractorFlags\(DefaultTsPayloadReaderFactory\.FLAG_ALLOW_NON_IDR_KEYFRAMES\)/);
+  assert.match(native, /DefaultExtractorsFactory\(\)\.setTsExtractorFlags\(/);
+  assert.match(native, /DefaultTsPayloadReaderFactory\.FLAG_ALLOW_NON_IDR_KEYFRAMES/);
+  assert.match(native, /DefaultTsPayloadReaderFactory\.FLAG_DETECT_ACCESS_UNITS/);
   assert.match(native, /"transport" -> builder\.setMimeType\(MimeTypes\.VIDEO_MP2T\)/);
   assert.match(native, /setEnableDecoderFallback\(true\)/);
   assert.doesNotMatch(native, /forceEnableMediaCodecAsynchronousQueueing\(\)/);
@@ -70,7 +72,7 @@ test("stale fullscreen native cleanup cannot release a newer Guide preview", asy
 });
 
 test("fullscreen exit returns currently tuned channel to Guide", async () => {
-  const player = await source("app/player.tsx"); assert.match(player, /const currentChannelId = pendingChannelIdRef\.current \|\| channelIdRef\.current/); assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: "All" \}\)/); assert.match(player, /router\.replace\("\/guide" as any\)/);
+  const player = await source("app/player.tsx"); assert.match(player, /const currentChannelId = pendingChannelIdRef\.current \|\| channelIdRef\.current/); assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: "All" \}\)/); assert.match(player, /stopFullscreenSession\(\)\.then\(\(\) => \{/); assert.match(player, /router\.replace\("\/guide" as any\)/);
 });
 
 test("Program Details Watch now preserves Guide return anchor", async () => { const modal = await source("src/components/ProgramModal.tsx"); assert.match(modal, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: pathname\?\.startsWith\("\/guide"\) \}\)/); });
