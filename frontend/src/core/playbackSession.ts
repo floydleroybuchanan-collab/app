@@ -33,9 +33,14 @@ const roles: Record<SessionRole, RoleState> = {
   fullscreen: createRole(),
 };
 let fullscreenReserved = false;
+let fullscreenReservationRevision = 0;
 let ownershipRevision = 0;
 let nativeReleaseHandler: NativeRoleFn | null = null;
 let nativePauseHandler: NativeRoleFn | null = null;
+const roleStopPromises: Record<SessionRole, Promise<void> | null> = {
+  preview: null,
+  fullscreen: null,
+};
 const ownershipListeners = new Set<() => void>();
 
 function publishOwnership(): void {
@@ -43,6 +48,11 @@ function publishOwnership(): void {
   for (const listener of Array.from(ownershipListeners)) {
     try { listener(); } catch {}
   }
+}
+
+function reserveFullscreen(): void {
+  fullscreenReserved = true;
+  fullscreenReservationRevision += 1;
 }
 
 function invokeStops(role: SessionRole): Promise<void> {
@@ -81,7 +91,7 @@ export function getPlaybackOwnershipRevision(): number {
 }
 
 export function isPreviewPlaybackAllowed(): boolean {
-  return !fullscreenReserved && roles.fullscreen.phase === "idle";
+  return !fullscreenReserved && roles.fullscreen.phase === "idle" && !roleStopPromises.fullscreen;
 }
 
 export function beginSession(role: SessionRole): number {
@@ -97,7 +107,7 @@ export function beginSession(role: SessionRole): number {
   }
 
   if (role === "fullscreen") {
-    fullscreenReserved = true;
+    reserveFullscreen();
     const preview = roles.preview;
     void invokeNative(nativeReleaseHandler, "preview");
     void invokeStops("preview");
@@ -155,23 +165,49 @@ export function setSessionPhase(
   return true;
 }
 
-export async function stopSession(
+/**
+ * Resolves only after the current fullscreen Media3/MediaCodec teardown has
+ * completed. New Guide -> fullscreen handoffs wait here so an old fullscreen
+ * release can never overlap the next preview/fullscreen decoder generation.
+ */
+export function waitForFullscreenRelease(): Promise<void> {
+  return roleStopPromises.fullscreen ?? Promise.resolve();
+}
+
+export function stopSession(
   role: SessionRole,
   reason: SessionFailReason = "user-stop",
 ): Promise<void> {
+  const existing = roleStopPromises[role];
+  if (existing) return existing;
+
   const state = roles[role];
   const callbacks = invokeStops(role);
   const nativeRelease = invokeNative(nativeReleaseHandler, role);
   state.generation += 1;
   const stoppedGeneration = state.generation;
+  const reservationRevisionAtStop = fullscreenReservationRevision;
   state.phase = "idle";
   state.reason = reason;
-  await Promise.allSettled([callbacks, nativeRelease]);
-  // Preview must remain ineligible until native fullscreen release has cleared
-  // the Media3 source, surface, audio focus, and decoder. A new fullscreen
-  // generation may have claimed ownership while the previous release settled.
-  if (role === "fullscreen" && state.generation === stoppedGeneration) fullscreenReserved = false;
   publishOwnership();
+
+  let stopPromise: Promise<void>;
+  stopPromise = Promise.allSettled([callbacks, nativeRelease]).then(() => {
+    if (roleStopPromises[role] === stopPromise) roleStopPromises[role] = null;
+    // A later fullscreen reservation must never be cleared by completion of an
+    // older teardown. This is the race that allowed a stale fullscreen stop to
+    // collide with a newly mounted Guide preview/decoder.
+    if (
+      role === "fullscreen" &&
+      state.generation === stoppedGeneration &&
+      fullscreenReservationRevision === reservationRevisionAtStop
+    ) {
+      fullscreenReserved = false;
+    }
+    publishOwnership();
+  });
+  roleStopPromises[role] = stopPromise;
+  return stopPromise;
 }
 
 export function pauseSessionDecoders(role: SessionRole): Promise<void> {
@@ -180,7 +216,7 @@ export function pauseSessionDecoders(role: SessionRole): Promise<void> {
 }
 
 export function stopPreviewForFullscreen(): Promise<void> {
-  fullscreenReserved = true;
+  reserveFullscreen();
   publishOwnership();
   return stopSession("preview", "superseded");
 }
@@ -203,8 +239,10 @@ export function resetPlaybackSessionsForTests(): void {
     roles[role].generation = 0;
     roles[role].phase = "idle";
     roles[role].reason = null;
+    roleStopPromises[role] = null;
   }
   fullscreenReserved = false;
+  fullscreenReservationRevision = 0;
   nativeReleaseHandler = null;
   nativePauseHandler = null;
   publishOwnership();
