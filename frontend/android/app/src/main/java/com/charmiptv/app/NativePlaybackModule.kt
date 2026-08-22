@@ -24,8 +24,8 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
   @ReactMethod fun selectSubtitle(groupIndex: Double, trackIndex: Double) { NativePlaybackManager.selectSubtitle(groupIndex.toInt(), trackIndex.toInt(), null) }
   @ReactMethod fun selectSubtitleLanguage(language: String?) { NativePlaybackManager.selectSubtitle(null, null, language) }
   @ReactMethod fun subtitlesOff() { NativePlaybackManager.selectSubtitle(null, null, null) }
-  @ReactMethod fun stopPreview(promise: Promise) { NativePlaybackManager.stop(NativePlaybackManager.Owner.PREVIEW, releasePlayer = false) { promise.resolve(null) } }
-  @ReactMethod fun stopFullscreen(releasePlayer: Boolean, promise: Promise) { NativePlaybackManager.stop(NativePlaybackManager.Owner.FULLSCREEN, releasePlayer) { promise.resolve(null) } }
+  @ReactMethod fun stopPreview(promise: Promise) { stopOwner(NativePlaybackManager.Owner.PREVIEW, releasePlayer = false, promise) }
+  @ReactMethod fun stopFullscreen(releasePlayer: Boolean, promise: Promise) { stopOwner(NativePlaybackManager.Owner.FULLSCREEN, releasePlayer, promise) }
   @ReactMethod fun getOwner(promise: Promise) { promise.resolve(NativePlaybackManager.currentOwner().name.lowercase()) }
 
   override fun onState(state: String, reason: String?) {
@@ -73,6 +73,26 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
       putDouble("heapMaxBytes", diagnostic.heapMaxBytes.toDouble())
       putMap("epgRam", epg)
     })
+  }
+
+  /**
+   * Owner-specific stops must be checked and executed on Android's main thread.
+   * A delayed fullscreen cleanup is not allowed to destroy a newer Guide preview
+   * (or vice versa), even when releasePlayer=true.
+   */
+  private fun stopOwner(requestedOwner: NativePlaybackManager.Owner, releasePlayer: Boolean, promise: Promise) {
+    val activity = ctx.currentActivity
+    if (activity == null) {
+      promise.resolve(null)
+      return
+    }
+    activity.runOnUiThread {
+      if (NativePlaybackManager.currentOwner() != requestedOwner) {
+        promise.resolve(null)
+        return@runOnUiThread
+      }
+      NativePlaybackManager.stop(requestedOwner, releasePlayer) { promise.resolve(null) }
+    }
   }
 
   private fun attachActivity() { ctx.currentActivity?.let(NativePlaybackManager::installIntoActivity) }
