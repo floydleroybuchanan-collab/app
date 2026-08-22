@@ -64,30 +64,36 @@ jobs:
         run: npm run lint
       - name: Verify Media3 rebuild invariants
         run: |
-          grep -q 'object NativePlaybackManager' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'PlayerView' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'CharmMemoryCoordinator.budgets().lowRam' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'onRenderedFirstFrame' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'HUNG_BUFFER_REPREPARE_MS = 5_000L' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'REBUFFER_BUFFER_MS_LOW_RAM = 5_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MIN_BUFFER_MS_NORMAL = 15_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MAX_BUFFER_MS_NORMAL = 60_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'PLAYBACK_BUFFER_MS_NORMAL = 3_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'readTimeout(20, TimeUnit.SECONDS)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MAX_AUTO_RECOVERIES = 4' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'cancelRecoveryCallbacks' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'performRecovery' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'showDiagnostic' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          PLAYER=android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'object NativePlaybackManager' "$PLAYER"
+          grep -q 'PlayerView' "$PLAYER"
+          grep -q 'CharmMemoryCoordinator.budgets().lowRam' "$PLAYER"
+          grep -q 'onRenderedFirstFrame' "$PLAYER"
+          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' "$PLAYER"
+          grep -q 'HUNG_BUFFER_REPREPARE_MS = 5_000L' "$PLAYER"
+          grep -q 'TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L' "$PLAYER"
+          grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_LOW_RAM = 5_000' "$PLAYER"
+          grep -q 'MIN_BUFFER_MS_NORMAL = 15_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_NORMAL = 60_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_NORMAL = 3_000' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
+          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
+          grep -q 'bufferedPosition > bufferingLastBufferedPositionMs' "$PLAYER"
+          grep -q 'FLAG_ALLOW_NON_IDR_KEYFRAMES' "$PLAYER"
+          grep -q 'FLAG_DETECT_ACCESS_UNITS' "$PLAYER"
+          grep -q 'setEnableDecoderFallback(true)' "$PLAYER"
+          ! grep -q 'forceEnableMediaCodecAsynchronousQueueing' "$PLAYER"
+          ! grep -q 'Toast.makeText\|showDiagnostic' "$PLAYER"
           grep -q 'prepareNativeFullscreen' src/components/StreamPlayer.tsx
           grep -q 'prepareNativePreview' src/components/StreamPlayer.tsx
+          grep -q 'streamTypeHint' src/components/StreamPlayer.tsx
           ! grep -q 'VideoView\|createVideoPlayer\|VLCPlayer\|react-native-vlc-media-player' src/components/StreamPlayer.tsx
       - name: Compile native Kotlin and Java
         env:
@@ -102,8 +108,6 @@ jobs:
             --no-daemon --max-workers=1 --stacktrace
 
   sideload:
-    # Every pushed recovery build on this branch produces an installable APK;
-    # the on-screen Retry remains a manual fallback after native attempts finish.
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_sideload) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -116,7 +120,7 @@ jobs:
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
       EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL }}
       EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL || vars.EXPO_PUBLIC_EPG_URL }}
-      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '6' }}
+      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -141,32 +145,40 @@ jobs:
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Verify native configuration
         run: npm run verify:native-config
+      - name: Unit tests
+        run: npm test
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
         run: npm run lint
       - name: Verify Media3 recovery invariants
         run: |
-          grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'REBUFFER_BUFFER_MS_LOW_RAM = 5_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MIN_BUFFER_MS_NORMAL = 15_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MAX_BUFFER_MS_NORMAL = 60_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'PLAYBACK_BUFFER_MS_NORMAL = 3_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'readTimeout(20, TimeUnit.SECONDS)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'MAX_AUTO_RECOVERIES = 4' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'removeCallbacks(delayedRecovery)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'performRecovery' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'showDiagnostic' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'HttpDataSource.InvalidResponseCodeException' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'HlsMediaSource.Factory' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          PLAYER=android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_LOW_RAM = 5_000' "$PLAYER"
+          grep -q 'MIN_BUFFER_MS_NORMAL = 15_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_NORMAL = 60_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_NORMAL = 3_000' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
+          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
+          grep -q 'TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L' "$PLAYER"
+          grep -q 'bufferedPosition > bufferingLastBufferedPositionMs' "$PLAYER"
+          grep -q 'FLAG_ALLOW_NON_IDR_KEYFRAMES' "$PLAYER"
+          grep -q 'FLAG_DETECT_ACCESS_UNITS' "$PLAYER"
+          grep -q 'setEnableDecoderFallback(true)' "$PLAYER"
+          ! grep -q 'forceEnableMediaCodecAsynchronousQueueing' "$PLAYER"
+          ! grep -q 'Toast.makeText\|showDiagnostic' "$PLAYER"
+          grep -q 'HttpDataSource.InvalidResponseCodeException' "$PLAYER"
+          grep -q 'HlsMediaSource.Factory' "$PLAYER"
           grep -q 'NativePlaybackSourceRefreshRequested' android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt
           grep -q 'refreshPlaybackChannel(event.channelKey)' src/components/StreamPlayer.tsx
+          grep -q 'streamTypeHint' src/components/StreamPlayer.tsx
           ! grep -q 'DEFAULT_STREAM_USER_AGENT\|VLC/3.0.20' src/core/streamPolicy.ts
       - name: Compile native Kotlin and Java
         run: |
@@ -196,7 +208,7 @@ jobs:
           unzip -l "$APK" | grep -q "lib/armeabi-v7a/"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
       - name: Upload sideload APK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: charmiptv-media3-sideload-${{ github.sha }}
           path: frontend/android/app/build/outputs/apk/sideload/app-sideload.apk
