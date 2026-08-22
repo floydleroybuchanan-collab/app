@@ -8,13 +8,17 @@ on:
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
+  pull_request:
+    paths:
+      - ".github/workflows/build-media3-sideload-now.yml"
+      - "frontend/.media3-sideload-build-trigger"
 
 permissions:
   contents: read
   issues: write
 
 concurrency:
-  group: media3-sideload-now
+  group: media3-sideload-now-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -35,6 +39,8 @@ jobs:
     steps:
       - name: Checkout exact branch head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Post build run pointer
         continue-on-error: true
@@ -42,7 +48,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" \
-            -f body="Media3 sideload build STARTED: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | commit=${GITHUB_SHA}"
+            -f body="Media3 sideload build STARTED: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | commit=${{ github.event.pull_request.head.sha || github.sha }}"
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -144,4 +150,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" \
-            -f body="Media3 sideload build FINISHED: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | job=${{ job.status }} | commit=${GITHUB_SHA}"
+            -f body="Media3 sideload build FINISHED: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | job=${{ job.status }} | commit=${{ github.event.pull_request.head.sha || github.sha }}"
