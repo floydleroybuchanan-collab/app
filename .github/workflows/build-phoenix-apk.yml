@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 # Keep queued/running APK jobs alive across retriggers — cancel storms left PRs red
 # even when typecheck/lint would have passed.
@@ -33,7 +34,7 @@ jobs:
     env:
       EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL }}
       EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL || vars.EXPO_PUBLIC_EPG_URL }}
-      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '6' }}
+      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
       CI: "1"
 
@@ -117,3 +118,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Publish APK run pointer to PR 29
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" \
+            -f body="CharmIPTV sideload APK build run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | job=${{ job.status }} | commit=${GITHUB_SHA}"
