@@ -26,7 +26,14 @@ test("Guide blur cleanup cannot clobber a newer TV remote owner", async () => {
 test("ErrorBoundary crash recovery waits for native decoder release before remount", async () => {
   const player = await source("app/player.tsx");
   const reset = player.match(/onReset=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] || "";
-  assert.match(reset, /void stopAllPlaybackSessions\("crashed"\)\.catch\(\(\) => undefined\)\.then\(\(\) => \{/);
+  assert.match(reset, /void stopAllPlaybackSessions\("crashed"\)\.then\(\(\) => \{/);
   assert.match(reset, /if \(generation === generationRef\.current\) setRetryToken/);
   assert.doesNotMatch(reset, /decoderArmed|DECODER_RESTART_SETTLE_MS|setTimeout/);
+});
+
+test("fullscreen exit serializes decoder teardown before Guide remount", async () => {
+  const player = await source("app/player.tsx");
+  assert.match(player, /const exitInFlightRef = useRef\(false\)/);
+  assert.match(player, /if \(exitInFlightRef\.current\) return/);
+  assert.match(player, /void stopFullscreenSession\(\)\.then\(\(\) => \{[\s\S]*?router\.replace\("\/guide" as any\)/);
 });
