@@ -323,7 +323,10 @@ object NativePlaybackManager {
       true
     } catch (t: Throwable) {
       recordDiagnostic("recovery-$recoveryAttempts-failed:${t.javaClass.simpleName}", lastPlaybackError, instance)
-      if (recoveryAttempts < MAX_AUTO_RECOVERIES) recoverOnce(instance) else finishWithError("stream-error", instance)
+      if (recoveryAttempts < MAX_AUTO_RECOVERIES) recoverOnce(instance) else {
+        finishWithError("stream-error", instance)
+        false
+      }
     }
   }
   private fun requestFreshSource(instance: ExoPlayer, source: PlaybackSource?) {
