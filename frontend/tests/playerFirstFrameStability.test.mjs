@@ -32,19 +32,28 @@ test("Media3 keeps bounded native startup and four-attempt post-playback recover
   assert.match(native, /STABLE_REARM_MS = 30_000L/);
 });
 
+test("Media3 TS watchdog requires no progress before recovery", async () => {
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  assert.match(native, /val madeProgress = bufferedPosition > bufferingLastBufferedPositionMs \|\| position > bufferingLastPositionMs/);
+  assert.match(native, /if \(madeProgress\) \{[\s\S]*?bufferingSinceMs = nowMs/);
+  assert.match(native, /val recoveryThresholdMs = if \(transport\) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS/);
+  assert.match(native, /recoverOnce\(instance, skipBarePrepare = transport\)/);
+});
+
 test("Media3 recovers bounded terminal live reads before exposing Retry", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /readTimeout\(20, TimeUnit\.SECONDS\)/);
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.match(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /recordDiagnostic\("player-error", error, created\)/);
-  assert.match(playerError, /recoverOnce\(created, forceFreshSource = isAuthenticationFailure\(error\)\)/);
+  assert.match(playerError, /forceFreshSource = isAuthenticationFailure\(error\)/);
+  assert.match(playerError, /skipBarePrepare = activeSource\?\.sourceType == "transport"/);
   assert.doesNotMatch(playerError, /publishState\("error"/);
   assert.doesNotMatch(native, /Toast\.makeText|showDiagnostic\(/);
   assert.match(native, /private fun recoverOnce\(instance: ExoPlayer, forceFreshSource: Boolean = false, skipBarePrepare: Boolean = false\): Boolean/);
   assert.match(native, /private fun performRecovery\(instance: ExoPlayer\)/);
   assert.match(native, /private fun rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
-  assert.match(native, /publishState\("loading", "native-reprepare"\)[\s\S]*?instance\.prepare\(\)/);
+  assert.match(native, /publishState\("loading", "native-reprepare"\)/);
   assert.match(native, /removeCallbacks\(delayedRecovery\)/);
 });
