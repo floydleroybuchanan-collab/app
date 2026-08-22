@@ -9,7 +9,6 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -28,6 +27,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import okhttp3.ConnectionPool
@@ -61,9 +63,8 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
-  // Keep the approved live-TV tuning exactly as it is. Only the recovery
-  // escalation below changes, so the new work cannot quietly undo the buffer
-  // and timeout gains already observed on constrained TV devices.
+  // Keep the approved live-TV tuning exactly as it is. The transport-specific
+  // watchdog below changes only recovery timing, never the requested buffers.
   private const val MIN_BUFFER_MS_LOW_RAM = 10_000
   private const val MAX_BUFFER_MS_LOW_RAM = 30_000
   private const val PLAYBACK_BUFFER_MS_LOW_RAM = 2_500
@@ -75,6 +76,10 @@ object NativePlaybackManager {
   private const val REBUFFER_BUFFER_MS_NORMAL = 5_000
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
   private const val HUNG_BUFFER_REPREPARE_MS = 5_000L
+  // Direct HTTP MPEG-TS is a continuous response. Do not destroy/reprepare that
+  // response before the already-approved 20s OkHttp read timeout has had a
+  // chance to detect a genuinely dead socket and let Media3's load policy react.
+  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L
   private const val STABLE_REARM_MS = 30_000L
   private const val MAX_AUTO_RECOVERIES = 4
   private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
@@ -112,6 +117,9 @@ object NativePlaybackManager {
   private var firstFrameRendered = false
   private var recoveryAttempts = 0
   private var stableSinceMs = 0L
+  private var bufferingSinceMs = 0L
+  private var bufferingLastBufferedPositionMs = 0L
+  private var bufferingLastPositionMs = 0L
 
   private val startupTimeout = Runnable {
     val instance = player ?: return@Runnable
@@ -122,7 +130,32 @@ object NativePlaybackManager {
   private val bufferingWatchdog = Runnable {
     val instance = player ?: return@Runnable
     if (!firstFrameRendered || instance.playbackState != Player.STATE_BUFFERING) return@Runnable
-    showDiagnostic("buffer-watchdog")
+
+    val nowMs = System.currentTimeMillis()
+    val bufferedPosition = instance.bufferedPosition
+    val position = instance.currentPosition
+    val madeProgress = bufferedPosition > bufferingLastBufferedPositionMs || position > bufferingLastPositionMs
+    bufferingLastBufferedPositionMs = bufferedPosition
+    bufferingLastPositionMs = position
+
+    // A TS socket may continue delivering/parsing data while playback is still
+    // below the rebuffer threshold. Forward progress means the stream is alive;
+    // restart the no-progress clock instead of destroying a healthy connection.
+    if (madeProgress) {
+      bufferingSinceMs = nowMs
+      recordDiagnostic("buffer-progress", lastPlaybackError, instance)
+      main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
+      return@Runnable
+    }
+
+    if (bufferingSinceMs == 0L) bufferingSinceMs = nowMs
+    val hungForMs = nowMs - bufferingSinceMs
+    val recoveryThresholdMs = if (activeSource?.sourceType == "transport") TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS
+    if (hungForMs < recoveryThresholdMs) {
+      main.postDelayed(bufferingWatchdog, minOf(HUNG_BUFFER_REPREPARE_MS, recoveryThresholdMs - hungForMs))
+      return@Runnable
+    }
+
     recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
     recoverOnce(instance)
   }
@@ -164,6 +197,7 @@ object NativePlaybackManager {
     firstFrameRendered = false
     recoveryAttempts = 0
     stableSinceMs = 0L
+    resetBufferingWatchdogState()
     markPlaybackStarting("channel-start")
     if (!attachPlayerView(requestedOwner)) { finishWithError("surface-unavailable", instance); return@runOnMain }
     playerView?.visibility = View.VISIBLE
@@ -218,7 +252,9 @@ object NativePlaybackManager {
     instance.trackSelectionParameters = builder.build()
   }
   fun stop(requestedOwner: Owner, releasePlayer: Boolean = false, onStopped: (() -> Unit)? = null) = runOnMain {
-    if (owner != requestedOwner && !releasePlayer) { onStopped?.invoke(); return@runOnMain }
+    // Owner-specific cleanup must be idempotent. A stale fullscreen release must
+    // never tear down a newer Guide preview just because releasePlayer=true.
+    if (owner != requestedOwner) { onStopped?.invoke(); return@runOnMain }
     stopInternal(releasePlayer); onStopped?.invoke()
   }
   fun suspendForBackground() = runOnMain { stopInternal(releasePlayer = true) }
@@ -230,19 +266,25 @@ object NativePlaybackManager {
   fun currentOwner(): Owner = owner
 
   private fun publishState(state: String, reason: String? = null) {
+    // Diagnostics belong in logcat/the diagnostic event channel, not Android
+    // Toasts that repeatedly cover live TV during automatic recovery.
     listener?.onState(state, reason)
-    if (!reason.isNullOrBlank()) showDiagnostic("$state: $reason")
   }
-  private fun showDiagnostic(message: String) { activity?.let { Toast.makeText(it, "Media3 $message", Toast.LENGTH_LONG).show() } }
   private fun stopInternal(releasePlayer: Boolean) {
     cancelRecoveryCallbacks()
     val instance = player
     try { instance?.stop() } catch (_: Throwable) {}
     try { instance?.clearMediaItems() } catch (_: Throwable) {}
     owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0; stableSinceMs = 0L
+    resetBufferingWatchdogState()
     CharmMemoryCoordinator.setPlaybackStarting(false)
     playerView?.visibility = View.GONE
-    if (releasePlayer) { try { playerView?.player = null } catch (_: Throwable) {}; try { instance?.release() } catch (_: Throwable) {}; player = null }
+    if (releasePlayer) {
+      try { playerView?.player = null } catch (_: Throwable) {}
+      try { (playerView?.parent as? ViewGroup)?.removeView(playerView) } catch (_: Throwable) {}
+      try { instance?.release() } catch (_: Throwable) {}
+      player = null
+    }
   }
 
   private fun ensurePlayer(): ExoPlayer {
@@ -253,23 +295,42 @@ object NativePlaybackManager {
       if (lowRam) MIN_BUFFER_MS_LOW_RAM else MIN_BUFFER_MS_NORMAL, if (lowRam) MAX_BUFFER_MS_LOW_RAM else MAX_BUFFER_MS_NORMAL,
       if (lowRam) PLAYBACK_BUFFER_MS_LOW_RAM else PLAYBACK_BUFFER_MS_NORMAL, if (lowRam) REBUFFER_BUFFER_MS_LOW_RAM else REBUFFER_BUFFER_MS_NORMAL,
     ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(true).build()
-    val renderers = DefaultRenderersFactory(context).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON).setEnableDecoderFallback(true).forceEnableMediaCodecAsynchronousQueueing()
+    // Media3 already selects async MediaCodec queueing by default on Android 12+
+    // and synchronous adapters on older devices. Do not force async on every
+    // Android 6+ TV/box vendor decoder; keep fallback enabled instead.
+    val renderers = DefaultRenderersFactory(context)
+      .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+      .setEnableDecoderFallback(true)
     val video = playerView ?: PlayerView(context).apply { useController = false; setShutterBackgroundColor(Color.BLACK); setKeepContentOnPlayerReset(false); resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT; visibility = View.GONE }.also { playerView = it }
     return ExoPlayer.Builder(context, renderers).setLoadControl(loadControl).setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap()))).build().also { created ->
       player = created; video.player = created
       created.addListener(object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
           when (playbackState) {
-            Player.STATE_BUFFERING -> { if (firstFrameRendered) { rearmRecoveryAfterStablePlayback(); main.removeCallbacks(bufferingWatchdog); main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS) }; publishState("loading", null) }
-            Player.STATE_READY -> { main.removeCallbacks(bufferingWatchdog); if (firstFrameRendered && stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis(); publishTracks(created.currentTracks) }
+            Player.STATE_BUFFERING -> {
+              if (firstFrameRendered) {
+                rearmRecoveryAfterStablePlayback()
+                bufferingSinceMs = System.currentTimeMillis()
+                bufferingLastBufferedPositionMs = created.bufferedPosition
+                bufferingLastPositionMs = created.currentPosition
+                main.removeCallbacks(bufferingWatchdog)
+                main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
+              }
+              publishState("loading", null)
+            }
+            Player.STATE_READY -> {
+              main.removeCallbacks(bufferingWatchdog)
+              resetBufferingWatchdogState()
+              if (firstFrameRendered && stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis()
+              publishTracks(created.currentTracks)
+            }
             // A provider ending a live response should still recover, but a
             // bare instance.prepare() (recovery stage 1) doesn't guarantee a
             // fresh network fetch of the manifest - it can just replay the
             // same already-ended playlist state, which is why this used to
             // fail identically every time after the same fixed duration.
-            // Jump straight to a real MediaSource rebuild (a genuine new HTTP
-            // GET of the .m3u8) so it actually has a chance to reconnect to
-            // the live edge instead of re-hitting the same end.
+            // Jump straight to a real MediaSource rebuild so it actually has a
+            // chance to reconnect rather than re-hitting the same end state.
             Player.STATE_ENDED -> {
               recordDiagnostic("stream-ended", lastPlaybackError, created)
               rearmRecoveryAfterStablePlayback()
@@ -280,10 +341,11 @@ object NativePlaybackManager {
         }
         override fun onRenderedFirstFrame() {
           firstFrameRendered = true; stableSinceMs = System.currentTimeMillis(); main.removeCallbacks(startupTimeout); main.removeCallbacks(bufferingWatchdog); main.removeCallbacks(delayedRecovery)
+          resetBufferingWatchdogState()
           CharmMemoryCoordinator.setPlaybackStarting(false); publishState("playing", null)
         }
         override fun onPlayerError(error: PlaybackException) {
-          lastPlaybackError = error; main.removeCallbacks(startupTimeout); main.removeCallbacks(bufferingWatchdog); showDiagnostic("player-error: ${error.errorCodeName}")
+          lastPlaybackError = error; main.removeCallbacks(startupTimeout); main.removeCallbacks(bufferingWatchdog); resetBufferingWatchdogState()
           recordDiagnostic("player-error", error, created); rearmRecoveryAfterStablePlayback()
           // HTTP 401/403 means the player needs a new provider token/session URL,
           // not another prepare() on the exact URL the server rejected.
@@ -353,6 +415,7 @@ object NativePlaybackManager {
     try { playerView?.player = null } catch (_: Throwable) {}
     try { instance.release() } catch (_: Throwable) {}
     player = null; firstFrameRendered = false
+    resetBufferingWatchdogState()
     val rebuilt = ensurePlayer()
     if (!attachPlayerView(owner)) throw IllegalStateException("Playback surface is unavailable")
     rebuildMediaSource(rebuilt, source, "full-player-source-recovery")
@@ -360,11 +423,11 @@ object NativePlaybackManager {
   private fun rebuildMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
     markPlaybackStarting(event)
     // New MediaItem + source preserve per-stream User-Agent/Referer/Origin/
-    // Authorization/Cookie headers. HLS always gets a new HlsMediaSource at a
-    // reset position, which makes catastrophic recovery rejoin the live edge.
+    // Authorization/Cookie headers. HLS always gets a new HlsMediaSource; a
+    // direct TS stream gets an explicit progressive MPEG-TS extractor path.
     val item = buildMediaItem(source)
     val mediaSource = buildMediaSource(item, source)
-    firstFrameRendered = false; main.removeCallbacks(bufferingWatchdog)
+    firstFrameRendered = false; main.removeCallbacks(bufferingWatchdog); resetBufferingWatchdogState()
     try { instance.stop() } catch (_: Throwable) {}
     try { instance.clearMediaItems() } catch (_: Throwable) {}
     instance.setMediaSource(mediaSource, true); instance.prepare(); instance.playWhenReady = true; armStartupTimeout()
@@ -372,13 +435,24 @@ object NativePlaybackManager {
   }
   private fun buildMediaItem(source: PlaybackSource): MediaItem {
     val builder = MediaItem.Builder().setUri(Uri.parse(source.uri))
-    when (source.contentType?.lowercase()) { "hls", "m3u8", MimeTypes.APPLICATION_M3U8 -> builder.setMimeType(MimeTypes.APPLICATION_M3U8); "dash", "mpd", MimeTypes.APPLICATION_MPD -> builder.setMimeType(MimeTypes.APPLICATION_MPD); "transport", "ts", MimeTypes.VIDEO_MP2T -> builder.setMimeType(MimeTypes.VIDEO_MP2T) }
+    when (source.sourceType) {
+      "hls" -> builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+      "dash" -> builder.setMimeType(MimeTypes.APPLICATION_MPD)
+      "transport" -> builder.setMimeType(MimeTypes.VIDEO_MP2T)
+    }
     return builder.build()
   }
   private fun buildMediaSource(item: MediaItem, source: PlaybackSource): MediaSource {
     val dataSource = createDataSourceFactory(source.headers)
-    return if (source.sourceType == "hls") HlsMediaSource.Factory(dataSource).createMediaSource(item) else DefaultMediaSourceFactory(dataSource).createMediaSource(item)
+    return when (source.sourceType) {
+      "hls" -> HlsMediaSource.Factory(dataSource).createMediaSource(item)
+      "transport" -> ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
+      else -> DefaultMediaSourceFactory(dataSource).createMediaSource(item)
+    }
   }
+  private fun createLiveTsExtractorsFactory(): DefaultExtractorsFactory =
+    DefaultExtractorsFactory().setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
+
   private fun createDataSourceFactory(headers: Map<String, String>): DefaultDataSource.Factory {
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
     return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient).setDefaultRequestProperties(headers))
@@ -386,7 +460,10 @@ object NativePlaybackManager {
   private fun finishWithError(reason: String, instance: ExoPlayer? = player) {
     cancelRecoveryCallbacks(); recordDiagnostic("definitive-$reason", lastPlaybackError, instance); CharmMemoryCoordinator.setPlaybackStarting(false); publishState("error", reason)
   }
-  private fun cancelRecoveryCallbacks() { main.removeCallbacks(startupTimeout); main.removeCallbacks(bufferingWatchdog); main.removeCallbacks(delayedRecovery); main.removeCallbacks(sourceRefreshTimeout); pendingSourceRefresh = null }
+  private fun cancelRecoveryCallbacks() {
+    main.removeCallbacks(startupTimeout); main.removeCallbacks(bufferingWatchdog); main.removeCallbacks(delayedRecovery); main.removeCallbacks(sourceRefreshTimeout); pendingSourceRefresh = null; resetBufferingWatchdogState()
+  }
+  private fun resetBufferingWatchdogState() { bufferingSinceMs = 0L; bufferingLastBufferedPositionMs = 0L; bufferingLastPositionMs = 0L }
   private fun markPlaybackStarting(reason: String) { CharmMemoryCoordinator.setPlaybackStarting(true); Log.d(TAG, "playback-starting: $reason") }
   private fun isAuthenticationFailure(error: PlaybackException?): Boolean = findHttpResponseCode(error) in setOf(401, 403)
   private fun findHttpResponseCode(error: Throwable?): Int? {
@@ -402,7 +479,8 @@ object NativePlaybackManager {
   private fun playbackStateName(instance: ExoPlayer?): String = when (instance?.playbackState) { Player.STATE_IDLE -> "idle"; Player.STATE_BUFFERING -> "buffering"; Player.STATE_READY -> "ready"; Player.STATE_ENDED -> "ended"; else -> "none" }
   private fun sourceTypeFor(uri: String, contentType: String?): String {
     val hint = contentType?.lowercase().orEmpty(); val lowerUri = uri.lowercase()
-    return when { hint == "hls" || hint == "m3u8" || hint == MimeTypes.APPLICATION_M3U8 || lowerUri.contains(".m3u8") || lowerUri.contains("format=m3u8") -> "hls"; hint == "dash" || hint == "mpd" || hint == MimeTypes.APPLICATION_MPD || lowerUri.contains(".mpd") || lowerUri.contains("format=mpd") -> "dash"; hint == "transport" || hint == "ts" || hint == MimeTypes.VIDEO_MP2T || lowerUri.contains(".ts") -> "transport"; else -> "progressive" }
+    val transportUri = Regex("\\.(?:ts|m2ts)(?:$|[?#])").containsMatchIn(lowerUri) || lowerUri.contains("mpegts") || lowerUri.contains("mpeg-ts") || Regex("[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)").containsMatchIn(lowerUri)
+    return when { hint == "hls" || hint == "m3u8" || hint == MimeTypes.APPLICATION_M3U8 || lowerUri.contains(".m3u8") || lowerUri.contains("format=m3u8") -> "hls"; hint == "dash" || hint == "mpd" || hint == MimeTypes.APPLICATION_MPD || lowerUri.contains(".mpd") || lowerUri.contains("format=mpd") -> "dash"; hint == "transport" || hint == "ts" || hint == MimeTypes.VIDEO_MP2T || transportUri -> "transport"; else -> "progressive" }
   }
   private fun recordDiagnostic(event: String, error: PlaybackException?, instance: ExoPlayer?) {
     val runtime = Runtime.getRuntime(); val bufferedPosition = instance?.bufferedPosition ?: 0L; val position = instance?.currentPosition ?: 0L
