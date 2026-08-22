@@ -39,7 +39,7 @@ test("Media3 recovers bounded terminal live reads before exposing Retry", async 
   assert.match(playerError, /showDiagnostic\("player-error: \$\{error\.errorCodeName\}"\)/);
   assert.match(playerError, /recoverOnce\(created, forceFreshSource = isAuthenticationFailure\(error\)\)/);
   assert.doesNotMatch(playerError, /publishState\("error"/);
-  assert.match(native, /private fun recoverOnce\(instance: ExoPlayer, forceFreshSource: Boolean = false\): Boolean/);
+  assert.match(native, /private fun recoverOnce\(instance: ExoPlayer, forceFreshSource: Boolean = false, skipBarePrepare: Boolean = false\): Boolean/);
   assert.match(native, /private fun performRecovery\(instance: ExoPlayer\)/);
   assert.match(native, /private fun rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
