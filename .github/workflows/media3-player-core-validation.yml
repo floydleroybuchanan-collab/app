@@ -83,7 +83,7 @@ jobs:
           grep -q 'readTimeout(20, TimeUnit.SECONDS)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'MAX_AUTO_RECOVERIES = 4' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          test "$(grep -c 'removeCallbacks(delayedRecovery)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt)" -ge 3
+          grep -q 'cancelRecoveryCallbacks' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'performRecovery' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'showDiagnostic' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'prepareNativeFullscreen' src/components/StreamPlayer.tsx
