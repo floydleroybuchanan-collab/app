@@ -23,7 +23,16 @@ test("channel changes build a fresh Media3 source on the same native ExoPlayer",
 
 test("Media3 uses the hardened live-TV buffers and bounded native recovery policy", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 10_000/); assert.match(native, /MAX_BUFFER_MS_LOW_RAM = 30_000/); assert.match(native, /PLAYBACK_BUFFER_MS_LOW_RAM = 2_500/); assert.match(native, /REBUFFER_BUFFER_MS_LOW_RAM = 5_000/); assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/); assert.match(native, /MIN_BUFFER_MS_NORMAL = 15_000/); assert.match(native, /MAX_BUFFER_MS_NORMAL = 60_000/); assert.match(native, /PLAYBACK_BUFFER_MS_NORMAL = 3_000/); assert.match(native, /REBUFFER_BUFFER_MS_NORMAL = 5_000/); assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/); assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/); assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 5_000L/); assert.match(native, /MAX_AUTO_RECOVERIES = 4/); assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/); assert.match(native, /readTimeout\(20, TimeUnit\.SECONDS\)/); assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/); assert.match(native, /instance\.prepare\(\)/);
+  assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 10_000/); assert.match(native, /MAX_BUFFER_MS_LOW_RAM = 30_000/); assert.match(native, /PLAYBACK_BUFFER_MS_LOW_RAM = 2_500/); assert.match(native, /REBUFFER_BUFFER_MS_LOW_RAM = 5_000/); assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/); assert.match(native, /MIN_BUFFER_MS_NORMAL = 15_000/); assert.match(native, /MAX_BUFFER_MS_NORMAL = 60_000/); assert.match(native, /PLAYBACK_BUFFER_MS_NORMAL = 3_000/); assert.match(native, /REBUFFER_BUFFER_MS_NORMAL = 5_000/); assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/); assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/); assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 5_000L/); assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L/); assert.match(native, /MAX_AUTO_RECOVERIES = 4/); assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/); assert.match(native, /readTimeout\(20, TimeUnit\.SECONDS\)/); assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/); assert.match(native, /instance\.prepare\(\)/);
+});
+
+test("direct MPEG-TS uses an explicit TS extractor without forcing legacy TV codecs async", async () => {
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  assert.match(native, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)\.createMediaSource\(item\)/);
+  assert.match(native, /DefaultExtractorsFactory\(\)\.setTsExtractorFlags\(DefaultTsPayloadReaderFactory\.FLAG_ALLOW_NON_IDR_KEYFRAMES\)/);
+  assert.match(native, /"transport" -> builder\.setMimeType\(MimeTypes\.VIDEO_MP2T\)/);
+  assert.match(native, /setEnableDecoderFallback\(true\)/);
+  assert.doesNotMatch(native, /forceEnableMediaCodecAsynchronousQueueing\(\)/);
 });
 
 test("first frame is the stable-playing gate and cancels delayed recovery", async () => {
@@ -51,6 +60,13 @@ test("audio and subtitles hot-apply through TrackSelectionParameters", async () 
 test("Guide preview cannot own playback while fullscreen owns native player", async () => {
   const [stream, native, guide] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("app/(tabs)/guide.tsx")]);
   assert.match(stream, /isPreviewPlaybackAllowed\(\)/); assert.match(native, /requestedOwner == Owner\.PREVIEW && owner == Owner\.FULLSCREEN/); assert.doesNotMatch(guide, /noteStreamFailure|clearStreamFailure/);
+});
+
+test("stale fullscreen native cleanup cannot release a newer Guide preview", async () => {
+  const [native, module] = await Promise.all([source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt")]);
+  assert.match(native, /if \(owner != requestedOwner\) \{ onStopped\?\.invoke\(\); return@runOnMain }/);
+  assert.match(module, /if \(NativePlaybackManager\.currentOwner\(\) != requestedOwner\)/);
+  assert.match(native, /\(playerView\?\.parent as\? ViewGroup\)\?\.removeView\(playerView\)/);
 });
 
 test("fullscreen exit returns currently tuned channel to Guide", async () => {
