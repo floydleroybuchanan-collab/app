@@ -32,7 +32,12 @@ export function detectStreamKind(uri: string): StreamKind {
     lower.includes("/dash/") ||
     lower.includes("manifest.mpd")
   ) return "dash";
-  if (/\.(?:ts|m2ts)(?:$|[?#])/.test(lower) || lower.includes("mpegts")) return "transport";
+  if (
+    /\.(?:ts|m2ts)(?:$|[?#])/.test(lower) ||
+    lower.includes("mpegts") ||
+    lower.includes("mpeg-ts") ||
+    /[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)/.test(lower)
+  ) return "transport";
   if (/\.(?:mp4|m4v|m4s|mov|webm|mkv|avi|cmfv|cmfa)(?:$|[?#])/.test(lower)) return "progressive";
   return "unknown";
 }
@@ -68,8 +73,9 @@ export function preferredEngine(_kind: StreamKind): Engine {
 }
 
 /** Media3 contentType hint for the native ExoPlayer source factory. */
-export function media3ContentType(kind: StreamKind): "hls" | "dash" | "progressive" {
+export function media3ContentType(kind: StreamKind): "hls" | "dash" | "transport" | "progressive" {
   if (kind === "dash") return "dash";
   if (kind === "hls") return "hls";
+  if (kind === "transport") return "transport";
   return "progressive";
 }
