@@ -115,7 +115,7 @@ object NativePlaybackManager {
     recordDiagnostic("start-timeout", lastPlaybackError, instance)
     recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
   }
-  private val bufferingWatchdog = Runnable {
+  private val bufferingWatchdog: Runnable = Runnable {
     val instance = player ?: return@Runnable
     if (!firstFrameRendered || instance.playbackState != Player.STATE_BUFFERING) return@Runnable
 
