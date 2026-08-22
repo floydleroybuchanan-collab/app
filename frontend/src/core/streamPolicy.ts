@@ -11,7 +11,27 @@ export type StreamKind =
   | "webrtc"
   | "unknown";
 
-export function detectStreamKind(uri: string): StreamKind {
+function kindFromHint(raw: string | null | undefined): StreamKind | null {
+  const hint = String(raw || "").trim().toLowerCase();
+  if (!hint || hint === "unknown") return null;
+  if (hint === "hls" || hint === "m3u8" || hint.includes("application/x-mpegurl") || hint.includes("application/vnd.apple.mpegurl")) return "hls";
+  if (hint === "dash" || hint === "mpd" || hint.includes("application/dash+xml")) return "dash";
+  if (hint === "ts" || hint === "m2ts" || hint === "transport" || hint === "mpegts" || hint === "mpeg-ts" || hint.includes("video/mp2t")) return "transport";
+  if (hint === "rtsp") return "rtsp";
+  if (hint === "rtmp" || hint === "rtmps") return "rtmp";
+  if (hint === "srt" || hint === "rist") return "srt";
+  if (hint === "webrtc") return "webrtc";
+  if (hint === "progressive" || hint === "mp4") return "progressive";
+  return null;
+}
+
+/**
+ * Resolve the real live transport. URL markers win when present, then the
+ * playlist/native parser hint fills in extensionless provider URLs. This keeps
+ * direct MPEG-TS on the explicit TS extractor/watchdog path instead of silently
+ * downgrading it to generic progressive playback.
+ */
+export function detectStreamKind(uri: string, streamTypeHint?: string | null): StreamKind {
   const lower = uri.toLowerCase();
   const protocol = lower.split(":", 1)[0];
   if (protocol === "rtsp") return "rtsp";
@@ -38,6 +58,10 @@ export function detectStreamKind(uri: string): StreamKind {
     lower.includes("mpeg-ts") ||
     /[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)/.test(lower)
   ) return "transport";
+
+  const hinted = kindFromHint(streamTypeHint);
+  if (hinted) return hinted;
+
   if (/\.(?:mp4|m4v|m4s|mov|webm|mkv|avi|cmfv|cmfa)(?:$|[?#])/.test(lower)) return "progressive";
   return "unknown";
 }
