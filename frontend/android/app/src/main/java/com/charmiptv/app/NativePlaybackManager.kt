@@ -102,13 +102,6 @@ object NativePlaybackManager {
   private var bufferingLastBufferedPositionMs = 0L
   private var bufferingLastPositionMs = 0L
 
-  private val stableRecoveryRearm = Runnable {
-    val instance = player ?: return@Runnable
-    if (owner == Owner.NONE || !firstFrameRendered || instance.playbackState != Player.STATE_READY) return@Runnable
-    recoveryAttempts = 0
-    stableSinceMs = 0L
-    recordDiagnostic("recovery-budget-rearmed", lastPlaybackError, instance)
-  }
   private val startupTimeout = Runnable {
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
@@ -301,7 +294,6 @@ object NativePlaybackManager {
           override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
               Player.STATE_BUFFERING -> {
-                main.removeCallbacks(stableRecoveryRearm)
                 if (firstFrameRendered) {
                   rearmRecoveryAfterStablePlayback()
                   bufferingSinceMs = System.currentTimeMillis()
@@ -319,7 +311,6 @@ object NativePlaybackManager {
                 publishTracks(created.currentTracks)
               }
               Player.STATE_ENDED -> {
-                main.removeCallbacks(stableRecoveryRearm)
                 recordDiagnostic("stream-ended", lastPlaybackError, created)
                 rearmRecoveryAfterStablePlayback()
                 recoverOnce(created, skipBarePrepare = true)
@@ -333,8 +324,8 @@ object NativePlaybackManager {
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
             main.removeCallbacks(delayedRecovery)
-            main.removeCallbacks(stableRecoveryRearm)
-            main.postDelayed(stableRecoveryRearm, STABLE_REARM_MS)
+            // Healthy playback no longer schedules a 30-second main-thread callback.
+            // The recovery budget is rearmed lazily only if a real stall/error occurs.
             resetBufferingWatchdogState()
             CharmMemoryCoordinator.setPlaybackStarting(false)
             publishState("playing", null)
@@ -343,7 +334,6 @@ object NativePlaybackManager {
             lastPlaybackError = error
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
-            main.removeCallbacks(stableRecoveryRearm)
             resetBufferingWatchdogState()
             recordDiagnostic("player-error", error, created)
             rearmRecoveryAfterStablePlayback()
@@ -433,7 +423,6 @@ object NativePlaybackManager {
     val mediaSource = buildMediaSource(item, source)
     firstFrameRendered = false
     main.removeCallbacks(bufferingWatchdog)
-    main.removeCallbacks(stableRecoveryRearm)
     resetBufferingWatchdogState()
     try { instance.stop() } catch (_: Throwable) {}
     try { instance.clearMediaItems() } catch (_: Throwable) {}
@@ -481,7 +470,6 @@ object NativePlaybackManager {
     main.removeCallbacks(bufferingWatchdog)
     main.removeCallbacks(delayedRecovery)
     main.removeCallbacks(sourceRefreshTimeout)
-    main.removeCallbacks(stableRecoveryRearm)
     pendingSourceRefresh = null
     resetBufferingWatchdogState()
   }
