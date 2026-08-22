@@ -91,14 +91,15 @@ export function getPlaybackOwnershipRevision(): number {
 }
 
 export function isPreviewPlaybackAllowed(): boolean {
-  return !fullscreenReserved && roles.fullscreen.phase === "idle" && !roleStopPromises.fullscreen;
+  return !fullscreenReserved &&
+    roles.fullscreen.phase === "idle" &&
+    !roleStopPromises.fullscreen &&
+    !roleStopPromises.preview;
 }
 
 export function beginSession(role: SessionRole): number {
   if (role === "preview" && !isPreviewPlaybackAllowed()) {
     const state = roles.preview;
-    void invokeNative(nativeReleaseHandler, "preview");
-    void invokeStops("preview");
     state.generation += 1;
     state.phase = "idle";
     state.reason = "superseded";
@@ -109,7 +110,9 @@ export function beginSession(role: SessionRole): number {
   if (role === "fullscreen") {
     reserveFullscreen();
     const preview = roles.preview;
-    void invokeNative(nativeReleaseHandler, "preview");
+    // Fullscreen entry must wait on stopPreviewForFullscreen before this point.
+    // If a caller violates that handoff, never start a second native release in
+    // parallel; invalidate only the JS callbacks and let the existing stop own it.
     void invokeStops("preview");
     preview.generation += 1;
     preview.phase = "idle";
@@ -165,6 +168,11 @@ export function setSessionPhase(
   return true;
 }
 
+/** Resolves after any currently active preview decoder/native stop finishes. */
+export function waitForPreviewRelease(): Promise<void> {
+  return roleStopPromises.preview ?? Promise.resolve();
+}
+
 /**
  * Resolves only after the current fullscreen Media3/MediaCodec teardown has
  * completed. New Guide -> fullscreen handoffs wait here so an old fullscreen
@@ -215,10 +223,14 @@ export function pauseSessionDecoders(role: SessionRole): Promise<void> {
   return invokeStops(role);
 }
 
+export function stopPreviewSession(reason: SessionFailReason = "superseded"): Promise<void> {
+  return stopSession("preview", reason);
+}
+
 export function stopPreviewForFullscreen(): Promise<void> {
   reserveFullscreen();
   publishOwnership();
-  return stopSession("preview", "superseded");
+  return stopPreviewSession("superseded");
 }
 
 export function stopFullscreenSession(reason: SessionFailReason = "user-stop"): Promise<void> {
@@ -226,7 +238,7 @@ export function stopFullscreenSession(reason: SessionFailReason = "user-stop"): 
 }
 
 export function stopAllPlaybackSessions(reason: SessionFailReason = "user-stop"): Promise<void> {
-  return Promise.allSettled([stopSession("preview", reason), stopSession("fullscreen", reason)]).then(() => undefined);
+  return Promise.allSettled([stopPreviewSession(reason), stopFullscreenSession(reason)]).then(() => undefined);
 }
 
 export function forceStopAllStreams(): void {
