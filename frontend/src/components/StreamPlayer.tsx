@@ -94,6 +94,8 @@ export function StreamPlayer({
   const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri), [rawUri]);
   const kind = useMemo(() => detectStreamKind(uri), [uri]);
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
+  const currentSourceRef = useRef({ uri, headers, contentType });
+  currentSourceRef.current = { uri, headers, contentType };
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => setAppActive(state !== "background" && state !== "inactive"));
@@ -129,9 +131,20 @@ export function StreamPlayer({
         resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
         return;
       }
-      // The native manager asks only after its bounded recovery stages demand a
-      // new provider URL. The source layer reloads the logical channel, then
-      // sends its latest URI and its own pipe headers back to Media3.
+      // Only a real 401/403 means the provider issued a token/session that
+      // expired - that's the only case where re-downloading the whole
+      // playlist to find a new URL can actually help. For an ordinary
+      // stall/freeze/live-edge hiccup on a static m3u URL, the channel's URL
+      // hasn't changed, so re-fetching thousands of playlist rows here just
+      // burns the native side's 10s source-refresh timeout for nothing and
+      // forces the recovery ladder to fail out to "stream-error". Answer
+      // those cases immediately with the URL we already have so recovery can
+      // proceed to actually rebuild the player instead of stalling here.
+      if (!event.authenticationFailure) {
+        const current = currentSourceRef.current;
+        resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, null);
+        return;
+      }
       void refreshPlaybackChannel(event.channelKey)
         .then((channel) => {
           if (!isSessionCurrent(role, generation) || !channel?.url) {
