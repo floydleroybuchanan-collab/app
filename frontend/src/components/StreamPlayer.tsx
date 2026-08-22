@@ -11,6 +11,7 @@ import {
   setNativePlaybackReleaseHandler,
   setSessionPhase,
   stopFullscreenSession,
+  stopPreviewSession,
   subscribePlaybackOwnership,
   type SessionFailReason,
   type SessionRole,
@@ -132,13 +133,6 @@ export function StreamPlayer({
         resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
         return;
       }
-      // Only a real 401/403 means the provider issued a token/session that
-      // expired - that's the only case where re-downloading the whole
-      // playlist to find a new URL can actually help. For an ordinary
-      // stall/freeze/live-edge hiccup on a static m3u URL, the channel's URL
-      // hasn't changed, so re-fetching thousands of playlist rows just burns
-      // the native source-refresh timeout for nothing. Answer those cases
-      // immediately with the URL already in use.
       if (!event.authenticationFailure) {
         const current = currentSourceRef.current;
         resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, null);
@@ -177,11 +171,20 @@ export function StreamPlayer({
     });
   }, [audioTrack, channelKey, owner, textTrack]);
 
+  // Preview components are intentionally mounted/unmounted as Guide focus,
+  // groups, drawers and memory pressure change. Their native decoder must be
+  // released when this adapter disappears; otherwise invisible MediaCodec and
+  // network work survives behind the Guide. The session registry blocks the next
+  // preview generation until this release promise completes.
+  useEffect(() => () => {
+    if (role === "preview") void stopPreviewSession("superseded");
+  }, [role]);
+
   useEffect(() => {
     if (!playbackFocused || !uri || Platform.OS !== "android" || !nativePlaybackAvailable()) {
       generationRef.current = 0;
       if (role === "preview") {
-        void stopNativePreview();
+        void stopPreviewSession("superseded");
       } else if (!appActive) {
         // Background teardown still releases the decoder, but navigation blur
         // is owned by stopFullscreenSession at the route/session layer. Do not
