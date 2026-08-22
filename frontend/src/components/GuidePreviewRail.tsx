@@ -36,7 +36,6 @@ type Props = {
   onFavorite: () => void;
   onOpenReminders: () => void;
   onHideToggle: () => void;
-  /** Opens the app drawer and lands focus on the top drawer row. */
   onOpenDrawer: () => void;
   onActionsFocusChange: (focused: boolean) => void;
   focusRequestToken: number;
@@ -126,6 +125,7 @@ export function GuidePreviewRail({
                   key={`guide-preview-${channel.id}-${previewEpoch}`}
                   uri={channel.url}
                   channelKey={channel.id}
+                  streamTypeHint={channel.stream_type}
                   onStatus={onPreviewStatus}
                   mode="preview"
                   sessionRole="preview"
@@ -181,56 +181,23 @@ export function GuidePreviewRail({
             <Ionicons name="play" size={12} color="#fff" />
             <Text style={styles.watchText}>Play</Text>
           </Pressable>
-          <Pressable
-            ref={favoriteFocus.setRef}
-            disabled={!channel}
-            onPress={onFavorite}
-            onFocus={() => { onActionsFocusChange(true); favoriteFocus.onFocus(); }}
-            style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
-            testID="guide-preview-favorite"
-          >
+          <Pressable ref={favoriteFocus.setRef} disabled={!channel} onPress={onFavorite} onFocus={() => { onActionsFocusChange(true); favoriteFocus.onFocus(); }} style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]} testID="guide-preview-favorite">
             <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={12} color={tvColors.purpleSoft} />
             <Text style={styles.secondaryText}>Favorite</Text>
           </Pressable>
-          <Pressable
-            ref={remindersFocus.setRef}
-            onPress={onOpenReminders}
-            onFocus={() => { onActionsFocusChange(true); remindersFocus.onFocus(); }}
-            style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
-            testID="guide-preview-remind"
-          >
+          <Pressable ref={remindersFocus.setRef} onPress={onOpenReminders} onFocus={() => { onActionsFocusChange(true); remindersFocus.onFocus(); }} style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]} testID="guide-preview-remind">
             <Ionicons name="notifications-outline" size={12} color={tvColors.purpleSoft} />
             <Text style={styles.secondaryText}>Reminders</Text>
           </Pressable>
-          <Pressable
-            ref={drawerFocus.setRef}
-            onPress={onOpenDrawer}
-            onFocus={() => { onActionsFocusChange(true); drawerFocus.onFocus(); }}
-            style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
-            testID="guide-preview-drawer"
-          >
+          <Pressable ref={drawerFocus.setRef} onPress={onOpenDrawer} onFocus={() => { onActionsFocusChange(true); drawerFocus.onFocus(); }} style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]} testID="guide-preview-drawer">
             <Ionicons name="menu-outline" size={12} color={tvColors.purpleSoft} />
             <Text style={styles.secondaryText}>Drawer</Text>
           </Pressable>
-          <Pressable
-            ref={muteFocus.setRef}
-            disabled={hidePreview}
-            onPress={onToggleMute}
-            onFocus={() => { onActionsFocusChange(true); muteFocus.onFocus(); }}
-            style={({ focused }: any) => [styles.secondaryButton, hidePreview && styles.disabledButton, focused && styles.focused]}
-            testID="guide-preview-mute"
-          >
+          <Pressable ref={muteFocus.setRef} disabled={hidePreview} onPress={onToggleMute} onFocus={() => { onActionsFocusChange(true); muteFocus.onFocus(); }} style={({ focused }: any) => [styles.secondaryButton, hidePreview && styles.disabledButton, focused && styles.focused]} testID="guide-preview-mute">
             <Ionicons name={muted ? "volume-mute-outline" : "volume-medium-outline"} size={10} color={tvColors.purpleSoft} />
             <Text style={styles.secondaryText}>{muted ? "Unmute" : "Mute"}</Text>
           </Pressable>
-          <Pressable
-            ref={hideFocus.setRef}
-            nextFocusDown={guideFocusTag || undefined}
-            onPress={onHideToggle}
-            onFocus={() => { onActionsFocusChange(true); hideFocus.onFocus(); }}
-            style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
-            testID="guide-preview-hide"
-          >
+          <Pressable ref={hideFocus.setRef} nextFocusDown={guideFocusTag || undefined} onPress={onHideToggle} onFocus={() => { onActionsFocusChange(true); hideFocus.onFocus(); }} style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]} testID="guide-preview-hide">
             <Ionicons name={hidePreview ? "eye-outline" : "eye-off-outline"} size={12} color={tvColors.purpleSoft} />
             <Text style={styles.secondaryText}>{hidePreview ? "Show" : "Hide"}</Text>
           </Pressable>
@@ -238,117 +205,34 @@ export function GuidePreviewRail({
       </FocusGuide>
 
       <View style={styles.copy}>
-        <Text numberOfLines={1} style={styles.channelName}>
-          {channel
-            ? `${showChannelNumbers && channelNumber ? `${channelNumber}  ` : ""}${channel.name}`
-            : "Select a channel"}
-        </Text>
-        <Text numberOfLines={2} style={styles.programTitle}>
-          {current?.title || "No program information"}
-        </Text>
+        <Text numberOfLines={1} style={styles.channelName}>{channel ? `${showChannelNumbers && channelNumber ? `${channelNumber}  ` : ""}${channel.name}` : "Select a channel"}</Text>
+        <Text numberOfLines={2} style={styles.programTitle}>{current?.title || "No program information"}</Text>
         <View style={styles.nowNextRow}>
-          <Text numberOfLines={1} style={styles.timeText}>
-            {current
-              ? `${fmtTime(current.start)}${current.stop ? ` – ${fmtTime(current.stop)}` : ""}`
-              : "Guide information will appear here"}
-          </Text>
+          <Text numberOfLines={1} style={styles.timeText}>{current ? `${fmtTime(current.start)}${current.stop ? ` – ${fmtTime(current.stop)}` : ""}` : "Guide information will appear here"}</Text>
           {endsIn != null ? <Text style={styles.endsIn}>{endsIn}m left</Text> : null}
         </View>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-        </View>
-        {next?.title ? (
-          <Text numberOfLines={1} style={styles.nextTitle}>
-            Next · {next.title}
-          </Text>
-        ) : null}
+        <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
+        {next?.title ? <Text numberOfLines={1} style={styles.nextTitle}>Next · {next.title}</Text> : null}
         <Text style={styles.descLabel}>ABOUT</Text>
-        <Text accessibilityRole="text" accessibilityLabel={about} style={styles.description} numberOfLines={5}>
-          {about}
-        </Text>
+        <Text accessibilityRole="text" accessibilityLabel={about} style={styles.description} numberOfLines={5}>{about}</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    height: 174,
-    flexShrink: 0,
-    flexDirection: "row",
-    alignItems: "stretch",
-    backgroundColor: tvColors.panel,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: tvColors.line,
-    overflow: "hidden",
-  },
-  previewColumn: {
-    width: 292,
-    flexShrink: 0,
-    padding: 7,
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: tvColors.line,
-  },
-  preview: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    maxHeight: 158,
-    flexShrink: 0,
-    backgroundColor: "#05050B",
-    overflow: "hidden",
-    borderRadius: 5,
-  },
-  fallback: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: tvColors.purpleDeep,
-    gap: 6,
-    paddingHorizontal: 8,
-  },
+  panel: { height: 174, flexShrink: 0, flexDirection: "row", alignItems: "stretch", backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, overflow: "hidden" },
+  previewColumn: { width: 292, flexShrink: 0, padding: 7, justifyContent: "center", borderRightWidth: 1, borderRightColor: tvColors.line },
+  preview: { width: "100%", aspectRatio: 16 / 9, maxHeight: 158, flexShrink: 0, backgroundColor: "#05050B", overflow: "hidden", borderRadius: 5 },
+  fallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep, gap: 6, paddingHorizontal: 8 },
   fallbackHint: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, textAlign: "center" },
-  liveTag: {
-    position: "absolute",
-    left: 6,
-    bottom: 6,
-    backgroundColor: "rgba(124,58,237,0.92)",
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
+  liveTag: { position: "absolute", left: 6, bottom: 6, backgroundColor: "rgba(124,58,237,0.92)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
   liveTagText: { color: "#fff", fontFamily: fonts.bold, fontSize: 6 },
-  codecChip: {
-    position: "absolute",
-    right: 6,
-    top: 6,
-    maxWidth: "70%",
-    backgroundColor: "rgba(0,0,0,0.72)",
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
+  codecChip: { position: "absolute", right: 6, top: 6, maxWidth: "70%", backgroundColor: "rgba(0,0,0,0.72)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
   codecText: { color: "#fff", fontFamily: fonts.medium, fontSize: 7 },
-  hiddenPreview: {
-    flex: 1,
-    minHeight: 80,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    borderWidth: 2,
-    borderColor: "transparent",
-    borderRadius: 5,
-  },
+  hiddenPreview: { flex: 1, minHeight: 80, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 2, borderColor: "transparent", borderRadius: 5 },
   hiddenPreviewText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
-  actionGrid: {
-    width: 138,
-    flexShrink: 0,
-    padding: 7,
-    borderRightWidth: 1,
-    borderRightColor: tvColors.line,
-  },
+  actionGrid: { width: 138, flexShrink: 0, padding: 7, borderRightWidth: 1, borderRightColor: tvColors.line },
   actionColumn: { flex: 1, minWidth: 0, gap: 3 },
   copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 9 },
   channelName: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 10 },
@@ -356,56 +240,15 @@ const styles = StyleSheet.create({
   nowNextRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
   timeText: { flex: 1, minWidth: 0, color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
   endsIn: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 9 },
-  progressTrack: {
-    height: 4,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 2,
-    overflow: "hidden",
-    marginTop: 7,
-  },
+  progressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 2, overflow: "hidden", marginTop: 7 },
   progressFill: { height: 4, backgroundColor: tvColors.purpleBright },
   nextTitle: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9, marginTop: 5 },
-  descLabel: {
-    color: tvColors.purpleSoft,
-    fontFamily: fonts.semibold,
-    fontSize: 7.5,
-    letterSpacing: 0.7,
-    marginTop: 7,
-    marginBottom: 3,
-  },
+  descLabel: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 0.7, marginTop: 7, marginBottom: 3 },
   description: { color: "rgba(255,255,255,0.86)", fontFamily: fonts.regular, fontSize: 9.5, lineHeight: 13 },
-  watchButton: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    backgroundColor: tvColors.panelRaised,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: "transparent",
-    paddingHorizontal: 4,
-  },
+  watchButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 4 },
   watchText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 7.5 },
-  secondaryButton: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    backgroundColor: tvColors.panelRaised,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: "transparent",
-    paddingHorizontal: 3,
-  },
+  secondaryButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 3 },
   secondaryText: { color: "#fff", fontFamily: fonts.medium, fontSize: 7.2 },
   disabledButton: { opacity: 0.45 },
   focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
 });
-
-
