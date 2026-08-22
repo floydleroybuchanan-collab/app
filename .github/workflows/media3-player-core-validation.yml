@@ -102,7 +102,9 @@ jobs:
             --no-daemon --max-workers=1 --stacktrace
 
   sideload:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_sideload) }}
+    # Every pushed recovery build on this branch produces an installable APK;
+    # the on-screen Retry remains a manual fallback after native attempts finish.
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_sideload) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -161,6 +163,11 @@ jobs:
           grep -q 'removeCallbacks(delayedRecovery)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'performRecovery' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'showDiagnostic' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'HttpDataSource.InvalidResponseCodeException' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'HlsMediaSource.Factory' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'NativePlaybackSourceRefreshRequested' android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt
+          grep -q 'refreshPlaybackChannel(event.channelKey)' src/components/StreamPlayer.tsx
+          ! grep -q 'DEFAULT_STREAM_USER_AGENT\|VLC/3.0.20' src/core/streamPolicy.ts
       - name: Compile native Kotlin and Java
         run: |
           chmod +x android/gradlew

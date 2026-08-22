@@ -11,10 +11,6 @@ export type StreamKind =
   | "webrtc"
   | "unknown";
 
-// Keep the provider-compatible UA independent from the decoder choice. Some IPTV
-// servers key behavior off this historical UA even though playback is Media3-only.
-export const DEFAULT_STREAM_USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20";
-
 export function detectStreamKind(uri: string): StreamKind {
   const lower = uri.toLowerCase();
   const protocol = lower.split(":", 1)[0];
@@ -47,9 +43,11 @@ function safeDecode(value: string): string {
 
 export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record<string, string> } {
   const pipeIndex = rawUri.indexOf("|");
-  if (pipeIndex < 0) return { uri: rawUri, headers: { "User-Agent": DEFAULT_STREAM_USER_AGENT } };
+  if (pipeIndex < 0) return { uri: rawUri, headers: {} };
   const uri = rawUri.slice(0, pipeIndex);
-  const headers: Record<string, string> = { "User-Agent": DEFAULT_STREAM_USER_AGENT };
+  // Preserve only headers supplied by the stream/provider. A universal fake
+  // player UA can solve one provider while breaking another.
+  const headers: Record<string, string> = {};
   for (const pair of rawUri.slice(pipeIndex + 1).split("&")) {
     const equals = pair.indexOf("=");
     if (equals <= 0) continue;

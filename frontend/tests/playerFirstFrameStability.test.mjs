@@ -37,12 +37,12 @@ test("Media3 recovers bounded terminal live reads before exposing Retry", async 
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.match(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /showDiagnostic\("player-error: \$\{error\.errorCodeName\}"\)/);
-  assert.match(playerError, /recoverOnce\(created\)/);
+  assert.match(playerError, /recoverOnce\(created, forceFreshSource = isAuthenticationFailure\(error\)\)/);
   assert.doesNotMatch(playerError, /publishState\("error"/);
-  assert.match(native, /private fun recoverOnce\(instance: ExoPlayer\): Boolean/);
+  assert.match(native, /private fun recoverOnce\(instance: ExoPlayer, forceFreshSource: Boolean = false\): Boolean/);
   assert.match(native, /private fun performRecovery\(instance: ExoPlayer\)/);
   assert.match(native, /private fun rearmRecoveryAfterStablePlayback\(\)/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?publishState\("error", "stream-error"\)/);
+  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
   assert.match(native, /publishState\("loading", "native-reprepare"\)[\s\S]*?instance\.prepare\(\)/);
   assert.match(native, /removeCallbacks\(delayedRecovery\)/);
 });

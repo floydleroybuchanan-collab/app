@@ -12,12 +12,12 @@ test("live TV core is one Activity-owned Media3 path", async () => {
   assert.match(native, /object NativePlaybackManager/); assert.match(native, /private var player: ExoPlayer\? = null/); assert.match(native, /private var owner: Owner = Owner\.NONE/); assert.match(native, /if \(requestedOwner == Owner\.PREVIEW && owner == Owner\.FULLSCREEN\) return@runOnMain/); assert.match(bridge, /NativeModules\.NativePlayback/);
 });
 
-test("channel changes replace MediaItem on the same native ExoPlayer", async () => {
+test("channel changes build a fresh Media3 source on the same native ExoPlayer", async () => {
   const [player, native] = await Promise.all([
     source("app/player.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
   ]);
-  assert.match(native, /player\?\.let \{ return it \}/); assert.match(native, /instance\.clearMediaItems\(\)/); assert.match(native, /instance\.setMediaItem\(itemBuilder\.build\(\), true\)/); assert.match(native, /instance\.prepare\(\)/);
+  assert.match(native, /player\?\.let \{ return it \}/); assert.match(native, /instance\.clearMediaItems\(\)/); assert.match(native, /instance\.setMediaSource\(mediaSource, true\)/); assert.match(native, /instance\.prepare\(\)/);
   assert.doesNotMatch(player, /decoderArmed|pauseSessionDecoders|CHANNEL_ZAP_SETTLE_MS|armDecoderAfterSettle/);
 });
 

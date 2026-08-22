@@ -28,6 +28,14 @@ internal object CharmGlideConfig {
           InternalCacheDiskCacheFactory(context, "charm-channel-logos", diskBytes)
         ),
     )
+    // Decoder recovery may ask the coordinator to shed only nonessential
+    // memory. Clearing Glide's memory cache leaves its disk cache and mounted
+    // views alone, so guide/logo persistence is not disturbed.
+    CharmMemoryCoordinator.register { level, _ ->
+      if (level == CharmTrimLevel.MODERATE || level == CharmTrimLevel.CRITICAL) {
+        runCatching { Glide.get(context).clearMemory() }
+      }
+    }
   }
 
   private const val MIN_LOGO_MEMORY_BYTES = 4L * 1024L * 1024L

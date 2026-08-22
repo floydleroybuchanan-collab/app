@@ -12,8 +12,9 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
   override fun getName(): String = "NativePlayback"
   init { NativePlaybackManager.setListener(this) }
 
-  @ReactMethod fun prepareFullscreen(uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, uri, readableMapToStringMap(headers), contentType) }
-  @ReactMethod fun preparePreview(uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, uri, readableMapToStringMap(headers), contentType) }
+  @ReactMethod fun prepareFullscreen(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
+  @ReactMethod fun preparePreview(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
+  @ReactMethod fun resolveFreshSource(requestId: Double, uri: String?, headers: ReadableMap?, contentType: String?, failureReason: String?) { NativePlaybackManager.provideFreshSource(requestId.toLong(), uri, readableMapToStringMap(headers), contentType, failureReason) }
   @ReactMethod fun setResizeMode(mode: String?) { NativePlaybackManager.setResizeMode(mode) }
   @ReactMethod fun pause() { NativePlaybackManager.pause() }
   @ReactMethod fun resume() { NativePlaybackManager.resume() }
@@ -36,6 +37,42 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
     val audioArray = Arguments.createArray(); audio.forEach { track -> audioArray.pushMap(Arguments.createMap().apply { putInt("groupIndex", track.groupIndex); putInt("trackIndex", track.trackIndex); putString("id", track.id); putString("name", track.label); putString("language", track.language); putString("mimeType", track.mimeType); putBoolean("isSupported", track.supported) }) }
     val textArray = Arguments.createArray(); subtitles.forEach { track -> textArray.pushMap(Arguments.createMap().apply { putInt("groupIndex", track.groupIndex); putInt("trackIndex", track.trackIndex); putString("id", track.id); putString("name", track.label); putString("language", track.language) }) }
     emit("NativePlaybackTracks", Arguments.createMap().apply { putString("owner", NativePlaybackManager.currentOwner().name.lowercase()); putArray("audio", audioArray); putArray("text", textArray) })
+  }
+
+  override fun onSourceRefreshRequested(request: NativePlaybackManager.SourceRefreshRequest) {
+    emit("NativePlaybackSourceRefreshRequested", Arguments.createMap().apply {
+      putDouble("requestId", request.requestId.toDouble())
+      putString("owner", request.owner.name.lowercase())
+      putString("channelKey", request.channelKey)
+      putInt("recoveryAttempt", request.recoveryAttempt)
+      putString("reason", request.reason)
+      putBoolean("authenticationFailure", request.authenticationFailure)
+    })
+  }
+
+  override fun onDiagnostic(diagnostic: NativePlaybackManager.PlaybackDiagnostic) {
+    val epg = Arguments.createMap()
+    diagnostic.epgRamStats.forEach { (key, value) -> epg.putDouble(key, value.toDouble()) }
+    emit("NativePlaybackDiagnostics", Arguments.createMap().apply {
+      putString("owner", NativePlaybackManager.currentOwner().name.lowercase())
+      putString("event", diagnostic.event)
+      if (diagnostic.media3ErrorCode != null) putInt("media3ErrorCode", diagnostic.media3ErrorCode) else putNull("media3ErrorCode")
+      if (diagnostic.media3ErrorCodeName != null) putString("media3ErrorCodeName", diagnostic.media3ErrorCodeName) else putNull("media3ErrorCodeName")
+      if (diagnostic.httpResponseCode != null) putInt("httpResponseCode", diagnostic.httpResponseCode) else putNull("httpResponseCode")
+      if (diagnostic.exceptionType != null) putString("exceptionType", diagnostic.exceptionType) else putNull("exceptionType")
+      putString("causeChain", diagnostic.causeChain.joinToString(" <- "))
+      putString("playbackState", diagnostic.playbackState)
+      putDouble("bufferedDurationMs", diagnostic.bufferedDurationMs.toDouble())
+      putDouble("bufferedPositionMs", diagnostic.bufferedPositionMs.toDouble())
+      putDouble("positionMs", diagnostic.positionMs.toDouble())
+      if (diagnostic.contentType != null) putString("contentType", diagnostic.contentType) else putNull("contentType")
+      if (diagnostic.sourceType != null) putString("sourceType", diagnostic.sourceType) else putNull("sourceType")
+      putInt("recoveryAttempt", diagnostic.recoveryAttempt)
+      putBoolean("lowRam", diagnostic.lowRam)
+      putDouble("heapUsedBytes", diagnostic.heapUsedBytes.toDouble())
+      putDouble("heapMaxBytes", diagnostic.heapMaxBytes.toDouble())
+      putMap("epgRam", epg)
+    })
   }
 
   private fun attachActivity() { ctx.currentActivity?.let(NativePlaybackManager::installIntoActivity) }

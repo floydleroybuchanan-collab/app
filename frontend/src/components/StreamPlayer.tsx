@@ -16,11 +16,13 @@ import {
 } from "@/src/core/playbackSession";
 import {
   addNativePlaybackStateListener,
+  addNativePlaybackSourceRefreshListener,
   addNativePlaybackTracksListener,
   nativePlaybackAvailable,
   pauseNativePlayback,
   prepareNativeFullscreen,
   prepareNativePreview,
+  resolveNativePlaybackFreshSource,
   resumeNativePlayback,
   selectNativeAudio,
   selectNativeSubtitle,
@@ -33,6 +35,7 @@ import {
 import { getPreferredAudioLanguage, getRememberedChannelAudioTrack } from "@/src/core/audioTrackPreferences";
 import type { PlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import { setNativePlaybackStarting } from "@/src/utils/tvRemote";
+import { refreshPlaybackChannel } from "@/src/source";
 
 export type StreamStatus = "loading" | "playing" | "error";
 export type PlayerScaleMode = "fit" | "zoom" | "stretch";
@@ -119,6 +122,34 @@ export function StreamPlayer({
   }, [owner, role]);
 
   useEffect(() => {
+    return addNativePlaybackSourceRefreshListener((event) => {
+      if (event.owner !== owner || !channelKey || event.channelKey !== channelKey) return;
+      const generation = generationRef.current;
+      if (!generation || !isSessionCurrent(role, generation)) {
+        resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
+        return;
+      }
+      // The native manager asks only after its bounded recovery stages demand a
+      // new provider URL. The source layer reloads the logical channel, then
+      // sends its latest URI and its own pipe headers back to Media3.
+      void refreshPlaybackChannel(event.channelKey)
+        .then((channel) => {
+          if (!isSessionCurrent(role, generation) || !channel?.url) {
+            resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "fresh-channel-unavailable");
+            return;
+          }
+          const fresh = parsePipeHeaders(channel.url);
+          const freshType = media3ContentType(detectStreamKind(fresh.uri));
+          resolveNativePlaybackFreshSource(event.requestId, fresh.uri, fresh.headers, freshType, null);
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.name : "source-refresh-failed";
+          resolveNativePlaybackFreshSource(event.requestId, null, {}, null, message);
+        });
+    });
+  }, [channelKey, owner, role]);
+
+  useEffect(() => {
     return addNativePlaybackTracksListener((event) => {
       if (event.owner !== owner) return;
       tracksRef.current = { audio: event.audio, text: event.text };
@@ -147,10 +178,10 @@ export function StreamPlayer({
     setSessionPhase(role, generation, "preparing");
     if (role === "fullscreen") setNativePlaybackStarting(true);
     onStatusRef.current("loading", null);
-    if (role === "preview") prepareNativePreview(uri, headers, contentType);
-    else prepareNativeFullscreen(uri, headers, contentType);
+    if (role === "preview") prepareNativePreview(channelKey ?? "", uri, headers, contentType);
+    else prepareNativeFullscreen(channelKey ?? "", uri, headers, contentType);
     return () => { if (generationRef.current === generation) generationRef.current = 0; };
-  }, [appActive, contentType, headers, isFocused, playbackFocused, role, uri]);
+  }, [appActive, channelKey, contentType, headers, isFocused, playbackFocused, role, uri]);
 
   useEffect(() => { setNativePlaybackMuted(muted); }, [muted]);
   useEffect(() => { if (paused) pauseNativePlayback(); else if (playbackFocused) resumeNativePlayback(); }, [paused, playbackFocused]);

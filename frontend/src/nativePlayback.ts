@@ -13,9 +13,40 @@ export type NativePlaybackTrack = {
   isSupported?: boolean;
 };
 
+export type NativePlaybackSourceRefreshRequest = {
+  requestId: number;
+  owner: NativePlaybackOwner;
+  channelKey: string;
+  recoveryAttempt: number;
+  reason: string;
+  authenticationFailure: boolean;
+};
+
+export type NativePlaybackDiagnostic = {
+  owner: NativePlaybackOwner;
+  event: string;
+  media3ErrorCode?: number | null;
+  media3ErrorCodeName?: string | null;
+  httpResponseCode?: number | null;
+  exceptionType?: string | null;
+  causeChain: string;
+  playbackState: string;
+  bufferedDurationMs: number;
+  bufferedPositionMs: number;
+  positionMs: number;
+  contentType?: string | null;
+  sourceType?: string | null;
+  recoveryAttempt: number;
+  lowRam: boolean;
+  heapUsedBytes: number;
+  heapMaxBytes: number;
+  epgRam: Record<string, number>;
+};
+
 type NativePlaybackModuleShape = {
-  prepareFullscreen(uri: string, headers: Record<string, string>, contentType?: string | null): void;
-  preparePreview(uri: string, headers: Record<string, string>, contentType?: string | null): void;
+  prepareFullscreen(channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void;
+  preparePreview(channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void;
+  resolveFreshSource(requestId: number, uri?: string | null, headers?: Record<string, string>, contentType?: string | null, failureReason?: string | null): void;
   setResizeMode(mode?: string | null): void;
   pause(): void;
   resume(): void;
@@ -37,8 +68,9 @@ const native: NativePlaybackModuleShape | null =
 const emitter = native ? new NativeEventEmitter(NativeModules.NativePlayback) : null;
 
 export function nativePlaybackAvailable(): boolean { return !!native; }
-export function prepareNativeFullscreen(uri: string, headers: Record<string, string>, contentType?: string | null): void { native?.prepareFullscreen(uri, headers, contentType ?? null); }
-export function prepareNativePreview(uri: string, headers: Record<string, string>, contentType?: string | null): void { native?.preparePreview(uri, headers, contentType ?? null); }
+export function prepareNativeFullscreen(channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void { native?.prepareFullscreen(channelKey, uri, headers, contentType ?? null); }
+export function prepareNativePreview(channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void { native?.preparePreview(channelKey, uri, headers, contentType ?? null); }
+export function resolveNativePlaybackFreshSource(requestId: number, uri?: string | null, headers: Record<string, string> = {}, contentType?: string | null, failureReason?: string | null): void { native?.resolveFreshSource(requestId, uri ?? null, headers, contentType ?? null, failureReason ?? null); }
 export function setNativePlaybackResizeMode(mode: "fit" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
 export function pauseNativePlayback(): void { native?.pause(); }
 export function resumeNativePlayback(): void { native?.resume(); }
@@ -55,3 +87,5 @@ export async function stopNativeFullscreen(releasePlayer = true): Promise<void> 
 export async function getNativePlaybackOwner(): Promise<NativePlaybackOwner> { return (await native?.getOwner()) ?? "none"; }
 export function addNativePlaybackStateListener(listener: (event: { owner: NativePlaybackOwner; state: NativePlaybackState; reason?: string | null }) => void): () => void { const sub = emitter?.addListener("NativePlaybackState", listener); return () => sub?.remove(); }
 export function addNativePlaybackTracksListener(listener: (event: { owner: NativePlaybackOwner; audio: NativePlaybackTrack[]; text: NativePlaybackTrack[] }) => void): () => void { const sub = emitter?.addListener("NativePlaybackTracks", listener); return () => sub?.remove(); }
+export function addNativePlaybackSourceRefreshListener(listener: (event: NativePlaybackSourceRefreshRequest) => void): () => void { const sub = emitter?.addListener("NativePlaybackSourceRefreshRequested", listener); return () => sub?.remove(); }
+export function addNativePlaybackDiagnosticListener(listener: (event: NativePlaybackDiagnostic) => void): () => void { const sub = emitter?.addListener("NativePlaybackDiagnostics", listener); return () => sub?.remove(); }

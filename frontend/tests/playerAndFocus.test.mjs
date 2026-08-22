@@ -168,7 +168,7 @@ test("Media3 recovery is one bounded native post-first-frame watchdog", async ()
   assert.match(native, /if \(!firstFrameRendered \|\| instance\.playbackState != Player\.STATE_BUFFERING\) return@Runnable/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
   assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?publishState\("error", "stream-error"\)/);
+  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
   assert.match(native, /recoveryAttempts \+= 1[\s\S]*?performRecovery\(instance\)/);
   assert.match(native, /main\.postDelayed\(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS\)/);
   assert.match(native, /override fun onRenderedFirstFrame\(\)[\s\S]*?firstFrameRendered = true[\s\S]*?removeCallbacks\(delayedRecovery\)[\s\S]*?publishState\("playing", null\)/);

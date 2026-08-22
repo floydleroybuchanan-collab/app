@@ -3,6 +3,7 @@ import "./favorites.test.mjs";
 import "./playerAndFocus.test.mjs";
 import "./playerLiveStability.test.mjs";
 import "./playerFirstFrameStability.test.mjs";
+import "./playbackReliabilityRecovery.test.mjs";
 import "./playerPreferenceHydration.test.mjs";
 import "./playerOwnershipRecovery.test.mjs";
 import "./guideLiveClock.test.mjs";
