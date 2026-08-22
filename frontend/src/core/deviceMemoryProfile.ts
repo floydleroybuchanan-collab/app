@@ -15,10 +15,6 @@ export function shouldUseLowRamTuning(profile: DeviceMemoryProfile | null): bool
  * Device memory is a hard safety boundary, separate from the user's preview/
  * responsiveness preference. Store may request Normal/Max Preview timings, but
  * a low-RAM stick must never regain the larger programme caches afterward.
- *
- * Lazy imports avoid introducing a startup cycle between Store → memory profile
- * → source. On Android these resolve the existing platform modules and only
- * adjust their row-count caps; SQLite remains authoritative and untouched.
  */
 function enforceLowRamCacheCaps(profile: DeviceMemoryProfile | null): void {
   const lowRam = shouldUseLowRamTuning(profile);
@@ -29,8 +25,8 @@ function enforceLowRamCacheCaps(profile: DeviceMemoryProfile | null): void {
     import("@/src/source"),
   ])
     .then(([guidePrograms, source]) => {
-      guidePrograms.setGuideProgramRowLimit(320);
-      source.setProgrammeWindowCacheLimit(320);
+      guidePrograms.setGuideProgramRowLimit(192);
+      source.setProgrammeWindowCacheLimit(192);
     })
     .catch(() => undefined)
     .finally(() => {
