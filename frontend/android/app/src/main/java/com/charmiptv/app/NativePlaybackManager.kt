@@ -80,7 +80,11 @@ object NativePlaybackManager {
   private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
   private const val FULLSCREEN_START_TIMEOUT_MS = 12_000L
   private const val PREVIEW_START_TIMEOUT_MS = 8_000L
-  private const val SOURCE_REFRESH_TIMEOUT_MS = 10_000L
+  // Large m3u/EPG IPTV playlists (thousands of rows) can legitimately take
+  // longer than 10s to re-fetch/parse on a TV box. This timeout only matters
+  // now for the genuine auth/token-refresh case (see StreamPlayer.tsx), so
+  // give it real headroom instead of forcing a false failure mid-fetch.
+  private const val SOURCE_REFRESH_TIMEOUT_MS = 20_000L
   private const val TAG = "CharmMedia3"
 
   // Preserve ordinary OkHttp pooling/persistence. No universal heartbeat and
@@ -108,7 +112,6 @@ object NativePlaybackManager {
   private var firstFrameRendered = false
   private var recoveryAttempts = 0
   private var stableSinceMs = 0L
-
   private val startupTimeout = Runnable {
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
@@ -258,13 +261,18 @@ object NativePlaybackManager {
           when (playbackState) {
             Player.STATE_BUFFERING -> { if (firstFrameRendered) { rearmRecoveryAfterStablePlayback(); main.removeCallbacks(bufferingWatchdog); main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS) }; publishState("loading", null) }
             Player.STATE_READY -> { main.removeCallbacks(bufferingWatchdog); if (firstFrameRendered && stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis(); publishTracks(created.currentTracks) }
-            // A provider ending a live response should get the same bounded
-            // automatic recovery as a source error. The Retry button is only
-            // shown once those four attempts have all failed.
+            // A provider ending a live response should still recover, but a
+            // bare instance.prepare() (recovery stage 1) doesn't guarantee a
+            // fresh network fetch of the manifest - it can just replay the
+            // same already-ended playlist state, which is why this used to
+            // fail identically every time after the same fixed duration.
+            // Jump straight to a real MediaSource rebuild (a genuine new HTTP
+            // GET of the .m3u8) so it actually has a chance to reconnect to
+            // the live edge instead of re-hitting the same end.
             Player.STATE_ENDED -> {
               recordDiagnostic("stream-ended", lastPlaybackError, created)
               rearmRecoveryAfterStablePlayback()
-              recoverOnce(created)
+              recoverOnce(created, skipBarePrepare = true)
             }
             else -> Unit
           }
@@ -297,9 +305,10 @@ object NativePlaybackManager {
    * are now: re-prepare, fresh MediaSource/network request, fresh source URL
    * and headers from React, then full player/source reconstruction.
    */
-  private fun recoverOnce(instance: ExoPlayer, forceFreshSource: Boolean = false): Boolean {
+  private fun recoverOnce(instance: ExoPlayer, forceFreshSource: Boolean = false, skipBarePrepare: Boolean = false): Boolean {
     if (owner == Owner.NONE || player !== instance) return false
     if (forceFreshSource && recoveryAttempts < 2) recoveryAttempts = 2
+    else if (skipBarePrepare && recoveryAttempts < 1) recoveryAttempts = 1
     if (recoveryAttempts >= MAX_AUTO_RECOVERIES) { finishWithError("stream-error", instance); return false }
     val delayMs = RECOVERY_BACKOFF_MS[recoveryAttempts]
     recoveryAttempts += 1
