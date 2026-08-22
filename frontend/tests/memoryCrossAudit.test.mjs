@@ -31,13 +31,13 @@ test("manual EPG remap no-op preserves the original channel array", () => {
 
 test("low-RAM device cap wins over larger user performance profiles", () => {
   setDeviceLowRamCacheCap(false);
-  assert.equal(getPowerProfileTuning("normal").programmeRowCacheLimit, 720);
-  assert.equal(getPowerProfileTuning("max_preview").programmeRowCacheLimit, 960);
+  assert.equal(getPowerProfileTuning("normal").programmeRowCacheLimit, 384);
+  assert.equal(getPowerProfileTuning("max_preview").programmeRowCacheLimit, 512);
 
   setDeviceLowRamCacheCap(true);
-  assert.equal(getPowerProfileTuning("normal").programmeRowCacheLimit, 320);
-  assert.equal(getPowerProfileTuning("max_preview").programmeRowCacheLimit, 320);
-  assert.equal(getPowerProfileTuning("weak").programmeRowCacheLimit, 320);
+  assert.equal(getPowerProfileTuning("normal").programmeRowCacheLimit, 192);
+  assert.equal(getPowerProfileTuning("max_preview").programmeRowCacheLimit, 192);
+  assert.equal(getPowerProfileTuning("weak").programmeRowCacheLimit, 192);
 
   setDeviceLowRamCacheCap(false);
 });
