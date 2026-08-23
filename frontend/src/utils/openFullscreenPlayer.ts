@@ -14,7 +14,7 @@ let handoffSequence = 0;
 export function openFullscreenPlayer(
   router: Pick<Router, "push">,
   channelId: string,
-  options?: { returnToGuide?: boolean },
+  options?: { returnToGuide?: boolean; returnGuideGroup?: string },
 ): void {
   if (!channelId) return;
   const sequence = ++handoffSequence;
@@ -29,6 +29,9 @@ export function openFullscreenPlayer(
         params: {
           channelId,
           returnToGuide: options?.returnToGuide ? "1" : undefined,
+          returnGuideGroup: options?.returnToGuide && options.returnGuideGroup
+            ? options.returnGuideGroup
+            : undefined,
         },
       });
     });
