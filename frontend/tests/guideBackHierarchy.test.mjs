@@ -25,3 +25,15 @@ test("Guide BACK requires a fresh double-press for each drawer layer", async () 
   assert.match(activity, /context == "guide_groups" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT"\)/);
   assert.doesNotMatch(activity, /context == "guide_groups" && boundaryKey != null/);
 });
+
+test("returning from fullscreen restores the selected Guide group and channel instead of All", async () => {
+  const guide = await source("app/(tabs)/guide.tsx");
+  assert.match(guide, /let guideSessionGroup = "All"/);
+  assert.match(guide, /guideSessionGroup = group;\s*guideSessionChannelId = channel\.id;\s*rememberGuideGroupChannel\(group, channel\.id\);/);
+  assert.match(guide, /if \(guideSessionChannelId \|\| guideSessionGroup !== "All"\) \{\s*if \(group !== guideSessionGroup\) setGroup\(guideSessionGroup\);\s*return;\s*}/);
+  assert.doesNotMatch(guide, /if \(isFocused && !wasFocusedRef\.current\) startPreferenceAppliedRef\.current = false/);
+  assert.doesNotMatch(guide, /const wasFocusedRef = useRef\(false\)/);
+  assert.match(guide, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: true, returnGuideGroup: group \}\)/);
+});
+
+// Keep this file in the validation PR path set so a head sync re-runs the no-APK gate.

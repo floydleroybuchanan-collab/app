@@ -1,40 +1,9 @@
-name: Android Native Compile
+name: Media3 Working Validation Only
 
 on:
-  pull_request:
-    branches:
-      - main
-      - agent/media3-validation-base-no-apk
-    paths:
-      - "frontend/android/**"
-      - "frontend/src/components/StreamPlayer.tsx"
-      - "frontend/src/core/streamPolicy.ts"
-      - "frontend/tests/**"
-      - "frontend/app/(tabs)/guide.tsx"
-      - "ci/tivimate-whole-repo-player-interaction-scan.py"
-      - "frontend/plugins/**"
-      - "frontend/package.json"
-      - "frontend/package-lock.json"
-      - "frontend/app.json"
-      - "frontend/scripts/verify-native-config.mjs"
-      - ".github/workflows/android-native-ci.yml"
   push:
     branches:
-      - main
       - agent/media3-opaque-live-startup-hardening
-    paths:
-      - "frontend/android/**"
-      - "frontend/src/components/StreamPlayer.tsx"
-      - "frontend/src/core/streamPolicy.ts"
-      - "frontend/tests/**"
-      - "frontend/app/(tabs)/guide.tsx"
-      - "ci/tivimate-whole-repo-player-interaction-scan.py"
-      - "frontend/plugins/**"
-      - "frontend/package.json"
-      - "frontend/package-lock.json"
-      - "frontend/app.json"
-      - "frontend/scripts/verify-native-config.mjs"
-      - ".github/workflows/android-native-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -42,20 +11,15 @@ permissions:
   issues: write
 
 concurrency:
-  group: android-native-${{ github.workflow }}-${{ github.ref }}
+  group: media3-working-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  compile:
-    name: Kotlin Java tests scan no APK
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
-      - name: Checkout full history
+      - name: Checkout full history for whole-repo scan
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
@@ -79,44 +43,47 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
 
-      - name: Install Android compile SDK and pinned NDK
+      - name: Install Android compile SDK
         run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
 
-      - name: Install JavaScript dependencies
+      - name: Install dependencies
+        working-directory: frontend
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
-      - name: Verify checked-in Android configuration and native Guide
-        id: config
+      - name: Verify native configuration and guide architecture
+        id: nativecfg
         continue-on-error: true
+        working-directory: frontend
         run: |
-          npm run verify:native-config
           npm run verify:native-guide
+          npm run verify:native-config
 
       - name: Unit and wiring tests
         id: tests
         continue-on-error: true
+        working-directory: frontend
         run: npm test
 
       - name: Typecheck
         id: typecheck
         continue-on-error: true
+        working-directory: frontend
         run: npm run typecheck
 
       - name: Lint
         id: lint
         continue-on-error: true
+        working-directory: frontend
         run: npm run lint
 
       - name: Whole-repository player interaction scan
         id: scan
         continue-on-error: true
-        working-directory: .
         run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
 
-      - name: Verify opaque startup and locked player budgets
+      - name: Verify opaque startup invariants
         id: invariants
         continue-on-error: true
-        working-directory: .
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
@@ -131,6 +98,7 @@ jobs:
           grep -q 'tryNextOpaqueCandidate(created, error)' "$PLAYER"
           grep -q 'forgetDetectedType(cacheKey)' "$PLAYER"
           ! grep -q 'if (firstFrameRendered || !isContainerMismatch(error))' "$PLAYER"
+          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' "$PLAYER"
           grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
           grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
           grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' "$PLAYER"
@@ -150,31 +118,29 @@ jobs:
           CI: "1"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.workers.max=1"
         run: |
-          chmod +x android/gradlew
-          ./android/gradlew -p android \
+          chmod +x frontend/android/gradlew
+          ./frontend/android/gradlew -p frontend/android \
             :ffmpeg-audio:compileDebugJavaWithJavac \
             :app:compileDebugKotlin \
             :app:compileDebugJavaWithJavac \
             --no-daemon --max-workers=1 --stacktrace
 
-      - name: Confirm compile gate produced no APK
+      - name: Verify no APK was assembled
         id: noapk
-        if: always()
         continue-on-error: true
-        run: test ! -d android/app/build/outputs/apk
+        run: test ! -d frontend/android/app/build/outputs/apk
 
-      - name: Post validation result to draft PR 30
+      - name: Report validation result
         if: always()
         continue-on-error: true
-        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "Android Native Compile — opaque-live validation-only"
+            echo "Media3 opaque-live VALIDATION-ONLY result"
             echo "commit=${GITHUB_SHA}"
             echo "run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "config=${{ steps.config.outcome }}"
+            echo "native_config=${{ steps.nativecfg.outcome }}"
             echo "tests=${{ steps.tests.outcome }}"
             echo "typecheck=${{ steps.typecheck.outcome }}"
             echo "lint=${{ steps.lint.outcome }}"
@@ -185,17 +151,18 @@ jobs:
             echo "apk_build=NOT_RUN"
             if [ -f ci/tivimate-whole-repo-player-interaction-report.txt ]; then
               echo
+              echo 'Whole-repo scan:'
               echo '```text'
               cat ci/tivimate-whole-repo-player-interaction-report.txt
               echo '```'
             fi
-          } > /tmp/validation.md
-          gh api "repos/${GITHUB_REPOSITORY}/issues/30/comments" -f body="$(cat /tmp/validation.md)"
+          } > /tmp/media3-validation-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" -f body="$(cat /tmp/media3-validation-comment.md)"
 
       - name: Enforce validation gate
         if: always()
         run: |
-          test "${{ steps.config.outcome }}" = "success"
+          test "${{ steps.nativecfg.outcome }}" = "success"
           test "${{ steps.tests.outcome }}" = "success"
           test "${{ steps.typecheck.outcome }}" = "success"
           test "${{ steps.lint.outcome }}" = "success"

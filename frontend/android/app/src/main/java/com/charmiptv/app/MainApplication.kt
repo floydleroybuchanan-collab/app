@@ -27,6 +27,7 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               add(TvRemotePackage())
               add(NativePlaybackPackage())
+              add(NativeVlcPlaybackPackage())
               add(EpgNativePackage())
               add(EpgRamPackage())
               add(NativeGuidePackage())

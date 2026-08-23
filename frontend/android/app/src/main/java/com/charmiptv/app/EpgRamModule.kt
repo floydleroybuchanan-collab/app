@@ -18,6 +18,7 @@ class EpgRamModule(private val reactContext: ReactApplicationContext) :
   private val engine = EpgRamEngine(database)
   private val worker = Executors.newSingleThreadExecutor()
   private val queryPool = Executors.newFixedThreadPool(2)
+  private val epochTransitionLock = Any()
   @Volatile private var warmGuideEpoch = -1L
 
   override fun getName(): String = "CharmEpgRam"
@@ -81,8 +82,10 @@ class EpgRamModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun clearMemory(promise: Promise) {
-    engine.clear()
-    warmGuideEpoch = -1L
+    synchronized(epochTransitionLock) {
+      engine.clear()
+      warmGuideEpoch = -1L
+    }
     promise.resolve(true)
   }
 
@@ -96,10 +99,17 @@ class EpgRamModule(private val reactContext: ReactApplicationContext) :
   }
 
   private fun ensureWarmForCurrentEpoch() {
-    val epoch = currentGuideEpoch()
-    if (warmGuideEpoch == epoch) return
-    engine.clearPrograms()
-    warmGuideEpoch = epoch
+    val observedEpoch = currentGuideEpoch()
+    if (warmGuideEpoch == observedEpoch) return
+    // Two query threads are allowed for normal reads, but an epoch replacement
+    // is a single-flight transition. Re-read inside the lock so one query cannot
+    // refill the new epoch while another query clears it using an older observation.
+    synchronized(epochTransitionLock) {
+      val currentEpoch = currentGuideEpoch()
+      if (warmGuideEpoch == currentEpoch) return
+      engine.clearPrograms()
+      warmGuideEpoch = currentEpoch
+    }
   }
 
   private fun currentGuideEpoch(): Long = database.getMeta("guide_epoch")?.toLongOrNull() ?: 0L

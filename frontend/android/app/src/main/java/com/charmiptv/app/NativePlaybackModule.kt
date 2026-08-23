@@ -1,6 +1,7 @@
 package com.charmiptv.app
 
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -8,12 +9,37 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
-class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx), NativePlaybackManager.Listener {
-  override fun getName(): String = "NativePlayback"
-  init { NativePlaybackManager.setListener(this) }
+class NativePlaybackModule(private val ctx: ReactApplicationContext) :
+  ReactContextBaseJavaModule(ctx),
+  NativePlaybackManager.Listener,
+  LifecycleEventListener {
 
-  @ReactMethod fun prepareFullscreen(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
-  @ReactMethod fun preparePreview(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
+  private var activeOwner = NativePlaybackManager.Owner.NONE
+  private var activeGeneration = 0L
+  private var activeChannelKey = ""
+
+  override fun getName(): String = "NativePlayback"
+
+  init {
+    NativePlaybackManager.setListener(this)
+    ctx.addLifecycleEventListener(this)
+  }
+
+  @ReactMethod
+  fun prepareFullscreen(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) {
+    attachActivity()
+    setIdentity(NativePlaybackManager.Owner.FULLSCREEN, generation.toLong(), channelKey.orEmpty())
+    NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, activeChannelKey, uri, readableMapToStringMap(headers), contentType)
+  }
+
+  @ReactMethod
+  fun preparePreview(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) {
+    attachActivity()
+    if (NativePlaybackManager.currentOwner() == NativePlaybackManager.Owner.FULLSCREEN) return
+    setIdentity(NativePlaybackManager.Owner.PREVIEW, generation.toLong(), channelKey.orEmpty())
+    NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, activeChannelKey, uri, readableMapToStringMap(headers), contentType)
+  }
+
   @ReactMethod fun resolveFreshSource(requestId: Double, uri: String?, headers: ReadableMap?, contentType: String?, failureReason: String?) { NativePlaybackManager.provideFreshSource(requestId.toLong(), uri, readableMapToStringMap(headers), contentType, failureReason) }
   @ReactMethod fun setResizeMode(mode: String?) { NativePlaybackManager.setResizeMode(mode) }
   @ReactMethod fun pause() { NativePlaybackManager.pause() }
@@ -29,20 +55,47 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
   @ReactMethod fun getOwner(promise: Promise) { promise.resolve(NativePlaybackManager.currentOwner().name.lowercase()) }
 
   override fun onState(state: String, reason: String?) {
-    val event = Arguments.createMap().apply { putString("owner", NativePlaybackManager.currentOwner().name.lowercase()); putString("state", state); if (reason != null) putString("reason", reason) }
-    emit("NativePlaybackState", event)
+    emit("NativePlaybackState", identityMap().apply {
+      putString("state", state)
+      if (reason != null) putString("reason", reason)
+    })
   }
 
   override fun onTracks(audio: List<NativePlaybackManager.AudioTrackInfo>, subtitles: List<NativePlaybackManager.SubtitleTrackInfo>) {
-    val audioArray = Arguments.createArray(); audio.forEach { track -> audioArray.pushMap(Arguments.createMap().apply { putInt("groupIndex", track.groupIndex); putInt("trackIndex", track.trackIndex); putString("id", track.id); putString("name", track.label); putString("language", track.language); putString("mimeType", track.mimeType); putBoolean("isSupported", track.supported) }) }
-    val textArray = Arguments.createArray(); subtitles.forEach { track -> textArray.pushMap(Arguments.createMap().apply { putInt("groupIndex", track.groupIndex); putInt("trackIndex", track.trackIndex); putString("id", track.id); putString("name", track.label); putString("language", track.language) }) }
-    emit("NativePlaybackTracks", Arguments.createMap().apply { putString("owner", NativePlaybackManager.currentOwner().name.lowercase()); putArray("audio", audioArray); putArray("text", textArray) })
+    val audioArray = Arguments.createArray()
+    audio.forEach { track ->
+      audioArray.pushMap(Arguments.createMap().apply {
+        putInt("groupIndex", track.groupIndex)
+        putInt("trackIndex", track.trackIndex)
+        putString("id", track.id)
+        putString("name", track.label)
+        putString("language", track.language)
+        putString("mimeType", track.mimeType)
+        putBoolean("isSupported", track.supported)
+      })
+    }
+    val textArray = Arguments.createArray()
+    subtitles.forEach { track ->
+      textArray.pushMap(Arguments.createMap().apply {
+        putInt("groupIndex", track.groupIndex)
+        putInt("trackIndex", track.trackIndex)
+        putString("id", track.id)
+        putString("name", track.label)
+        putString("language", track.language)
+      })
+    }
+    emit("NativePlaybackTracks", identityMap().apply {
+      putArray("audio", audioArray)
+      putArray("text", textArray)
+    })
   }
 
   override fun onSourceRefreshRequested(request: NativePlaybackManager.SourceRefreshRequest) {
+    val generation = if (request.owner == activeOwner && request.channelKey == activeChannelKey) activeGeneration else -1L
     emit("NativePlaybackSourceRefreshRequested", Arguments.createMap().apply {
       putDouble("requestId", request.requestId.toDouble())
       putString("owner", request.owner.name.lowercase())
+      putDouble("generation", generation.toDouble())
       putString("channelKey", request.channelKey)
       putInt("recoveryAttempt", request.recoveryAttempt)
       putString("reason", request.reason)
@@ -53,8 +106,12 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
   override fun onDiagnostic(diagnostic: NativePlaybackManager.PlaybackDiagnostic) {
     val epg = Arguments.createMap()
     diagnostic.epgRamStats.forEach { (key, value) -> epg.putDouble(key, value.toDouble()) }
+    val diagnosticChannel = diagnostic.channelKey.orEmpty()
+    val generation = if (diagnosticChannel == activeChannelKey) activeGeneration else -1L
     emit("NativePlaybackDiagnostics", Arguments.createMap().apply {
-      putString("owner", NativePlaybackManager.currentOwner().name.lowercase())
+      putString("owner", activeOwner.name.lowercase())
+      putDouble("generation", generation.toDouble())
+      putString("channelKey", diagnosticChannel)
       putString("event", diagnostic.event)
       if (diagnostic.media3ErrorCode != null) putInt("media3ErrorCode", diagnostic.media3ErrorCode) else putNull("media3ErrorCode")
       if (diagnostic.media3ErrorCodeName != null) putString("media3ErrorCodeName", diagnostic.media3ErrorCodeName) else putNull("media3ErrorCodeName")
@@ -66,7 +123,6 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
       putDouble("bufferedDurationMs", diagnostic.bufferedDurationMs.toDouble())
       putDouble("bufferedPositionMs", diagnostic.bufferedPositionMs.toDouble())
       putDouble("positionMs", diagnostic.positionMs.toDouble())
-      if (diagnostic.channelKey != null) putString("channelKey", diagnostic.channelKey) else putNull("channelKey")
       if (diagnostic.contentType != null) putString("contentType", diagnostic.contentType) else putNull("contentType")
       if (diagnostic.sourceType != null) putString("sourceType", diagnostic.sourceType) else putNull("sourceType")
       if (diagnostic.detectedContainer != null) putString("detectedContainer", diagnostic.detectedContainer) else putNull("detectedContainer")
@@ -91,22 +147,66 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
     })
   }
 
+  override fun onHostResume() = Unit
+  override fun onHostPause() { NativePlaybackManager.pause() }
+  override fun onHostDestroy() {
+    NativePlaybackManager.releaseAll()
+    clearIdentity()
+  }
+
+  override fun invalidate() {
+    try { ctx.removeLifecycleEventListener(this) } catch (_: Throwable) {}
+    NativePlaybackManager.setListener(null)
+    NativePlaybackManager.releaseAll()
+    clearIdentity()
+    super.invalidate()
+  }
+
   private fun stopOwner(requestedOwner: NativePlaybackManager.Owner, releasePlayer: Boolean, promise: Promise) {
     val activity = ctx.currentActivity
-    if (activity == null) { promise.resolve(null); return }
-    activity.runOnUiThread {
-      if (NativePlaybackManager.currentOwner() != requestedOwner) { promise.resolve(null); return@runOnUiThread }
-      NativePlaybackManager.stop(requestedOwner, releasePlayer) { promise.resolve(null) }
+    val stop = {
+      if (NativePlaybackManager.currentOwner() != requestedOwner) {
+        promise.resolve(null)
+      } else {
+        NativePlaybackManager.stop(requestedOwner, releasePlayer) {
+          if (activeOwner == requestedOwner) clearIdentity()
+          promise.resolve(null)
+        }
+      }
     }
+    if (activity == null) stop() else activity.runOnUiThread(stop)
+  }
+
+  private fun setIdentity(owner: NativePlaybackManager.Owner, generation: Long, channelKey: String) {
+    activeOwner = owner
+    activeGeneration = generation
+    activeChannelKey = channelKey.trim()
+  }
+
+  private fun clearIdentity() {
+    activeOwner = NativePlaybackManager.Owner.NONE
+    activeGeneration = 0L
+    activeChannelKey = ""
+  }
+
+  private fun identityMap() = Arguments.createMap().apply {
+    putString("owner", activeOwner.name.lowercase())
+    putDouble("generation", activeGeneration.toDouble())
+    putString("channelKey", activeChannelKey)
   }
 
   private fun attachActivity() { ctx.currentActivity?.let(NativePlaybackManager::installIntoActivity) }
   private fun emit(name: String, value: Any) { try { ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit(name, value) } catch (_: Throwable) {} }
   private fun readableMapToStringMap(readable: ReadableMap?): Map<String, String> {
-    if (readable == null) return emptyMap(); val out = LinkedHashMap<String, String>(); val iterator = readable.keySetIterator()
-    while (iterator.hasNextKey()) { val key = iterator.nextKey(); try { val value = readable.getString(key); if (!value.isNullOrBlank()) out[key] = value } catch (_: Throwable) {} }
+    if (readable == null) return emptyMap()
+    val out = LinkedHashMap<String, String>()
+    val iterator = readable.keySetIterator()
+    while (iterator.hasNextKey()) {
+      val key = iterator.nextKey()
+      try { val value = readable.getString(key); if (!value.isNullOrBlank()) out[key] = value } catch (_: Throwable) {}
+    }
     return out
   }
-  @ReactMethod fun addListener(eventName: String) {}
-  @ReactMethod fun removeListeners(count: Int) {}
+  @ReactMethod fun addListener(eventName: String) = Unit
+  @ReactMethod fun removeListeners(count: Int) = Unit
 }
