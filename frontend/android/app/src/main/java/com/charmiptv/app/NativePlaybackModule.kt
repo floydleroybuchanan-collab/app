@@ -7,14 +7,13 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import java.util.Locale
 
 class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx), NativePlaybackManager.Listener {
   override fun getName(): String = "NativePlayback"
   init { NativePlaybackManager.setListener(this) }
 
-  @ReactMethod fun prepareFullscreen(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); prepareResolved(NativePlaybackManager.Owner.FULLSCREEN, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
-  @ReactMethod fun preparePreview(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); prepareResolved(NativePlaybackManager.Owner.PREVIEW, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
+  @ReactMethod fun prepareFullscreen(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
+  @ReactMethod fun preparePreview(channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) { attachActivity(); NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, channelKey.orEmpty(), uri, readableMapToStringMap(headers), contentType) }
   @ReactMethod fun resolveFreshSource(requestId: Double, uri: String?, headers: ReadableMap?, contentType: String?, failureReason: String?) { NativePlaybackManager.provideFreshSource(requestId.toLong(), uri, readableMapToStringMap(headers), contentType, failureReason) }
   @ReactMethod fun setResizeMode(mode: String?) { NativePlaybackManager.setResizeMode(mode) }
   @ReactMethod fun pause() { NativePlaybackManager.pause() }
@@ -28,52 +27,6 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
   @ReactMethod fun stopPreview(promise: Promise) { stopOwner(NativePlaybackManager.Owner.PREVIEW, releasePlayer = false, promise) }
   @ReactMethod fun stopFullscreen(releasePlayer: Boolean, promise: Promise) { stopOwner(NativePlaybackManager.Owner.FULLSCREEN, releasePlayer, promise) }
   @ReactMethod fun getOwner(promise: Promise) { promise.resolve(NativePlaybackManager.currentOwner().name.lowercase()) }
-
-  /**
-   * Only extensionless/opaque HTTP(S) endpoints are probed. Known HLS, DASH,
-   * TS and progressive URLs retain the zero-extra-request fast path.
-   */
-  private fun prepareResolved(owner: NativePlaybackManager.Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?) {
-    if (!isOpaqueHttpUrl(uri, contentType)) {
-      NativePlaybackManager.prepare(owner, channelKey, uri, headers, contentType)
-      return
-    }
-    val cached = OpaqueStreamProbe.cached(uri)
-    if (cached != null) {
-      emitProbeDiagnostic(channelKey, uri, cached, cached = true)
-      NativePlaybackManager.prepare(owner, channelKey, uri, headers, cached.sourceType)
-      return
-    }
-    OpaqueStreamProbe.probe(uri, headers) { result ->
-      val activity = ctx.currentActivity ?: return@probe
-      activity.runOnUiThread {
-        if (result != null) emitProbeDiagnostic(channelKey, uri, result, cached = false)
-        NativePlaybackManager.prepare(owner, channelKey, uri, headers, result?.sourceType ?: contentType)
-      }
-    }
-  }
-
-  private fun isOpaqueHttpUrl(uri: String, contentType: String?): Boolean {
-    val clean = uri.substringBefore('|').trim().lowercase(Locale.US)
-    if (!(clean.startsWith("http://") || clean.startsWith("https://"))) return false
-    val hint = contentType?.trim()?.lowercase(Locale.US).orEmpty()
-    if (hint in setOf("hls", "m3u8", "dash", "mpd", "transport", "ts")) return false
-    if (clean.contains(".m3u8") || clean.contains(".mpd") || Regex("\\.(?:ts|m2ts|mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)(?:$|[?#])").containsMatchIn(clean)) return false
-    if (clean.contains("/hls/") || clean.contains("/dash/") || clean.contains("format=m3u8") || clean.contains("type=hls") || clean.contains("format=mpd") || clean.contains("type=dash") || clean.contains("mpegts") || clean.contains("mpeg-ts") || Regex("[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)").containsMatchIn(clean)) return false
-    return true
-  }
-
-  private fun emitProbeDiagnostic(channelKey: String, originalUrl: String, result: OpaqueStreamProbe.Result, cached: Boolean) {
-    emit("NativePlaybackOpaqueProbe", Arguments.createMap().apply {
-      putString("channelKey", channelKey)
-      putString("sourceType", result.sourceType)
-      putString("mimeType", result.mimeType)
-      putInt("httpResponseCode", result.httpCode)
-      putString("signature", result.signature)
-      putBoolean("redirected", result.finalUrl != originalUrl)
-      putBoolean("cached", cached)
-    })
-  }
 
   override fun onState(state: String, reason: String?) {
     val event = Arguments.createMap().apply { putString("owner", NativePlaybackManager.currentOwner().name.lowercase()); putString("state", state); if (reason != null) putString("reason", reason) }
@@ -107,13 +60,29 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) : ReactCont
       if (diagnostic.media3ErrorCodeName != null) putString("media3ErrorCodeName", diagnostic.media3ErrorCodeName) else putNull("media3ErrorCodeName")
       if (diagnostic.httpResponseCode != null) putInt("httpResponseCode", diagnostic.httpResponseCode) else putNull("httpResponseCode")
       if (diagnostic.exceptionType != null) putString("exceptionType", diagnostic.exceptionType) else putNull("exceptionType")
+      if (diagnostic.errorSummary != null) putString("errorSummary", diagnostic.errorSummary) else putNull("errorSummary")
       putString("causeChain", diagnostic.causeChain.joinToString(" <- "))
       putString("playbackState", diagnostic.playbackState)
       putDouble("bufferedDurationMs", diagnostic.bufferedDurationMs.toDouble())
       putDouble("bufferedPositionMs", diagnostic.bufferedPositionMs.toDouble())
       putDouble("positionMs", diagnostic.positionMs.toDouble())
+      if (diagnostic.channelKey != null) putString("channelKey", diagnostic.channelKey) else putNull("channelKey")
       if (diagnostic.contentType != null) putString("contentType", diagnostic.contentType) else putNull("contentType")
       if (diagnostic.sourceType != null) putString("sourceType", diagnostic.sourceType) else putNull("sourceType")
+      if (diagnostic.detectedContainer != null) putString("detectedContainer", diagnostic.detectedContainer) else putNull("detectedContainer")
+      if (diagnostic.detectedMimeType != null) putString("detectedMimeType", diagnostic.detectedMimeType) else putNull("detectedMimeType")
+      if (diagnostic.resolvedUri != null) putString("resolvedUri", diagnostic.resolvedUri) else putNull("resolvedUri")
+      if (diagnostic.probeHttpResponseCode != null) putInt("probeHttpResponseCode", diagnostic.probeHttpResponseCode) else putNull("probeHttpResponseCode")
+      if (diagnostic.probeReason != null) putString("probeReason", diagnostic.probeReason) else putNull("probeReason")
+      if (diagnostic.videoMimeType != null) putString("videoMimeType", diagnostic.videoMimeType) else putNull("videoMimeType")
+      if (diagnostic.videoCodecs != null) putString("videoCodecs", diagnostic.videoCodecs) else putNull("videoCodecs")
+      if (diagnostic.audioMimeType != null) putString("audioMimeType", diagnostic.audioMimeType) else putNull("audioMimeType")
+      if (diagnostic.audioCodecs != null) putString("audioCodecs", diagnostic.audioCodecs) else putNull("audioCodecs")
+      if (diagnostic.videoWidth != null) putInt("videoWidth", diagnostic.videoWidth) else putNull("videoWidth")
+      if (diagnostic.videoHeight != null) putInt("videoHeight", diagnostic.videoHeight) else putNull("videoHeight")
+      if (diagnostic.videoDecoder != null) putString("videoDecoder", diagnostic.videoDecoder) else putNull("videoDecoder")
+      if (diagnostic.audioDecoder != null) putString("audioDecoder", diagnostic.audioDecoder) else putNull("audioDecoder")
+      if (diagnostic.codecError != null) putString("codecError", diagnostic.codecError) else putNull("codecError")
       putInt("recoveryAttempt", diagnostic.recoveryAttempt)
       putBoolean("lowRam", diagnostic.lowRam)
       putDouble("heapUsedBytes", diagnostic.heapUsedBytes.toDouble())
