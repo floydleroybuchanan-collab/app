@@ -4,8 +4,14 @@ on:
   pull_request:
     branches:
       - main
+      - agent/media3-validation-base-no-apk
     paths:
       - "frontend/android/**"
+      - "frontend/src/components/StreamPlayer.tsx"
+      - "frontend/src/core/streamPolicy.ts"
+      - "frontend/tests/**"
+      - "frontend/app/(tabs)/guide.tsx"
+      - "ci/tivimate-whole-repo-player-interaction-scan.py"
       - "frontend/plugins/**"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -21,6 +27,7 @@ on:
       - "frontend/src/components/StreamPlayer.tsx"
       - "frontend/src/core/streamPolicy.ts"
       - "frontend/tests/**"
+      - "frontend/app/(tabs)/guide.tsx"
       - "ci/tivimate-whole-repo-player-interaction-scan.py"
       - "frontend/plugins/**"
       - "frontend/package.json"
@@ -112,13 +119,18 @@ jobs:
         working-directory: .
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          PROBE=frontend/android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt
           grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
-          grep -q 'val firstType = detectedType ?: "transport"' "$PLAYER"
-          ! grep -q 'val routedType = detectedType ?: "progressive"' "$PLAYER"
+          grep -q 'probeReason = "direct:transport"' "$PLAYER"
+          grep -q 'startOpaqueCandidate(instance, source, cacheKey, "transport"' "$PLAYER"
+          ! grep -q 'NativeOpaqueStreamProbe.start' "$PLAYER"
+          ! grep -q 'opaqueProbeHttpClient' "$PLAYER"
           grep -q 'OPAQUE_TYPE_PREFS = "charm_media3_stream_types"' "$PLAYER"
+          grep -q 'main.postDelayed(opaqueTypeConfirmation, STABLE_REARM_MS)' "$PLAYER"
+          grep -q 'private val opaqueTypeConfirmation = Runnable' "$PLAYER"
           grep -q 'confirmSuccessfulStreamType()' "$PLAYER"
           grep -q 'tryNextOpaqueCandidate(created, error)' "$PLAYER"
+          grep -q 'forgetDetectedType(cacheKey)' "$PLAYER"
+          ! grep -q 'if (firstFrameRendered || !isContainerMismatch(error))' "$PLAYER"
           grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
           grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
           grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' "$PLAYER"
@@ -130,8 +142,6 @@ jobs:
           grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
-          grep -q 'val metadataType = sourceTypeFromMimeOrUri' "$PROBE"
-          grep -q 'MAX_SNIFF_BYTES = 4 \* 1024' "$PROBE"
 
       - name: Compile native Kotlin and Java only
         id: compile
@@ -155,6 +165,7 @@ jobs:
 
       - name: Post validation result to draft PR 30
         if: always()
+        continue-on-error: true
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
