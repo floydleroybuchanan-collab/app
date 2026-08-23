@@ -13,12 +13,9 @@ if 'label="Player engine"' not in s:
  if anchor not in s: raise SystemExit('missing playback buffer anchor')
  s=s.replace(anchor,row+anchor,1)
 p.write_text(s)
-
 g=Path('frontend/android/app/build.gradle'); x=g.read_text()
 if 'libc++_shared.so' not in x: x=x.replace('packagingOptions { jniLibs {', "packagingOptions { pickFirst '**/libc++_shared.so'; jniLibs {",1)
 g.write_text(x)
-
-q=Path('frontend/src/components/StreamPlayer.tsx'); t=q.read_text()
-t=t.replace('const kindSupported = playerEngine === "vlc" ? isVlcSupportedStreamKind(kind) : isNativeMedia3SupportedStreamKind(kind);','const kindSupported = playerEngine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);')
-q.write_text(t)
+q=Path('frontend/src/components/StreamPlayer.tsx'); t=q.read_text(); t=t.replace('const kindSupported = playerEngine === "vlc" ? isVlcSupportedStreamKind(kind) : isNativeMedia3SupportedStreamKind(kind);','const kindSupported = playerEngine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);'); q.write_text(t)
 print('manual VLC settings, packaging, and player markers applied')
+# rerun against final identity-aware VLC bridge
