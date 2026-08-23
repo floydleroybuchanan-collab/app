@@ -62,7 +62,7 @@ export function detectStreamKind(uri: string, streamTypeHint?: string | null): S
   const hinted = kindFromHint(streamTypeHint);
   if (hinted) return hinted;
 
-  if (/\.(?:mp4|m4v|m4s|mov|webm|mkv|avi|cmfv|cmfa)(?:$|[?#])/.test(lower)) return "progressive";
+  if (/\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)(?:$|[?#])/.test(lower)) return "progressive";
   return "unknown";
 }
 
@@ -96,10 +96,15 @@ export function preferredEngine(_kind: StreamKind): Engine {
   return "media3";
 }
 
-/** Media3 contentType hint for the native ExoPlayer source factory. */
-export function media3ContentType(kind: StreamKind): "hls" | "dash" | "transport" | "progressive" {
+/**
+ * Media3 contentType hint for the native source factory. Unknown HTTP(S) URLs
+ * deliberately remain unknown so Android can perform the bounded response/body
+ * probe instead of prematurely locking an opaque HLS/TS/DASH URL to progressive.
+ */
+export function media3ContentType(kind: StreamKind): "hls" | "dash" | "transport" | "progressive" | "unknown" {
   if (kind === "dash") return "dash";
   if (kind === "hls") return "hls";
   if (kind === "transport") return "transport";
+  if (kind === "unknown") return "unknown";
   return "progressive";
 }
