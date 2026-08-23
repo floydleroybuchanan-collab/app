@@ -1,5 +1,4 @@
 CharmIPTV Media3 sideload build trigger
-Source baseline: 23e3839c11744a7bff5bb1d93f8b313b23cff1c9
 Requested: 2026-08-23
-Dedicated build trigger: 4
-Reason: validate HLS/DASH/MPEG-TS/progressive HTTP(S) stream support expansion
+Dedicated build trigger: 5
+Reason: validate bounded opaque HTTP(S) stream detection, redirect-aware classification, signature sniffing, cache, and codec diagnostics
