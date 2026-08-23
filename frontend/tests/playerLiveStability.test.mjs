@@ -71,8 +71,13 @@ test("stale fullscreen native cleanup cannot release a newer Guide preview", asy
   assert.match(native, /\(playerView\?\.parent as\? ViewGroup\)\?\.removeView\(playerView\)/);
 });
 
-test("fullscreen exit returns currently tuned channel to Guide", async () => {
-  const player = await source("app/player.tsx"); assert.match(player, /const currentChannelId = pendingChannelIdRef\.current \|\| channelIdRef\.current/); assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: "All" \}\)/); assert.match(player, /stopFullscreenSession\(\)\.then\(\(\) => \{/); assert.match(player, /router\.replace\("\/guide" as any\)/);
+test("fullscreen exit returns currently tuned channel to the originating Guide group", async () => {
+  const player = await source("app/player.tsx");
+  assert.match(player, /const currentChannelId = pendingChannelIdRef\.current \|\| channelIdRef\.current/);
+  assert.match(player, /const returnGuideGroup = String\(params\.returnGuideGroup \|\| ""\)\.trim\(\) \|\| "All"/);
+  assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: returnGuideGroup \}\)/);
+  assert.match(player, /stopFullscreenSession\(\)\.then\(\(\) => \{/);
+  assert.match(player, /router\.replace\("\/guide" as any\)/);
 });
 
 test("Program Details Watch now preserves Guide return anchor", async () => { const modal = await source("src/components/ProgramModal.tsx"); assert.match(modal, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: pathname\?\.startsWith\("\/guide"\) \}\)/); });
