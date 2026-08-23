@@ -19,9 +19,6 @@ if 'libc++_shared.so' not in x: x=x.replace('packagingOptions { jniLibs {', "pac
 g.write_text(x)
 
 q=Path('frontend/src/components/StreamPlayer.tsx'); t=q.read_text()
-t=t.replace('const [engine] = usePlayerEnginePreference();','const [playerEngine] = usePlayerEnginePreference();')
-t=t.replace('engine !== "media3"','playerEngine !== "media3"').replace('engine !== "vlc"','playerEngine !== "vlc"').replace('engine === "vlc"','playerEngine === "vlc"').replace('engine === "media3"','playerEngine === "media3"')
-t=t.replace(', engine,', ', playerEngine,').replace('[engine,', '[playerEngine,')
+t=t.replace('const kindSupported = playerEngine === "vlc" ? isVlcSupportedStreamKind(kind) : isNativeMedia3SupportedStreamKind(kind);','const kindSupported = playerEngine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);')
 q.write_text(t)
 print('manual VLC settings, packaging, and player markers applied')
-# rerun after native lifecycle hardening
