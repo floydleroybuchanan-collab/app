@@ -1,10 +1,11 @@
-name: Build Media3 Sideload APK Now
+name: Build CharmIPTV Media3 + VLC Sideload APK
 
 on:
   workflow_dispatch:
   push:
     branches:
       - agent/media3-player-core-rebuild
+      - agent/manual-vlc-engine
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
@@ -14,16 +15,16 @@ on:
       - "frontend/.media3-sideload-build-trigger"
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 concurrency:
-  group: media3-sideload-now-${{ github.event_name }}
+  group: media3-vlc-sideload-now-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Media3 universal sideload APK
+    name: Build Media3 + VLC universal sideload APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -41,14 +42,18 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
-      - name: Post build run pointer
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish build run pointer
+        if: github.ref_name == 'agent/manual-vlc-engine'
+        working-directory: .
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" \
-            -f body="Media3 sideload build STARTED: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | commit=${{ github.event.pull_request.head.sha || github.sha }}"
+          printf '%s\n' "${GITHUB_RUN_ID}" > .github/manual-vlc-sideload-current-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/manual-vlc-sideload-current-run.txt
+          git commit -m "ci: record Media3 VLC sideload run ${GITHUB_RUN_ID}" || true
+          git push origin HEAD:agent/manual-vlc-engine
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -94,6 +99,45 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Whole-repository player interaction scan
+        working-directory: .
+        run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
+
+      - name: Verify manual VLC and locked Media3 invariants
+        working-directory: .
+        run: |
+          PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          VLC=frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt
+          MODULE=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt
+          PROFILE=frontend/src/core/playbackProfileIndex.ts
+          SOURCE=frontend/src/source.native.ts
+          SETTINGS='frontend/app/(tabs)/settings.tsx'
+          grep -q 'org.videolan.android:libvlc-all:3.7.5' frontend/android/app/build.gradle
+          grep -q 'MediaPlayer(core)' "$VLC"
+          grep -q 'setHWDecoderEnabled(source.hardwareDecode, false)' "$VLC"
+          grep -q 'NativePlaybackManager.releaseAll()' "$VLC"
+          grep -q 'LifecycleEventListener' "$MODULE"
+          grep -q 'activeGeneration' "$MODULE"
+          grep -q 'indexDeclaredStreamTypes(channels)' "$SOURCE"
+          grep -q 'mutationRevision' "$PROFILE"
+          grep -q 'VLC compatibility' "$SETTINGS"
+          grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_LOW_RAM = 5_000' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'MIN_BUFFER_MS_NORMAL = 15_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_NORMAL = 60_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_NORMAL = 3_000' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'HUNG_BUFFER_REPREPARE_MS = 5_000L' "$PLAYER"
+          grep -q 'TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L' "$PLAYER"
+          grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
+          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
+          grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
+
       - name: Build pinned LGPL FFmpeg audio extension
         run: |
           chmod +x scripts/build-media3-ffmpeg-audio.sh
@@ -119,7 +163,7 @@ jobs:
       - name: Build universal sideload APK
         run: ./android/gradlew -p android :app:assembleSideload --no-daemon --max-workers=1 --stacktrace
 
-      - name: Verify and checksum APK
+      - name: Verify Media3 VLC APK and checksum
         run: |
           APK="android/app/build/outputs/apk/sideload/app-sideload.apk"
           test -f "$APK"
@@ -128,26 +172,23 @@ jobs:
           grep -q 'lib/armeabi-v7a/' apk-contents.txt
           grep -q 'lib/arm64-v8a/' apk-contents.txt
           grep -Eq 'libffmpeg|ffmpeg' apk-contents.txt
+          grep -q 'lib/armeabi-v7a/libvlc.so' apk-contents.txt
+          grep -q 'lib/arm64-v8a/libvlc.so' apk-contents.txt
+          grep -Eq 'lib/armeabi-v7a/libvlcjni[^/]*\.so' apk-contents.txt
+          grep -Eq 'lib/arm64-v8a/libvlcjni[^/]*\.so' apk-contents.txt
           mkdir -p artifacts
-          cp "$APK" "artifacts/CharmIPTV-Media3-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/CharmIPTV-Media3-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          printf 'source_commit=%s\nvalidation_run=32662442899\n' "${{ github.event.pull_request.head.sha || github.sha }}" > artifacts/BUILD_INFO.txt
 
       - name: Upload sideload APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: CharmIPTV-Media3-Sideload-${{ github.run_number }}
+          name: CharmIPTV-Media3-VLC-Sideload-${{ github.run_number }}
           path: |
-            frontend/artifacts/CharmIPTV-Media3-Sideload-${{ github.run_number }}.apk
+            frontend/artifacts/CharmIPTV-Media3-VLC-Sideload-${{ github.run_number }}.apk
             frontend/artifacts/SHA256SUMS.txt
+            frontend/artifacts/BUILD_INFO.txt
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
-
-      - name: Post final build status
-        if: always()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" \
-            -f body="Media3 sideload build FINISHED: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | job=${{ job.status }} | commit=${{ github.event.pull_request.head.sha || github.sha }}"
