@@ -303,7 +303,7 @@ export function StreamPlayer({
     const media3Available = Platform.OS === "android" && nativePlaybackAvailable();
     const vlcAvailable = Platform.OS === "android" && nativeVlcPlaybackAvailable();
     const engineAvailable = playerEngine === "vlc" ? vlcAvailable : media3Available;
-    const kindSupported = playerEngine === "vlc" ? isVlcSupportedStreamKind(kind) : isNativeMedia3SupportedStreamKind(kind);
+    const kindSupported = playerEngine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);
 
     if (!playbackFocused || !uri || !engineAvailable) {
       generationRef.current = 0;

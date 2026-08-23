@@ -44,6 +44,8 @@ import {
   usePlaybackBufferProfile,
   type PlaybackBufferProfile,
 } from "@/src/core/playbackBufferProfile";
+import { usePlayerEnginePreference } from "@/src/playerEnginePreference";
+import { useVlcPlaybackPreferences } from "@/src/core/vlcPlaybackPreferences";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { useParentalPin } from "@/src/core/parentalPin";
@@ -149,6 +151,8 @@ function SettingsScreenContent() {
   } = useStore();
   const remoteShortcuts = useRemoteShortcutPreferences();
   const [playbackBufferProfile, setPlaybackBufferProfile] = usePlaybackBufferProfile();
+  const [playerEngine, setPlayerEngine] = usePlayerEnginePreference();
+  const vlcPlayback = useVlcPlaybackPreferences();
   const channelCustomize = useChannelCustomize();
   const guideUi = useGuideUiPreferences();
   const parental = useParentalPin();
@@ -526,6 +530,15 @@ function SettingsScreenContent() {
                   onChange={remoteShortcuts.setLongDown}
                 />
                 <Text style={styles.help}>Long OK/Select is reserved for contextual Quick Actions. Directional D-pad keys remain deterministic; Long Down is the only remappable D-pad hold.</Text>
+                <ChoiceRow<"media3" | "vlc">
+                  label="Player engine" value={playerEngine}
+                  options={[{ label: "Media3 (recommended)", value: "media3" }, { label: "VLC compatibility", value: "vlc" }]}
+                  onChange={setPlayerEngine}
+                />
+                {playerEngine === "vlc" ? (<>
+                  <ToggleRow label="VLC hardware decoding" value={vlcPlayback.hardwareDecode} onChange={vlcPlayback.setHardwareDecode} />
+                  <ChoiceRow<"auto" | "stereo" | "passthrough"> label="VLC audio output" value={vlcPlayback.audioOutput} options={[{ label: "Auto", value: "auto" }, { label: "Stereo", value: "stereo" }, { label: "Passthrough", value: "passthrough" }]} onChange={vlcPlayback.setAudioOutput} />
+                </>) : null}
                 <ChoiceRow<PlaybackBufferProfile>
                   label="Playback buffer"
                   value={playbackBufferProfile}
