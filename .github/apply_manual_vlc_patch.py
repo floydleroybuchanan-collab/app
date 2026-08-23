@@ -17,5 +17,5 @@ g=Path('frontend/android/app/build.gradle'); x=g.read_text()
 if 'libc++_shared.so' not in x: x=x.replace('packagingOptions { jniLibs {', "packagingOptions { pickFirst '**/libc++_shared.so'; jniLibs {",1)
 g.write_text(x)
 q=Path('frontend/src/components/StreamPlayer.tsx'); t=q.read_text(); t=t.replace('const kindSupported = playerEngine === "vlc" ? isVlcSupportedStreamKind(kind) : isNativeMedia3SupportedStreamKind(kind);','const kindSupported = playerEngine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);'); q.write_text(t)
-print('manual VLC settings, packaging, and player markers applied')
-# rerun against final identity-aware VLC bridge
+test=Path('frontend/tests/manualVlcEngine.test.mjs'); z=test.read_text(); z=z.replace('assert.match(vlcManager, /media\\.setHWDecoderEnabled\\(source\\.hardwareDecode, false\\)/, "VLC manager forwards the source hardware-decode setting");','assert.match(vlcManager, /media\\.setHWDecoderEnabled\\((?:source\\.)?hardwareDecode, false\\)/, "VLC manager forwards the hardware-decode setting");'); test.write_text(z)
+print('manual VLC settings, packaging, player wiring, and validation contract applied')
