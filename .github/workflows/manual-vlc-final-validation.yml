@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 concurrency:
@@ -32,6 +32,16 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
+
+      - name: Publish live run id
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '%s\n' "$GITHUB_RUN_ID" > .github/manual-vlc-current-run.txt
+          git add .github/manual-vlc-current-run.txt
+          git commit -m "ci: record manual VLC validation run ${GITHUB_RUN_ID}" || exit 0
+          git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Post live run pointer
         continue-on-error: true
