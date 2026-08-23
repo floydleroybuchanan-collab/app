@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: media3-working-validation-${{ github.ref }}
@@ -50,27 +51,39 @@ jobs:
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Verify native configuration and guide architecture
+        id: nativecfg
+        continue-on-error: true
         working-directory: frontend
         run: |
           npm run verify:native-guide
           npm run verify:native-config
 
       - name: Unit and wiring tests
+        id: tests
+        continue-on-error: true
         working-directory: frontend
         run: npm test
 
       - name: Typecheck
+        id: typecheck
+        continue-on-error: true
         working-directory: frontend
         run: npm run typecheck
 
       - name: Lint
+        id: lint
+        continue-on-error: true
         working-directory: frontend
         run: npm run lint
 
       - name: Whole-repository player interaction scan
+        id: scan
+        continue-on-error: true
         run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
 
       - name: Verify opaque startup invariants
+        id: invariants
+        continue-on-error: true
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           PROBE=frontend/android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt
@@ -97,6 +110,8 @@ jobs:
           grep -q 'MAX_SNIFF_BYTES = 4 \* 1024' "$PROBE"
 
       - name: Compile native Kotlin and Java only
+        id: compile
+        continue-on-error: true
         env:
           CI: "1"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.workers.max=1"
@@ -107,3 +122,41 @@ jobs:
             :app:compileDebugKotlin \
             :app:compileDebugJavaWithJavac \
             --no-daemon --max-workers=1 --stacktrace
+
+      - name: Report validation result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Media3 opaque-live VALIDATION-ONLY result"
+            echo "commit=${GITHUB_SHA}"
+            echo "run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "native_config=${{ steps.nativecfg.outcome }}"
+            echo "tests=${{ steps.tests.outcome }}"
+            echo "typecheck=${{ steps.typecheck.outcome }}"
+            echo "lint=${{ steps.lint.outcome }}"
+            echo "whole_repo_scan=${{ steps.scan.outcome }}"
+            echo "opaque_invariants=${{ steps.invariants.outcome }}"
+            echo "native_compile=${{ steps.compile.outcome }}"
+            echo "apk_build=NOT_RUN"
+            if [ -f ci/tivimate-whole-repo-player-interaction-report.txt ]; then
+              echo
+              echo 'Whole-repo scan:'
+              echo '```text'
+              cat ci/tivimate-whole-repo-player-interaction-report.txt
+              echo '```'
+            fi
+          } > /tmp/media3-validation-comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" -f body="$(cat /tmp/media3-validation-comment.md)"
+
+      - name: Enforce validation gate
+        if: always()
+        run: |
+          test "${{ steps.nativecfg.outcome }}" = "success"
+          test "${{ steps.tests.outcome }}" = "success"
+          test "${{ steps.typecheck.outcome }}" = "success"
+          test "${{ steps.lint.outcome }}" = "success"
+          test "${{ steps.scan.outcome }}" = "success"
+          test "${{ steps.invariants.outcome }}" = "success"
+          test "${{ steps.compile.outcome }}" = "success"
