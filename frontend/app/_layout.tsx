@@ -80,10 +80,12 @@ function ReminderCleanup() {
 function StartScreenRedirect() {
   const router = useRouter();
   const pathname = usePathname();
-  const { lastChannelId, loading } = useStore();
+  const { lastChannelId, loading, startScreen } = useStore();
   const [startupPreference, setStartupPreference] = React.useState<StartScreen | null>(null);
   const [startupPreferencesReady, setStartupPreferencesReady] = React.useState(false);
   const doneRef = React.useRef(false);
+  const persistenceChainRef = React.useRef<Promise<void>>(Promise.resolve());
+  const lastQueuedStartScreenRef = React.useRef<StartScreen | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -95,6 +97,21 @@ function StartScreenRedirect() {
     })();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    // Store hydration reads gs_start_screen before loading can become false.
+    // Once hydrated, serialize writes so rapid Settings edits cannot finish out
+    // of order. Retry one silent AsyncStorage failure without creating a timer,
+    // polling loop, or repeated Guide/EPG/cache work.
+    if (loading) return;
+    const next = resolveStartupScreen(startScreen);
+    if (lastQueuedStartScreenRef.current === next) return;
+    lastQueuedStartScreenRef.current = next;
+    persistenceChainRef.current = persistenceChainRef.current.then(async () => {
+      const saved = await storage.setItem(START_SCREEN_KEY, next);
+      if (!saved) await storage.setItem(START_SCREEN_KEY, next);
+    });
+  }, [loading, startScreen]);
 
   useEffect(() => {
     if (doneRef.current || !startupPreferencesReady || !startupPreference) return;
