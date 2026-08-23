@@ -21,6 +21,7 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
       CharmTrimLevel.CRITICAL -> clear()
     }
   }
+  private val unregisterDiagnostics = CharmEpgRamDiagnostics.register(::stats)
 
   fun clear(cooldownMs: Long = 0L) = synchronized(lock) {
     entries.clear()
@@ -30,6 +31,7 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
   fun clearPrograms() = clear()
   fun dispose() {
     unregisterMemoryListener()
+    unregisterDiagnostics()
     clear()
   }
   fun isWarm(): Boolean = synchronized(lock) { entries.isNotEmpty() }
@@ -208,4 +210,16 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
     private const val LOW_MEMORY_CLASS_BYTES = 192L * 1024L * 1024L
     private const val MAX_CACHE_BYTES = 64L * 1024L * 1024L
   }
+}
+
+/** Best-effort snapshot for playback diagnostics; no playback control depends on it. */
+internal object CharmEpgRamDiagnostics {
+  @Volatile private var provider: (() -> Map<String, Long>)? = null
+
+  fun register(next: () -> Map<String, Long>): () -> Unit {
+    provider = next
+    return { if (provider === next) provider = null }
+  }
+
+  fun stats(): Map<String, Long> = runCatching { provider?.invoke() ?: emptyMap() }.getOrDefault(emptyMap())
 }

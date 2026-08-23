@@ -28,7 +28,7 @@ export type SlidingCacheWindow = {
   end: number;
   /** Inclusive eviction start (wider than fetch window). */
   evictStart: number;
-  /** Exclusive eviction end. */
+  /** Exclusive eviction end (wider than fetch window). */
   evictEnd: number;
   pageSize: number;
   behind: number;
@@ -36,16 +36,15 @@ export type SlidingCacheWindow = {
 };
 
 const PROFILE_PAGES: Record<GuideCacheProfile, SlidingCachePages> = {
-  // Match the symmetric on-screen EPG runway plus one page of eviction slack.
   normal: {
     behind: GUIDE_PREFETCH_PAGES_BEHIND,
     ahead: GUIDE_PREFETCH_PAGES_AHEAD,
     hysteresis: 1,
   },
-  weak: { behind: 5, ahead: 5, hysteresis: 1 },
+  weak: { behind: 3, ahead: 3, hysteresis: 1 },
   max_preview: {
-    behind: GUIDE_PREFETCH_PAGES_BEHIND + 2,
-    ahead: GUIDE_PREFETCH_PAGES_AHEAD + 2,
+    behind: GUIDE_PREFETCH_PAGES_BEHIND + 1,
+    ahead: GUIDE_PREFETCH_PAGES_AHEAD + 1,
     hysteresis: 1,
   },
 };
@@ -102,7 +101,6 @@ export function computeSlidingCacheWindow(input: {
   const focus = Math.max(0, Math.min(Math.max(0, count - 1), Math.floor(input.focusIndex || 0)));
   const behindRows = behind * pageSize;
   const aheadRows = ahead * pageSize;
-  // Sticky neighbors: always keep at least focus ± 1 inside the fetch window.
   let start = Math.max(0, focus - Math.max(behindRows, 1));
   let end = Math.min(count, focus + 1 + Math.max(aheadRows, 1));
 
@@ -110,11 +108,9 @@ export function computeSlidingCacheWindow(input: {
   let evictStart = Math.max(0, start - hysteresisRows);
   let evictEnd = Math.min(count, end + hysteresisRows);
 
-  // Hysteresis vs previous band: never shrink eviction while still inside it.
   const prev = input.previousWindow;
   if (prev && count > 0) {
-    const stillInside =
-      focus >= prev.evictStart && focus < Math.max(prev.evictStart + 1, prev.evictEnd);
+    const stillInside = focus >= prev.evictStart && focus < Math.max(prev.evictStart + 1, prev.evictEnd);
     if (stillInside) {
       evictStart = Math.min(evictStart, Math.max(0, prev.evictStart));
       evictEnd = Math.max(evictEnd, Math.min(count, prev.evictEnd));
@@ -124,15 +120,7 @@ export function computeSlidingCacheWindow(input: {
   if (end < start) end = start;
   if (evictEnd < evictStart) evictEnd = evictStart;
 
-  return {
-    start,
-    end,
-    evictStart,
-    evictEnd,
-    pageSize,
-    behind,
-    ahead,
-  };
+  return { start, end, evictStart, evictEnd, pageSize, behind, ahead };
 }
 
 export function slidingWindowChannelIds(
@@ -150,16 +138,12 @@ export function slidingWindowChannelIds(
   return out;
 }
 
-/** IDs currently cached that fall outside the eviction band. */
 export function idsOutsideSlidingWindow(
   cachedIds: Iterable<string>,
   keepIds: ReadonlySet<string>,
 ): string[] {
   const drop: string[] = [];
-  for (const id of cachedIds) {
-    if (!id) continue;
-    if (!keepIds.has(id)) drop.push(id);
-  }
+  for (const id of cachedIds) if (id && !keepIds.has(id)) drop.push(id);
   return drop;
 }
 
@@ -178,7 +162,7 @@ export function slidingWindowKeepSet(
   return keep;
 }
 
-/** Build once per filtered playlist; reuse across half-page viewport buckets. */
+/** Build once per filtered playlist; reuse across viewport buckets. */
 export function buildChannelIndexMap(
   orderedChannelIds: readonly string[],
 ): Map<string, number> {
@@ -190,14 +174,7 @@ export function buildChannelIndexMap(
   return indexById;
 }
 
-/**
- * Expand a fetched runway with ±hysteresis pages so reverse surfing does not
- * immediately drop the page the user just left.
- */
-/**
- * Cap a keep list around focus so blur / memory-pressure release does not keep
- * the head of an ascending ID list (which drops the focused neighborhood).
- */
+/** Cap a keep list around focus for blur / memory-pressure release. */
 export function pickKeepIdsAroundFocus(
   sourceIds: readonly string[],
   keepLimit: number,
@@ -208,7 +185,6 @@ export function pickKeepIdsAroundFocus(
   if (sourceIds.length <= limit) return sourceIds.filter(Boolean);
   const focusIndex = focusChannelId ? sourceIds.indexOf(focusChannelId) : -1;
   if (focusIndex < 0) {
-    // Prefer the middle of the warm runway over the playlist head.
     const start = Math.max(0, Math.floor((sourceIds.length - limit) / 2));
     return sourceIds.slice(start, start + limit).filter(Boolean);
   }
@@ -222,6 +198,7 @@ export function pickKeepIdsAroundFocus(
   return sourceIds.slice(start, end).filter(Boolean);
 }
 
+/** Expand a fetched runway with ±hysteresis pages for fast reverse surfing. */
 export function expandRunwayKeepSet(
   orderedChannelIds: readonly string[],
   runwayIds: readonly string[],

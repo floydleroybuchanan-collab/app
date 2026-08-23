@@ -15,13 +15,13 @@ import {
 
 const channelIds = Array.from({ length: 200 }, (_, index) => `channel-${index}`);
 
-test("sliding cache pages track the symmetric eight-page runway policy", () => {
+test("sliding cache pages track the symmetric bounded runway policy", () => {
   const pages = getSlidingCachePages("normal");
   assert.equal(pages.ahead, GUIDE_PREFETCH_PAGES_AHEAD);
   assert.equal(pages.behind, GUIDE_PREFETCH_PAGES_BEHIND);
   assert.equal(pages.hysteresis, 1);
-  assert.equal(GUIDE_PREFETCH_PAGES_AHEAD, 8);
-  assert.equal(GUIDE_PREFETCH_PAGES_BEHIND, 8);
+  assert.equal(GUIDE_PREFETCH_PAGES_AHEAD, 4);
+  assert.equal(GUIDE_PREFETCH_PAGES_BEHIND, 4);
 });
 
 test("sliding window stretches ahead while surfing down", () => {
@@ -32,21 +32,20 @@ test("sliding window stretches ahead while surfing down", () => {
     direction: "down",
     profile: "normal",
   });
-  // 8 behind + focus + (8+1) ahead
-  assert.equal(window.behind, 8);
-  assert.equal(window.ahead, 9);
+  assert.equal(window.behind, 4);
+  assert.equal(window.ahead, 5);
   assert.equal(window.start, 0);
-  assert.equal(window.end, 131);
+  assert.equal(window.end, 91);
   assert.ok(window.evictStart <= window.start);
   assert.ok(window.evictEnd >= window.end);
 
   const fetchIds = slidingWindowChannelIds(channelIds, window);
   assert.equal(fetchIds[0], "channel-0");
-  assert.equal(fetchIds.at(-1), "channel-130");
+  assert.equal(fetchIds.at(-1), "channel-90");
 
   const keep = slidingWindowKeepSet(channelIds, window);
   assert.equal(keep.has("channel-20"), true);
-  assert.equal(keep.has("channel-10"), true); // hysteresis behind
+  assert.equal(keep.has("channel-10"), true);
   assert.equal(keep.has("channel-0"), true);
 });
 

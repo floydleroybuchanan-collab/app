@@ -49,6 +49,21 @@ internal object CharmMemoryCoordinator {
     // Delay background/moderate cleanup during decoder startup. Critical
     // pressure always wins so Android does not kill the process outright.
     if (level != CharmTrimLevel.CRITICAL && System.currentTimeMillis() < playbackStartingUntilMs) return
+    dispatchTrim(level)
+  }
+
+  /**
+   * Used only immediately before a full decoder reconstruction on low-RAM
+   * hardware. MODERATE listeners may release disposable RAM caches, while
+   * persistent SQLite guide data and the current guide selection stay intact.
+   * This deliberately bypasses the decoder-start grace period: the player is
+   * about to release/recreate its decoder and needs that memory first.
+   */
+  fun trimNonEssentialForPlaybackRecovery() {
+    dispatchTrim(CharmTrimLevel.MODERATE)
+  }
+
+  private fun dispatchTrim(level: CharmTrimLevel) {
     val snapshot = synchronized(listeners) { listeners.toList() }
     for (listener in snapshot) runCatching { listener(level, budgets) }
   }

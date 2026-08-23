@@ -40,6 +40,7 @@ import {
   setGuideFocusedProgram,
   useGuideSelection,
 } from "@/src/core/guideSelectionStore";
+import { stopPreviewSession } from "@/src/core/playbackSession";
 import { getPowerProfileTuning } from "@/src/core/devicePowerProfile";
 import { shouldUseLowRamTuning, useDeviceMemoryProfile } from "@/src/core/deviceMemoryProfile";
 import { channelHasOwnedEpgMatch } from "@/src/core/epgUserOverrides";
@@ -215,9 +216,6 @@ function PurpleGuideScreenContent() {
       return () => {
         setGuideScreenActive(false);
         setGuideNavigationActive(false);
-        // A route/modal/drawer may already own the remote by the time Guide
-        // blur cleanup runs. Release only our own ownership so stale cleanup
-        // cannot clobber the newer focus context.
         resetRemoteContextIfOwned("guide", "default");
       };
     }, []),
@@ -295,8 +293,6 @@ function PurpleGuideScreenContent() {
   const [nativeGuideFocusTag, setNativeGuideFocusTag] = useState<number | null>(null);
   const [resetToken, setResetToken] = useState(0);
   const [restoreTimeMs, setRestoreTimeMs] = useState<number | null>(null);
-  // Explicit Search/player jumps may target a channel hidden by the saved Matched/Unmatched filter.
-  // Keep one session-only bypass row until the user manually navigates away; never rewrite the saved filter.
   const [jumpFilterBypassId, setJumpFilterBypassId] = useState<string | null>(null);
   const [pinPromptGroup, setPinPromptGroup] = useState<string | null>(null);
   const [pinDigits, setPinDigits] = useState("");
@@ -325,6 +321,32 @@ function PurpleGuideScreenContent() {
   const [previewEpoch, setPreviewEpoch] = useState(0);
   const startPreferenceAppliedRef = useRef(false);
   const wasFocusedRef = useRef(false);
+
+  const cancelGuideTransientTimers = useCallback(() => {
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
+    if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
+    if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
+    previewTimer.current = null;
+    previewRecoverTimer.current = null;
+    surfReleaseTimer.current = null;
+    runwayPatchTimer.current = null;
+    pendingRunwayPatchRef.current = null;
+    rapidSurfUntilRef.current = 0;
+  }, []);
+
+  const quiesceGuideForTransition = useCallback((releaseCache: boolean) => {
+    cancelGuideTransientTimers();
+    setPreviewId(null);
+    setPreviewStatus("loading");
+    setPreviewActionsFocused(false);
+    setViewportGuideChannelIds(null);
+    setPriorityMatchChannelIds([]);
+    lastRunwayRef.current = { ids: [], priority: [], pageSize: 8 };
+    void stopPreviewSession("superseded");
+    if (releaseCache) releaseGuideSlidingCache();
+  }, [cancelGuideTransientTimers, releaseGuideSlidingCache]);
+
   useEffect(() => {
     if (isFocused && !wasFocusedRef.current) startPreferenceAppliedRef.current = false;
     wasFocusedRef.current = isFocused;
@@ -334,21 +356,17 @@ function PurpleGuideScreenContent() {
   }, []);
   useEffect(
     () => subscribeAndroidMemoryPressure((pressure) => {
-      if (previewTimer.current) clearTimeout(previewTimer.current);
-      previewTimer.current = null;
-      if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
-      previewRecoverTimer.current = null;
-      if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
-      surfReleaseTimer.current = null;
+      cancelGuideTransientTimers();
       if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
-      if (pressure === "critical") setPreviewId(null);
+      setPreviewId(null);
+      void stopPreviewSession("superseded");
       setSurfLogosSuppressed(true);
       memoryLogoRestoreTimer.current = setTimeout(
         () => setSurfLogosSuppressed(false),
         pressure === "critical" ? 12_000 : 4_000,
       );
     }),
-    [],
+    [cancelGuideTransientTimers],
   );
   useEffect(() => {
     if (activeProgram) hadProgramModalRef.current = true;
@@ -402,9 +420,6 @@ function PurpleGuideScreenContent() {
   }, [isFocused]);
 
   useEffect(() => {
-    // TiViMate-style window ownership: an overlay that is visually on top must
-    // also be the only semantic key owner. Otherwise Channel/Page keys can move
-    // the hidden native Guide and held Select can reopen Guide actions underneath.
     if (!isFocused) {
       setGuideNavigationActive(false);
       if (pinModalOwnedRef.current) {
@@ -426,9 +441,6 @@ function PurpleGuideScreenContent() {
     }
 
     if (!quickActionsOpen && !activeProgram && !drawerOpen && !groupDrawerOpen) {
-      // Reassert both halves of Guide ownership. An edge control can temporarily
-      // claim the Activity router; merely re-enabling navigation left long OK
-      // classified under `default`, where it fell through to ProgramModal.
       setRemoteContext("guide");
       setGuideNavigationActive(true);
     }
@@ -466,20 +478,14 @@ function PurpleGuideScreenContent() {
 
   useEffect(
     () => () => {
-      if (previewTimer.current) clearTimeout(previewTimer.current);
-      if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
-      if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
+      cancelGuideTransientTimers();
       if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
-      if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
-      previewTimer.current = null;
-      previewRecoverTimer.current = null;
-      surfReleaseTimer.current = null;
       memoryLogoRestoreTimer.current = null;
-      runwayPatchTimer.current = null;
-      pendingRunwayPatchRef.current = null;
       setViewportGuideChannelIds(null);
+      setPriorityMatchChannelIds([]);
+      void stopPreviewSession("superseded");
     },
-    [],
+    [cancelGuideTransientTimers],
   );
 
   useFocusEffect(
@@ -504,24 +510,9 @@ function PurpleGuideScreenContent() {
         void patchProgramsForChannelIds(last.ids, last.priority);
       }
       return () => {
-        if (previewTimer.current) {
-          clearTimeout(previewTimer.current);
-          previewTimer.current = null;
-        }
-        if (previewRecoverTimer.current) {
-          clearTimeout(previewRecoverTimer.current);
-          previewRecoverTimer.current = null;
-        }
-        if (surfReleaseTimer.current) {
-          clearTimeout(surfReleaseTimer.current);
-          surfReleaseTimer.current = null;
-        }
-        setPreviewId(null);
-        setViewportGuideChannelIds(null);
-        setPriorityMatchChannelIds([]);
-        releaseGuideSlidingCache();
+        quiesceGuideForTransition(true);
       };
-    }, [channels.length, patchProgramsForChannelIds, releaseGuideSlidingCache, retainGuideSlidingCache]),
+    }, [channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache]),
   );
 
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
@@ -530,9 +521,6 @@ function PurpleGuideScreenContent() {
 
   const groupCounts = useMemo(
     () => {
-      // The failure registry is module-owned. Reading its count here makes a
-      // failure-state render recompute this memo without pretending the EPG
-      // filter participates in group counts.
       void failedCount;
       return buildGroupCounts(channels, {
         favoriteSet,
@@ -720,12 +708,13 @@ function PurpleGuideScreenContent() {
 
   useEffect(() => {
     if (!groups.includes(group) && !overflowGroups.includes(group)) {
+      quiesceGuideForTransition(true);
       guideSessionGroup = "All";
       guideSessionChannelId = null;
       setGroup("All");
       setResetToken((value) => value + 1);
     }
-  }, [group, groups, overflowGroups]);
+  }, [group, groups, overflowGroups, quiesceGuideForTransition]);
 
   const channelNumberById = useMemo(() => {
     const result: Record<string, number> = {};
@@ -838,26 +827,23 @@ function PurpleGuideScreenContent() {
   }, [armPreviewForChannel, group, jumpFilterBypassId]);
 
   const openGuideProgram = useCallback((_program: Program, _channel: Channel) => {
-    // The Guide has one action surface. Short OK and long OK now converge on
-    // Quick Actions instead of mounting ProgramModal with Watch Now focused.
-    // NativeGuideCanvas updates the synchronous selection snapshot first.
     emitTvQuickActions("guide");
   }, []);
 
   const play = useCallback(
     (channel: Channel) => {
       void Haptics.selectionAsync().catch(() => undefined);
-      if (previewTimer.current) clearTimeout(previewTimer.current);
-      setPreviewId(null);
+      quiesceGuideForTransition(true);
       addRecent(channel);
-      openFullscreenPlayer(router, channel.id, { returnToGuide: true });
+      openFullscreenPlayer(router, channel.id, { returnToGuide: true, returnGuideGroup: group });
     },
-    [addRecent, router],
+    [addRecent, group, quiesceGuideForTransition, router],
   );
 
   const applyGroup = useCallback((next: string) => {
     void Haptics.selectionAsync().catch(() => undefined);
-    if (previewTimer.current) clearTimeout(previewTimer.current);
+    if (next !== group) quiesceGuideForTransition(true);
+    else cancelGuideTransientTimers();
     groupChangedAt.current = Date.now();
     if (guideSessionChannelId) rememberGuideGroupChannel(group, guideSessionChannelId);
     const rememberedChannelId = guideSessionChannelByGroup.get(next) || null;
@@ -871,34 +857,22 @@ function PurpleGuideScreenContent() {
     setResetToken((value) => value + 1);
     setGroupDrawerOpen(false);
     closeDrawer();
-  }, [closeDrawer, group]);
+  }, [cancelGuideTransientTimers, closeDrawer, group, quiesceGuideForTransition]);
 
   const openPinPrompt = useCallback((next: string, returnToGroups: boolean) => {
-    // Claim the modal synchronously with the key action. The old group drawer
-    // must not stay mounted with a second FocusGuide underneath the PIN.
     pinModalOwnedRef.current = true;
     pinReturnToGroupsRef.current = returnToGroups;
     setGuideNavigationActive(false);
     setRemoteContext("modal");
-    if (previewTimer.current) {
-      clearTimeout(previewTimer.current);
-      previewTimer.current = null;
-    }
-    if (previewRecoverTimer.current) {
-      clearTimeout(previewRecoverTimer.current);
-      previewRecoverTimer.current = null;
-    }
-    if (surfReleaseTimer.current) {
-      clearTimeout(surfReleaseTimer.current);
-      surfReleaseTimer.current = null;
-    }
+    cancelGuideTransientTimers();
     setPreviewId(null);
+    void stopPreviewSession("superseded");
     setPreviewActionsFocused(false);
     if (returnToGroups) setGroupDrawerOpen(false);
     setPinPromptGroup(next);
     setPinDigits("");
     setPinError(false);
-  }, []);
+  }, [cancelGuideTransientTimers]);
 
   const closePinPrompt = useCallback((restoreGroups: boolean) => {
     const returnToGroups = restoreGroups && pinReturnToGroupsRef.current;
@@ -967,9 +941,6 @@ function PurpleGuideScreenContent() {
   }, [activeProgram, drawerOpen, groupDrawerOpen]);
 
   const onGuideUpBoundary = useCallback(() => {
-    // RC.5 used a short preferred-focus claim for this boundary. Restore that
-    // reliable TV behavior without restoring its old playback lifecycle: the
-    // native Guide remains active until a real action receives Android focus.
     setPreviewFocusRequestToken((value) => value + 1);
     requestAnimationFrame(() => {
       focusGuidePreviewSurface();
@@ -981,12 +952,13 @@ function PurpleGuideScreenContent() {
       const jump = consumeGuideJump();
       if (!jump) return;
       startPreferenceAppliedRef.current = true;
-      const nextGroup = jump.group || "All";
+      const nextGroup = jump.group || guideSessionGroup || "All";
       if (hasPin && isGroupLocked(nextGroup)) {
         openPinPrompt(nextGroup, false);
         guideSessionChannelId = jump.channelId;
         return;
       }
+      if (nextGroup !== guideSessionGroup) quiesceGuideForTransition(true);
       guideSessionGroup = nextGroup;
       guideSessionChannelId = jump.channelId;
       setJumpFilterBypassId(jump.channelId);
@@ -1000,7 +972,7 @@ function PurpleGuideScreenContent() {
       if (ch) {
         schedulePreview(jump.channelId, previewDelay + surfSettleExtraMs, !!ch.url);
       }
-    }, [channelById, hasPin, isGroupLocked, openPinPrompt, previewDelay, schedulePreview, surfSettleExtraMs]),
+    }, [channelById, hasPin, isGroupLocked, openPinPrompt, previewDelay, quiesceGuideForTransition, schedulePreview, surfSettleExtraMs]),
   );
 
   const onPreviewStatus = useCallback((status: StreamStatus) => {
@@ -1099,8 +1071,7 @@ function PurpleGuideScreenContent() {
               onPlay={play}
               onFavorite={toggleFavorite}
               onOpenReminders={() => {
-                if (previewTimer.current) clearTimeout(previewTimer.current);
-                setPreviewId(null);
+                quiesceGuideForTransition(true);
                 router.replace("/reminders" as any);
               }}
               onHideToggle={() => setHidePreview(!hidePreview)}
