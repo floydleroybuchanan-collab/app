@@ -16,7 +16,7 @@ test("provider headers are preserved without a universal fake user agent", () =>
   assert.equal(parsed.headers.Authorization, "Bearer abc");
 });
 
-test("native recovery escalates through fresh source and full player rebuild without changing tuning", async () => {
+test("native recovery escalates through a real playlist-only source refresh and full player rebuild without changing tuning", async () => {
   const [native, bridge, adapter, memory] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("src/nativePlayback.ts"),
@@ -38,6 +38,9 @@ test("native recovery escalates through fresh source and full player rebuild wit
   assert.match(memory, /fun trimNonEssentialForPlaybackRecovery/);
   assert.match(bridge, /NativePlaybackSourceRefreshRequested/);
   assert.match(adapter, /refreshPlaybackChannel\(event\.channelKey\)/);
+  assert.match(adapter, /fresh-channel-unavailable-reused-current/);
+  assert.match(adapter, /source-refresh-failed[\s\S]*?-reused-current/);
+  assert.doesNotMatch(adapter, /if \(!event\.authenticationFailure\)/);
   assert.match(adapter, /resolveNativePlaybackFreshSource/);
 });
 
