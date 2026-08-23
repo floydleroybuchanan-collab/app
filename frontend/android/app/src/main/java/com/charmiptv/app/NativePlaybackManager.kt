@@ -1,6 +1,7 @@
 package com.charmiptv.app
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
@@ -111,6 +112,8 @@ object NativePlaybackManager {
   private const val PREVIEW_START_TIMEOUT_MS = 8_000L
   private const val SOURCE_REFRESH_TIMEOUT_MS = 20_000L
   private const val OPAQUE_PROBE_CACHE_SIZE = 256
+  private const val OPAQUE_TYPE_PREFS = "charm_media3_stream_types"
+  private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
   private const val TAG = "CharmMedia3"
 
   private val httpClient = OkHttpClient.Builder()
@@ -148,6 +151,11 @@ object NativePlaybackManager {
   private var bufferingLastPositionMs = 0L
   private var opaqueProbeCall: Call? = null
   private var opaqueProbeGeneration = 0L
+  private var opaqueRouteSource: PlaybackSource? = null
+  private var opaqueRouteCandidates: List<String> = emptyList()
+  private var opaqueRouteIndex = -1
+  private var opaqueRouteCacheKey: String? = null
+  private var opaqueRouteWasCached = false
 
   // Per-channel diagnostics. These are reset on a new tune and updated by the
   // opaque probe plus Media3 renderer callbacks; no extra recovery is triggered.
@@ -238,9 +246,10 @@ object NativePlaybackManager {
     cancelRecoveryCallbacks()
     owner = requestedOwner
     resetMediaDiagnostics()
+    resetOpaqueRoutingState()
     val baseSource = PlaybackSource(channelKey.trim(), uri, LinkedHashMap(headers), contentType?.trim()?.takeIf { it.isNotEmpty() }, sourceTypeFor(uri, contentType))
-    activeSource = applyCachedDetectedType(baseSource)
-    seedKnownContainerMime(activeSource!!)
+    activeSource = baseSource
+    seedKnownContainerMime(baseSource)
     lastPlaybackError = null
     firstFrameRendered = false
     recoveryAttempts = 0
@@ -250,7 +259,7 @@ object NativePlaybackManager {
     if (!attachPlayerView(requestedOwner)) { finishWithError("surface-unavailable", instance); return@runOnMain }
     playerView?.visibility = View.VISIBLE
     publishState("loading", null)
-    startOrProbeMediaSource(instance, activeSource!!, "channel-start")
+    startOrProbeMediaSource(instance, baseSource, "channel-start")
   }
 
   fun provideFreshSource(requestId: Long, uri: String?, headers: Map<String, String>, contentType: String?, failureReason: String?) = runOnMain {
@@ -267,12 +276,13 @@ object NativePlaybackManager {
     }
     val freshContentType = contentType?.trim()?.takeIf { it.isNotEmpty() } ?: source.contentType
     val baseSource = PlaybackSource(source.channelKey, uri, LinkedHashMap(headers), freshContentType, sourceTypeFor(uri, freshContentType))
-    activeSource = applyCachedDetectedType(baseSource)
-    seedKnownContainerMime(activeSource!!)
+    resetOpaqueRoutingState()
+    activeSource = baseSource
+    seedKnownContainerMime(baseSource)
     markPlaybackStarting("fresh-source")
     recordDiagnostic("fresh-source-received", lastPlaybackError, instance)
     try {
-      startOrProbeMediaSource(instance, activeSource!!, "fresh-source")
+      startOrProbeMediaSource(instance, baseSource, "fresh-source")
     } catch (error: Throwable) {
       recordDiagnostic("fresh-source-rebuild-failed:${error.javaClass.simpleName}", lastPlaybackError, instance)
       if (recoveryAttempts < MAX_AUTO_RECOVERIES) recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport") else finishWithError("stream-error", instance)
@@ -322,6 +332,7 @@ object NativePlaybackManager {
     owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0; stableSinceMs = 0L
     resetBufferingWatchdogState()
     resetMediaDiagnostics()
+    resetOpaqueRoutingState()
     CharmMemoryCoordinator.setPlaybackStarting(false)
     playerView?.visibility = View.GONE
     if (releasePlayer) {
@@ -397,6 +408,7 @@ object NativePlaybackManager {
             // Healthy playback no longer schedules a 30-second main-thread callback.
             // The recovery budget is rearmed lazily only if a real stall/error occurs.
             resetBufferingWatchdogState()
+            confirmSuccessfulStreamType()
             CharmMemoryCoordinator.setPlaybackStarting(false)
             recordDiagnostic("first-frame", lastPlaybackError, created)
             publishState("playing", null)
@@ -407,6 +419,7 @@ object NativePlaybackManager {
             main.removeCallbacks(bufferingWatchdog)
             resetBufferingWatchdogState()
             recordDiagnostic("player-error", error, created)
+            if (tryNextOpaqueCandidate(created, error)) return
             rearmRecoveryAfterStablePlayback()
             recoverOnce(
               created,
@@ -532,6 +545,7 @@ object NativePlaybackManager {
 
   private fun startOrProbeMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
     if (source.sourceType != "unknown" || !isHttpOrHttps(source.uri)) {
+      resetOpaqueRoutingState()
       val routed = if (source.sourceType == "unknown") source.copy(sourceType = "progressive") else source
       activeSource = routed
       seedKnownContainerMime(routed)
@@ -540,13 +554,10 @@ object NativePlaybackManager {
     }
 
     val cacheKey = detectedTypeCacheKey(source)
-    detectedTypeCache[cacheKey]?.let { cachedType ->
+    readDetectedType(cacheKey)?.let { cachedType ->
       probeReason = "cache:$cachedType"
-      val routed = source.copy(sourceType = cachedType)
-      activeSource = routed
-      seedKnownContainerMime(routed)
       recordDiagnostic("opaque-cache-hit", lastPlaybackError, instance)
-      rebuildMediaSource(instance, routed, event)
+      startOpaqueCandidate(instance, source, cacheKey, cachedType, "$event-opaque-cache-$cachedType", fromCache = true)
       return
     }
 
@@ -562,21 +573,58 @@ object NativePlaybackManager {
         detectedMimeType = result.contentType
         resolvedUri = result.finalUri?.let(::redactUriForDiagnostics)
         probeHttpResponseCode = result.httpCode
-        probeReason = result.reason
         val detectedType = result.sourceType
-        if (detectedType != null) detectedTypeCache[cacheKey] = detectedType
-        val routedType = detectedType ?: "progressive"
-        val routed = source.copy(sourceType = routedType)
-        activeSource = routed
-        seedKnownContainerMime(routed)
+        val firstType = detectedType ?: "transport"
+        probeReason = if (detectedType == null) "${result.reason};default:transport" else result.reason
         recordDiagnostic("opaque-probe-${detectedType ?: "unknown"}", lastPlaybackError, instance)
         try {
-          rebuildMediaSource(instance, routed, "$event-opaque-$routedType")
+          startOpaqueCandidate(instance, source, cacheKey, firstType, "$event-opaque-$firstType", fromCache = false)
         } catch (error: Throwable) {
           recordDiagnostic("opaque-rebuild-failed:${error.javaClass.simpleName}", lastPlaybackError, instance)
-          recoverOnce(instance, skipBarePrepare = routedType == "transport")
+          recoverOnce(instance, skipBarePrepare = firstType == "transport")
         }
       }
+    }
+  }
+
+  private fun startOpaqueCandidate(instance: ExoPlayer, source: PlaybackSource, cacheKey: String, firstType: String, event: String, fromCache: Boolean) {
+    opaqueRouteSource = source
+    opaqueRouteCacheKey = cacheKey
+    opaqueRouteWasCached = fromCache
+    opaqueRouteCandidates = orderedOpaqueCandidates(firstType)
+    opaqueRouteIndex = 0
+    val routed = source.copy(sourceType = opaqueRouteCandidates.first())
+    activeSource = routed
+    detectedMimeType = detectedMimeType ?: knownMimeForSource(routed)
+    rebuildMediaSource(instance, routed, event)
+  }
+
+  private fun tryNextOpaqueCandidate(instance: ExoPlayer, error: PlaybackException): Boolean {
+    if (firstFrameRendered || !isContainerMismatch(error)) return false
+    val original = opaqueRouteSource ?: return false
+    if (opaqueRouteIndex < 0 || opaqueRouteCandidates.isEmpty()) return false
+    val cacheKey = opaqueRouteCacheKey
+    if (opaqueRouteWasCached && cacheKey != null) {
+      forgetDetectedType(cacheKey)
+      opaqueRouteWasCached = false
+      recordDiagnostic("opaque-cache-invalidated", error, instance)
+    }
+    val nextIndex = opaqueRouteIndex + 1
+    if (nextIndex >= opaqueRouteCandidates.size) return false
+    opaqueRouteIndex = nextIndex
+    val nextType = opaqueRouteCandidates[nextIndex]
+    val routed = original.copy(sourceType = nextType)
+    activeSource = routed
+    detectedMimeType = knownMimeForSource(routed)
+    probeReason = "${probeReason ?: "opaque"};parser-retry:$nextType"
+    recordDiagnostic("opaque-type-retry-$nextType", error, instance)
+    lastPlaybackError = null
+    return try {
+      rebuildMediaSource(instance, routed, "opaque-type-retry-$nextType")
+      true
+    } catch (failure: Throwable) {
+      recordDiagnostic("opaque-type-retry-failed:${failure.javaClass.simpleName}", error, instance)
+      false
     }
   }
 
@@ -642,6 +690,13 @@ object NativePlaybackManager {
     try { opaqueProbeCall?.cancel() } catch (_: Throwable) {}
     opaqueProbeCall = null
   }
+  private fun resetOpaqueRoutingState() {
+    opaqueRouteSource = null
+    opaqueRouteCandidates = emptyList()
+    opaqueRouteIndex = -1
+    opaqueRouteCacheKey = null
+    opaqueRouteWasCached = false
+  }
   private fun resetBufferingWatchdogState() { bufferingSinceMs = 0L; bufferingLastBufferedPositionMs = 0L; bufferingLastPositionMs = 0L }
   private fun resetMediaDiagnostics() {
     detectedMimeType = null
@@ -660,6 +715,13 @@ object NativePlaybackManager {
   }
   private fun markPlaybackStarting(reason: String) { CharmMemoryCoordinator.setPlaybackStarting(true); Log.d(TAG, "playback-starting: $reason") }
   private fun isAuthenticationFailure(error: PlaybackException?): Boolean = findHttpResponseCode(error) in setOf(401, 403)
+  private fun isContainerMismatch(error: PlaybackException): Boolean {
+    if (error.errorCodeName.contains("PARSING", ignoreCase = true)) return true
+    return causeChain(error).any { name ->
+      name.contains("ParserException", ignoreCase = true) ||
+        name.contains("UnrecognizedInputFormatException", ignoreCase = true)
+    }
+  }
   private fun findHttpResponseCode(error: Throwable?): Int? {
     var current = error
     repeat(12) {
@@ -690,11 +752,13 @@ object NativePlaybackManager {
   private fun sourceTypeFor(uri: String, contentType: String?): String {
     val hint = contentType?.substringBefore(';')?.trim()?.lowercase(Locale.US).orEmpty()
     val lowerUri = uri.lowercase(Locale.US)
+    val hlsUri = Regex("\\.m3u8(?:$|[?#])").containsMatchIn(lowerUri) || Regex("[?&](?:format|type|output)=(?:hls|m3u8)(?:&|$)").containsMatchIn(lowerUri) || lowerUri.contains("/hls/")
+    val dashUri = Regex("\\.mpd(?:$|[?#])").containsMatchIn(lowerUri) || Regex("[?&](?:format|type|output)=(?:dash|mpd)(?:&|$)").containsMatchIn(lowerUri) || lowerUri.contains("/dash/")
     val transportUri = Regex("\\.(?:ts|m2ts)(?:$|[?#])").containsMatchIn(lowerUri) || lowerUri.contains("mpegts") || lowerUri.contains("mpeg-ts") || Regex("[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)").containsMatchIn(lowerUri)
     val progressiveUri = Regex("\\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)(?:$|[?#])").containsMatchIn(lowerUri)
     return when {
-      hint == "hls" || hint == "m3u8" || hint == MimeTypes.APPLICATION_M3U8 || hint == "application/x-mpegurl" || hint == "application/vnd.apple.mpegurl" || lowerUri.contains(".m3u8") || lowerUri.contains("format=m3u8") || lowerUri.contains("type=hls") || lowerUri.contains("/hls/") -> "hls"
-      hint == "dash" || hint == "mpd" || hint == MimeTypes.APPLICATION_MPD || hint == "application/dash+xml" || lowerUri.contains(".mpd") || lowerUri.contains("format=mpd") || lowerUri.contains("type=dash") || lowerUri.contains("/dash/") -> "dash"
+      hint == "hls" || hint == "m3u8" || hint == MimeTypes.APPLICATION_M3U8 || hint == "application/x-mpegurl" || hint == "application/vnd.apple.mpegurl" || hlsUri -> "hls"
+      hint == "dash" || hint == "mpd" || hint == MimeTypes.APPLICATION_MPD || hint == "application/dash+xml" || dashUri -> "dash"
       hint == "transport" || hint == "ts" || hint == MimeTypes.VIDEO_MP2T || transportUri -> "transport"
       hint == "progressive" || progressiveUri -> "progressive"
       hint == "unknown" && isHttpOrHttps(uri) -> "unknown"
@@ -714,21 +778,56 @@ object NativePlaybackManager {
   }
   private fun detectedTypeCacheKey(source: PlaybackSource): String =
     source.channelKey.takeIf { it.isNotBlank() }?.let { "channel:$it" } ?: "url:${source.uri.substringBefore('?').substringBefore('#')}"
-  private fun applyCachedDetectedType(source: PlaybackSource): PlaybackSource {
-    if (source.sourceType != "unknown") return source
-    val cached = detectedTypeCache[detectedTypeCacheKey(source)] ?: return source
-    probeReason = "cache:$cached"
-    return source.copy(sourceType = cached)
+  private fun orderedOpaqueCandidates(firstType: String): List<String> =
+    (listOf(firstType) + OPAQUE_LIVE_CANDIDATES).filter(::isPersistableDetectedType).distinct()
+  private fun isPersistableDetectedType(type: String): Boolean = type in setOf("hls", "dash", "transport", "progressive")
+  private fun readDetectedType(cacheKey: String): String? {
+    detectedTypeCache[cacheKey]?.let { return it }
+    val persisted = try {
+      activity?.getSharedPreferences(OPAQUE_TYPE_PREFS, Context.MODE_PRIVATE)?.getString(cacheKey, null)
+    } catch (_: Throwable) {
+      null
+    }
+    if (persisted != null && isPersistableDetectedType(persisted)) {
+      detectedTypeCache[cacheKey] = persisted
+      return persisted
+    }
+    return null
+  }
+  private fun rememberDetectedType(cacheKey: String, type: String) {
+    if (!isPersistableDetectedType(type)) return
+    detectedTypeCache[cacheKey] = type
+    try {
+      val prefs = activity?.getSharedPreferences(OPAQUE_TYPE_PREFS, Context.MODE_PRIVATE) ?: return
+      val editor = prefs.edit().putString(cacheKey, type)
+      if (!prefs.contains(cacheKey) && prefs.all.size >= OPAQUE_PROBE_CACHE_SIZE) {
+        prefs.all.keys.firstOrNull { it != cacheKey }?.let(editor::remove)
+      }
+      editor.apply()
+    } catch (_: Throwable) {}
+  }
+  private fun forgetDetectedType(cacheKey: String) {
+    detectedTypeCache.remove(cacheKey)
+    try { activity?.getSharedPreferences(OPAQUE_TYPE_PREFS, Context.MODE_PRIVATE)?.edit()?.remove(cacheKey)?.apply() } catch (_: Throwable) {}
+  }
+  private fun confirmSuccessfulStreamType() {
+    val source = activeSource ?: return
+    if (!isPersistableDetectedType(source.sourceType)) return
+    val cacheKey = detectedTypeCacheKey(source)
+    rememberDetectedType(cacheKey, source.sourceType)
+    if (opaqueRouteCacheKey != null) probeReason = "${probeReason ?: "opaque"};confirmed:${source.sourceType}"
+    resetOpaqueRoutingState()
   }
   private fun seedKnownContainerMime(source: PlaybackSource) {
     if (detectedMimeType != null) return
-    detectedMimeType = when (source.sourceType) {
-      "hls" -> MimeTypes.APPLICATION_M3U8
-      "dash" -> MimeTypes.APPLICATION_MPD
-      "transport" -> MimeTypes.VIDEO_MP2T
-      "progressive" -> progressiveContainerMime(source.uri)
-      else -> null
-    }
+    detectedMimeType = knownMimeForSource(source)
+  }
+  private fun knownMimeForSource(source: PlaybackSource): String? = when (source.sourceType) {
+    "hls" -> MimeTypes.APPLICATION_M3U8
+    "dash" -> MimeTypes.APPLICATION_MPD
+    "transport" -> MimeTypes.VIDEO_MP2T
+    "progressive" -> progressiveContainerMime(source.uri)
+    else -> null
   }
   private fun progressiveContainerMime(uri: String): String? {
     val lower = uri.substringBefore('?').substringBefore('#').lowercase(Locale.US)
