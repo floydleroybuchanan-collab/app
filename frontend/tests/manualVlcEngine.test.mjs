@@ -49,3 +49,5 @@ test("playlist stream types are batch-indexed without probing and hydration cann
   assert.match(vlc, /audioMutationRevision === audioRevisionAtStart/);
   assert.doesNotMatch(profile, /fetch\(|XMLHttpRequest|probeStream/);
 });
+
+// Native validation trigger: manual VLC final compile/scan.
