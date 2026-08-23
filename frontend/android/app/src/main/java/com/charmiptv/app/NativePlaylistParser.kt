@@ -263,11 +263,43 @@ internal object NativePlaylistParser {
   private fun streamIdentityUrl(url: String): String =
     url.substringBefore('|').trim().lowercase(Locale.US)
 
+  /**
+   * Preserve a compact transport/container hint for the playback layer. Media3
+   * still sniffs the actual progressive container and then selects codecs from
+   * the tracks; this hint is only used to choose the correct MediaSource and
+   * live-transport recovery policy for extensionless/provider-style URLs.
+   */
   private fun streamType(url: String): String {
-    val clean = url.lowercase(Locale.US).substringBefore('?').substringBefore('|')
+    val clean = streamIdentityUrl(url)
+    val path = clean.substringBefore('?')
+    val query = clean.substringAfter('?', "")
+    val paddedQuery = if (query.isEmpty()) "" else "&$query&"
     return when {
-      clean.endsWith(".m3u8") -> "hls"
-      clean.endsWith(".ts") -> "ts"
+      path.endsWith(".m3u8") ||
+        clean.contains("/hls/") ||
+        paddedQuery.contains("&format=m3u8&") ||
+        paddedQuery.contains("&type=hls&") ||
+        paddedQuery.contains("&output=hls&") -> "hls"
+      path.endsWith(".mpd") ||
+        clean.contains("/dash/") ||
+        paddedQuery.contains("&format=mpd&") ||
+        paddedQuery.contains("&type=dash&") ||
+        paddedQuery.contains("&output=dash&") -> "dash"
+      path.endsWith(".ts") || path.endsWith(".m2ts") ||
+        clean.contains("mpegts") || clean.contains("mpeg-ts") ||
+        paddedQuery.contains("&format=ts&") ||
+        paddedQuery.contains("&type=ts&") ||
+        paddedQuery.contains("&output=ts&") ||
+        paddedQuery.contains("&format=mpegts&") ||
+        paddedQuery.contains("&type=mpegts&") ||
+        paddedQuery.contains("&output=mpegts&") -> "ts"
+      path.endsWith(".mp4") || path.endsWith(".m4v") || path.endsWith(".m4a") ||
+        path.endsWith(".m4s") || path.endsWith(".mov") || path.endsWith(".webm") ||
+        path.endsWith(".mkv") || path.endsWith(".avi") || path.endsWith(".flv") ||
+        path.endsWith(".mpg") || path.endsWith(".mpeg") || path.endsWith(".vob") ||
+        path.endsWith(".mp3") || path.endsWith(".aac") || path.endsWith(".ogg") ||
+        path.endsWith(".wav") || path.endsWith(".flac") || path.endsWith(".amr") ||
+        path.endsWith(".cmfv") || path.endsWith(".cmfa") -> "progressive"
       else -> "unknown"
     }
   }
@@ -332,7 +364,7 @@ internal object NativePlaylistParser {
     private fun account(count: Int): Int {
       if (count <= 0) return count
       bytesRead += count.toLong()
-      if (bytesRead > maxBytes) throw IllegalStateException("Playlist exceeds size limit ($maxBytes bytes)")
+      if (bytesRead > maxBytes) throw IllegalStateException("Playlist exceeds size limit ($MAX_PLAYLIST_BYTES bytes)")
       return count
     }
 
