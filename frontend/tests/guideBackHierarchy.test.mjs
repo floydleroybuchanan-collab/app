@@ -35,3 +35,5 @@ test("returning from fullscreen restores the selected Guide group and channel in
   assert.doesNotMatch(guide, /const wasFocusedRef = useRef\(false\)/);
   assert.match(guide, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: true, returnGuideGroup: group \}\)/);
 });
+
+// Keep this file in the validation PR path set so a head sync re-runs the no-APK gate.
