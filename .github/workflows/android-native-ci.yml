@@ -22,6 +22,7 @@ on:
     branches:
       - main
       - agent/media3-opaque-live-startup-hardening
+      - agent/manual-vlc-engine
     paths:
       - "frontend/android/**"
       - "frontend/src/components/StreamPlayer.tsx"
