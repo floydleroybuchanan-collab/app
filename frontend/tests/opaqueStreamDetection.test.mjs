@@ -13,15 +13,22 @@ test("opaque HTTP IPTV URLs remain unknown until native response sniffing", () =
   assert.equal(detectStreamKind(opaque, "unknown"), "unknown");
   assert.equal(media3ContentType(detectStreamKind(opaque, "unknown")), "unknown");
   assert.equal(media3ContentType(detectStreamKind("https://provider.example/live/abc.m3u8?token=x", null)), "hls");
+  assert.equal(media3ContentType(detectStreamKind("https://provider.example/live/328923?output=hls", null)), "hls");
+  assert.equal(media3ContentType(detectStreamKind("https://provider.example/live/328923?output=m3u8", null)), "hls");
   assert.equal(media3ContentType(detectStreamKind("http://provider.example/live/abc.ts?token=x", null)), "transport");
+  assert.equal(media3ContentType(detectStreamKind("http://provider.example/live/328923?output=ts", null)), "transport");
   assert.equal(media3ContentType(detectStreamKind("https://provider.example/manifest.mpd?token=x", null)), "dash");
+  assert.equal(media3ContentType(detectStreamKind("https://provider.example/live/328923?output=dash", null)), "dash");
   assert.equal(media3ContentType(detectStreamKind("https://provider.example/movie.mp4?token=x", null)), "progressive");
 });
 
-test("native opaque probe is bounded, redirect-aware and signature-aware", async () => {
+test("native opaque probe is bounded, redirect-aware and metadata-first", async () => {
   const probe = await source("android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt");
   assert.match(probe, /MAX_SNIFF_BYTES = 4 \* 1024/);
   assert.match(probe, /safeResponse\.request\.url\.toString\(\)/);
+  assert.match(probe, /val metadataType = sourceTypeFromMimeOrUri/);
+  assert.match(probe, /if \(metadataType != null\)/);
+  assert.ok(probe.indexOf("val metadataType = sourceTypeFromMimeOrUri") < probe.indexOf("readPrefix(safeResponse.body?.byteStream()"));
   assert.match(probe, /#EXTM3U/);
   assert.match(probe, /<MPD/);
   assert.match(probe, /looksLikeTransportStream/);
@@ -29,7 +36,7 @@ test("native opaque probe is bounded, redirect-aware and signature-aware", async
   assert.doesNotMatch(probe, /readByteArray\(Long\.MAX_VALUE\)|bytes\(\)/);
 });
 
-test("opaque probing is one native path with a bounded session cache", async () => {
+test("opaque startup uses one Media3 path, persistent channel typing and live-first unresolved routing", async () => {
   const [manager, module] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt"),
@@ -37,9 +44,37 @@ test("opaque probing is one native path with a bounded session cache", async () 
   assert.match(manager, /source\.sourceType != "unknown"/);
   assert.match(manager, /NativeOpaqueStreamProbe\.start/);
   assert.match(manager, /OPAQUE_PROBE_CACHE_SIZE = 256/);
-  assert.match(manager, /detectedTypeCache\[cacheKey\]/);
+  assert.match(manager, /OPAQUE_TYPE_PREFS = "charm_media3_stream_types"/);
+  assert.match(manager, /OPAQUE_LIVE_CANDIDATES = listOf\("transport", "hls", "dash", "progressive"\)/);
+  assert.match(manager, /val firstType = detectedType \?: "transport"/);
+  assert.doesNotMatch(manager, /val routedType = detectedType \?: "progressive"/);
+  assert.match(manager, /detectedTypeCacheKey\(source\)/);
+  assert.match(manager, /"channel:\$it"/);
+  assert.match(manager, /getSharedPreferences\(OPAQUE_TYPE_PREFS/);
+  assert.match(manager, /confirmSuccessfulStreamType\(\)/);
+  assert.match(manager, /tryNextOpaqueCandidate\(created, error\)/);
+  assert.match(manager, /isContainerMismatch/);
+  assert.match(manager, /forgetDetectedType\(cacheKey\)/);
   assert.match(manager, /opaqueProbeCall\?\.cancel\(\)/);
   assert.doesNotMatch(module, /OpaqueStreamProbe\.probe|NativeOpaqueStreamProbe\.start/);
+});
+
+test("known TS/HLS/DASH paths bypass opaque probing and keep the locked playback budgets", async () => {
+  const manager = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  assert.match(manager, /if \(source\.sourceType != "unknown" \|\| !isHttpOrHttps\(source\.uri\)\)/);
+  assert.match(manager, /HlsMediaSource\.Factory/);
+  assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
+  assert.match(manager, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
+  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 10_000/);
+  assert.match(manager, /MAX_BUFFER_MS_LOW_RAM = 30_000/);
+  assert.match(manager, /PLAYBACK_BUFFER_MS_LOW_RAM = 2_500/);
+  assert.match(manager, /REBUFFER_BUFFER_MS_LOW_RAM = 5_000/);
+  assert.match(manager, /MIN_BUFFER_MS_NORMAL = 15_000/);
+  assert.match(manager, /MAX_BUFFER_MS_NORMAL = 60_000/);
+  assert.match(manager, /PLAYBACK_BUFFER_MS_NORMAL = 3_000/);
+  assert.match(manager, /REBUFFER_BUFFER_MS_NORMAL = 5_000/);
+  assert.match(manager, /readTimeout\(20, TimeUnit\.SECONDS\)/);
+  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
 });
 
 test("playback diagnostics capture container, codecs, resolution and decoders without changing recovery budgets", async () => {
