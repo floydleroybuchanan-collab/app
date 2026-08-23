@@ -99,7 +99,7 @@ export function rememberDeclaredStreamType(channelKey: string | undefined, rawTy
  * cheap for the current ~300-channel list and avoids hundreds of HEAD/GET probes.
  */
 export function indexDeclaredStreamTypes(
-  channels: ReadonlyArray<{ id?: string | null; stream_type?: unknown }>,
+  channels: readonly { id?: string | null; stream_type?: unknown }[],
 ): void {
   if (!channels.length) return;
   const now = Date.now();
