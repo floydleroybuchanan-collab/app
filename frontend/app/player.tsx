@@ -69,7 +69,7 @@ function AutoScrollProgramDescription({ text }: { text: string; activeKey: strin
 
 export default function PlayerScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string }>();
+  const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const {
@@ -348,14 +348,15 @@ export default function PlayerScreen() {
     const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
     generationRef.current += 1;
     const returnToGuide = params.returnToGuide === "1" && !!currentChannelId;
-    if (returnToGuide && currentChannelId) requestGuideJump({ channelId: currentChannelId, group: "All" });
+    const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
+    if (returnToGuide && currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
     // Do not mount the Guide/home tree while MediaCodec/ExoPlayer is still
     // releasing. That overlap was a reproducible peak-RAM/lifecycle crash path.
     void stopFullscreenSession().then(() => {
       if (returnToGuide) router.replace("/guide" as any);
       else router.back();
     });
-  }, [params.returnToGuide, router]);
+  }, [params.returnGuideGroup, params.returnToGuide, router]);
 
   const handleStreamStatus = useCallback((nextStatus: StreamStatus, reason?: SessionFailReason | null) => {
     setStatus(nextStatus);
@@ -386,10 +387,11 @@ export default function PlayerScreen() {
     exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
     const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
-    if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: "All" });
+    const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
+    if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
     generationRef.current += 1;
     void stopFullscreenSession().then(() => router.replace("/guide" as any));
-  }, [router]);
+  }, [params.returnGuideGroup, router]);
 
   const runRemoteAction = useCallback((action: PlayerRemoteAction) => {
     if (exitInFlightRef.current) return;
