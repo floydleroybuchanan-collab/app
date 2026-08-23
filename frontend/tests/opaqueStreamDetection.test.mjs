@@ -8,7 +8,7 @@ import { detectStreamKind, media3ContentType } from "../src/core/streamPolicy.ts
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("opaque HTTP IPTV URLs remain unknown until native response sniffing", () => {
+test("opaque HTTP IPTV URLs remain unknown until native Media3 routing", () => {
   const opaque = "http://provider.example/account/token/328923";
   assert.equal(detectStreamKind(opaque, "unknown"), "unknown");
   assert.equal(media3ContentType(detectStreamKind(opaque, "unknown")), "unknown");
@@ -22,13 +22,9 @@ test("opaque HTTP IPTV URLs remain unknown until native response sniffing", () =
   assert.equal(media3ContentType(detectStreamKind("https://provider.example/movie.mp4?token=x", null)), "progressive");
 });
 
-test("native opaque probe is bounded, redirect-aware and metadata-first", async () => {
+test("opaque sniff helper stays bounded even though live startup no longer opens a second GET", async () => {
   const probe = await source("android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt");
   assert.match(probe, /MAX_SNIFF_BYTES = 4 \* 1024/);
-  assert.match(probe, /safeResponse\.request\.url\.toString\(\)/);
-  assert.match(probe, /val metadataType = sourceTypeFromMimeOrUri/);
-  assert.match(probe, /if \(metadataType != null\)/);
-  assert.ok(probe.indexOf("val metadataType = sourceTypeFromMimeOrUri") < probe.indexOf("readPrefix(safeResponse.body?.byteStream()"));
   assert.match(probe, /#EXTM3U/);
   assert.match(probe, /<MPD/);
   assert.match(probe, /looksLikeTransportStream/);
@@ -36,30 +32,37 @@ test("native opaque probe is bounded, redirect-aware and metadata-first", async 
   assert.doesNotMatch(probe, /readByteArray\(Long\.MAX_VALUE\)|bytes\(\)/);
 });
 
-test("opaque startup uses one Media3 path, persistent channel typing and live-first unresolved routing", async () => {
+test("opaque startup uses one Media3 connection, stable confirmation and bounded candidate routing", async () => {
   const [manager, module] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt"),
   ]);
   assert.match(manager, /source\.sourceType != "unknown"/);
-  assert.match(manager, /NativeOpaqueStreamProbe\.start/);
+  assert.doesNotMatch(manager, /NativeOpaqueStreamProbe\.start/);
+  assert.doesNotMatch(manager, /opaqueProbeHttpClient/);
   assert.match(manager, /OPAQUE_PROBE_CACHE_SIZE = 256/);
   assert.match(manager, /OPAQUE_TYPE_PREFS = "charm_media3_stream_types"/);
   assert.match(manager, /OPAQUE_LIVE_CANDIDATES = listOf\("transport", "hls", "dash", "progressive"\)/);
-  assert.match(manager, /val firstType = detectedType \?: "transport"/);
-  assert.doesNotMatch(manager, /val routedType = detectedType \?: "progressive"/);
+  assert.match(manager, /probeReason = "direct:transport"/);
+  assert.match(manager, /startOpaqueCandidate\(instance, source, cacheKey, "transport"/);
   assert.match(manager, /detectedTypeCacheKey\(source\)/);
   assert.match(manager, /"channel:\$it"/);
   assert.match(manager, /getSharedPreferences\(OPAQUE_TYPE_PREFS/);
+  assert.match(manager, /main\.postDelayed\(opaqueTypeConfirmation, STABLE_REARM_MS\)/);
+  assert.match(manager, /private val opaqueTypeConfirmation = Runnable/);
   assert.match(manager, /confirmSuccessfulStreamType\(\)/);
   assert.match(manager, /tryNextOpaqueCandidate\(created, error\)/);
   assert.match(manager, /isContainerMismatch/);
   assert.match(manager, /forgetDetectedType\(cacheKey\)/);
-  assert.match(manager, /opaqueProbeCall\?\.cancel\(\)/);
+  assert.doesNotMatch(manager, /if \(firstFrameRendered \|\| !isContainerMismatch\(error\)\)/);
+  const firstFrameStart = manager.indexOf("override fun onRenderedFirstFrame()");
+  const firstFrameEnd = manager.indexOf("override fun onPlayerError", firstFrameStart);
+  const firstFrameBody = manager.slice(firstFrameStart, firstFrameEnd);
+  assert.doesNotMatch(firstFrameBody, /confirmSuccessfulStreamType\(\)/);
   assert.doesNotMatch(module, /OpaqueStreamProbe\.probe|NativeOpaqueStreamProbe\.start/);
 });
 
-test("known TS/HLS/DASH paths bypass opaque probing and keep the locked playback budgets", async () => {
+test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback budgets", async () => {
   const manager = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(manager, /if \(source\.sourceType != "unknown" \|\| !isHttpOrHttps\(source\.uri\)\)/);
   assert.match(manager, /HlsMediaSource\.Factory/);
