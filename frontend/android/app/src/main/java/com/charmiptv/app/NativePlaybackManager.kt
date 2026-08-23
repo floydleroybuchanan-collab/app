@@ -37,7 +37,6 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import okhttp3.Call
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import java.util.Locale
@@ -123,11 +122,6 @@ object NativePlaybackManager {
     .writeTimeout(15, TimeUnit.SECONDS)
     .retryOnConnectionFailure(true)
     .build()
-  private val opaqueProbeHttpClient = httpClient.newBuilder()
-    .connectTimeout(4, TimeUnit.SECONDS)
-    .readTimeout(4, TimeUnit.SECONDS)
-    .callTimeout(6, TimeUnit.SECONDS)
-    .build()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > OPAQUE_PROBE_CACHE_SIZE
   }
@@ -149,16 +143,14 @@ object NativePlaybackManager {
   private var bufferingSinceMs = 0L
   private var bufferingLastBufferedPositionMs = 0L
   private var bufferingLastPositionMs = 0L
-  private var opaqueProbeCall: Call? = null
-  private var opaqueProbeGeneration = 0L
   private var opaqueRouteSource: PlaybackSource? = null
   private var opaqueRouteCandidates: List<String> = emptyList()
   private var opaqueRouteIndex = -1
   private var opaqueRouteCacheKey: String? = null
   private var opaqueRouteWasCached = false
 
-  // Per-channel diagnostics. These are reset on a new tune and updated by the
-  // opaque probe plus Media3 renderer callbacks; no extra recovery is triggered.
+  // Per-channel diagnostics. These are reset on a new tune and updated by
+  // Media3 renderer callbacks; diagnostics never create a second stream request.
   private var detectedMimeType: String? = null
   private var resolvedUri: String? = null
   private var probeHttpResponseCode: Int? = null
@@ -223,6 +215,13 @@ object NativePlaybackManager {
     recordDiagnostic("source-refresh-timeout", lastPlaybackError, instance)
     recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
   }
+  private val opaqueTypeConfirmation = Runnable {
+    val instance = player ?: return@Runnable
+    if (owner == Owner.NONE || !firstFrameRendered || opaqueRouteCacheKey == null) return@Runnable
+    if (instance.playbackState != Player.STATE_READY) return@Runnable
+    confirmSuccessfulStreamType()
+    recordDiagnostic("opaque-type-stable", lastPlaybackError, instance)
+  }
 
   fun setListener(next: Listener?) = runOnMain { listener = next }
   fun installIntoActivity(activity: Activity) = runOnMain { this.activity = activity }
@@ -259,7 +258,7 @@ object NativePlaybackManager {
     if (!attachPlayerView(requestedOwner)) { finishWithError("surface-unavailable", instance); return@runOnMain }
     playerView?.visibility = View.VISIBLE
     publishState("loading", null)
-    startOrProbeMediaSource(instance, baseSource, "channel-start")
+    startOrRouteMediaSource(instance, baseSource, "channel-start")
   }
 
   fun provideFreshSource(requestId: Long, uri: String?, headers: Map<String, String>, contentType: String?, failureReason: String?) = runOnMain {
@@ -282,7 +281,7 @@ object NativePlaybackManager {
     markPlaybackStarting("fresh-source")
     recordDiagnostic("fresh-source-received", lastPlaybackError, instance)
     try {
-      startOrProbeMediaSource(instance, baseSource, "fresh-source")
+      startOrRouteMediaSource(instance, baseSource, "fresh-source")
     } catch (error: Throwable) {
       recordDiagnostic("fresh-source-rebuild-failed:${error.javaClass.simpleName}", lastPlaybackError, instance)
       if (recoveryAttempts < MAX_AUTO_RECOVERIES) recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport") else finishWithError("stream-error", instance)
@@ -405,10 +404,13 @@ object NativePlaybackManager {
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
             main.removeCallbacks(delayedRecovery)
-            // Healthy playback no longer schedules a 30-second main-thread callback.
-            // The recovery budget is rearmed lazily only if a real stall/error occurs.
+            // Do not treat one decoded frame as proof that an opaque container
+            // guess is correct. Some wrong guesses can render briefly and fail a
+            // few seconds later. Keep candidate routing alive until the same
+            // existing stable-playback window has elapsed.
+            main.removeCallbacks(opaqueTypeConfirmation)
+            if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, STABLE_REARM_MS)
             resetBufferingWatchdogState()
-            confirmSuccessfulStreamType()
             CharmMemoryCoordinator.setPlaybackStarting(false)
             recordDiagnostic("first-frame", lastPlaybackError, created)
             publishState("playing", null)
@@ -417,6 +419,7 @@ object NativePlaybackManager {
             lastPlaybackError = error
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
+            main.removeCallbacks(opaqueTypeConfirmation)
             resetBufferingWatchdogState()
             recordDiagnostic("player-error", error, created)
             if (tryNextOpaqueCandidate(created, error)) return
@@ -543,7 +546,7 @@ object NativePlaybackManager {
     rebuildMediaSource(rebuilt, source, "full-player-source-recovery")
   }
 
-  private fun startOrProbeMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
+  private fun startOrRouteMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
     if (source.sourceType != "unknown" || !isHttpOrHttps(source.uri)) {
       resetOpaqueRoutingState()
       val routed = if (source.sourceType == "unknown") source.copy(sourceType = "progressive") else source
@@ -561,38 +564,25 @@ object NativePlaybackManager {
       return
     }
 
-    cancelOpaqueProbe()
-    val generation = opaqueProbeGeneration
-    recordDiagnostic("opaque-probe-start", lastPlaybackError, instance)
-    opaqueProbeCall = NativeOpaqueStreamProbe.start(opaqueProbeHttpClient, source.uri, source.headers) { result ->
-      main.post {
-        if (generation != opaqueProbeGeneration || owner == Owner.NONE || player !== instance) return@post
-        val current = activeSource ?: return@post
-        if (current.channelKey != source.channelKey || current.uri != source.uri) return@post
-        opaqueProbeCall = null
-        detectedMimeType = result.contentType
-        resolvedUri = result.finalUri?.let(::redactUriForDiagnostics)
-        probeHttpResponseCode = result.httpCode
-        val detectedType = result.sourceType
-        val firstType = detectedType ?: "transport"
-        probeReason = if (detectedType == null) "${result.reason};default:transport" else result.reason
-        recordDiagnostic("opaque-probe-${detectedType ?: "unknown"}", lastPlaybackError, instance)
-        try {
-          startOpaqueCandidate(instance, source, cacheKey, firstType, "$event-opaque-$firstType", fromCache = false)
-        } catch (error: Throwable) {
-          recordDiagnostic("opaque-rebuild-failed:${error.javaClass.simpleName}", lastPlaybackError, instance)
-          recoverOnce(instance, skipBarePrepare = firstType == "transport")
-        }
-      }
-    }
+    // Do not open a separate GET just to sniff an opaque live URL. A number of
+    // IPTV providers allow only one active connection per token/session, and the
+    // old probe could consume or disturb the same stream Media3 then tried to play.
+    // Start the existing single Media3 player directly on the live-first candidate
+    // and let a real parser/container mismatch advance the bounded candidate list.
+    probeReason = "direct:transport"
+    resolvedUri = redactUriForDiagnostics(source.uri)
+    recordDiagnostic("opaque-direct-start", lastPlaybackError, instance)
+    startOpaqueCandidate(instance, source, cacheKey, "transport", "$event-opaque-transport", fromCache = false)
   }
 
   private fun startOpaqueCandidate(instance: ExoPlayer, source: PlaybackSource, cacheKey: String, firstType: String, event: String, fromCache: Boolean) {
+    main.removeCallbacks(opaqueTypeConfirmation)
     opaqueRouteSource = source
     opaqueRouteCacheKey = cacheKey
     opaqueRouteWasCached = fromCache
     opaqueRouteCandidates = orderedOpaqueCandidates(firstType)
     opaqueRouteIndex = 0
+    stableSinceMs = 0L
     val routed = source.copy(sourceType = opaqueRouteCandidates.first())
     activeSource = routed
     detectedMimeType = detectedMimeType ?: knownMimeForSource(routed)
@@ -600,9 +590,10 @@ object NativePlaybackManager {
   }
 
   private fun tryNextOpaqueCandidate(instance: ExoPlayer, error: PlaybackException): Boolean {
-    if (firstFrameRendered || !isContainerMismatch(error)) return false
+    if (!isContainerMismatch(error)) return false
     val original = opaqueRouteSource ?: return false
     if (opaqueRouteIndex < 0 || opaqueRouteCandidates.isEmpty()) return false
+    main.removeCallbacks(opaqueTypeConfirmation)
     val cacheKey = opaqueRouteCacheKey
     if (opaqueRouteWasCached && cacheKey != null) {
       forgetDetectedType(cacheKey)
@@ -612,6 +603,7 @@ object NativePlaybackManager {
     val nextIndex = opaqueRouteIndex + 1
     if (nextIndex >= opaqueRouteCandidates.size) return false
     opaqueRouteIndex = nextIndex
+    stableSinceMs = 0L
     val nextType = opaqueRouteCandidates[nextIndex]
     val routed = original.copy(sourceType = nextType)
     activeSource = routed
@@ -681,16 +673,12 @@ object NativePlaybackManager {
     main.removeCallbacks(bufferingWatchdog)
     main.removeCallbacks(delayedRecovery)
     main.removeCallbacks(sourceRefreshTimeout)
+    main.removeCallbacks(opaqueTypeConfirmation)
     pendingSourceRefresh = null
-    cancelOpaqueProbe()
     resetBufferingWatchdogState()
   }
-  private fun cancelOpaqueProbe() {
-    opaqueProbeGeneration += 1L
-    try { opaqueProbeCall?.cancel() } catch (_: Throwable) {}
-    opaqueProbeCall = null
-  }
   private fun resetOpaqueRoutingState() {
+    main.removeCallbacks(opaqueTypeConfirmation)
     opaqueRouteSource = null
     opaqueRouteCandidates = emptyList()
     opaqueRouteIndex = -1
