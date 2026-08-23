@@ -53,10 +53,16 @@ internal object NativeOpaqueStreamProbe {
         response.use { safeResponse ->
           val mime = normalizeContentType(safeResponse.header("Content-Type"))
           val finalUri = safeResponse.request.url.toString()
+          val metadataType = sourceTypeFromMimeOrUri(mime, finalUri)
+          if (metadataType != null) {
+            val reason = if (sourceTypeFromMimeOrUri(mime, null) != null) "content-type:$mime" else "redirect-uri"
+            callback(Result(metadataType, mime, safeResponse.code, finalUri, reason))
+            return
+          }
           val bytes = try {
             readPrefix(safeResponse.body?.byteStream(), MAX_SNIFF_BYTES)
           } catch (error: Throwable) {
-            callback(Result(sourceTypeFromMimeOrUri(mime, finalUri), mime, safeResponse.code, finalUri, "body-read:${error.javaClass.simpleName}"))
+            callback(Result(null, mime, safeResponse.code, finalUri, "body-read:${error.javaClass.simpleName}"))
             return
           }
           val detected = detect(mime, finalUri, bytes)
@@ -69,7 +75,7 @@ internal object NativeOpaqueStreamProbe {
 
   internal fun detect(contentType: String?, finalUri: String?, bytes: ByteArray): Pair<String?, String> {
     val mimeType = normalizeContentType(contentType)
-    sourceTypeFromMimeOrUri(mimeType, finalUri)?.let { return it to if (mimeType != null) "content-type:$mimeType" else "redirect-uri" }
+    sourceTypeFromMimeOrUri(mimeType, finalUri)?.let { return it to if (sourceTypeFromMimeOrUri(mimeType, null) != null) "content-type:$mimeType" else "redirect-uri" }
 
     val text = try {
       bytes.toString(Charsets.UTF_8).trimStart('\uFEFF', ' ', '\r', '\n', '\t')
@@ -99,9 +105,9 @@ internal object NativeOpaqueStreamProbe {
 
     val lower = finalUri?.lowercase(Locale.US).orEmpty()
     return when {
-      Regex("\\.m3u8(?:$|[?#])").containsMatchIn(lower) || lower.contains("/hls/") -> "hls"
-      Regex("\\.mpd(?:$|[?#])").containsMatchIn(lower) || lower.contains("/dash/") -> "dash"
-      Regex("\\.(?:ts|m2ts)(?:$|[?#])").containsMatchIn(lower) -> "transport"
+      Regex("\\.m3u8(?:$|[?#])").containsMatchIn(lower) || Regex("[?&](?:format|type|output)=(?:hls|m3u8)(?:&|$)").containsMatchIn(lower) || lower.contains("/hls/") -> "hls"
+      Regex("\\.mpd(?:$|[?#])").containsMatchIn(lower) || Regex("[?&](?:format|type|output)=(?:dash|mpd)(?:&|$)").containsMatchIn(lower) || lower.contains("/dash/") -> "dash"
+      Regex("\\.(?:ts|m2ts)(?:$|[?#])").containsMatchIn(lower) || Regex("[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)").containsMatchIn(lower) -> "transport"
       Regex("\\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)(?:$|[?#])").containsMatchIn(lower) -> "progressive"
       else -> null
     }
@@ -119,6 +125,7 @@ internal object NativeOpaqueStreamProbe {
       if (read <= 0) break
       total += read
       if (total >= 16 && hasEarlyTextSignature(buffer, total)) break
+      if (total >= 3 * 204 && (looksLikeTransportStream(buffer.copyOf(total)) || looksLikeProgressiveContainer(buffer.copyOf(total)))) break
     }
     return buffer.copyOf(total)
   }
