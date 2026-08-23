@@ -358,9 +358,6 @@ function PurpleGuideScreenContent() {
     () => subscribeAndroidMemoryPressure((pressure) => {
       cancelGuideTransientTimers();
       if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
-      // Under any Android memory pressure, video preview is the first disposable
-      // resource. StreamPlayer's preview cleanup now releases MediaCodec/socket
-      // through the serialized native session before another preview may start.
       setPreviewId(null);
       void stopPreviewSession("superseded");
       setSurfLogosSuppressed(true);
@@ -838,9 +835,9 @@ function PurpleGuideScreenContent() {
       void Haptics.selectionAsync().catch(() => undefined);
       quiesceGuideForTransition(true);
       addRecent(channel);
-      openFullscreenPlayer(router, channel.id, { returnToGuide: true });
+      openFullscreenPlayer(router, channel.id, { returnToGuide: true, returnGuideGroup: group });
     },
-    [addRecent, quiesceGuideForTransition, router],
+    [addRecent, group, quiesceGuideForTransition, router],
   );
 
   const applyGroup = useCallback((next: string) => {
@@ -955,7 +952,7 @@ function PurpleGuideScreenContent() {
       const jump = consumeGuideJump();
       if (!jump) return;
       startPreferenceAppliedRef.current = true;
-      const nextGroup = jump.group || "All";
+      const nextGroup = jump.group || guideSessionGroup || "All";
       if (hasPin && isGroupLocked(nextGroup)) {
         openPinPrompt(nextGroup, false);
         guideSessionChannelId = jump.channelId;
