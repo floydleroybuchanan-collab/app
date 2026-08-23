@@ -164,7 +164,7 @@ jobs:
         continue-on-error: true
         run: test ! -d android/app/build/outputs/apk
 
-      - name: Post validation result to draft PR 30
+      - name: Post validation result to draft PR 31
         if: always()
         continue-on-error: true
         working-directory: .
@@ -172,7 +172,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "Android Native Compile — opaque-live validation-only"
+            echo "Android Native Compile — manual-VLC validation-only"
             echo "commit=${GITHUB_SHA}"
             echo "run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo "config=${{ steps.config.outcome }}"
@@ -191,7 +191,7 @@ jobs:
               echo '```'
             fi
           } > /tmp/validation.md
-          gh api "repos/${GITHUB_REPOSITORY}/issues/30/comments" -f body="$(cat /tmp/validation.md)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/31/comments" -f body="$(cat /tmp/validation.md)"
 
       - name: Enforce validation gate
         if: always()
