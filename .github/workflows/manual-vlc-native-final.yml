@@ -1,0 +1,189 @@
+name: Manual VLC Final Native Gate
+
+on:
+  push:
+    branches:
+      - agent/manual-vlc-engine
+    paths:
+      - ".github/workflows/manual-vlc-native-final.yml"
+      - "frontend/**"
+      - "ci/tivimate-whole-repo-player-interaction-scan.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-vlc-final-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Full JS scan and native compile no APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+
+      - name: Install Android SDK and pinned NDK
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+
+      - name: Install dependencies
+        id: deps
+        continue-on-error: true
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Verify native configuration
+        id: config
+        continue-on-error: true
+        run: |
+          npm run verify:native-config
+          npm run verify:native-guide
+
+      - name: Unit and wiring tests
+        id: tests
+        continue-on-error: true
+        run: npm test
+
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: npm run typecheck
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Whole-repository player interaction scan
+        id: scan
+        continue-on-error: true
+        working-directory: .
+        run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
+
+      - name: Verify manual VLC and locked Media3 invariants
+        id: invariants
+        continue-on-error: true
+        working-directory: .
+        run: |
+          PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          VLC=frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt
+          MODULE=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt
+          PROFILE=frontend/src/core/playbackProfileIndex.ts
+          SOURCE=frontend/src/source.native.ts
+          SETTINGS='frontend/app/(tabs)/settings.tsx'
+          grep -q 'org.videolan.android:libvlc-all:3.7.5' frontend/android/app/build.gradle
+          grep -q 'MediaPlayer(core)' "$VLC"
+          grep -q 'setHWDecoderEnabled(source.hardwareDecode, false)' "$VLC"
+          grep -q 'NativePlaybackManager.releaseAll()' "$VLC"
+          grep -q 'LifecycleEventListener' "$MODULE"
+          grep -q 'activeGeneration' "$MODULE"
+          grep -q 'indexDeclaredStreamTypes(channels)' "$SOURCE"
+          grep -q 'mutationRevision' "$PROFILE"
+          grep -q 'VLC compatibility' "$SETTINGS"
+          grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_LOW_RAM = 2_500' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_LOW_RAM = 5_000' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'MIN_BUFFER_MS_NORMAL = 15_000' "$PLAYER"
+          grep -q 'MAX_BUFFER_MS_NORMAL = 60_000' "$PLAYER"
+          grep -q 'PLAYBACK_BUFFER_MS_NORMAL = 3_000' "$PLAYER"
+          grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' "$PLAYER"
+          grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
+          grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'HUNG_BUFFER_REPREPARE_MS = 5_000L' "$PLAYER"
+          grep -q 'TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L' "$PLAYER"
+          grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
+          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
+          grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
+
+      - name: Compile Kotlin and Java only
+        id: compile
+        continue-on-error: true
+        env:
+          CI: "1"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.workers.max=1"
+        run: |
+          chmod +x android/gradlew
+          ./android/gradlew -p android \
+            :ffmpeg-audio:compileDebugJavaWithJavac \
+            :app:compileDebugKotlin \
+            :app:compileDebugJavaWithJavac \
+            --no-daemon --max-workers=1 --stacktrace
+
+      - name: Confirm no APK was built
+        id: noapk
+        if: always()
+        continue-on-error: true
+        run: test ! -d android/app/build/outputs/apk
+
+      - name: Write validation result
+        if: always()
+        working-directory: .
+        run: |
+          cat > .github/manual-vlc-native-result.txt <<EOF
+          commit=${GITHUB_SHA}
+          run_id=${GITHUB_RUN_ID}
+          run_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          dependencies=${{ steps.deps.outcome }}
+          config=${{ steps.config.outcome }}
+          tests=${{ steps.tests.outcome }}
+          typecheck=${{ steps.typecheck.outcome }}
+          lint=${{ steps.lint.outcome }}
+          whole_repo_scan=${{ steps.scan.outcome }}
+          invariants=${{ steps.invariants.outcome }}
+          native_compile=${{ steps.compile.outcome }}
+          no_apk=${{ steps.noapk.outcome }}
+          apk_build=NOT_RUN
+          EOF
+          if [ -f ci/tivimate-whole-repo-player-interaction-report.txt ]; then
+            printf '\n' >> .github/manual-vlc-native-result.txt
+            cat ci/tivimate-whole-repo-player-interaction-report.txt >> .github/manual-vlc-native-result.txt
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/manual-vlc-native-result.txt
+          git commit -m "ci: record manual VLC native validation ${GITHUB_RUN_ID}" || true
+          git push origin HEAD:agent/manual-vlc-engine
+
+      - name: Enforce final native gate
+        if: always()
+        working-directory: .
+        run: |
+          test "${{ steps.deps.outcome }}" = "success"
+          test "${{ steps.config.outcome }}" = "success"
+          test "${{ steps.tests.outcome }}" = "success"
+          test "${{ steps.typecheck.outcome }}" = "success"
+          test "${{ steps.lint.outcome }}" = "success"
+          test "${{ steps.scan.outcome }}" = "success"
+          test "${{ steps.invariants.outcome }}" = "success"
+          test "${{ steps.compile.outcome }}" = "success"
+          test "${{ steps.noapk.outcome }}" = "success"
