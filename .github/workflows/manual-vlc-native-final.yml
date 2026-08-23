@@ -33,6 +33,22 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
+      - name: Publish run pointer
+        working-directory: .
+        run: |
+          cat > .github/manual-vlc-native-result.txt <<EOF
+          commit=${GITHUB_SHA}
+          run_id=${GITHUB_RUN_ID}
+          run_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          status=RUNNING
+          apk_build=NOT_RUN
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/manual-vlc-native-result.txt
+          git commit -m "ci: record manual VLC native gate start ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/manual-vlc-engine
+
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -153,6 +169,7 @@ jobs:
           commit=${GITHUB_SHA}
           run_id=${GITHUB_RUN_ID}
           run_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          status=COMPLETE
           dependencies=${{ steps.deps.outcome }}
           config=${{ steps.config.outcome }}
           tests=${{ steps.tests.outcome }}
@@ -168,8 +185,6 @@ jobs:
             printf '\n' >> .github/manual-vlc-native-result.txt
             cat ci/tivimate-whole-repo-player-interaction-report.txt >> .github/manual-vlc-native-result.txt
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/manual-vlc-native-result.txt
           git commit -m "ci: record manual VLC native validation ${GITHUB_RUN_ID}" || true
           git push origin HEAD:agent/manual-vlc-engine
