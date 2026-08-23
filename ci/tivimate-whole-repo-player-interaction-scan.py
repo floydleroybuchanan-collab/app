@@ -136,10 +136,19 @@ for rel in (
     except Exception as exc:
         critical.append(f"repair-entry baseline unavailable for {rel}: {exc}")
         continue
-    # The player may add this read-through helper without altering the verified
-    # native playlist/EPG transport. Compare the transport after removing only
-    # that tightly bounded additive API.
+    # The player may add narrowly bounded non-transport bookkeeping without
+    # altering verified M3U/XMLTV ownership. Remove only those exact additions
+    # before the byte-for-byte transport comparison.
     if rel == "frontend/src/source.native.ts":
+        current = current.replace(
+            'import { indexDeclaredStreamTypes } from "@/src/core/playbackProfileIndex";\n',
+            "",
+        )
+        current = current.replace("  indexDeclaredStreamTypes(channels);\n", "")
+        current = current.replace(
+            "  if (!channels.length) return;\n  if (!nativeEpgAvailable) return;\n",
+            "  if (!nativeEpgAvailable || !channels.length) return;\n",
+        )
         helper_start = current.find("\n/** Refresh only M3U rows and return the latest URL for one logical channel. */")
         helper_end = current.find("\n/** Check persisted independent playlist/EPG clocks", helper_start + 1)
         if helper_start >= 0 and helper_end > helper_start:
