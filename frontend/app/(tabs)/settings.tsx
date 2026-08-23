@@ -509,9 +509,9 @@ function SettingsScreenContent() {
 
             {section === "player" ? (
               <SettingsCard title="Playback" icon="play-circle-outline">
-                <Text style={styles.settingLabel}>Media3 live TV</Text>
+                <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
-                  Live TV uses one Android-owned Media3 player. It starts with supported hardware codecs and uses the installed Media3 audio fallback when available; no second engine is started automatically.
+                  Media3 is recommended. VLC is a manual compatibility option for streams or devices that need it. Only the selected engine owns the decoder; CharmIPTV never auto-starts the other engine as a fallback.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"

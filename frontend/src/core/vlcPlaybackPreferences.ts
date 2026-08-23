@@ -13,6 +13,8 @@ const AUDIO_KEY = "gs_vlc_audio_output";
 let cached: Snapshot = { hardwareDecode: true, audioOutput: "auto" };
 let loaded = false;
 let loadPromise: Promise<Snapshot> | null = null;
+let hardwareMutationRevision = 0;
+let audioMutationRevision = 0;
 const listeners = new Set<(value: Snapshot) => void>();
 
 function normalizeAudio(raw: unknown): VlcAudioOutput {
@@ -22,14 +24,16 @@ function normalizeAudio(raw: unknown): VlcAudioOutput {
 async function load(): Promise<Snapshot> {
   if (loaded) return cached;
   if (loadPromise) return loadPromise;
+  const hardwareRevisionAtStart = hardwareMutationRevision;
+  const audioRevisionAtStart = audioMutationRevision;
   loadPromise = (async () => {
     const [hardwareDecode, audioOutput] = await Promise.all([
       storage.getItem<boolean>(HW_KEY, true),
       storage.getItem<string>(AUDIO_KEY, "auto"),
     ]);
     cached = {
-      hardwareDecode: hardwareDecode !== false,
-      audioOutput: normalizeAudio(audioOutput),
+      hardwareDecode: hardwareMutationRevision === hardwareRevisionAtStart ? hardwareDecode !== false : cached.hardwareDecode,
+      audioOutput: audioMutationRevision === audioRevisionAtStart ? normalizeAudio(audioOutput) : cached.audioOutput,
     };
     loaded = true;
     return cached;
@@ -62,6 +66,7 @@ export function useVlcPlaybackPreferences(): Snapshot & {
   return {
     ...value,
     setHardwareDecode: useCallback((next: boolean) => {
+      hardwareMutationRevision += 1;
       cached = { ...cached, hardwareDecode: !!next };
       loaded = true;
       setValue(cached);
@@ -69,6 +74,7 @@ export function useVlcPlaybackPreferences(): Snapshot & {
       void storage.setItem(HW_KEY, cached.hardwareDecode);
     }, []),
     setAudioOutput: useCallback((next: VlcAudioOutput) => {
+      audioMutationRevision += 1;
       cached = { ...cached, audioOutput: normalizeAudio(next) };
       loaded = true;
       setValue(cached);

@@ -33,3 +33,19 @@ test("locked Media3 safety budgets remain unchanged", async () => {
   const manager = await read("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   for (const marker of ["MIN_BUFFER_MS_LOW_RAM = 10_000","MAX_BUFFER_MS_LOW_RAM = 30_000","PLAYBACK_BUFFER_MS_LOW_RAM = 2_500","REBUFFER_BUFFER_MS_LOW_RAM = 5_000","MIN_BUFFER_MS_NORMAL = 15_000","MAX_BUFFER_MS_NORMAL = 60_000","PLAYBACK_BUFFER_MS_NORMAL = 3_000","REBUFFER_BUFFER_MS_NORMAL = 5_000","HUNG_BUFFER_REPREPARE_MS = 5_000L","TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L","MAX_AUTO_RECOVERIES = 4","longArrayOf(0L, 1_000L, 3_000L, 6_000L)"]) assert.match(manager, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
+
+
+test("playlist stream types are batch-indexed without probing and hydration cannot clobber edits", async () => {
+  const [profile, source, engine, vlc] = await Promise.all([read("src/core/playbackProfileIndex.ts"), read("src/source.native.ts"), read("src/playerEnginePreference.ts"), read("src/core/vlcPlaybackPreferences.ts")]);
+  assert.match(profile, /let mutationRevision = 0/);
+  assert.match(profile, /const revisionAtStart = mutationRevision/);
+  assert.match(profile, /prune\(\{ \.\.\.storedProfiles, \.\.\.cached \}\)/);
+  assert.match(profile, /const pendingLoad = loadPromise/);
+  assert.match(source, /indexDeclaredStreamTypes\(channels\)/);
+  assert.match(source, /if \(!channels\.length\) return;[\s\S]*indexDeclaredStreamTypes\(channels\);[\s\S]*if \(!nativeEpgAvailable\) return;/);
+  assert.match(engine, /const revisionAtStart = mutationRevision/);
+  assert.match(engine, /mutationRevision === revisionAtStart/);
+  assert.match(vlc, /hardwareMutationRevision === hardwareRevisionAtStart/);
+  assert.match(vlc, /audioMutationRevision === audioRevisionAtStart/);
+  assert.doesNotMatch(profile, /fetch\(|XMLHttpRequest|probeStream/);
+});

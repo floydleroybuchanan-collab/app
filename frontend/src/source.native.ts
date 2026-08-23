@@ -36,6 +36,7 @@ import {
 } from "@/src/core/sourceRefreshPreferences";
 import { getLogoPriority, type LogoPriority } from "@/src/core/logoPreferences";
 import { getEpgSourcePreferences, type EpgSourcePreferences } from "@/src/core/epgSourcePreferences";
+import { indexDeclaredStreamTypes } from "@/src/core/playbackProfileIndex";
 
 export const API_BASE = "";
 /** Playlist URL — set via EXPO_PUBLIC_M3U_URL at build time. Never hardcode provider URLs. */
@@ -136,7 +137,9 @@ export function retainProgrammeWindowCache(keepIds: Iterable<string>): void {
 }
 
 async function syncPlaylistToNative(channels: Channel[], playlistEpoch: number): Promise<void> {
-  if (!nativeEpgAvailable || !channels.length) return;
+  if (!channels.length) return;
+  indexDeclaredStreamTypes(channels);
+  if (!nativeEpgAvailable) return;
   const contentFingerprint = playlistNativeContentFingerprint(channels);
   if (await nativePlaylistIsCurrent(contentFingerprint)) return;
   await upsertNativePlaylistChannels(

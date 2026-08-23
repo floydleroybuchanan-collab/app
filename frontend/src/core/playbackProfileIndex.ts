@@ -17,6 +17,7 @@ let cached: Record<string, ChannelPlaybackProfile> = {};
 let loaded = false;
 let loadPromise: Promise<void> | null = null;
 let persistChain: Promise<void> = Promise.resolve();
+let mutationRevision = 0;
 const listeners = new Set<() => void>();
 
 function normalizeType(raw: unknown): PlaybackProfileType {
@@ -38,9 +39,13 @@ function prune(input: Record<string, ChannelPlaybackProfile>): Record<string, Ch
 async function loadProfiles(): Promise<void> {
   if (loaded) return;
   if (loadPromise) return loadPromise;
+  const revisionAtStart = mutationRevision;
   loadPromise = (async () => {
     const stored = await storage.getItem<Record<string, ChannelPlaybackProfile>>(STORAGE_KEY, {});
-    cached = stored && typeof stored === "object" ? prune(stored) : {};
+    const storedProfiles = stored && typeof stored === "object" ? prune(stored) : {};
+    cached = mutationRevision === revisionAtStart
+      ? storedProfiles
+      : prune({ ...storedProfiles, ...cached });
     loaded = true;
   })();
   try { await loadPromise; } finally { loadPromise = null; }
@@ -55,11 +60,15 @@ function publish() {
 }
 
 function persist() {
-  const snapshot = prune({ ...cached });
-  cached = snapshot;
   persistChain = persistChain
     .catch(() => undefined)
-    .then(() => storage.setItem(STORAGE_KEY, snapshot))
+    .then(async () => {
+      const pendingLoad = loadPromise;
+      if (pendingLoad) await pendingLoad.catch(() => undefined);
+      const snapshot = prune({ ...cached });
+      cached = snapshot;
+      await storage.setItem(STORAGE_KEY, snapshot);
+    })
     .then(() => undefined);
 }
 
@@ -73,8 +82,8 @@ function update(channelKey: string | undefined, updater: (current: ChannelPlayba
     current.confirmedType === next.confirmedType &&
     current.lastEngine === next.lastEngine
   ) return;
+  mutationRevision += 1;
   cached = { ...cached, [key]: next };
-  loaded = true;
   publish();
   persist();
 }
@@ -107,8 +116,8 @@ export function indexDeclaredStreamTypes(
     changed = true;
   }
   if (!changed) return;
+  mutationRevision += 1;
   cached = prune(next);
-  loaded = true;
   publish();
   persist();
 }
@@ -136,6 +145,7 @@ export function invalidateConfirmedStreamType(channelKey: string | undefined): v
   const key = String(channelKey || "").trim();
   if (!key || !cached[key]?.confirmedType) return;
   const { confirmedType: _ignored, ...rest } = cached[key];
+  mutationRevision += 1;
   cached = { ...cached, [key]: { ...rest, updatedAt: Date.now() } };
   publish();
   persist();
