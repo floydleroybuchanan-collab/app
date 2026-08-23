@@ -1,4 +1,4 @@
-export type Engine = "media3";
+export type Engine = "media3" | "vlc";
 /** CMAF is packaging (fMP4) carried inside HLS or DASH — not a separate engine path. */
 export type StreamKind =
   | "hls"
@@ -85,24 +85,30 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
   return { uri, headers };
 }
 
-/**
- * The rebuilt live-TV core has one automatic engine: Media3. Container/protocol
- * detection is used only to provide Media3 source hints. It must never route an
- * extensionless IPTV URL to a second in-process decoder.
- */
+export function isNativeMedia3SupportedStreamKind(kind: StreamKind): boolean {
+  return kind === "hls" || kind === "dash" || kind === "progressive" || kind === "transport" || kind === "unknown";
+}
+
+export function isVlcSupportedStreamKind(kind: StreamKind): boolean {
+  // This build has no WebRTC signaling/session stack. LibVLC is the explicit
+  // compatibility choice for the remaining ordinary/live protocols.
+  return kind !== "webrtc";
+}
+
+/** Manual selection happens in StreamPlayer; there is no automatic cross-engine fallback. */
 export function preferredEngine(_kind: StreamKind): Engine {
   return "media3";
 }
 
 /**
  * Media3 contentType hint for the native source factory. Unknown HTTP(S) URLs
- * deliberately remain unknown so Android can perform the bounded response/body
- * probe instead of prematurely locking an opaque HLS/TS/DASH URL to progressive.
+ * deliberately remain unknown so the native learned-type cache and bounded
+ * single-player candidate router can classify them without a second decoder.
  */
 export function media3ContentType(kind: StreamKind): "hls" | "dash" | "transport" | "progressive" | "unknown" {
   if (kind === "dash") return "dash";
   if (kind === "hls") return "hls";
   if (kind === "transport") return "transport";
-  if (kind === "unknown") return "unknown";
-  return "progressive";
+  if (kind === "progressive") return "progressive";
+  return "unknown";
 }
