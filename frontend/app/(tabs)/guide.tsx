@@ -320,7 +320,6 @@ function PurpleGuideScreenContent() {
   });
   const [previewEpoch, setPreviewEpoch] = useState(0);
   const startPreferenceAppliedRef = useRef(false);
-  const wasFocusedRef = useRef(false);
 
   const cancelGuideTransientTimers = useCallback(() => {
     if (previewTimer.current) clearTimeout(previewTimer.current);
@@ -347,10 +346,6 @@ function PurpleGuideScreenContent() {
     if (releaseCache) releaseGuideSlidingCache();
   }, [cancelGuideTransientTimers, releaseGuideSlidingCache]);
 
-  useEffect(() => {
-    if (isFocused && !wasFocusedRef.current) startPreferenceAppliedRef.current = false;
-    wasFocusedRef.current = isFocused;
-  }, [isFocused]);
   useEffect(() => {
     resetGuideSelection(guideSessionChannelId);
   }, []);
@@ -558,6 +553,13 @@ function PurpleGuideScreenContent() {
     if (startPreferenceAppliedRef.current || !isFocused || !channels.length) return;
     if (peekGuideJump()) return;
     startPreferenceAppliedRef.current = true;
+    // A remembered channel/group means this is a session restore (for example,
+    // BACK from fullscreen). Do not re-apply the configured startup tab over the
+    // user's current Guide group; the startup preference is only for a fresh entry.
+    if (guideSessionChannelId || guideSessionGroup !== "All") {
+      if (group !== guideSessionGroup) setGroup(guideSessionGroup);
+      return;
+    }
     if (!startGroup || startGroup === GUIDE_START_LAST_USED) return;
     const available = groups.includes(startGroup) || overflowGroups.includes(startGroup);
     const next = available ? startGroup : "All";
@@ -567,7 +569,7 @@ function PurpleGuideScreenContent() {
     resetGuideSelection(guideSessionChannelId);
     setRestoreTimeMs(null);
     setResetToken((value) => value + 1);
-  }, [channels.length, groups, isFocused, overflowGroups, startGroup]);
+  }, [channels.length, group, groups, isFocused, overflowGroups, startGroup]);
 
   const filteredMeta = useMemo(() => {
     let list = filterChannelsByGroup(channels, group, {
@@ -833,6 +835,11 @@ function PurpleGuideScreenContent() {
   const play = useCallback(
     (channel: Channel) => {
       void Haptics.selectionAsync().catch(() => undefined);
+      // Capture both pieces of Guide navigation state before the root player route
+      // can unmount the tabs. BACK must restore the chosen group as well as focus.
+      guideSessionGroup = group;
+      guideSessionChannelId = channel.id;
+      rememberGuideGroupChannel(group, channel.id);
       quiesceGuideForTransition(true);
       addRecent(channel);
       openFullscreenPlayer(router, channel.id, { returnToGuide: true, returnGuideGroup: group });
