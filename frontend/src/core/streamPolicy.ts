@@ -40,15 +40,13 @@ export function detectStreamKind(uri: string, streamTypeHint?: string | null): S
   if (protocol === "webrtc" || (protocol === "http" && lower.includes("webrtc"))) return "webrtc";
   if (
     /\.m3u8(?:$|[?#])/.test(lower) ||
-    lower.includes("format=m3u8") ||
-    lower.includes("type=hls") ||
+    /[?&](?:format|type|output)=(?:hls|m3u8)(?:&|$)/.test(lower) ||
     lower.includes("/hls/") ||
     lower.includes("playlist.m3u8")
   ) return "hls";
   if (
     /\.mpd(?:$|[?#])/.test(lower) ||
-    lower.includes("format=mpd") ||
-    lower.includes("type=dash") ||
+    /[?&](?:format|type|output)=(?:dash|mpd)(?:&|$)/.test(lower) ||
     lower.includes("/dash/") ||
     lower.includes("manifest.mpd")
   ) return "dash";
