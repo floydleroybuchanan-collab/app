@@ -138,15 +138,23 @@ export function StreamPlayer({
         resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
         return;
       }
-      if (!event.authenticationFailure) {
-        const current = currentSourceRef.current;
-        resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, null);
-        return;
-      }
+
+      // Native asks for a fresh source only after bounded playback recovery has
+      // reached the refresh stage. A normal channel tune never enters here.
+      // Refresh only the M3U/catalog row (not XMLTV) so rotating provider tokens,
+      // stale sockets and non-401 expiry responses can receive a genuinely new URL.
+      // If the refresh endpoint is unavailable, reuse the current URL once and let
+      // native recovery continue instead of turning a refresh-service problem into
+      // a terminal playback error.
+      const current = currentSourceRef.current;
       void refreshPlaybackChannel(event.channelKey)
         .then((channel) => {
-          if (!isSessionCurrent(role, generation) || !channel?.url) {
-            resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "fresh-channel-unavailable");
+          if (!isSessionCurrent(role, generation)) {
+            resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
+            return;
+          }
+          if (!channel?.url) {
+            resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, "fresh-channel-unavailable-reused-current");
             return;
           }
           const fresh = parsePipeHeaders(channel.url);
@@ -154,8 +162,12 @@ export function StreamPlayer({
           resolveNativePlaybackFreshSource(event.requestId, fresh.uri, fresh.headers, freshType, null);
         })
         .catch((error: unknown) => {
+          if (!isSessionCurrent(role, generation)) {
+            resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
+            return;
+          }
           const message = error instanceof Error ? error.name : "source-refresh-failed";
-          resolveNativePlaybackFreshSource(event.requestId, null, {}, null, message);
+          resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, `${message}-reused-current`);
         });
     });
   }, [channelKey, owner, role]);
