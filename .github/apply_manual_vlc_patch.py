@@ -24,3 +24,4 @@ t=t.replace('engine !== "media3"','playerEngine !== "media3"').replace('engine !
 t=t.replace(', engine,', ', playerEngine,').replace('[engine,', '[playerEngine,')
 q.write_text(t)
 print('manual VLC settings, packaging, and player markers applied')
+# rerun after native lifecycle hardening
