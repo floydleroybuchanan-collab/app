@@ -9,7 +9,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { useAppFonts } from "@/src/hooks/use-app-fonts";
-import { GuideProvider, useStore } from "@/src/store";
+import { GuideProvider, useStore, type StartScreen } from "@/src/store";
 import { ProgramModal } from "@/src/components/ProgramModal";
 import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 import { PointerOverlay } from "@/src/components/PointerOverlay";
@@ -19,6 +19,13 @@ import { TvQuickActionsOverlay } from "@/src/components/TvQuickActionsOverlay";
 import { TvCalibrationFrame, TvCalibrationProvider } from "@/src/tvCalibration";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { StartupVersion4 } from "@/src/components/StartupVersion4";
+import { storage } from "@/src/utils/storage";
+
+const START_SCREEN_KEY = "gs_start_screen";
+
+function resolveStartupScreen(value: unknown): StartScreen {
+  return value === "guide" || value === "last_channel" || value === "home" ? value : "home";
+}
 
 // Keep real errors visible for TV QA; only silence known noisy module warnings.
 LogBox.ignoreLogs([
@@ -73,21 +80,44 @@ function ReminderCleanup() {
 function StartScreenRedirect() {
   const router = useRouter();
   const pathname = usePathname();
-  const { startScreen, lastChannelId, loading } = useStore();
+  const { lastChannelId, loading } = useStore();
+  const [startupPreference, setStartupPreference] = React.useState<StartScreen | null>(null);
+  const [startupPreferencesReady, setStartupPreferencesReady] = React.useState(false);
   const doneRef = React.useRef(false);
 
   useEffect(() => {
-    if (doneRef.current || loading) return;
+    let active = true;
+    void (async () => {
+      const stored = resolveStartupScreen(await storage.getItem<string>(START_SCREEN_KEY, "home"));
+      if (!active) return;
+      setStartupPreference(stored);
+      setStartupPreferencesReady(true);
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (doneRef.current || !startupPreferencesReady || !startupPreference) return;
     if (pathname && pathname !== "/" && pathname !== "/index") return;
-    doneRef.current = true;
-    if (startScreen === "guide") {
+
+    if (startupPreference === "guide") {
+      doneRef.current = true;
       router.replace("/guide" as any);
       return;
     }
-    if (startScreen === "last_channel" && lastChannelId) {
-      openFullscreenPlayer(router, lastChannelId);
+
+    if (startupPreference === "last_channel") {
+      // Last-channel playback needs the channel catalog hydrated first. If no
+      // remembered channel exists, Guide is the deterministic fallback.
+      if (loading) return;
+      doneRef.current = true;
+      if (lastChannelId) openFullscreenPlayer(router, lastChannelId);
+      else router.replace("/guide" as any);
+      return;
     }
-  }, [lastChannelId, loading, pathname, router, startScreen]);
+
+    doneRef.current = true;
+  }, [lastChannelId, loading, pathname, router, startupPreference, startupPreferencesReady]);
 
   return null;
 }
