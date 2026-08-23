@@ -84,6 +84,35 @@ export function rememberDeclaredStreamType(channelKey: string | undefined, rawTy
   update(channelKey, (current) => ({ ...current, declaredType, updatedAt: Date.now() }));
 }
 
+/**
+ * Index the playlist's already-parsed stream types without opening any stream
+ * connections. One bounded persistence write covers the whole catalog, which is
+ * cheap for the current ~300-channel list and avoids hundreds of HEAD/GET probes.
+ */
+export function indexDeclaredStreamTypes(
+  channels: ReadonlyArray<{ id?: string | null; stream_type?: unknown }>,
+): void {
+  if (!channels.length) return;
+  const now = Date.now();
+  let changed = false;
+  let next = cached;
+  for (const channel of channels) {
+    const key = String(channel.id || "").trim();
+    if (!key) continue;
+    const declaredType = normalizeType(channel.stream_type);
+    const current = next[key] || { declaredType: "unknown" as const, updatedAt: 0 };
+    if (current.declaredType === declaredType) continue;
+    if (!changed) next = { ...cached };
+    next[key] = { ...current, declaredType, updatedAt: now };
+    changed = true;
+  }
+  if (!changed) return;
+  cached = prune(next);
+  loaded = true;
+  publish();
+  persist();
+}
+
 export function rememberConfirmedStreamType(
   channelKey: string | undefined,
   rawType: unknown,
