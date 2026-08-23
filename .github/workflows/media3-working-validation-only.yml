@@ -86,14 +86,18 @@ jobs:
         continue-on-error: true
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          PROBE=frontend/android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt
           grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
-          grep -q 'val firstType = detectedType ?: "transport"' "$PLAYER"
-          ! grep -q 'val routedType = detectedType ?: "progressive"' "$PLAYER"
+          grep -q 'probeReason = "direct:transport"' "$PLAYER"
+          grep -q 'startOpaqueCandidate(instance, source, cacheKey, "transport"' "$PLAYER"
+          ! grep -q 'NativeOpaqueStreamProbe.start' "$PLAYER"
+          ! grep -q 'opaqueProbeHttpClient' "$PLAYER"
           grep -q 'OPAQUE_TYPE_PREFS = "charm_media3_stream_types"' "$PLAYER"
+          grep -q 'main.postDelayed(opaqueTypeConfirmation, STABLE_REARM_MS)' "$PLAYER"
+          grep -q 'private val opaqueTypeConfirmation = Runnable' "$PLAYER"
           grep -q 'confirmSuccessfulStreamType()' "$PLAYER"
           grep -q 'tryNextOpaqueCandidate(created, error)' "$PLAYER"
           grep -q 'forgetDetectedType(cacheKey)' "$PLAYER"
+          ! grep -q 'if (firstFrameRendered || !isContainerMismatch(error))' "$PLAYER"
           grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' "$PLAYER"
           grep -q 'MIN_BUFFER_MS_LOW_RAM = 10_000' "$PLAYER"
           grep -q 'MAX_BUFFER_MS_LOW_RAM = 30_000' "$PLAYER"
@@ -106,8 +110,6 @@ jobs:
           grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
-          grep -q 'val metadataType = sourceTypeFromMimeOrUri' "$PROBE"
-          grep -q 'MAX_SNIFF_BYTES = 4 \* 1024' "$PROBE"
 
       - name: Compile native Kotlin and Java only
         id: compile
@@ -123,8 +125,14 @@ jobs:
             :app:compileDebugJavaWithJavac \
             --no-daemon --max-workers=1 --stacktrace
 
+      - name: Verify no APK was assembled
+        id: noapk
+        continue-on-error: true
+        run: test ! -d frontend/android/app/build/outputs/apk
+
       - name: Report validation result
         if: always()
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -139,6 +147,7 @@ jobs:
             echo "whole_repo_scan=${{ steps.scan.outcome }}"
             echo "opaque_invariants=${{ steps.invariants.outcome }}"
             echo "native_compile=${{ steps.compile.outcome }}"
+            echo "no_apk=${{ steps.noapk.outcome }}"
             echo "apk_build=NOT_RUN"
             if [ -f ci/tivimate-whole-repo-player-interaction-report.txt ]; then
               echo
@@ -160,3 +169,4 @@ jobs:
           test "${{ steps.scan.outcome }}" = "success"
           test "${{ steps.invariants.outcome }}" = "success"
           test "${{ steps.compile.outcome }}" = "success"
+          test "${{ steps.noapk.outcome }}" = "success"
