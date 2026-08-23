@@ -9,7 +9,7 @@ const source = (path) => readFile(join(root, path), "utf8");
 
 test("native Media3 exposes selectable audio tracks and deterministic track selection", async () => {
   const [adapter, native, screen] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("app/player.tsx")]);
-  assert.match(adapter, /addNativePlaybackTracksListener/); assert.match(adapter, /selectNativeAudio/); assert.match(adapter, /getRememberedChannelAudioTrack\(channelKey\)/); assert.match(adapter, /getPreferredAudioLanguage\(\)/); assert.match(native, /fun selectAudio/); assert.match(native, /clearOverridesOfType\(C\.TRACK_TYPE_AUDIO\)/); assert.match(native, /TrackSelectionOverride/); assert.match(native, /EXTENSION_RENDERER_MODE_ON/); assert.match(screen, /setAudioTrackId\(undefined\)/);
+  assert.match(adapter, /addNativePlaybackTracksListener/); assert.match(adapter, /selectNativeAudio/); assert.match(adapter, /getRememberedChannelAudioTrack\(currentChannelKey\)/); assert.match(adapter, /getPreferredAudioLanguage\(\)/); assert.match(native, /fun selectAudio/); assert.match(native, /clearOverridesOfType\(C\.TRACK_TYPE_AUDIO\)/); assert.match(native, /TrackSelectionOverride/); assert.match(native, /EXTENSION_RENDERER_MODE_ON/); assert.match(screen, /setAudioTrackId\(undefined\)/);
 });
 
 test("Android TV build includes a pinned LGPL Media3 FFmpeg audio extension", async () => {
