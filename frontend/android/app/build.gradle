@@ -42,8 +42,8 @@ react {
 
     /* Bundling */
     // nodeExecutableAndArgs = ["node"]
-    // bundleConfig = file(../rn-cli.config.js)
-    // bundleAssetName = "MyApplication.android.bundle"
+    // bundleConfig = file("../rn-cli.config.js")
+    // bundleAssetName = "ReactAndroid.bundle"
     // entryFile = file("../rn-cli.config.js")
     // extraPackagerArgs = []
 
@@ -176,9 +176,10 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
-    // Explicit HLS source construction is used for catastrophic live-edge
-    // recovery, so the rebuilt player never inherits stale segment state.
+    // Explicit adaptive-streaming modules keep extensionless provider URLs
+    // routable when MediaItem supplies a MIME/content-type hint.
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
+    implementation("androidx.media3:media3-exoplayer-dash:1.8.0")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
     kapt("androidx.room:room-compiler:2.7.2")
