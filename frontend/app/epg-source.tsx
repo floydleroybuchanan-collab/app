@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PurpleTvShell } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
+import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useStore } from "@/src/store";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
@@ -39,6 +40,8 @@ export default function EpgSourceScreen() {
   const [xmltvRows, setXmltvRows] = useState<XmltvRow[]>([]);
   const [xmltvTotal, setXmltvTotal] = useState(0);
   const [xmltvPage, setXmltvPage] = useState(0);
+  const [xmltvFilter, setXmltvFilter] = useState<EpgPickerFilter>("all");
+  const [assignDrawerOpen, setAssignDrawerOpen] = useState(false);
   const queryGeneration = useRef(0);
   const scrollRef = useRef<ScrollView | null>(null);
   const [preferBackFocus, setPreferBackFocus] = useState(true);
@@ -92,6 +95,8 @@ export default function EpgSourceScreen() {
     return channels.filter((channel) => !query || `${channel.name} ${channel.group || ""} ${channel.raw_tvg_id || channel.tvg_id || ""}`.toLowerCase().includes(query)).slice(0, PAGE);
   }, [channelQuery, channels]);
   const selectedChannel = channels.find((item) => item.id === selectedChannelId);
+  const xmltvPageCount = Math.max(1, Math.ceil(xmltvTotal / PAGE));
+  const assignedXmltvIds = useMemo(() => new Set(Object.values(draft.overrides)), [draft.overrides]);
 
   const loadDirectory = useCallback(async () => {
     const generation = ++queryGeneration.current;
@@ -110,7 +115,7 @@ export default function EpgSourceScreen() {
       await setNativeSourceGuideBinding(sourceId, selectedChannel.id, xmltvId);
       assignMultiEpgChannel(sourceId, selectedChannel.id, xmltvId);
       const next = { ...draft, overrides: { ...draft.overrides, [selectedChannel.id]: xmltvId } }; setDraft(next);
-      invalidateGuideOwnershipCaches(); setMessage(`${selectedChannel.name} assigned to ${xmltvId}.`);
+      invalidateGuideOwnershipCaches(); setAssignDrawerOpen(false); setMessage(`${selectedChannel.name} assigned to ${xmltvId}.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not assign EPG channel."); }
     finally { setBusy(false); }
   }, [busy, draft, selectedChannel, sourceId]);
@@ -146,18 +151,39 @@ export default function EpgSourceScreen() {
       </View>
       <View style={styles.card}><Text style={styles.cardTitle}>Assign channels</Text><Text style={styles.help}>A channel can have one custom EPG owner. Assigning it here automatically removes an older custom-source assignment.</Text>
         <TextInput value={channelQuery} onChangeText={setChannelQuery} placeholder="Search playlist channels" placeholderTextColor={tvColors.textMuted} style={styles.input} />
-        {filteredChannels.map((channel) => <Row key={channel.id} label={channel.name} value={draft.overrides[channel.id] ? "Assigned" : channel.group || "Live TV"} selected={selectedChannelId === channel.id} onPress={() => setSelectedChannelId(channel.id)} />)}
+        {filteredChannels.map((channel) => <Row key={channel.id} label={channel.name} value={draft.overrides[channel.id] ? "Assigned" : channel.group || "Live TV"} selected={selectedChannelId === channel.id} onPress={() => { setSelectedChannelId(channel.id); setAssignDrawerOpen(true); }} />)}
       </View>
-      {selectedChannel ? <View style={styles.card}><Text style={styles.cardTitle}>XMLTV channel for {selectedChannel.name}</Text>
-        <TextInput value={xmltvQuery} onChangeText={(value) => { setXmltvQuery(value); setXmltvPage(0); }} placeholder="Search this EPG source" placeholderTextColor={tvColors.textMuted} style={styles.input} />
-        <Text style={styles.help}>{xmltvTotal} XMLTV channels · page {xmltvPage + 1}</Text>
-        {xmltvRows.map((row) => <Row key={row.id} label={row.name || row.id} value={draft.overrides[selectedChannel.id] === row.id ? "Assigned" : "Assign"} selected={draft.overrides[selectedChannel.id] === row.id} onPress={() => void assign(row.id)} />)}
-        <View style={styles.actions}><Button label="Previous" disabled={xmltvPage <= 0} onPress={() => setXmltvPage((value) => Math.max(0, value - 1))} /><Button label="Next" disabled={(xmltvPage + 1) * PAGE >= xmltvTotal} onPress={() => setXmltvPage((value) => value + 1)} /></View>
+      {selectedChannel ? <View style={styles.card}><Text style={styles.cardTitle}>EPG channel for {selectedChannel.name}</Text>
+        <Text style={styles.help}>Current: {draft.overrides[selectedChannel.id] ? `Assigned · ${draft.overrides[selectedChannel.id]}` : "Not assigned"}</Text>
+        <View style={styles.actions}><Button label={draft.overrides[selectedChannel.id] ? "Change assignment" : "Choose from list"} onPress={() => setAssignDrawerOpen(true)} /></View>
       </View> : null}
       {message ? <Text style={styles.status}>{message}</Text> : null}
       </ScrollView>
     </FocusGuide>
-  </View></PurpleTvShell>;
+  </View>
+  {selectedChannel ? (
+    <EpgChannelAssignDrawer
+      visible={assignDrawerOpen}
+      title={`Assign XMLTV channel to ${selectedChannel.name}`}
+      subtitle="Search this EPG source's own channel list, then pick one to bind it to this playlist channel."
+      query={xmltvQuery}
+      onQueryChange={(value) => { setXmltvQuery(value); setXmltvPage(0); }}
+      filter={xmltvFilter}
+      onFilterChange={setXmltvFilter}
+      rows={xmltvRows}
+      total={xmltvTotal}
+      page={xmltvPage}
+      pageCount={xmltvPageCount}
+      onPrevPage={() => setXmltvPage((value) => Math.max(0, value - 1))}
+      onNextPage={() => setXmltvPage((value) => Math.min(xmltvPageCount - 1, value + 1))}
+      assignedIds={assignedXmltvIds}
+      currentAssignedId={draft.overrides[selectedChannel.id] || null}
+      onSelect={(id) => void assign(id)}
+      onClose={() => setAssignDrawerOpen(false)}
+      busy={busy}
+    />
+  ) : null}
+  </PurpleTvShell>;
 }
 
 function Row({ label, value, onPress, selected = false }: { label: string; value: string; onPress: () => void; selected?: boolean }) { return <Pressable onPress={onPress} style={({ focused }: any) => [styles.row, selected && styles.selected, focused && styles.focused]}><Text numberOfLines={1} style={styles.rowText}>{label}</Text><Text numberOfLines={1} style={styles.value}>{value}</Text></Pressable>; }

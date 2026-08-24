@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { PurpleTvShell } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
+import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useStore } from "@/src/store";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
 import {
@@ -46,6 +47,8 @@ export default function CustomEpgScreen() {
   const [xmltvPage, setXmltvPage] = useState(0);
   const [xmltvRows, setXmltvRows] = useState<XmltvRow[]>([]);
   const [xmltvTotal, setXmltvTotal] = useState(0);
+  const [xmltvFilter, setXmltvFilter] = useState<EpgPickerFilter>("all");
+  const [assignDrawerOpen, setAssignDrawerOpen] = useState(false);
   const [preferBackFocus, setPreferBackFocus] = useState(true);
   const queryGeneration = useRef(0);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -92,6 +95,10 @@ export default function CustomEpgScreen() {
     [channelPage, filteredChannels],
   );
   const xmltvPageCount = Math.max(1, Math.ceil(xmltvTotal / XMLTV_PAGE_SIZE));
+  // Every XMLTV id currently bound to any playlist channel on this source —
+  // drives the picker drawer's "already assigned elsewhere" badge and its
+  // Unassigned filter.
+  const assignedXmltvIds = useMemo(() => new Set(Object.values(prefs.userOverrides)), [prefs.userOverrides]);
 
   useEffect(() => {
     setChannelPage((current) => Math.max(0, Math.min(channelPageCount - 1, current)));
@@ -241,6 +248,7 @@ export default function CustomEpgScreen() {
       prefs.setUserOverride(channel.id, xmltvId);
       invalidateGuideOwnershipCaches();
       void Haptics.selectionAsync().catch(() => undefined);
+      setAssignDrawerOpen(false);
       setStatus(`${channel.name} now uses custom EPG channel ${xmltvId}. Guide data will update without blocking navigation.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not assign custom EPG channel.");
@@ -334,7 +342,12 @@ export default function CustomEpgScreen() {
                 const selected = channel.id === selectedChannelId;
                 const mapped = prefs.userOverrides[channel.id];
                 return (
-                  <Pressable key={channel.id} onPress={() => setSelectedChannelId(channel.id)} style={({ focused }: any) => [styles.row, selected && styles.selected, focused && styles.focused]}>
+                  <Pressable
+                    key={channel.id}
+                    onPress={() => { setSelectedChannelId(channel.id); setAssignDrawerOpen(true); }}
+                    style={({ focused }: any) => [styles.row, selected && styles.selected, focused && styles.focused]}
+                    testID={`epg-custom-channel-${channel.id}`}
+                  >
                     <View style={styles.flex}><Text numberOfLines={1} style={styles.rowText}>{channel.name}</Text><Text numberOfLines={1} style={styles.sub}>{channel.group || "Live TV"}</Text></View>
                     <Text numberOfLines={1} style={styles.value}>{mapped ? `Custom · ${mapped}` : prefs.primaryEnabled ? "Charm EPG" : "No EPG"}</Text>
                   </Pressable>
@@ -344,25 +357,15 @@ export default function CustomEpgScreen() {
 
             {selectedChannel ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>2 · Assign XMLTV channel to {selectedChannel.name}</Text>
+                <Text style={styles.cardTitle}>2 · EPG channel for {selectedChannel.name}</Text>
                 <Text style={styles.help}>Current owner: {currentOverride ? `Custom EPG · ${currentOverride}` : prefs.primaryEnabled ? "Charm EPG" : "No EPG"}</Text>
                 <View style={styles.actions}>
+                  <Pressable onPress={() => setAssignDrawerOpen(true)} style={({ focused }: any) => [styles.action, focused && styles.focused]} testID="epg-custom-open-picker">
+                    <Text style={styles.actionText}>{currentOverride ? "Change assignment" : "Choose from list"}</Text>
+                  </Pressable>
                   {quickTvgId ? <Pressable disabled={busy} onPress={() => void assign(quickTvgId)} style={({ focused }: any) => [styles.action, focused && styles.focused]}><Text style={styles.actionText}>Try playlist tvg-id: {quickTvgId}</Text></Pressable> : null}
                   <Pressable disabled={!currentOverride || busy} onPress={clearAssignment} style={({ focused }: any) => [styles.action, (!currentOverride || busy) && styles.disabled, focused && styles.focused]}><Text style={styles.actionText}>Clear Override</Text></Pressable>
                 </View>
-                <TextInput value={xmltvQuery} onChangeText={(value) => { setXmltvQuery(value); setXmltvPage(0); }} placeholder="Search custom XMLTV channels" placeholderTextColor={tvColors.textMuted} style={styles.input} />
-                <View style={styles.pager}>
-                  <Pressable disabled={xmltvPage <= 0} onPress={() => setXmltvPage((value) => Math.max(0, value - 1))} style={({ focused }: any) => [styles.small, xmltvPage <= 0 && styles.disabled, focused && styles.focused]}><Text style={styles.actionText}>Previous</Text></Pressable>
-                  <Text style={styles.value}>Page {xmltvPage + 1}/{xmltvPageCount} · {xmltvTotal} XMLTV channels</Text>
-                  <Pressable disabled={xmltvPage + 1 >= xmltvPageCount} onPress={() => setXmltvPage((value) => Math.min(xmltvPageCount - 1, value + 1))} style={({ focused }: any) => [styles.small, xmltvPage + 1 >= xmltvPageCount && styles.disabled, focused && styles.focused]}><Text style={styles.actionText}>Next</Text></Pressable>
-                </View>
-                {xmltvRows.map((row) => (
-                  <Pressable key={row.id} disabled={busy} onPress={() => void assign(row.id)} style={({ focused }: any) => [styles.row, currentOverride === row.id && styles.selected, focused && styles.focused]}>
-                    <View style={styles.flex}><Text numberOfLines={1} style={styles.rowText}>{row.name || row.id}</Text><Text numberOfLines={1} style={styles.sub}>{row.id}</Text></View>
-                    <Text style={styles.value}>{currentOverride === row.id ? "Assigned" : "Assign"}</Text>
-                  </Pressable>
-                ))}
-                {!xmltvRows.length ? <Text style={styles.help}>Refresh the custom EPG first, or change the XMLTV search.</Text> : null}
               </View>
             ) : null}
 
@@ -370,6 +373,29 @@ export default function CustomEpgScreen() {
           </ScrollView>
         </FocusGuide>
       </View>
+
+      {selectedChannel ? (
+        <EpgChannelAssignDrawer
+          visible={assignDrawerOpen}
+          title={`Assign XMLTV channel to ${selectedChannel.name}`}
+          subtitle="Search this custom EPG's own channel list, then pick one to bind it to this playlist channel."
+          query={xmltvQuery}
+          onQueryChange={(value) => { setXmltvQuery(value); setXmltvPage(0); }}
+          filter={xmltvFilter}
+          onFilterChange={setXmltvFilter}
+          rows={xmltvRows}
+          total={xmltvTotal}
+          page={xmltvPage}
+          pageCount={xmltvPageCount}
+          onPrevPage={() => setXmltvPage((value) => Math.max(0, value - 1))}
+          onNextPage={() => setXmltvPage((value) => Math.min(xmltvPageCount - 1, value + 1))}
+          assignedIds={assignedXmltvIds}
+          currentAssignedId={currentOverride || null}
+          onSelect={(id) => void assign(id)}
+          onClose={() => setAssignDrawerOpen(false)}
+          busy={busy}
+        />
+      ) : null}
     </PurpleTvShell>
   );
 }
