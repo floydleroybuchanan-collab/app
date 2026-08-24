@@ -92,24 +92,41 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
+  // Rebuffer-to-resume and playback-start targets were brought down from an
+  // earlier, much deeper set of numbers after comparing against TiViMate
+  // (which plays the same provider streams without the freeze/flicker/resync
+  // cycle reported on-device here). TiViMate keeps live TV latency low with a
+  // ~1,000/2,500/500/1,000ms LoadControl and recovers a stalled connection
+  // within ~5s flat. minBufferMs/maxBufferMs stay well above TiViMate's own
+  // numbers on purpose -- unlike TiViMate's curated provider set, this app
+  // has to absorb jitter from arbitrary Xtream/Stalker panels, so the
+  // steady-state cushion against a stall happening at all is kept large.
+  // What actually drives the *visible* freeze duration once a stall does
+  // happen is how long it takes to refill to the rebuffer-after-stall target
+  // and how quickly a genuinely dead connection gets detected in the first
+  // place (see httpClient below) -- those are the values pulled toward
+  // TiViMate's much snappier numbers.
   private const val MIN_BUFFER_MS_LOW_RAM = 10_000
   private const val MAX_BUFFER_MS_LOW_RAM = 30_000
-  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 2_500
-  private const val REBUFFER_BUFFER_MS_LOW_RAM = 5_000
+  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 1_500
+  private const val REBUFFER_BUFFER_MS_LOW_RAM = 2_500
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
   private const val MIN_BUFFER_MS_NORMAL = 15_000
   private const val MAX_BUFFER_MS_NORMAL = 60_000
-  private const val PLAYBACK_BUFFER_MS_NORMAL = 3_000
-  private const val REBUFFER_BUFFER_MS_NORMAL = 5_000
+  private const val PLAYBACK_BUFFER_MS_NORMAL = 1_500
+  private const val REBUFFER_BUFFER_MS_NORMAL = 2_500
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
-  // Must stay comfortably above REBUFFER_BUFFER_MS_*: that is how long
-  // DefaultLoadControl itself needs to resume playback after a stall. When this
-  // watchdog matched that threshold exactly, it could fire a disruptive
-  // stop()+reprepare (see setKeepContentOnPlayerReset above) for ordinary live-TS
-  // jitter DefaultLoadControl was about to resolve on its own, producing repeated
-  // buffer -> recover -> buffer cycles on otherwise-healthy streams.
-  private const val HUNG_BUFFER_REPREPARE_MS = 9_000L
-  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L
+  // Must stay comfortably above REBUFFER_BUFFER_MS_* (how long DefaultLoadControl
+  // itself needs to resume playback after a stall) AND above httpClient's
+  // readTimeout below (how long a single stalled read takes to surface as a
+  // load error ExoPlayer can retry on its own). Firing at or below either of
+  // those causes a disruptive stop()+reprepare (see setKeepContentOnPlayerReset
+  // above) for ordinary jitter that was already about to resolve itself,
+  // producing repeated buffer -> recover -> buffer cycles on otherwise-healthy
+  // streams -- this was observed on-device and is why both this and the HTTP
+  // timeouts below were pulled in together rather than in isolation.
+  private const val HUNG_BUFFER_REPREPARE_MS = 12_000L
+  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 16_000L
   private const val STABLE_REARM_MS = 30_000L
   private const val MAX_AUTO_RECOVERIES = 4
   private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
@@ -121,11 +138,20 @@ object NativePlaybackManager {
   private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
   private const val TAG = "CharmMedia3"
 
+  // Connect/read timeouts were brought down from 8s/20s toward TiViMate's flat
+  // 5s: a dead IPTV-panel connection that never sends a FIN (common with cheap
+  // Xtream/Stalker backends that silently drop idle sockets) used to take up
+  // to 20s to surface as a read error, during which the stream just sat
+  // frozen with no recovery path engaged yet. 10s read / 6s connect still
+  // gives more slack than TiViMate's single flat number since this app talks
+  // to far more heterogeneous provider infrastructure, but is short enough
+  // that a truly-dead read is caught well before the watchdog thresholds
+  // above would otherwise have to notice via the "no progress" fallback path.
   private val httpClient = OkHttpClient.Builder()
     .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
-    .connectTimeout(8, TimeUnit.SECONDS)
-    .readTimeout(20, TimeUnit.SECONDS)
-    .writeTimeout(15, TimeUnit.SECONDS)
+    .connectTimeout(6, TimeUnit.SECONDS)
+    .readTimeout(10, TimeUnit.SECONDS)
+    .writeTimeout(8, TimeUnit.SECONDS)
     .retryOnConnectionFailure(true)
     .build()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
@@ -142,6 +168,17 @@ object NativePlaybackManager {
   private var previewPlayerView: PlayerView? = null
   private var fullscreenPlayerView: PlayerView? = null
   private var player: ExoPlayer? = null
+  // Applied to every ExoPlayer this object creates (see ensurePlayer below), not
+  // just the currently-live one. setMuted() below updates this before touching
+  // player.volume so a freshly created/recreated instance -- on first prepare(),
+  // or after fullPlayerAndSourceRecovery's release+recreate -- starts at the
+  // caller's last-requested mute state instead of defaulting to unmuted (1.0).
+  // A brand-new ExoPlayer was previously left unmuted until the JS mute effect
+  // happened to re-fire, which it only does when its `muted` prop value itself
+  // changes -- never merely because a new native player was created underneath
+  // it -- so "mute live preview" silently stopped applying on every channel
+  // change (StreamPlayer.tsx remounts a fresh player per channel) or recovery.
+  private var mutedState = false
   private var listener: Listener? = null
   private var owner: Owner = Owner.NONE
   private var activeSource: PlaybackSource? = null
@@ -260,7 +297,20 @@ object NativePlaybackManager {
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?) = runOnMain {
-    if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) return@runOnMain
+    if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
+      // Do not silently drop this. A fullscreen session's async teardown (its
+      // own prepare()/stop() round trip through runOnMain) can still be
+      // in-flight on the native side at the exact moment Guide remounts and
+      // asks for a preview -- JS's session bookkeeper has no visibility into
+      // this native-only check, so without an explicit error here the preview
+      // surface is left forever unbound (permanently black, since nothing else
+      // ever re-drives this generation) while a still-live fullscreen player
+      // can keep producing audio in the background. Publishing "error" lets
+      // Guide's existing previewStatus/previewId retry-on-refocus path recover
+      // instead of hanging indefinitely.
+      publishState("error", "owner-reserved")
+      return@runOnMain
+    }
     // A manual engine switch must never leave two native decoders alive. VLC's
     // prepare() already stops us the same way; this was previously the only
     // direction missing, so switching Media3 <- VLC had no native-level
@@ -325,7 +375,7 @@ object NativePlaybackManager {
 
   fun pause() = runOnMain { player?.pause() }
   fun resume() = runOnMain { if (owner != Owner.NONE) player?.play() }
-  fun setMuted(muted: Boolean) = runOnMain { player?.volume = if (muted) 0f else 1f }
+  fun setMuted(muted: Boolean) = runOnMain { mutedState = muted; player?.volume = if (muted) 0f else 1f }
   fun selectAudio(groupIndex: Int?, trackIndex: Int?, preferredLanguage: String?) = runOnMain {
     val instance = player ?: return@runOnMain
     val builder = instance.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO)
@@ -415,6 +465,7 @@ object NativePlaybackManager {
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
       .build().also { created ->
         player = created
+        created.volume = if (mutedState) 0f else 1f
         created.addListener(object : Player.Listener {
           override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {

@@ -55,6 +55,12 @@ object NativeVlcPlaybackManager {
   private var activeIdentity: Identity? = null
   private var listener: Listener? = null
   private var playing = false
+  // Same reasoning as NativePlaybackManager.mutedState: every prepare() below
+  // builds a brand new MediaPlayer, which otherwise starts unmuted regardless
+  // of what the caller last asked for -- applied to each new instance right
+  // after it is created, not just through setMuted() on whatever instance
+  // happens to be current when JS calls it.
+  private var mutedState = false
 
   private val startupTimeout = Runnable {
     val identity = activeIdentity ?: return@Runnable
@@ -103,7 +109,14 @@ object NativeVlcPlaybackManager {
     audioOutput: String,
     bufferProfile: String,
   ) = runOnMain {
-    if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) return@runOnMain
+    if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
+      // See the equivalent guard in NativePlaybackManager.prepare() for why
+      // this must publish rather than silently drop: without an event for
+      // this exact generation, JS's preview session has no way to learn this
+      // attempt failed and never retries on its own.
+      listener?.onState(Identity(requestedOwner, nextGeneration, nextChannelKey.trim()), "error", "owner-reserved")
+      return@runOnMain
+    }
 
     // A manual engine switch must never leave two native decoders alive. Use
     // stopForEngineSwitch(), not releaseAll(): releaseAll() also nulls Media3's
@@ -138,6 +151,7 @@ object NativeVlcPlaybackManager {
     val core = ensureCore()
     val player = MediaPlayer(core)
     mediaPlayer = player
+    player.volume = if (mutedState) 0 else 100
     configureAudioOutput(player, source.audioOutput)
     player.setEventListener { event ->
       if (mediaPlayer !== player || activeIdentity != identity) return@setEventListener
@@ -212,6 +226,7 @@ object NativeVlcPlaybackManager {
   }
 
   fun setMuted(muted: Boolean) = runOnMain {
+    mutedState = muted
     mediaPlayer?.volume = if (muted) 0 else 100
   }
 
