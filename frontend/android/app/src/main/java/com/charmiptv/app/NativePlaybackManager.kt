@@ -247,6 +247,11 @@ object NativePlaybackManager {
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) return@runOnMain
+    // A manual engine switch must never leave two native decoders alive. VLC's
+    // prepare() already stops us the same way; this was previously the only
+    // direction missing, so switching Media3 <- VLC had no native-level
+    // guarantee VLC actually released the decoder/surface first.
+    NativeVlcPlaybackManager.stopForEngineSwitch()
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
     owner = requestedOwner
@@ -321,6 +326,18 @@ object NativePlaybackManager {
     stopInternal(releasePlayer); onStopped?.invoke()
   }
   fun suspendForBackground() = runOnMain { stopInternal(releasePlayer = true) }
+  /**
+   * Stop and release the ExoPlayer instance when the user switches to a
+   * different playback engine. Deliberately does NOT clear listener/activity/
+   * surface references the way releaseAll() does: those stay valid for the
+   * app's lifetime and are needed again the instant the user switches back to
+   * Media3. NativePlaybackModule's listener is only ever registered once, at
+   * NativeModule construction — nulling it here (as releaseAll() used to,
+   * before this method existed) permanently silenced every future onState/
+   * onTracks/onDiagnostic callback to JS after the first engine switch away
+   * from Media3, which looked like "Media3 stops working after using VLC".
+   */
+  fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
   fun releaseAll() = runOnMain {
     stopInternal(releasePlayer = true)
     playerView?.let { video -> video.player = null; (video.parent as? ViewGroup)?.removeView(video) }

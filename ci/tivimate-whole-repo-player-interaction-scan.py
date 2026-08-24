@@ -153,6 +153,24 @@ for rel in (
         helper_end = current.find("\n/** Check persisted independent playlist/EPG clocks", helper_start + 1)
         if helper_start >= 0 and helper_end > helper_start:
             current = current[:helper_start] + current[helper_end:]
+    # EpgNativeModule.kt: the primary EpgDatabase is now a shared singleton
+    # (EpgDatabase.shared()) instead of each owner opening its own
+    # SQLiteOpenHelper connection to the same file — a memory-audit fix, not a
+    # transport change. Neither which EpgDatabase instance backs `database` nor
+    # whether this module closes it on invalidate() touches M3U/XMLTV fetch,
+    # parse, or match logic. Normalize those two exact edits before comparing.
+    if rel == "frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt":
+        current = current.replace(
+            "  // Shared across every owner of the primary EPG store (this module, EpgRamModule,\n"
+            "  // NativeGuideView) — see EpgDatabase.shared() for why. Never closed here.\n"
+            "  private val database = EpgDatabase.shared(reactContext)\n",
+            "  private val database = EpgDatabase(reactContext)\n",
+        )
+        current = current.replace(
+            "    // `database` is the shared primary EpgDatabase instance (EpgRamModule and\n"
+            "    // NativeGuideView may still be using it) — never close it here.\n",
+            "    database.close()\n",
+        )
     if current != baseline:
         critical.append(f"repair changed M3U/EPG transport: {rel}")
 

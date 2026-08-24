@@ -104,8 +104,14 @@ object NativeVlcPlaybackManager {
   ) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) return@runOnMain
 
-    // A manual engine switch must never leave two native decoders alive.
-    NativePlaybackManager.releaseAll()
+    // A manual engine switch must never leave two native decoders alive. Use
+    // stopForEngineSwitch(), not releaseAll(): releaseAll() also nulls Media3's
+    // listener/activity/surface refs, and NativePlaybackModule's listener is
+    // only ever registered once at NativeModule construction — that
+    // permanently silenced every Media3 state/track/diagnostic callback to JS
+    // after the first switch away from it (looked like "Media3 broken after
+    // using VLC").
+    NativePlaybackManager.stopForEngineSwitch()
     main.removeCallbacks(startupTimeout)
     releasePlayerOnly(removeLayout = false)
 
@@ -207,6 +213,15 @@ object NativeVlcPlaybackManager {
     if (owner == requestedOwner) stopInternal(releasePlayer)
     onStopped?.invoke()
   }
+
+  /**
+   * Stop and release the LibVLC core/player when the user switches to a
+   * different playback engine. Deliberately does NOT clear listener/activity/
+   * surface references the way releaseAll() does — those stay valid for the
+   * app's lifetime and are needed again the instant the user switches back to
+   * VLC. See the matching NativePlaybackManager.stopForEngineSwitch() doc.
+   */
+  fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
 
   fun releaseAll() = runOnMain {
     stopInternal(releasePlayer = true)

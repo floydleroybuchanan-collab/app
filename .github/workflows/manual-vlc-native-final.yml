@@ -118,7 +118,7 @@ jobs:
           grep -q 'org.videolan.android:libvlc-all:3.7.5' frontend/android/app/build.gradle
           grep -q 'MediaPlayer(core)' "$VLC"
           grep -q 'setHWDecoderEnabled(source.hardwareDecode, false)' "$VLC"
-          grep -q 'NativePlaybackManager.releaseAll()' "$VLC"
+          grep -q 'NativePlaybackManager.stopForEngineSwitch()' "$VLC"
           grep -q 'LifecycleEventListener' "$MODULE"
           grep -q 'activeGeneration' "$MODULE"
           grep -q 'indexDeclaredStreamTypes(channels)' "$SOURCE"
@@ -135,7 +135,7 @@ jobs:
           grep -q 'REBUFFER_BUFFER_MS_NORMAL = 5_000' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
           grep -q 'readTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
-          grep -q 'HUNG_BUFFER_REPREPARE_MS = 5_000L' "$PLAYER"
+          grep -q 'HUNG_BUFFER_REPREPARE_MS = 9_000L' "$PLAYER"
           grep -q 'TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L' "$PLAYER"
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
