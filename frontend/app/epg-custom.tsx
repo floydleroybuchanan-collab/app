@@ -119,10 +119,14 @@ export default function CustomEpgScreen() {
     }
   }, [xmltvPage, xmltvQuery]);
 
+  // Only queries the native EPG channel directory while the picker is open —
+  // reopening re-runs it immediately (assignDrawerOpen flips the deps), so the
+  // list is never stale, and nothing fires or lingers while the drawer is closed.
   useEffect(() => {
+    if (!assignDrawerOpen) return;
     const timer = setTimeout(() => void reloadXmltvPage(), 180);
     return () => clearTimeout(timer);
-  }, [reloadXmltvPage]);
+  }, [reloadXmltvPage, assignDrawerOpen]);
 
   const applyOwnership = useCallback(async (
     primaryEnabled: boolean,

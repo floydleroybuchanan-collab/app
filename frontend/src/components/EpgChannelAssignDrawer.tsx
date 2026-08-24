@@ -59,13 +59,17 @@ export function EpgChannelAssignDrawer({
   onClose,
   busy,
 }: Props) {
-  const [preferSearchFocus, setPreferSearchFocus] = useState(true);
+  // Preferred focus goes to Close, not the search TextInput — same contract as
+  // every other overlay/screen in this app (ProgramModal's action button,
+  // epg-custom/epg-source/group-settings's preferBackFocus). Auto-focusing a
+  // TextInput would pop the on-screen keyboard immediately on open and put the
+  // D-pad one extra press away from Close/filters/rows; it also self-clears on
+  // the button's own onFocus rather than a fixed timer, so it can't race a
+  // slower TV focus engine.
+  const [preferCloseFocus, setPreferCloseFocus] = useState(true);
 
   useEffect(() => {
-    if (!visible) return;
-    setPreferSearchFocus(true);
-    const timer = setTimeout(() => setPreferSearchFocus(false), 220);
-    return () => clearTimeout(timer);
+    if (visible) setPreferCloseFocus(true);
   }, [visible]);
 
   // Close on the hardware / remote BACK button while the sheet is open —
@@ -94,6 +98,8 @@ export function EpgChannelAssignDrawer({
                 {subtitle ? <Text numberOfLines={2} style={styles.subtitle}>{subtitle}</Text> : null}
               </View>
               <Pressable
+                hasTVPreferredFocus={preferCloseFocus}
+                onFocus={() => setPreferCloseFocus(false)}
                 style={({ focused }: any) => [styles.closeBtn, focused && styles.focused]}
                 onPress={onClose}
                 hitSlop={10}
@@ -104,7 +110,6 @@ export function EpgChannelAssignDrawer({
             </View>
 
             <TextInput
-              hasTVPreferredFocus={preferSearchFocus}
               value={query}
               onChangeText={onQueryChange}
               placeholder="Search this EPG's channels…"

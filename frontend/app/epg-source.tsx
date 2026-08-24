@@ -106,7 +106,8 @@ export default function EpgSourceScreen() {
       setXmltvRows(result.rows || []); setXmltvTotal(Math.max(0, Number(result.total) || 0));
     } catch (error) { if (generation === queryGeneration.current) setMessage(error instanceof Error ? error.message : "Could not read EPG channels."); }
   }, [sourceId, xmltvPage, xmltvQuery]);
-  useEffect(() => { const timer = setTimeout(() => void loadDirectory(), 180); return () => clearTimeout(timer); }, [loadDirectory]);
+  // Only queries the native EPG channel directory while the picker is open — reopening re-runs it immediately (assignDrawerOpen flips the deps), so the list is never stale, and nothing fires or lingers while the drawer is closed.
+  useEffect(() => { if (!assignDrawerOpen) return; const timer = setTimeout(() => void loadDirectory(), 180); return () => clearTimeout(timer); }, [loadDirectory, assignDrawerOpen]);
 
   const assign = useCallback(async (xmltvId: string) => {
     if (!selectedChannel || busy) return;
