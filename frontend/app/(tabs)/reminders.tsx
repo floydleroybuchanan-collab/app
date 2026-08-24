@@ -170,6 +170,7 @@ function RemindersScreenContent() {
           <View style={styles.topActions}>
             <Pressable
               hasTVPreferredFocus={preferInitialFocus}
+              onFocus={() => setPreferInitialFocus(false)}
               onPress={returnToGuide}
               style={({ focused }: any) => [styles.returnButton, focused && styles.returnFocused]}
               testID="reminders-return-guide"

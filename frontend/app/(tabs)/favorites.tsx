@@ -206,7 +206,7 @@ function FavoritesScreenContent() {
         </View>
 
         <View style={styles.folderRow}>
-          <Pressable hasTVPreferredFocus={preferInitialFocus} onPress={() => setFolderId("all")} style={({ focused }: any) => [styles.folderChip, folderId === "all" && styles.folderActive, focused && styles.focused]}>
+          <Pressable hasTVPreferredFocus={preferInitialFocus && items.length > 0} onFocus={() => setPreferInitialFocus(false)} onPress={() => setFolderId("all")} style={({ focused }: any) => [styles.folderChip, folderId === "all" && styles.folderActive, focused && styles.focused]}>
             <Text style={styles.folderText}>All</Text>
           </Pressable>
           {favoriteFolders.map((folder) => (
@@ -266,7 +266,7 @@ function FavoritesScreenContent() {
             <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
             <Text style={styles.emptyTitle}>No favorites yet</Text>
             <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
-            <Pressable hasTVPreferredFocus={preferInitialFocus} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
+            <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
               <Text style={styles.guideText}>Open TV Guide</Text>
             </Pressable>
           </View>
