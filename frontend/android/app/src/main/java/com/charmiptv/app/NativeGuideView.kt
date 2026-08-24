@@ -111,8 +111,9 @@ class NativeGuideView(context: Context) : View(context) {
   private val nowPaint = Paint().apply { color = Color.rgb(197, 158, 255); strokeWidth = 2f * density }
   private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f * density }
   private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(183, 174, 204); textSize = 11f * density }
-  private val timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
+  private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
   private val tickDate = Date()
+  private var use24HourClock = false
 
   init {
     isFocusable = true
@@ -194,6 +195,13 @@ class NativeGuideView(context: Context) : View(context) {
 
   fun setWindowStart(start: Double) = setWindow(start, windowEndMs.toDouble())
   fun setWindowEnd(end: Double) = setWindow(windowStartMs.toDouble(), end)
+
+  fun setClock24h(value: Boolean) {
+    if (value == use24HourClock) return
+    use24HourClock = value
+    timeFormatter = SimpleDateFormat(if (value) "HH:mm" else "h:mm a", Locale.getDefault())
+    invalidate()
+  }
 
   fun setActive(value: Boolean) {
     val wasEnabled = enabled

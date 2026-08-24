@@ -16,6 +16,7 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   @ReactProp(name = "windowStartMs") fun start(view: NativeGuideView, value: Double) = view.setWindowStart(value)
   @ReactProp(name = "windowEndMs") fun end(view: NativeGuideView, value: Double) = view.setWindowEnd(value)
   @ReactProp(name = "active", defaultBoolean = true) fun active(view: NativeGuideView, value: Boolean) = view.setActive(value)
+  @ReactProp(name = "clock24h", defaultBoolean = false) fun clock24h(view: NativeGuideView, value: Boolean) = view.setClock24h(value)
   @ReactProp(name = "restoreChannelId") fun restore(view: NativeGuideView, value: String?) = view.restoreChannel(value)
   @ReactProp(name = "restoreTimeMs", defaultDouble = 0.0) fun restoreTime(view: NativeGuideView, value: Double) = view.restoreTime(value)
   @ReactProp(name = "reloadGeneration", defaultInt = 0) fun reload(view: NativeGuideView, value: Int) = view.setReloadGeneration(value)

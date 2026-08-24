@@ -246,6 +246,7 @@ function PurpleGuideScreenContent() {
     epgGuideFilter,
     retainGuideSlidingCache,
     releaseGuideSlidingCache,
+    clock24h,
   } = useStore();
 
   const {
@@ -1097,6 +1098,7 @@ function PurpleGuideScreenContent() {
                 restoreChannelId={guideSessionChannelId}
                 restoreTimeMs={restoreTimeMs}
                 reloadGeneration={resetToken}
+                clock24h={clock24h}
                 channelNumberById={channelNumberById}
                 onProgramPress={openGuideProgram}
                 onChannelFocus={onFocusChannel}

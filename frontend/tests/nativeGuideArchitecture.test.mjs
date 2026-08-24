@@ -67,13 +67,30 @@ test("native Guide timeline uses real program duration and queries the visible r
 
 test("native Guide draw loop reuses formatter/date objects instead of allocating per frame", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
-  assert.match(view, /private val timeFormatter = SimpleDateFormat\("h:mm a", Locale\.getDefault\(\)\)/);
+  // `var`, not `val`: setClock24h() rebuilds this once when the JS-side
+  // 24-hour clock preference (Settings > General) changes, not per frame.
+  assert.match(view, /private var timeFormatter = SimpleDateFormat\("h:mm a", Locale\.getDefault\(\)\)/);
   assert.match(view, /private val tickDate = Date\(\)/);
+  assert.match(view, /fun setClock24h\(value: Boolean\)/);
   const drawHeader = view.match(/private fun drawHeader[\s\S]*?\n  }\n\n  private fun drawClippedText/)?.[0] || "";
   assert.match(drawHeader, /tickDate\.time = tick/);
   assert.match(drawHeader, /timeFormatter\.format\(tickDate\)/);
   assert.doesNotMatch(drawHeader, /SimpleDateFormat\(|Date\(/);
   assert.doesNotMatch(view, /listOfNotNull\(row\.number/);
+});
+
+test("native Guide clock24h preference reaches the native time-of-day header", async () => {
+  const [guide, bridge, manager, view] = await Promise.all([
+    source("app/(tabs)/guide.tsx"),
+    source("src/components/NativeGuideCanvas.tsx"),
+    source("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"),
+  ]);
+  assert.match(guide, /clock24h,?\s*\n\s*\} = useStore\(\)/);
+  assert.match(guide, /<NativeGuideCanvas[\s\S]*?clock24h=\{clock24h\}/);
+  assert.match(bridge, /clock24h=\{clock24h\}/);
+  assert.match(manager, /@ReactProp\(name = "clock24h", defaultBoolean = false\) fun clock24h/);
+  assert.match(view, /timeFormatter = SimpleDateFormat\(if \(value\) "HH:mm" else "h:mm a", Locale\.getDefault\(\)\)/);
 });
 
 test("preview tuning only follows settled native selection", async () => {

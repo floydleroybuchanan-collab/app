@@ -7,6 +7,7 @@ type SelectionEvent = { channelId: string; row: number; settled: boolean; presse
 type RunwayEvent = { ids: string[]; priorityIds: string[]; pageSize: number; velocity: number; direction: number };
 type Props = {
   channels: Channel[]; windowStart: string; windowEnd: string; active: boolean; restoreChannelId?: string | null; restoreTimeMs?: number | null; reloadGeneration?: number;
+  clock24h?: boolean;
   channelNumberById: Record<string, number>;
   onChannelFocus: (channel: Channel, settled: boolean) => void;
   onProgramFocus: (program: Program, channel: Channel, settled: boolean) => void;
@@ -26,6 +27,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   restoreChannelId,
   restoreTimeMs,
   reloadGeneration = 0,
+  clock24h = false,
   channelNumberById,
   onChannelFocus,
   onProgramFocus,
@@ -129,6 +131,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       restoreChannelId={deferredRestoreChannelId}
       restoreTimeMs={deferredRestoreTimeMs}
       reloadGeneration={reloadGeneration}
+      clock24h={clock24h}
       onSelectionChange={handleSelectionChange}
       onRunwayChange={handleRunwayChange}
       onLeftBoundary={onLeftBoundary}
