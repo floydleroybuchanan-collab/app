@@ -164,10 +164,10 @@ test("Media3 recovery is one bounded native post-first-frame watchdog", async ()
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
   ]);
-  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 12_000L/);
+  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 5_000L/);
   assert.match(native, /if \(!firstFrameRendered \|\| instance\.playbackState != Player\.STATE_BUFFERING\) return@Runnable/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
   assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
   assert.match(native, /recoveryAttempts \+= 1[\s\S]*?performRecovery\(instance\)/);
   assert.match(native, /main\.postDelayed\(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS\)/);

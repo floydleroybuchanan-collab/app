@@ -23,8 +23,8 @@ test("native recovery escalates through a real playlist-only source refresh and 
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/CharmMemoryCoordinator.kt"),
   ]);
-  assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 10_000/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 1_000/);
+  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
   assert.match(native, /when \(recoveryAttempts\)[\s\S]*?1 -> \{ instance\.prepare\(\)/);
   assert.match(native, /2 -> \{[\s\S]*?rebuildMediaSource\(instance, source, "media-source-rebuild"\)/);
   assert.match(native, /3 -> requestFreshSource\(instance, source\)/);

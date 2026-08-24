@@ -92,44 +92,49 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
-  // Rebuffer-to-resume and playback-start targets were brought down from an
-  // earlier, much deeper set of numbers after comparing against TiViMate
-  // (which plays the same provider streams without the freeze/flicker/resync
-  // cycle reported on-device here). TiViMate keeps live TV latency low with a
-  // ~1,000/2,500/500/1,000ms LoadControl and recovers a stalled connection
-  // within ~5s flat. minBufferMs/maxBufferMs stay well above TiViMate's own
-  // numbers on purpose -- unlike TiViMate's curated provider set, this app
-  // has to absorb jitter from arbitrary Xtream/Stalker panels, so the
-  // steady-state cushion against a stall happening at all is kept large.
-  // What actually drives the *visible* freeze duration once a stall does
-  // happen is how long it takes to refill to the rebuffer-after-stall target
-  // and how quickly a genuinely dead connection gets detected in the first
-  // place (see httpClient below) -- those are the values pulled toward
-  // TiViMate's much snappier numbers.
-  private const val MIN_BUFFER_MS_LOW_RAM = 10_000
-  private const val MAX_BUFFER_MS_LOW_RAM = 30_000
-  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 1_500
-  private const val REBUFFER_BUFFER_MS_LOW_RAM = 2_500
+  // LoadControl now matches TiViMate's own numbers directly (it plays the same
+  // provider streams without the freeze/flicker/resync cycle reported
+  // on-device here, on both low-RAM and normal hardware -- their docs draw no
+  // RAM-tier distinction for these, so this app's LOW_RAM/NORMAL split is kept
+  // only for TARGET_BUFFER_BYTES below, an unrelated total-memory ceiling).
+  // A shallow, fast-refilling buffer is a deliberate strategy, not a
+  // compromise: it trades rare-but-long freezes (this app's earlier, much
+  // deeper buffer) for occasional sub-second ones that recover almost
+  // invisibly, which is exactly the behavior TiViMate demonstrates on these
+  // exact streams. See httpClient and HUNG_BUFFER_REPREPARE_MS below for the
+  // other half of that strategy: detecting and recovering a genuine stall
+  // fast, rather than trying to buffer through it.
+  private const val MIN_BUFFER_MS_LOW_RAM = 1_000
+  private const val MAX_BUFFER_MS_LOW_RAM = 2_500
+  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 500
+  private const val REBUFFER_BUFFER_MS_LOW_RAM = 1_000
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
-  private const val MIN_BUFFER_MS_NORMAL = 15_000
-  private const val MAX_BUFFER_MS_NORMAL = 60_000
-  private const val PLAYBACK_BUFFER_MS_NORMAL = 1_500
-  private const val REBUFFER_BUFFER_MS_NORMAL = 2_500
+  private const val MIN_BUFFER_MS_NORMAL = 1_000
+  private const val MAX_BUFFER_MS_NORMAL = 2_500
+  private const val PLAYBACK_BUFFER_MS_NORMAL = 500
+  private const val REBUFFER_BUFFER_MS_NORMAL = 1_000
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
-  // Must stay comfortably above REBUFFER_BUFFER_MS_* (how long DefaultLoadControl
-  // itself needs to resume playback after a stall) AND above httpClient's
-  // readTimeout below (how long a single stalled read takes to surface as a
-  // load error ExoPlayer can retry on its own). Firing at or below either of
-  // those causes a disruptive stop()+reprepare (see setKeepContentOnPlayerReset
-  // above) for ordinary jitter that was already about to resolve itself,
-  // producing repeated buffer -> recover -> buffer cycles on otherwise-healthy
-  // streams -- this was observed on-device and is why both this and the HTTP
-  // timeouts below were pulled in together rather than in isolation.
-  private const val HUNG_BUFFER_REPREPARE_MS = 12_000L
-  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 16_000L
+  // Matches TiViMate's flat ~5s "Silent Resync" watchdog for HLS/DASH, whose
+  // individually-bounded segment requests are already covered by httpClient's
+  // own readTimeout below sitting at the same ~5s mark. TRANSPORT (raw
+  // continuous MPEG-TS) keeps a little extra slack rather than the exact same
+  // flat number: recovering it needs a whole fresh HTTP request/reconnect
+  // (see recoverOnce's skipBarePrepare below), not just a retried segment, so
+  // it is given a bit more room before being torn down -- TiViMate's own docs
+  // don't draw this distinction, but this app supports raw MPEG-TS as a
+  // first-class case where TiViMate's document flat number is implicitly
+  // tuned for it already (Xtream Codes live TV is typically raw MPEG-TS).
+  private const val HUNG_BUFFER_REPREPARE_MS = 5_000L
+  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 7_000L
   private const val STABLE_REARM_MS = 30_000L
+  // Kept at 4 escalating recovery actions (bare re-prepare -> rebuild source
+  // -> fresh source from JS -> full player release+recreate) rather than
+  // trimming to TiViMate's 3: those are distinct recovery strategies, not
+  // just retries of the same action, and dropping one would be losing
+  // capability rather than adopting a TiViMate number. The backoff delays
+  // between them are TiViMate's own 1s/2s/4s escalation.
   private const val MAX_AUTO_RECOVERIES = 4
-  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
+  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 2_000L, 4_000L)
   private const val FULLSCREEN_START_TIMEOUT_MS = 12_000L
   private const val PREVIEW_START_TIMEOUT_MS = 8_000L
   private const val SOURCE_REFRESH_TIMEOUT_MS = 20_000L
@@ -138,20 +143,16 @@ object NativePlaybackManager {
   private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
   private const val TAG = "CharmMedia3"
 
-  // Connect/read timeouts were brought down from 8s/20s toward TiViMate's flat
-  // 5s: a dead IPTV-panel connection that never sends a FIN (common with cheap
-  // Xtream/Stalker backends that silently drop idle sockets) used to take up
-  // to 20s to surface as a read error, during which the stream just sat
-  // frozen with no recovery path engaged yet. 10s read / 6s connect still
-  // gives more slack than TiViMate's single flat number since this app talks
-  // to far more heterogeneous provider infrastructure, but is short enough
-  // that a truly-dead read is caught well before the watchdog thresholds
-  // above would otherwise have to notice via the "no progress" fallback path.
+  // Flat 5s connect/read/write, matching TiViMate directly: a dead IPTV-panel
+  // connection that never sends a FIN (common with cheap Xtream/Stalker
+  // backends that silently drop idle sockets) now surfaces as a read error in
+  // ~5s instead of the up to 20s this used to take, during which the stream
+  // just sat frozen with no recovery path engaged yet.
   private val httpClient = OkHttpClient.Builder()
     .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
-    .connectTimeout(6, TimeUnit.SECONDS)
-    .readTimeout(10, TimeUnit.SECONDS)
-    .writeTimeout(8, TimeUnit.SECONDS)
+    .connectTimeout(5, TimeUnit.SECONDS)
+    .readTimeout(5, TimeUnit.SECONDS)
+    .writeTimeout(5, TimeUnit.SECONDS)
     .retryOnConnectionFailure(true)
     .build()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {

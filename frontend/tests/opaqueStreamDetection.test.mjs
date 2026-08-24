@@ -68,16 +68,16 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /HlsMediaSource\.Factory/);
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(manager, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
-  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 10_000/);
-  assert.match(manager, /MAX_BUFFER_MS_LOW_RAM = 30_000/);
-  assert.match(manager, /PLAYBACK_BUFFER_MS_LOW_RAM = 1_500/);
-  assert.match(manager, /REBUFFER_BUFFER_MS_LOW_RAM = 2_500/);
-  assert.match(manager, /MIN_BUFFER_MS_NORMAL = 15_000/);
-  assert.match(manager, /MAX_BUFFER_MS_NORMAL = 60_000/);
-  assert.match(manager, /PLAYBACK_BUFFER_MS_NORMAL = 1_500/);
-  assert.match(manager, /REBUFFER_BUFFER_MS_NORMAL = 2_500/);
-  assert.match(manager, /readTimeout\(10, TimeUnit\.SECONDS\)/);
-  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 1_000/);
+  assert.match(manager, /MAX_BUFFER_MS_LOW_RAM = 2_500/);
+  assert.match(manager, /PLAYBACK_BUFFER_MS_LOW_RAM = 500/);
+  assert.match(manager, /REBUFFER_BUFFER_MS_LOW_RAM = 1_000/);
+  assert.match(manager, /MIN_BUFFER_MS_NORMAL = 1_000/);
+  assert.match(manager, /MAX_BUFFER_MS_NORMAL = 2_500/);
+  assert.match(manager, /PLAYBACK_BUFFER_MS_NORMAL = 500/);
+  assert.match(manager, /REBUFFER_BUFFER_MS_NORMAL = 1_000/);
+  assert.match(manager, /readTimeout\(5, TimeUnit\.SECONDS\)/);
+  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
 });
 
 test("playback diagnostics capture container, codecs, resolution and decoders without changing recovery budgets", async () => {
@@ -94,7 +94,7 @@ test("playback diagnostics capture container, codecs, resolution and decoders wi
   assert.match(manager, /videoDecoder/);
   assert.match(manager, /audioDecoder/);
   assert.match(manager, /codecError/);
-  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 10_000/);
-  assert.match(manager, /readTimeout\(10, TimeUnit\.SECONDS\)/);
-  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 1_000/);
+  assert.match(manager, /readTimeout\(5, TimeUnit\.SECONDS\)/);
+  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
 });
