@@ -59,6 +59,7 @@ object NativeVlcPlaybackManager {
   private val startupTimeout = Runnable {
     val identity = activeIdentity ?: return@Runnable
     if (playing || owner == Owner.NONE) return@Runnable
+    CharmMemoryCoordinator.setPlaybackStarting(false)
     listener?.onState(identity, "error", "start-timeout")
   }
 
@@ -117,6 +118,13 @@ object NativeVlcPlaybackManager {
 
     owner = requestedOwner
     playing = false
+    // Media3's manager holds off background/moderate memory trims for a grace
+    // window around decoder startup (CharmMemoryCoordinator.setPlaybackStarting).
+    // VLC never told the coordinator it was starting at all, so a trim could
+    // land mid-tune here — competing with LibVLC's own core/decoder/surface
+    // setup for the same RAM right when it's least able to absorb it. Cleared
+    // on Playing/error/end/timeout below and in stopInternal.
+    CharmMemoryCoordinator.setPlaybackStarting(true)
     val identity = Identity(requestedOwner, nextGeneration, nextChannelKey.trim())
     activeIdentity = identity
     val source = PlaybackSource(
@@ -139,17 +147,20 @@ object NativeVlcPlaybackManager {
         MediaPlayer.Event.Playing -> {
           playing = true
           main.removeCallbacks(startupTimeout)
+          CharmMemoryCoordinator.setPlaybackStarting(false)
           listener?.onState(identity, "playing", null)
           publishTracks(player, identity)
         }
         MediaPlayer.Event.EncounteredError -> {
           playing = false
           main.removeCallbacks(startupTimeout)
+          CharmMemoryCoordinator.setPlaybackStarting(false)
           listener?.onState(identity, "error", "vlc-playback-error")
         }
         MediaPlayer.Event.EndReached -> {
           playing = false
           main.removeCallbacks(startupTimeout)
+          CharmMemoryCoordinator.setPlaybackStarting(false)
           listener?.onState(identity, "error", "stream-ended")
         }
       }
@@ -304,6 +315,7 @@ object NativeVlcPlaybackManager {
     playing = false
     activeIdentity = null
     owner = Owner.NONE
+    CharmMemoryCoordinator.setPlaybackStarting(false)
     if (releasePlayer) {
       releasePlayerOnly(removeLayout = true)
       try { libVlc?.release() } catch (_: Throwable) {}
