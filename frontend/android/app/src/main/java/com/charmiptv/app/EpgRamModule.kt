@@ -14,7 +14,9 @@ import java.util.concurrent.Executors
 class EpgRamModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
-  private val database = EpgDatabase(reactContext)
+  // Shared across every owner of the primary EPG store (EpgNativeModule,
+  // NativeGuideView, and this module) — see EpgDatabase.shared(). Never closed here.
+  private val database = EpgDatabase.shared(reactContext)
   private val engine = EpgRamEngine(database)
   private val worker = Executors.newSingleThreadExecutor()
   private val queryPool = Executors.newFixedThreadPool(2)
@@ -146,7 +148,8 @@ class EpgRamModule(private val reactContext: ReactApplicationContext) :
     engine.dispose()
     worker.shutdownNow()
     queryPool.shutdownNow()
-    database.close()
+    // `database` is the shared primary EpgDatabase instance (EpgNativeModule and
+    // NativeGuideView may still be using it) — never close it here.
     super.invalidate()
   }
 

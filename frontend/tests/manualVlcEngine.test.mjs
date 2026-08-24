@@ -31,7 +31,7 @@ test("native events carry session identity and lifecycle cleanup", async () => {
 
 test("locked Media3 safety budgets remain unchanged", async () => {
   const manager = await read("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  for (const marker of ["MIN_BUFFER_MS_LOW_RAM = 10_000","MAX_BUFFER_MS_LOW_RAM = 30_000","PLAYBACK_BUFFER_MS_LOW_RAM = 2_500","REBUFFER_BUFFER_MS_LOW_RAM = 5_000","MIN_BUFFER_MS_NORMAL = 15_000","MAX_BUFFER_MS_NORMAL = 60_000","PLAYBACK_BUFFER_MS_NORMAL = 3_000","REBUFFER_BUFFER_MS_NORMAL = 5_000","HUNG_BUFFER_REPREPARE_MS = 5_000L","TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L","MAX_AUTO_RECOVERIES = 4","longArrayOf(0L, 1_000L, 3_000L, 6_000L)"]) assert.match(manager, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of ["MIN_BUFFER_MS_LOW_RAM = 10_000","MAX_BUFFER_MS_LOW_RAM = 30_000","PLAYBACK_BUFFER_MS_LOW_RAM = 2_500","REBUFFER_BUFFER_MS_LOW_RAM = 5_000","MIN_BUFFER_MS_NORMAL = 15_000","MAX_BUFFER_MS_NORMAL = 60_000","PLAYBACK_BUFFER_MS_NORMAL = 3_000","REBUFFER_BUFFER_MS_NORMAL = 5_000","HUNG_BUFFER_REPREPARE_MS = 9_000L","TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L","MAX_AUTO_RECOVERIES = 4","longArrayOf(0L, 1_000L, 3_000L, 6_000L)"]) assert.match(manager, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 

@@ -12,7 +12,7 @@ CharmIPTV Phoenix — Expo/React Native Android TV guide + IPTV player (`fronten
 ### Non-obvious Guide / TV focus notes
 - Drawer boots **closed**. Selecting **TV Guide** must hand focus into the Guide grid before drawer rows become `focusable={false}`; otherwise Android can strand focus on an invisible nav Pressable (chaotic D-pad, no visible focus ring).
 - Preview rail **Drawer** button calls `openDrawer({ focusTop: true })` so focus lands on the first drawer row (Live TV), not the active route.
-- Guide restore after drawer close is **nonce-only**: `guide.tsx` bumps `focusClaimNonce`; TimelineGrid/BoxGrid call `focusGuideSurfaceWhenMounted(restoreChannelId)`. Do **not** also call `focusGuideSurface` from `guide.tsx` or Shell on drawer close — they share one `cancelGuideRestoreTimers` and the last writer wins (wrong row / focus yank).
+- Guide selection restore after a drawer/date/group transition goes through props on `<NativeGuideCanvas>` (`restoreChannelId`, `restoreTimeMs`, `reloadGeneration`), consumed natively by `NativeGuideView.restoreChannel`/`restoreTime`/`setReloadGeneration`. (Historical note: this used to be a JS-side `focusClaimNonce`/`focusGuideSurfaceWhenMounted` handoff against the retired TimelineGrid/BoxGrid renderer — that mechanism no longer exists.)
 - Shell may claim Guide focus only when `navigate()` route is `/guide` (not when leaving Guide).
 - The reclaim effect must **not** depend on `channels` identity (use `channelsRef`).
 - D-pad page jump window is **300ms** rapid succession only. Second taps during brief FlashList focus flicker must still feed the detector (`recentlyOwned` grace).
@@ -25,7 +25,7 @@ CharmIPTV Phoenix — Expo/React Native Android TV guide + IPTV player (`fronten
 - Power profile changes the symmetric runway size: Compatibility (`weak`) uses 5 pages each way; Normal 8/8; Max preview 10/10.
 - Reuse `buildChannelIndexMap` across viewport buckets — do not rebuild the id→index Map on every half-page focus move.
 - On Guide refocus, rewarm from `lastRunwayRef` before the first D-pad event.
-- TimelineGrid `previousPreparedByKeyRef` must prune to current prepared keys + focused orphan key or it grows unbounded while surfing.
+- The native Guide's painted-row cache (`NativeGuideView.programs`, filled by `scheduleQueryDrain`) is capped at `PAINT_CACHE_CHANNELS` (128, or `LOW_RAM_PAINT_CACHE_CHANNELS` 64 under memory pressure) — this replaced the old JS-side TimelineGrid `previousPreparedByKeyRef` prune rule when the retired JS grid was replaced by the native Canvas renderer. Keep it bounded the same way if this cache is ever restructured.
 - Pending EPG Pressable may stay mounted for focus stability, but once real cells exist it must use `pendingProgramCellHidden` (1×1 / opacity 0) so it cannot paint over programme cells.
 - Blur / critical memory pressure must `retainGuidePrograms(keep, { force: true })` / critical trim so subscribed off-keep rows empty to `EMPTY_PROGRAMS`.
 - Stable Media3 fullscreen buffer is capped at **48MB** (not 72MB) to reduce Fire TV OOM with guide preview + player.

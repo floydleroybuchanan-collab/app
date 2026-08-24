@@ -27,7 +27,9 @@ import kotlin.math.exp
 class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
-  private val database = EpgDatabase(reactContext)
+  // Shared across every owner of the primary EPG store (this module, EpgRamModule,
+  // NativeGuideView) — see EpgDatabase.shared() for why. Never closed here.
+  private val database = EpgDatabase.shared(reactContext)
   // Registry retains the legacy charm_epg_user_v1.db store while adding one
   // independent transactional database per additional custom EPG source.
   private val userDatabase = CustomEpgStoreRegistry.database(reactContext, USER_SOURCE_ID)
@@ -1164,7 +1166,8 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
     refreshExecutor.shutdownNow()
     playlistExecutor.shutdownNow()
     queryExecutor.shutdownNow()
-    database.close()
+    // `database` is the shared primary EpgDatabase instance (EpgRamModule and
+    // NativeGuideView may still be using it) — never close it here.
     CustomEpgStoreRegistry.closeAll()
     super.invalidate()
   }

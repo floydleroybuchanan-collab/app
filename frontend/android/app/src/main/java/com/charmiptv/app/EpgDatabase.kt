@@ -557,6 +557,20 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
   private fun toDurationSeconds(milliseconds: Long): Long = (milliseconds + 999L) / 1000L
 
   companion object {
+    // The primary programme/playlist/match store used to be opened independently
+    // by EpgNativeModule, EpgRamModule, and every NativeGuideView instance —
+    // three-plus concurrent SQLiteOpenHelper connections to the same file, each
+    // paying its own default page-cache overhead. Share one connection instead,
+    // the same way EpgControlDatabase/CharmCustomizationDatabase already do.
+    // Never explicitly closed: Android reclaims it on process death, and no
+    // single owner (module invalidate / View dispose) can safely close a
+    // connection the others still expect to be open.
+    @Volatile private var sharedInstance: EpgDatabase? = null
+
+    fun shared(context: Context): EpgDatabase = sharedInstance ?: synchronized(this) {
+      sharedInstance ?: EpgDatabase(context.applicationContext).also { sharedInstance = it }
+    }
+
     private const val STORAGE_RECHECK_BATCHES = 32
     private const val DATABASE_VERSION = 10
     private const val LIVE_TABLE = "epg_programmes"

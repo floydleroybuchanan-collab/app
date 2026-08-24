@@ -102,7 +102,13 @@ object NativePlaybackManager {
   private const val PLAYBACK_BUFFER_MS_NORMAL = 3_000
   private const val REBUFFER_BUFFER_MS_NORMAL = 5_000
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
-  private const val HUNG_BUFFER_REPREPARE_MS = 5_000L
+  // Must stay comfortably above REBUFFER_BUFFER_MS_*: that is how long
+  // DefaultLoadControl itself needs to resume playback after a stall. When this
+  // watchdog matched that threshold exactly, it could fire a disruptive
+  // stop()+reprepare (see setKeepContentOnPlayerReset above) for ordinary live-TS
+  // jitter DefaultLoadControl was about to resolve on its own, producing repeated
+  // buffer -> recover -> buffer cycles on otherwise-healthy streams.
+  private const val HUNG_BUFFER_REPREPARE_MS = 9_000L
   private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 20_000L
   private const val STABLE_REARM_MS = 30_000L
   private const val MAX_AUTO_RECOVERIES = 4
@@ -361,7 +367,14 @@ object NativePlaybackManager {
     val video = playerView ?: PlayerView(context).apply {
       useController = false
       setShutterBackgroundColor(Color.BLACK)
-      setKeepContentOnPlayerReset(false)
+      // Automatic stall recovery (bufferingWatchdog -> recoverOnce) calls
+      // instance.stop() before every rebuildMediaSource(), which transitions
+      // through STATE_IDLE. With this false, PlayerView blanks to the shutter on
+      // every one of those internal resets — visible as a black flash every time
+      // the player quietly reprepares itself, even when it recovers cleanly a
+      // moment later. Keep the last decoded frame up instead; only a genuine
+      // user-initiated stop()/release() should ever show black.
+      setKeepContentOnPlayerReset(true)
       resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.GONE
     }.also { playerView = it }
