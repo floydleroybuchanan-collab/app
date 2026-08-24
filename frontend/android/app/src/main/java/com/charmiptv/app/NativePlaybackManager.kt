@@ -9,7 +9,6 @@ import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.media3.common.C
@@ -136,7 +135,12 @@ object NativePlaybackManager {
   private var activity: Activity? = null
   private var previewSurface: FrameLayout? = null
   private var fullscreenSurface: FrameLayout? = null
-  private var playerView: PlayerView? = null
+  // Each surface owns its own permanently-parented PlayerView, never moved to
+  // the other one. See attachSurface/ensurePlayerViewIn below and
+  // res/layout/charm_player_view.xml for why this replaced a single shared,
+  // reparented PlayerView.
+  private var previewPlayerView: PlayerView? = null
+  private var fullscreenPlayerView: PlayerView? = null
   private var player: ExoPlayer? = null
   private var listener: Listener? = null
   private var owner: Owner = Owner.NONE
@@ -234,16 +238,25 @@ object NativePlaybackManager {
   fun installIntoActivity(activity: Activity) = runOnMain { this.activity = activity }
   fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
     when (surfaceOwner) { Owner.PREVIEW -> previewSurface = surface; Owner.FULLSCREEN -> fullscreenSurface = surface; Owner.NONE -> return@runOnMain }
-    if (owner == surfaceOwner) attachPlayerView(surfaceOwner)
+    val video = ensurePlayerViewIn(surfaceOwner, surface)
+    if (owner == surfaceOwner) {
+      video.player = player
+      video.visibility = if (player != null) View.VISIBLE else View.GONE
+    }
   }
   fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
     val attached = when (surfaceOwner) { Owner.PREVIEW -> previewSurface; Owner.FULLSCREEN -> fullscreenSurface; Owner.NONE -> null }
     if (attached !== surface) return@runOnMain
-    playerView?.let { if (it.parent === surface) surface.removeView(it) }
-    when (surfaceOwner) { Owner.PREVIEW -> previewSurface = null; Owner.FULLSCREEN -> fullscreenSurface = null; Owner.NONE -> Unit }
+    val video = playerViewFor(surfaceOwner)
+    if (video?.parent === surface) { try { video.player = null } catch (_: Throwable) {} }
+    when (surfaceOwner) {
+      Owner.PREVIEW -> { previewSurface = null; previewPlayerView = null }
+      Owner.FULLSCREEN -> { fullscreenSurface = null; fullscreenPlayerView = null }
+      Owner.NONE -> Unit
+    }
   }
   fun setResizeMode(mode: String?) = runOnMain {
-    playerView?.resizeMode = when (mode) { "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT }
+    playerViewFor(owner)?.resizeMode = when (mode) { "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT }
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?) = runOnMain {
@@ -255,7 +268,15 @@ object NativePlaybackManager {
     NativeVlcPlaybackManager.stopForEngineSwitch()
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
+    val previousOwner = owner
     owner = requestedOwner
+    // Only one surface's view should ever hold the player at a time. Not a
+    // no-op even for a same-owner re-tune: this clears a stale bind left by
+    // an interrupted prior attempt (e.g. surface-unavailable below never got
+    // to VISIBLE/player-bound at all).
+    if (previousOwner != Owner.NONE && previousOwner != requestedOwner) {
+      playerViewFor(previousOwner)?.let { it.player = null; it.visibility = View.GONE }
+    }
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
     val baseSource = PlaybackSource(channelKey.trim(), uri, LinkedHashMap(headers), contentType?.trim()?.takeIf { it.isNotEmpty() }, sourceTypeFor(uri, contentType))
@@ -267,8 +288,10 @@ object NativePlaybackManager {
     stableSinceMs = 0L
     resetBufferingWatchdogState()
     markPlaybackStarting("channel-start")
-    if (!attachPlayerView(requestedOwner)) { finishWithError("surface-unavailable", instance); return@runOnMain }
-    playerView?.visibility = View.VISIBLE
+    val video = playerViewFor(requestedOwner)
+    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
+    video.player = instance
+    video.visibility = View.VISIBLE
     publishState("loading", null)
     startOrRouteMediaSource(instance, baseSource, "channel-start")
   }
@@ -341,8 +364,10 @@ object NativePlaybackManager {
   fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
   fun releaseAll() = runOnMain {
     stopInternal(releasePlayer = true)
-    playerView?.let { video -> video.player = null; (video.parent as? ViewGroup)?.removeView(video) }
-    listener = null; activity = null; previewSurface = null; fullscreenSurface = null; playerView = null
+    try { previewPlayerView?.player = null } catch (_: Throwable) {}
+    try { fullscreenPlayerView?.player = null } catch (_: Throwable) {}
+    listener = null; activity = null; previewSurface = null; fullscreenSurface = null
+    previewPlayerView = null; fullscreenPlayerView = null
   }
   fun currentOwner(): Owner = owner
 
@@ -350,6 +375,10 @@ object NativePlaybackManager {
   private fun stopInternal(releasePlayer: Boolean) {
     cancelRecoveryCallbacks()
     val instance = player
+    // Resolved before `owner` is reset below — that reset is exactly why this
+    // is captured first rather than looked up again inside the releasePlayer
+    // block, which would otherwise resolve to nothing.
+    val video = playerViewFor(owner)
     try { instance?.stop() } catch (_: Throwable) {}
     try { instance?.clearMediaItems() } catch (_: Throwable) {}
     owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0; stableSinceMs = 0L
@@ -357,10 +386,9 @@ object NativePlaybackManager {
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
     CharmMemoryCoordinator.setPlaybackStarting(false)
-    playerView?.visibility = View.GONE
+    video?.visibility = View.GONE
     if (releasePlayer) {
-      try { playerView?.player = null } catch (_: Throwable) {}
-      try { (playerView?.parent as? ViewGroup)?.removeView(playerView) } catch (_: Throwable) {}
+      try { video?.player = null } catch (_: Throwable) {}
       try { instance?.release() } catch (_: Throwable) {}
       player = null
     }
@@ -382,33 +410,11 @@ object NativePlaybackManager {
     val renderers = DefaultRenderersFactory(context)
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
       .setEnableDecoderFallback(true)
-    // Inflated, not `PlayerView(context)`: surface_type has no runtime setter
-    // and must be set in XML. texture_view is required here — this PlayerView
-    // is moved between the Guide preview surface and the fullscreen surface
-    // (see attachPlayerView below), and SurfaceView's separate compositor
-    // window forces Android to tear down/rebuild its Surface on every such
-    // reparent, which is a documented source of "video renders at the wrong
-    // size" and "video never returns, audio keeps playing" bugs. See
-    // res/layout/charm_player_view.xml for the full rationale and citations.
-    val video = playerView ?: (LayoutInflater.from(context).inflate(R.layout.charm_player_view, null, false) as PlayerView).apply {
-      useController = false
-      setShutterBackgroundColor(Color.BLACK)
-      // Automatic stall recovery (bufferingWatchdog -> recoverOnce) calls
-      // instance.stop() before every rebuildMediaSource(), which transitions
-      // through STATE_IDLE. With this false, PlayerView blanks to the shutter on
-      // every one of those internal resets — visible as a black flash every time
-      // the player quietly reprepares itself, even when it recovers cleanly a
-      // moment later. Keep the last decoded frame up instead; only a genuine
-      // user-initiated stop()/release() should ever show black.
-      setKeepContentOnPlayerReset(true)
-      resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-      visibility = View.GONE
-    }.also { playerView = it }
     return ExoPlayer.Builder(context, renderers)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
       .build().also { created ->
-        player = created; video.player = created
+        player = created
         created.addListener(object : Player.Listener {
           override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
@@ -515,11 +521,40 @@ object NativePlaybackManager {
       }
   }
 
-  private fun attachPlayerView(requestedOwner: Owner): Boolean {
-    val target = when (requestedOwner) { Owner.PREVIEW -> previewSurface; Owner.FULLSCREEN -> fullscreenSurface; Owner.NONE -> null } ?: return false
-    val video = playerView ?: return false
-    if (video.parent !== target) { (video.parent as? ViewGroup)?.removeView(video); target.addView(video, fillParent()) } else video.layoutParams = fillParent()
-    video.requestLayout(); return true
+  private fun playerViewFor(target: Owner): PlayerView? = when (target) {
+    Owner.PREVIEW -> previewPlayerView
+    Owner.FULLSCREEN -> fullscreenPlayerView
+    Owner.NONE -> null
+  }
+
+  // Inflated, not `PlayerView(context)`: surface_type has no runtime setter and
+  // must be set in XML (see res/layout/charm_player_view.xml). This view is
+  // permanently parented in `target` and never moved to the other surface, so
+  // PlayerView's default SurfaceView output is safe here — see attachSurface
+  // above and the layout file for why that matters.
+  private fun ensurePlayerViewIn(surfaceOwner: Owner, target: FrameLayout): PlayerView {
+    playerViewFor(surfaceOwner)?.let { existing -> if (existing.parent === target) return existing }
+    val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {
+      useController = false
+      setShutterBackgroundColor(Color.BLACK)
+      // Automatic stall recovery (bufferingWatchdog -> recoverOnce) calls
+      // instance.stop() before every rebuildMediaSource(), which transitions
+      // through STATE_IDLE. With this false, PlayerView blanks to the shutter on
+      // every one of those internal resets — visible as a black flash every time
+      // the player quietly reprepares itself, even when it recovers cleanly a
+      // moment later. Keep the last decoded frame up instead; only a genuine
+      // user-initiated stop()/release() should ever show black.
+      setKeepContentOnPlayerReset(true)
+      resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+      visibility = View.GONE
+    }
+    target.addView(video, fillParent())
+    when (surfaceOwner) {
+      Owner.PREVIEW -> previewPlayerView = video
+      Owner.FULLSCREEN -> fullscreenPlayerView = video
+      Owner.NONE -> Unit
+    }
+    return video
   }
 
   private fun recoverOnce(instance: ExoPlayer, forceFreshSource: Boolean = false, skipBarePrepare: Boolean = false): Boolean {
@@ -575,13 +610,14 @@ object NativePlaybackManager {
       CharmMemoryCoordinator.trimNonEssentialForPlaybackRecovery()
       recordDiagnostic("low-ram-nonessential-trim", lastPlaybackError, instance)
     }
-    try { playerView?.player = null } catch (_: Throwable) {}
+    val video = playerViewFor(owner) ?: throw IllegalStateException("Playback surface is unavailable")
+    try { video.player = null } catch (_: Throwable) {}
     try { instance.release() } catch (_: Throwable) {}
     player = null
     firstFrameRendered = false
     resetBufferingWatchdogState()
     val rebuilt = ensurePlayer()
-    if (!attachPlayerView(owner)) throw IllegalStateException("Playback surface is unavailable")
+    video.player = rebuilt
     rebuildMediaSource(rebuilt, source, "full-player-source-recovery")
   }
 
@@ -716,7 +752,7 @@ object NativePlaybackManager {
     if (instance != null) {
       main.post {
         if (player === instance) {
-          try { playerView?.player = null } catch (_: Throwable) {}
+          try { playerViewFor(owner)?.player = null } catch (_: Throwable) {}
           try { instance.release() } catch (_: Throwable) {}
           player = null
         }

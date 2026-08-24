@@ -68,7 +68,7 @@ test("stale fullscreen native cleanup cannot release a newer Guide preview", asy
   const [native, module] = await Promise.all([source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt")]);
   assert.match(native, /if \(owner != requestedOwner\) \{ onStopped\?\.invoke\(\); return@runOnMain }/);
   assert.match(module, /if \(NativePlaybackManager\.currentOwner\(\) != requestedOwner\)/);
-  assert.match(native, /\(playerView\?\.parent as\? ViewGroup\)\?\.removeView\(playerView\)/);
+  assert.match(native, /val video = playerViewFor\(owner\)/);
 });
 
 test("fullscreen exit returns currently tuned channel to the originating Guide group", async () => {

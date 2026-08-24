@@ -1,24 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The one shared Media3 PlayerView is moved between the small Guide preview
-  surface and the fullscreen player surface at runtime (see
-  NativePlaybackManager.attachPlayerView). PlayerView's default surface_type
-  is SurfaceView, which owns a separate compositor window outside the normal
-  view hierarchy — removing/re-adding it across parents forces Android to
-  destroy and recreate its underlying Surface, which is a documented source
-  of "video renders at the wrong/old size" and "video never comes back,
-  audio keeps playing" bugs (MediaCodec requires a live Surface at all
-  times; see https://github.com/google/ExoPlayer/issues/5825 and
-  https://github.com/google/ExoPlayer/issues/1084). TextureView is a normal
-  view-hierarchy-rendered surface with no such lifecycle, so it resizes and
-  reparents safely — the standard fix for this exact reparenting pattern.
-  app:surface_type can only be set via XML at inflate time (PlayerView has
-  no runtime setter for it), so this view must be inflated, not built with
-  `PlayerView(context)`.
+  Each of the preview and fullscreen surfaces gets its own instance of this
+  PlayerView, permanently parented into that exact surface and never moved to
+  the other one (see NativePlaybackManager.attachSurface/ensurePlayerViewIn).
+  Only the ExoPlayer bound to it changes.
+
+  An earlier revision shared ONE PlayerView between the two surfaces,
+  reparenting it at runtime, and set app:surface_type="texture_view" to route
+  around a real bug that caused: PlayerView's default surface_type is
+  SurfaceView, which owns a separate compositor window outside the normal view
+  hierarchy — removing/re-adding it across parents forces Android to destroy
+  and recreate its underlying Surface, a documented source of "video renders
+  at the wrong/old size" and "video never comes back, audio keeps playing"
+  bugs (MediaCodec requires a live Surface at all times; see
+  https://github.com/google/ExoPlayer/issues/5825 and
+  https://github.com/google/ExoPlayer/issues/1084).
+
+  TextureView avoids that specific hazard, but trades it for a different one on
+  some lower-end/older Android TV and Fire TV SoCs: rendering video into a
+  TextureView requires the GPU to copy every decoded frame into an OpenGL
+  texture, and some vendor GPU driver combinations on that hardware tier are
+  known to silently fail this copy — decode succeeds (ExoPlayer reports a
+  normal playing state, audio plays normally, no error is ever raised) but
+  nothing ever appears on screen. That is a worse failure mode than the one
+  TextureView was chosen to fix, and on exactly the hardware this app targets.
+
+  Never reparenting the view at all removes the original SurfaceView hazard
+  without needing TextureView, so surface_type is back to PlayerView's default
+  (SurfaceView) here — the broadly hardware-compatible, direct-compositor path.
 -->
 <androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/charm_player_view"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    app:surface_type="texture_view" />
+    android:layout_height="match_parent" />
