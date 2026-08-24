@@ -195,7 +195,13 @@ function FavoritesScreenContent() {
                 ? `${folderMemberSet.size} in folder · ${items.length} favorites`
                 : `${items.length} favorites`}
             </Text>
-            <Ionicons name="search-outline" size={15} color={tvColors.textMuted} />
+            <Pressable
+              onPress={() => router.replace("/search" as any)}
+              style={({ focused }: any) => [styles.searchHit, focused && styles.focused]}
+              testID="favorites-open-search"
+            >
+              <Ionicons name="search-outline" size={15} color={tvColors.textMuted} />
+            </Pressable>
           </View>
         </View>
 
@@ -281,6 +287,7 @@ const styles = StyleSheet.create({
   addHint: { flex: 1, maxWidth: 360, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 10.5, marginTop: 2 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
   count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },
+  searchHit: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
   folderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingTop: 10, paddingBottom: 4 },
   folderChip: { minHeight: 28, justifyContent: "center", paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
   folderActive: { borderColor: tvColors.purpleBright, backgroundColor: tvColors.purpleDeep },
