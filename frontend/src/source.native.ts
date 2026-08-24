@@ -455,6 +455,16 @@ let progress: EpgProgress = { phase: "idle", ratio: 0, etaSeconds: null, message
 const progressListeners = new Set<(value: EpgProgress) => void>();
 let lastProgressEmit = 0;
 let progressTimer: ReturnType<typeof setTimeout> | null = null;
+// Every native call along the refresh chain (playlist fetch, XMLTV fetch) has
+// its own bounded timeout, but the SQLite writes/reads between them
+// (persistMeta, syncPlaylistToNative, applyPersistedGuideOwnership, ...) do
+// not — a stuck native executor there leaves refreshInternal's single big
+// try/catch simply never advancing and never throwing, which freezes the
+// progress bar at whatever percent it last reached forever (reported as
+// "guide stopped loading at 17%"). Re-armed on every real progress step, so
+// this only fires on a genuine stall, not merely a slow-but-advancing refresh.
+const PROGRESS_STALL_TIMEOUT_MS = 45_000;
+let progressStallTimer: ReturnType<typeof setTimeout> | null = null;
 
 function notifyProgress(snapshot: EpgProgress): void {
   lastProgressEmit = Date.now();
@@ -480,6 +490,26 @@ export function subscribeProgress(listener: (value: EpgProgress) => void): () =>
   };
 }
 
+function disarmProgressStallWatchdog(): void {
+  if (progressStallTimer) {
+    clearTimeout(progressStallTimer);
+    progressStallTimer = null;
+  }
+}
+
+function onProgressStalled(): void {
+  progressStallTimer = null;
+  if (progress.phase === "ready" || progress.phase === "error") return;
+  const message = "Guide refresh stalled — showing saved Guide where available";
+  lastSourceError = message;
+  if (MEM) {
+    MEM = { ...MEM, epgError: message };
+    void persistMeta(MEM).catch(() => undefined);
+    emit();
+  }
+  setProgress({ phase: "error", ratio: 0, etaSeconds: null, message }, true);
+}
+
 function setProgress(next: Partial<EpgProgress>, force = false): void {
   const previousPhase = progress.phase;
   progress = {
@@ -496,6 +526,12 @@ function setProgress(next: Partial<EpgProgress>, force = false): void {
   const phaseChanged = progress.phase !== previousPhase;
   const terminal = progress.phase === "ready" || progress.phase === "error" || progress.ratio >= 1;
   const elapsed = Date.now() - lastProgressEmit;
+
+  if (terminal) disarmProgressStallWatchdog();
+  else {
+    if (progressStallTimer) clearTimeout(progressStallTimer);
+    progressStallTimer = setTimeout(onProgressStalled, PROGRESS_STALL_TIMEOUT_MS);
+  }
 
   if (progressTimer) {
     clearTimeout(progressTimer);

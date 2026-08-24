@@ -153,6 +153,61 @@ for rel in (
         helper_end = current.find("\n/** Check persisted independent playlist/EPG clocks", helper_start + 1)
         if helper_start >= 0 and helper_end > helper_start:
             current = current[:helper_start] + current[helper_end:]
+        # A stall watchdog on the progress bar only: if setProgress() stops
+        # advancing (a native SQLite call between fetchPlaylist and the next
+        # setProgress hangs without throwing) it forces the error phase after
+        # PROGRESS_STALL_TIMEOUT_MS instead of leaving the UI frozen at
+        # whatever percent it last reached. Touches only progress-bar state
+        # (`progress`, `progressStallTimer`) — never the fetch/parse/match
+        # transport itself, and never blocks or delays a real completion.
+        current = current.replace(
+            "let progressTimer: ReturnType<typeof setTimeout> | null = null;\n"
+            "// Every native call along the refresh chain (playlist fetch, XMLTV fetch) has\n"
+            "// its own bounded timeout, but the SQLite writes/reads between them\n"
+            "// (persistMeta, syncPlaylistToNative, applyPersistedGuideOwnership, ...) do\n"
+            "// not — a stuck native executor there leaves refreshInternal's single big\n"
+            "// try/catch simply never advancing and never throwing, which freezes the\n"
+            "// progress bar at whatever percent it last reached forever (reported as\n"
+            "// \"guide stopped loading at 17%\"). Re-armed on every real progress step, so\n"
+            "// this only fires on a genuine stall, not merely a slow-but-advancing refresh.\n"
+            "const PROGRESS_STALL_TIMEOUT_MS = 45_000;\n"
+            "let progressStallTimer: ReturnType<typeof setTimeout> | null = null;\n",
+            "let progressTimer: ReturnType<typeof setTimeout> | null = null;\n",
+        )
+        current = current.replace(
+            "function disarmProgressStallWatchdog(): void {\n"
+            "  if (progressStallTimer) {\n"
+            "    clearTimeout(progressStallTimer);\n"
+            "    progressStallTimer = null;\n"
+            "  }\n"
+            "}\n"
+            "\n"
+            "function onProgressStalled(): void {\n"
+            "  progressStallTimer = null;\n"
+            "  if (progress.phase === \"ready\" || progress.phase === \"error\") return;\n"
+            "  const message = \"Guide refresh stalled — showing saved Guide where available\";\n"
+            "  lastSourceError = message;\n"
+            "  if (MEM) {\n"
+            "    MEM = { ...MEM, epgError: message };\n"
+            "    void persistMeta(MEM).catch(() => undefined);\n"
+            "    emit();\n"
+            "  }\n"
+            "  setProgress({ phase: \"error\", ratio: 0, etaSeconds: null, message }, true);\n"
+            "}\n"
+            "\n"
+            "function setProgress",
+            "function setProgress",
+        )
+        current = current.replace(
+            "  if (terminal) disarmProgressStallWatchdog();\n"
+            "  else {\n"
+            "    if (progressStallTimer) clearTimeout(progressStallTimer);\n"
+            "    progressStallTimer = setTimeout(onProgressStalled, PROGRESS_STALL_TIMEOUT_MS);\n"
+            "  }\n"
+            "\n"
+            "  if (progressTimer) {",
+            "  if (progressTimer) {",
+        )
     # EpgNativeModule.kt: the primary EpgDatabase is now a shared singleton
     # (EpgDatabase.shared()) instead of each owner opening its own
     # SQLiteOpenHelper connection to the same file — a memory-audit fix, not a

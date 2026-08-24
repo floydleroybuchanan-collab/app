@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -381,7 +382,15 @@ object NativePlaybackManager {
     val renderers = DefaultRenderersFactory(context)
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
       .setEnableDecoderFallback(true)
-    val video = playerView ?: PlayerView(context).apply {
+    // Inflated, not `PlayerView(context)`: surface_type has no runtime setter
+    // and must be set in XML. texture_view is required here — this PlayerView
+    // is moved between the Guide preview surface and the fullscreen surface
+    // (see attachPlayerView below), and SurfaceView's separate compositor
+    // window forces Android to tear down/rebuild its Surface on every such
+    // reparent, which is a documented source of "video renders at the wrong
+    // size" and "video never returns, audio keeps playing" bugs. See
+    // res/layout/charm_player_view.xml for the full rationale and citations.
+    val video = playerView ?: (LayoutInflater.from(context).inflate(R.layout.charm_player_view, null, false) as PlayerView).apply {
       useController = false
       setShutterBackgroundColor(Color.BLACK)
       // Automatic stall recovery (bufferingWatchdog -> recoverOnce) calls

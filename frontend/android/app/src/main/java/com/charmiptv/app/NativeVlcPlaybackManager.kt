@@ -267,7 +267,18 @@ object NativeVlcPlaybackManager {
     surface.addView(layout, FrameLayout.LayoutParams(-1, -1))
     val player = mediaPlayer ?: return false
     try { player.detachViews() } catch (_: Throwable) {}
-    player.attachViews(layout, null, false, false)
+    // Every other native/JNI call on this MediaPlayer is guarded the same way
+    // (see stopInternal/releasePlayerOnly below) — attachViews() was the one
+    // exception, and an uncaught throw here on the main thread crashes the
+    // whole app rather than just failing this one tune. libVLC's Android
+    // JNI layer can throw (or the core can already be mid-release from a
+    // fast preview<->fullscreen or Media3<->VLC switch) even though this is
+    // the normal, expected path.
+    try {
+      player.attachViews(layout, null, false, false)
+    } catch (_: Throwable) {
+      return false
+    }
     return true
   }
 
