@@ -42,6 +42,9 @@ yarn-error.log*
 .pnpm-debug.log*
 dump.rdb
 
+# Generated CI scan reports (rewritten on every local run, never versioned)
+ci/tivimate-whole-repo-player-interaction-report.txt
+
 # System files
 .DS_Store
 *.pem
