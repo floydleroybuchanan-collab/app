@@ -705,6 +705,23 @@ object NativePlaybackManager {
     cancelRecoveryCallbacks()
     recordDiagnostic("definitive-$reason", lastPlaybackError, instance)
     CharmMemoryCoordinator.setPlaybackStarting(false)
+    // Recovery is exhausted: release the decoder instead of leaving it parked
+    // on a failed session until the next tune happens to reuse or replace it.
+    // Deferred via post(), not called inline — finishWithError can be reached
+    // synchronously from Player.Listener.onPlayerError (a repeat failure after
+    // MAX_AUTO_RECOVERIES is already spent takes the line 529 branch straight
+    // out of that callback), and releasing an ExoPlayer from inside its own
+    // callback stack is the same hazard fullPlayerAndSourceRecovery already
+    // avoids by running its release through a posted Runnable instead of inline.
+    if (instance != null) {
+      main.post {
+        if (player === instance) {
+          try { playerView?.player = null } catch (_: Throwable) {}
+          try { instance.release() } catch (_: Throwable) {}
+          player = null
+        }
+      }
+    }
     publishState("error", reason)
   }
   private fun cancelRecoveryCallbacks() {

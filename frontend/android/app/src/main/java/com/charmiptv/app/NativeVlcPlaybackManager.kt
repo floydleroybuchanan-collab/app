@@ -155,12 +155,19 @@ object NativeVlcPlaybackManager {
           playing = false
           main.removeCallbacks(startupTimeout)
           CharmMemoryCoordinator.setPlaybackStarting(false)
+          // Release the failed player instead of leaving it parked until the
+          // next tune happens to reuse or replace it. Deferred via post(), not
+          // called inline — this branch runs from inside player's own
+          // setEventListener callback, and releasing a LibVLC MediaPlayer from
+          // inside its own native event dispatch is unsafe.
+          main.post { if (mediaPlayer === player) releasePlayerOnly(removeLayout = false) }
           listener?.onState(identity, "error", "vlc-playback-error")
         }
         MediaPlayer.Event.EndReached -> {
           playing = false
           main.removeCallbacks(startupTimeout)
           CharmMemoryCoordinator.setPlaybackStarting(false)
+          main.post { if (mediaPlayer === player) releasePlayerOnly(removeLayout = false) }
           listener?.onState(identity, "error", "stream-ended")
         }
       }
