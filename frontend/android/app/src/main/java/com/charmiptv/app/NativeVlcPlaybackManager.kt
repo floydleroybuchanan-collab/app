@@ -16,7 +16,10 @@ import org.videolan.libvlc.util.VLCVideoLayout
  *
  * This manager never chooses itself automatically. StreamPlayer selects it only
  * when the user has explicitly selected VLC in Settings. One MediaPlayer exists
- * at a time and the Media3 player is fully released before a VLC tune starts.
+ * at a time and Media3 is fully released before a VLC tune starts. A temporary
+ * React/Fabric surface loss pauses and detaches only the video target; it never
+ * leaves audio running against a missing layout and never creates a second
+ * decoder to recover the display.
  */
 object NativeVlcPlaybackManager {
   enum class Owner { NONE, PREVIEW, FULLSCREEN }
@@ -42,7 +45,7 @@ object NativeVlcPlaybackManager {
     fun onTracks(identity: Identity, audio: List<TrackInfo>, subtitles: List<TrackInfo>)
   }
 
-  private const val START_TIMEOUT_MS = 20_000L
+  private const val START_TIMEOUT_MS = 60_000L
 
   private val main = Handler(Looper.getMainLooper())
   private var activity: Activity? = null
@@ -55,11 +58,6 @@ object NativeVlcPlaybackManager {
   private var activeIdentity: Identity? = null
   private var listener: Listener? = null
   private var playing = false
-  // Same reasoning as NativePlaybackManager.mutedState: every prepare() below
-  // builds a brand new MediaPlayer, which otherwise starts unmuted regardless
-  // of what the caller last asked for -- applied to each new instance right
-  // after it is created, not just through setMuted() on whatever instance
-  // happens to be current when JS calls it.
   private var mutedState = false
 
   private val startupTimeout = Runnable {
@@ -67,6 +65,13 @@ object NativeVlcPlaybackManager {
     if (playing || owner == Owner.NONE) return@Runnable
     CharmMemoryCoordinator.setPlaybackStarting(false)
     listener?.onState(identity, "error", "start-timeout")
+    main.post {
+      if (activeIdentity == identity) {
+        releasePlayerOnly(removeLayout = false)
+        activeIdentity = null
+        owner = Owner.NONE
+      }
+    }
   }
 
   fun installIntoActivity(next: Activity) = runOnMain { activity = next }
@@ -81,7 +86,15 @@ object NativeVlcPlaybackManager {
       Owner.FULLSCREEN -> fullscreenSurface = surface
       Owner.NONE -> return@runOnMain
     }
-    if (owner == surfaceOwner) attachVideoLayout(surfaceOwner)
+    if (owner != surfaceOwner || mediaPlayer == null) return@runOnMain
+    if (attachVideoLayout(surfaceOwner)) {
+      try { mediaPlayer?.play() } catch (_: Throwable) {}
+      if (!playing) {
+        main.removeCallbacks(startupTimeout)
+        main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+        activeIdentity?.let { listener?.onState(it, "loading", "surface-attached") }
+      }
+    }
   }
 
   fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
@@ -91,6 +104,14 @@ object NativeVlcPlaybackManager {
       Owner.NONE -> null
     }
     if (attached !== surface) return@runOnMain
+
+    if (owner == surfaceOwner) {
+      try { mediaPlayer?.pause() } catch (_: Throwable) {}
+      try { mediaPlayer?.detachViews() } catch (_: Throwable) {}
+      playing = false
+      main.removeCallbacks(startupTimeout)
+      activeIdentity?.let { listener?.onState(it, "loading", "surface-detached") }
+    }
     if (videoLayout?.parent === surface) surface.removeView(videoLayout)
     when (surfaceOwner) {
       Owner.PREVIEW -> previewSurface = null
@@ -110,33 +131,16 @@ object NativeVlcPlaybackManager {
     bufferProfile: String,
   ) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
-      // See the equivalent guard in NativePlaybackManager.prepare() for why
-      // this must publish rather than silently drop: without an event for
-      // this exact generation, JS's preview session has no way to learn this
-      // attempt failed and never retries on its own.
       listener?.onState(Identity(requestedOwner, nextGeneration, nextChannelKey.trim()), "error", "owner-reserved")
       return@runOnMain
     }
 
-    // A manual engine switch must never leave two native decoders alive. Use
-    // stopForEngineSwitch(), not releaseAll(): releaseAll() also nulls Media3's
-    // listener/activity/surface refs, and NativePlaybackModule's listener is
-    // only ever registered once at NativeModule construction — that
-    // permanently silenced every Media3 state/track/diagnostic callback to JS
-    // after the first switch away from it (looked like "Media3 broken after
-    // using VLC").
     NativePlaybackManager.stopForEngineSwitch()
     main.removeCallbacks(startupTimeout)
     releasePlayerOnly(removeLayout = false)
 
     owner = requestedOwner
     playing = false
-    // Media3's manager holds off background/moderate memory trims for a grace
-    // window around decoder startup (CharmMemoryCoordinator.setPlaybackStarting).
-    // VLC never told the coordinator it was starting at all, so a trim could
-    // land mid-tune here — competing with LibVLC's own core/decoder/surface
-    // setup for the same RAM right when it's least able to absorb it. Cleared
-    // on Playing/error/end/timeout below and in stopInternal.
     CharmMemoryCoordinator.setPlaybackStarting(true)
     val identity = Identity(requestedOwner, nextGeneration, nextChannelKey.trim())
     activeIdentity = identity
@@ -169,26 +173,37 @@ object NativeVlcPlaybackManager {
           playing = false
           main.removeCallbacks(startupTimeout)
           CharmMemoryCoordinator.setPlaybackStarting(false)
-          // Release the failed player instead of leaving it parked until the
-          // next tune happens to reuse or replace it. Deferred via post(), not
-          // called inline — this branch runs from inside player's own
-          // setEventListener callback, and releasing a LibVLC MediaPlayer from
-          // inside its own native event dispatch is unsafe.
-          main.post { if (mediaPlayer === player) releasePlayerOnly(removeLayout = false) }
           listener?.onState(identity, "error", "vlc-playback-error")
+          main.post {
+            if (mediaPlayer === player && activeIdentity == identity) {
+              releasePlayerOnly(removeLayout = false)
+              activeIdentity = null
+              if (owner == identity.owner) owner = Owner.NONE
+            }
+          }
         }
         MediaPlayer.Event.EndReached -> {
           playing = false
           main.removeCallbacks(startupTimeout)
           CharmMemoryCoordinator.setPlaybackStarting(false)
-          main.post { if (mediaPlayer === player) releasePlayerOnly(removeLayout = false) }
           listener?.onState(identity, "error", "stream-ended")
+          main.post {
+            if (mediaPlayer === player && activeIdentity == identity) {
+              releasePlayerOnly(removeLayout = false)
+              activeIdentity = null
+              if (owner == identity.owner) owner = Owner.NONE
+            }
+          }
         }
       }
     }
 
     if (!attachVideoLayout(requestedOwner)) {
+      CharmMemoryCoordinator.setPlaybackStarting(false)
       listener?.onState(identity, "error", "surface-unavailable")
+      releasePlayerOnly(removeLayout = false)
+      activeIdentity = null
+      owner = Owner.NONE
       return@runOnMain
     }
 
@@ -196,8 +211,6 @@ object NativeVlcPlaybackManager {
     val media = Media(core, Uri.parse(source.uri))
     media.setHWDecoderEnabled(source.hardwareDecode, false)
     media.addOption(":network-caching=${networkCachingMs(source.bufferProfile)}")
-    // LibVLC 3's Android HTTP access exposes provider UA and referrer knobs.
-    // Other custom headers stay on Media3; do not pretend VLC can forward them.
     source.headers.forEach { (key, value) ->
       when (key.lowercase()) {
         "user-agent" -> media.addOption(":http-user-agent=$value")
@@ -211,8 +224,6 @@ object NativeVlcPlaybackManager {
   }
 
   fun setResizeMode(mode: String?) = runOnMain {
-    // VLCVideoLayout handles the normal fit path itself. Preserve that stable
-    // behavior here rather than applying a fake crop/stretch transform.
     if (mode == "fit" || mode.isNullOrBlank()) {
       try { mediaPlayer?.setAspectRatio(null) } catch (_: Throwable) {}
       try { mediaPlayer?.setScale(0f) } catch (_: Throwable) {}
@@ -247,13 +258,6 @@ object NativeVlcPlaybackManager {
     onStopped?.invoke()
   }
 
-  /**
-   * Stop and release the LibVLC core/player when the user switches to a
-   * different playback engine. Deliberately does NOT clear listener/activity/
-   * surface references the way releaseAll() does — those stay valid for the
-   * app's lifetime and are needed again the instant the user switches back to
-   * VLC. See the matching NativePlaybackManager.stopForEngineSwitch() doc.
-   */
   fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
 
   fun releaseAll() = runOnMain {
@@ -282,9 +286,9 @@ object NativeVlcPlaybackManager {
   }
 
   private fun networkCachingMs(profile: String): Int = when (profile) {
-    "low_latency" -> 1_000
-    "balanced" -> 1_500
-    else -> 3_000
+    "low_latency" -> 5_000
+    "balanced" -> 8_000
+    else -> 12_000
   }
 
   private fun attachVideoLayout(surfaceOwner: Owner): Boolean {
@@ -293,6 +297,7 @@ object NativeVlcPlaybackManager {
       Owner.FULLSCREEN -> fullscreenSurface
       Owner.NONE -> null
     } ?: return false
+    if (!surface.isAttachedToWindow) return false
     val context = activity ?: return false
     val layout = videoLayout ?: VLCVideoLayout(context).also { videoLayout = it }
     (layout.parent as? ViewGroup)?.removeView(layout)
@@ -300,13 +305,6 @@ object NativeVlcPlaybackManager {
     surface.addView(layout, FrameLayout.LayoutParams(-1, -1))
     val player = mediaPlayer ?: return false
     try { player.detachViews() } catch (_: Throwable) {}
-    // Every other native/JNI call on this MediaPlayer is guarded the same way
-    // (see stopInternal/releasePlayerOnly below) — attachViews() was the one
-    // exception, and an uncaught throw here on the main thread crashes the
-    // whole app rather than just failing this one tune. libVLC's Android
-    // JNI layer can throw (or the core can already be mid-release from a
-    // fast preview<->fullscreen or Media3<->VLC switch) even though this is
-    // the normal, expected path.
     try {
       player.attachViews(layout, null, false, false)
     } catch (_: Throwable) {

@@ -9,12 +9,16 @@ import com.facebook.react.uimanager.annotations.ReactProp
 /**
  * React Native host for the Media3 video output.
  *
- * React/Fabric may temporarily detach and later reattach this native view without
- * changing the `owner` prop. Treat window attachment as the physical video-surface
- * lifetime: bind only while attached, detach while off-window, and perform an
- * explicit final release when React permanently drops the view. The player itself
- * remains owned by NativePlaybackManager, so a surface recycle never creates a
- * second decoder or a second network stream.
+ * The decoder/player belongs to NativePlaybackManager, while this view owns only
+ * a render target. React/Fabric is allowed to detach a mounted native view from
+ * the window temporarily during layout/navigation work. That must not be treated
+ * as destruction: keeping the same PlayerView child lets SurfaceView recreate its
+ * physical Surface and reconnect to the same ExoPlayer without inflating another
+ * PlayerView, opening another stream, or rebuilding the decoder.
+ *
+ * A real owner change or onDropViewInstance is different. Those paths explicitly
+ * detach the manager and remove the old child so no stale PlayerView/SurfaceView
+ * can survive into the next preview/fullscreen owner.
  */
 class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativePlaybackManager.Owner.NONE
@@ -32,9 +36,14 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
     }
     if (owner == next) return
 
-    if (owner != NativePlaybackManager.Owner.NONE && isAttachedToWindow) {
+    if (owner != NativePlaybackManager.Owner.NONE) {
+      // Owner changes are real lifecycle boundaries, even if Fabric currently
+      // has the host off-window. The manager may still have this exact host
+      // registered from before the temporary detach.
       NativePlaybackManager.detachSurface(owner, this)
+      removeAllViews()
     }
+
     owner = next
     if (owner != NativePlaybackManager.Owner.NONE && isAttachedToWindow) {
       NativePlaybackManager.attachSurface(owner, this)
@@ -49,9 +58,10 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   override fun onDetachedFromWindow() {
-    if (owner != NativePlaybackManager.Owner.NONE) {
-      NativePlaybackManager.detachSurface(owner, this)
-    }
+    // Do not call NativePlaybackManager.detachSurface() here. Fabric may detach
+    // and reattach this same host without dropping it. The PlayerView must stay
+    // parented to this host so SurfaceView can recreate its physical Surface and
+    // ExoPlayer can continue on the same decoder/session when we reattach.
     super.onDetachedFromWindow()
   }
 
