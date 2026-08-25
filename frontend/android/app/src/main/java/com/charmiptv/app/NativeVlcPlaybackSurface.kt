@@ -7,36 +7,53 @@ import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
 
 /**
- * A React Native layout target for the one authoritative VLC video layout.
- * Mirrors NativePlaybackSurface (Media3): re-attaches on onAttachedToWindow
- * so a detach/reattach that isn't accompanied by an `owner` prop change or a
- * full view teardown (RN view-flattening/recycling, TV window focus churn)
- * can't leave VLCVideoLayout unparented from a mediaPlayer that still thinks
- * it owns this surface — the previous bare-FrameLayout version had no such
- * recovery path and could end up rendering no video.
+ * React Native host for the manual LibVLC compatibility engine.
+ *
+ * It mirrors the Media3 surface lifetime: null/unknown owners mean NONE,
+ * temporary Fabric/window detaches release only the physical video target, and
+ * final React disposal explicitly clears the host. NativeVlcPlaybackManager
+ * remains the sole owner of the decoder/player instance.
  */
 class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativeVlcPlaybackManager.Owner.NONE
 
   fun setOwner(value: String?) {
     val next = when (value) {
+      "preview" -> NativeVlcPlaybackManager.Owner.PREVIEW
       "fullscreen" -> NativeVlcPlaybackManager.Owner.FULLSCREEN
-      else -> NativeVlcPlaybackManager.Owner.PREVIEW
+      else -> NativeVlcPlaybackManager.Owner.NONE
     }
     if (owner == next) return
-    if (owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.detachSurface(owner, this)
+
+    if (owner != NativeVlcPlaybackManager.Owner.NONE && isAttachedToWindow) {
+      NativeVlcPlaybackManager.detachSurface(owner, this)
+    }
     owner = next
-    NativeVlcPlaybackManager.attachSurface(owner, this)
+    if (owner != NativeVlcPlaybackManager.Owner.NONE && isAttachedToWindow) {
+      NativeVlcPlaybackManager.attachSurface(owner, this)
+    }
   }
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
-    if (owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.attachSurface(owner, this)
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
+      NativeVlcPlaybackManager.attachSurface(owner, this)
+    }
   }
 
   override fun onDetachedFromWindow() {
-    if (owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.detachSurface(owner, this)
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
+      NativeVlcPlaybackManager.detachSurface(owner, this)
+    }
     super.onDetachedFromWindow()
+  }
+
+  fun releaseFromReact() {
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
+      NativeVlcPlaybackManager.detachSurface(owner, this)
+    }
+    owner = NativeVlcPlaybackManager.Owner.NONE
+    removeAllViews()
   }
 }
 
@@ -46,4 +63,9 @@ class NativeVlcPlaybackSurfaceManager : SimpleViewManager<NativeVlcPlaybackSurfa
 
   @ReactProp(name = "owner")
   fun setOwner(view: NativeVlcPlaybackSurface, owner: String?) = view.setOwner(owner)
+
+  override fun onDropViewInstance(view: NativeVlcPlaybackSurface) {
+    view.releaseFromReact()
+    super.onDropViewInstance(view)
+  }
 }
