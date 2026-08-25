@@ -168,8 +168,7 @@ function GuideSelectionPreview({
   const previewVisible =
     !hidePreview &&
     !!channel?.url &&
-    previewId === channel.id &&
-    previewStatus !== "error";
+    previewId === channel.id;
 
   return (
     <GuidePreviewRail
@@ -985,6 +984,13 @@ function PurpleGuideScreenContent() {
 
   const onPreviewStatus = useCallback((status: StreamStatus) => {
     setPreviewStatus(status);
+    if (status !== "error") return;
+    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
+    previewRecoverTimer.current = setTimeout(() => {
+      previewRecoverTimer.current = null;
+      setPreviewStatus("loading");
+      setPreviewEpoch((value) => value + 1);
+    }, 1_500);
   }, []);
 
   const onPreviewErrorRemount = useCallback(() => {

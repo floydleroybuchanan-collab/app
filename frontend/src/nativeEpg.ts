@@ -12,6 +12,7 @@ export type NativePlaylistChannelRow = { playlistId: string; rawTvgId?: string; 
 export type NativePlaylistEpgMatchRow = { playlistId: string; xmltvId?: string; logoXmltvId?: string; ambiguous?: boolean; matchPolicy?: string; manual?: boolean };
 
 const PLAYLIST_FETCH_TIMEOUT_MS = 45_000;
+const MATCH_SYNC_TIMEOUT_MS = 8_000;
 
 type CharmEpgModule = {
   fetchPlaylist?(url: string): Promise<NativePlaylistResult>;
@@ -153,7 +154,21 @@ export async function queryNativeGuideWindow(playlistChannelIds: string[], start
 export async function touchNativePlaylistRefresh(playlistEpoch: number): Promise<void> { if (nativeModule?.touchPlaylistRefresh) await nativeModule.touchPlaylistRefresh(playlistEpoch); }
 export async function upsertNativePlaylistChannels(channels: NativePlaylistChannelRow[], playlistEpoch: number, contentFingerprint: string): Promise<boolean> { if (!nativeModule?.upsertPlaylistChannels || !channels.length) return false; return nativeModule.upsertPlaylistChannels(channels, playlistEpoch, contentFingerprint); }
 export async function nativePlaylistIsCurrent(contentFingerprint: string): Promise<boolean> { if (!nativeModule?.isPlaylistCurrent || !contentFingerprint) return false; return nativeModule.isPlaylistCurrent(contentFingerprint); }
-export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> { if (nativeModule?.upsertPlaylistEpgMatches) await nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch); if (ramModule) await ramModule.replaceMatches(matches); }
+export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> {
+  const tasks: Promise<unknown>[] = [];
+  if (nativeModule?.upsertPlaylistEpgMatches) tasks.push(nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch));
+  if (ramModule) tasks.push(ramModule.replaceMatches(matches));
+  if (!tasks.length) return;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  try {
+    await Promise.race([
+      Promise.all(tasks.map((task) => task.catch(() => undefined))).then(() => undefined),
+      new Promise<void>((resolve) => { timeout = setTimeout(resolve, MATCH_SYNC_TIMEOUT_MS); }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 export async function configureNativeGuideOwnership(primaryEnabled: boolean, userEnabled: boolean, userUrl: string, userOverrides: Record<string, string>): Promise<void> {
   const normalizedUserUrl = userUrl.trim(); const effectiveUserEnabled = userEnabled && !!normalizedUserUrl;
