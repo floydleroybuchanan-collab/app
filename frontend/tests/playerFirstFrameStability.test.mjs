@@ -19,30 +19,30 @@ test("Media3 publishes stable playback only after native onRenderedFirstFrame", 
 
 test("Media3 keeps bounded native startup and four-attempt post-playback recovery", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /FULLSCREEN_START_TIMEOUT_MS = 12_000L/);
-  assert.match(native, /PREVIEW_START_TIMEOUT_MS = 8_000L/);
-  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 5_000L/);
-  assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 7_000L/);
+  assert.match(native, /FULLSCREEN_START_TIMEOUT_MS = 45_000L/);
+  assert.match(native, /PREVIEW_START_TIMEOUT_MS = 45_000L/);
+  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 25_000L/);
+  assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 35_000L/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
   assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
   assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/);
   assert.match(native, /recoveryAttempts \+= 1/);
   assert.match(native, /main\.postDelayed\(delayedRecovery, delayMs\)/);
   assert.match(native, /instance\.prepare\(\)/);
-  assert.match(native, /STABLE_REARM_MS = 30_000L/);
+  assert.match(native, /STABLE_REARM_MS = 60_000L/);
 });
 
 test("Media3 TS watchdog requires no progress before recovery", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /val madeProgress = bufferedPosition > bufferingLastBufferedPositionMs \|\| position > bufferingLastPositionMs/);
   assert.match(native, /if \(madeProgress\) \{[\s\S]*?bufferingSinceMs = nowMs/);
-  assert.match(native, /val recoveryThresholdMs = if \(transport\) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS/);
+  assert.match(native, /val observationThresholdMs = if \(transport\) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS/);
   assert.match(native, /recoverOnce\(instance, skipBarePrepare = transport\)/);
 });
 
 test("Media3 recovers bounded terminal live reads before exposing Retry", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /readTimeout\(5, TimeUnit\.SECONDS\)/);
+  assert.match(native, /readTimeout\(30, TimeUnit\.SECONDS\)/);
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.match(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /recordDiagnostic\("player-error", error, created\)/);

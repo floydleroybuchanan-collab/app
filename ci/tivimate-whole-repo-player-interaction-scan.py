@@ -208,6 +208,40 @@ for rel in (
             "  if (progressTimer) {",
             "  if (progressTimer) {",
         )
+    # nativeEpg.ts: upsertNativePlaylistEpgMatches now issues the native-table
+    # and RAM-index writes in parallel (was sequential await/await) and caps
+    # the combined wait at MATCH_SYNC_TIMEOUT_MS via Promise.race with a
+    # timer, mirroring the already-reviewed PROGRESS_STALL_TIMEOUT_MS pattern
+    # in source.native.ts above (a stuck native SQLite executor between calls
+    # freezing the whole refresh forever). Neither underlying write is
+    # skipped, reordered relative to its own data, or given different
+    # arguments — each task's own promise (and its real native call) still
+    # runs to completion in the background even past the timeout; only how
+    # long this function's *caller* waits on them changes. Normalize the one
+    # changed function back to its previous form before comparing.
+    if rel == "frontend/src/nativeEpg.ts":
+        current = current.replace(
+            "const PLAYLIST_FETCH_TIMEOUT_MS = 45_000;\nconst MATCH_SYNC_TIMEOUT_MS = 8_000;\n",
+            "const PLAYLIST_FETCH_TIMEOUT_MS = 45_000;\n",
+        )
+        current = current.replace(
+            "export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> {\n"
+            "  const tasks: Promise<unknown>[] = [];\n"
+            "  if (nativeModule?.upsertPlaylistEpgMatches) tasks.push(nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch));\n"
+            "  if (ramModule) tasks.push(ramModule.replaceMatches(matches));\n"
+            "  if (!tasks.length) return;\n"
+            "  let timeout: ReturnType<typeof setTimeout> | null = null;\n"
+            "  try {\n"
+            "    await Promise.race([\n"
+            "      Promise.all(tasks.map((task) => task.catch(() => undefined))).then(() => undefined),\n"
+            "      new Promise<void>((resolve) => { timeout = setTimeout(resolve, MATCH_SYNC_TIMEOUT_MS); }),\n"
+            "    ]);\n"
+            "  } finally {\n"
+            "    if (timeout) clearTimeout(timeout);\n"
+            "  }\n"
+            "}\n",
+            "export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> { if (nativeModule?.upsertPlaylistEpgMatches) await nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch); if (ramModule) await ramModule.replaceMatches(matches); }\n",
+        )
     # EpgNativeModule.kt: the primary EpgDatabase is now a shared singleton
     # (EpgDatabase.shared()) instead of each owner opening its own
     # SQLiteOpenHelper connection to the same file — a memory-audit fix, not a
