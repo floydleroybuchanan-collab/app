@@ -304,9 +304,22 @@ object NativePlaybackManager {
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
     val previousOwner = owner
+    val video = playerViewFor(requestedOwner)
+    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
+
+    // Bind the replacement video target before clearing the previous target.
+    // Preview <-> fullscreen is a PlayerView handoff, not a stream failure;
+    // this order avoids leaving the decoder with no output Surface.
     owner = requestedOwner
+    video.player = instance
+    video.visibility = View.VISIBLE
     if (previousOwner != Owner.NONE && previousOwner != requestedOwner) {
-      playerViewFor(previousOwner)?.let { it.player = null; it.visibility = View.GONE }
+      playerViewFor(previousOwner)?.let { previousVideo ->
+        if (previousVideo !== video) {
+          previousVideo.player = null
+          previousVideo.visibility = View.GONE
+        }
+      }
     }
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
@@ -319,10 +332,6 @@ object NativePlaybackManager {
     stableSinceMs = 0L
     resetBufferingWatchdogState()
     markPlaybackStarting("channel-start")
-    val video = playerViewFor(requestedOwner)
-    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
-    video.player = instance
-    video.visibility = View.VISIBLE
     publishState("loading", null)
     startOrRouteMediaSource(instance, baseSource, "channel-start")
   }
