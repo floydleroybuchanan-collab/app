@@ -9,7 +9,7 @@
  *   config      -> small JSON string   (version, maintenance, announcements, lastUpdated)
  *   channels_gz -> gzip bytes of JSON  (channel list the app needs)
  *   guide_gz    -> gzip bytes of JSON  (optimized guide, matched per channel)
- *   windows     -> JSON string         ({ [channelId]: { n, l, g, p:[{t,s,e,c}] } })
+ *   windows_gz  -> gzip bytes of JSON  ({ [channelId]: { n, l, g, p:[{t,s,e,c}] } })
  *
  * Endpoints:
  *   GET /config          GET /channels          GET /guide          GET /channels.json
@@ -140,7 +140,20 @@ async function serveConfig(env, cors) {
 
 // Current + next program for one channel, computed at request time.
 async function serveChannel(env, id, cors) {
-  const text = await env.KV.get("windows");
+  let text = null;
+  const compressed = await env.KV.get("windows_gz", "arrayBuffer");
+  if (compressed) {
+    try {
+      const source = new Response(compressed).body;
+      if (!source) throw new Error("empty compressed windows payload");
+      text = await new Response(source.pipeThrough(new DecompressionStream("gzip"))).text();
+    } catch {
+      return jsonResponse({ error: "bad_data" }, { status: 500, cors });
+    }
+  } else {
+    // Backward-compatible fallback while an older KV snapshot is still present.
+    text = await env.KV.get("windows");
+  }
   if (!text) return jsonResponse({ error: "not_ready" }, { status: 503, maxAge: 15, cors });
 
   let map;

@@ -665,7 +665,10 @@ export async function main() {
         .map((p) => ({ t: p.t, s: p.s, e: p.e, c: p.c }));
       windows[c.id] = { n: c.name, l: c.logo || "", g: c.category, p: w };
     }
-    await kvPut(acc, ns, token, "windows", JSON.stringify(windows), "text/plain");
+    const windowsJson = Buffer.from(JSON.stringify(windows));
+    const windowsGz = gzipSync(windowsJson);
+    console.log(`Windows payload: ${windowsJson.length} bytes plain -> ${windowsGz.length} bytes gzip`);
+    await kvPut(acc, ns, token, "windows_gz", windowsGz, "application/octet-stream");
   }
 
   const config = {
