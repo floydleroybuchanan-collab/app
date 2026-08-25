@@ -1,0 +1,866 @@
+name: Charm full playback pipeline repair
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/charm-full-playback-pipeline-repair.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  repair-build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      TARGET_BRANCH: claude/repo-branch-access-dxx6wf
+      EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL }}
+      EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL || vars.EXPO_PUBLIC_EPG_URL }}
+      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
+      CMAKE_BUILD_PARALLEL_LEVEL: "1"
+      CI: "1"
+    steps:
+      - name: Checkout playback branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: claude/repo-branch-access-dxx6wf
+          fetch-depth: 0
+
+      - name: Apply guarded full playback pipeline repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one literal match in {path}, found {count}: {old[:120]!r}")
+              path.write_text(text.replace(old, new, 1))
+
+          def sub_once(path, pattern, replacement, flags=0):
+              text = path.read_text()
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one regex match in {path}, found {count}: {pattern[:140]!r}")
+              path.write_text(updated)
+
+          # ------------------------------------------------------------------
+          # Media3: keep the user's deliberately generous jitter profile while
+          # repairing the actual native video-surface lifecycle.
+          # ------------------------------------------------------------------
+          mgr = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")
+          replace_once(mgr, "import android.view.LayoutInflater\nimport android.view.View\n", "import android.view.LayoutInflater\nimport android.view.SurfaceView\nimport android.view.View\nimport android.view.ViewGroup\n")
+          for old, new in {
+              "MIN_BUFFER_MS_LOW_RAM = 15_000": "MIN_BUFFER_MS_LOW_RAM = 20_000",
+              "MAX_BUFFER_MS_LOW_RAM = 45_000": "MAX_BUFFER_MS_LOW_RAM = 90_000",
+              "PLAYBACK_BUFFER_MS_LOW_RAM = 4_000": "PLAYBACK_BUFFER_MS_LOW_RAM = 5_000",
+              "REBUFFER_BUFFER_MS_LOW_RAM = 8_000": "REBUFFER_BUFFER_MS_LOW_RAM = 12_000",
+              "MIN_BUFFER_MS_NORMAL = 15_000": "MIN_BUFFER_MS_NORMAL = 20_000",
+              "MAX_BUFFER_MS_NORMAL = 45_000": "MAX_BUFFER_MS_NORMAL = 90_000",
+              "PLAYBACK_BUFFER_MS_NORMAL = 4_000": "PLAYBACK_BUFFER_MS_NORMAL = 5_000",
+              "REBUFFER_BUFFER_MS_NORMAL = 8_000": "REBUFFER_BUFFER_MS_NORMAL = 12_000",
+              "HUNG_BUFFER_REPREPARE_MS = 25_000L": "HUNG_BUFFER_REPREPARE_MS = 35_000L",
+              "TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 35_000L": "TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L",
+              "HARD_STALL_RECOVERY_MS = 45_000L": "HARD_STALL_RECOVERY_MS = 70_000L",
+              "STABLE_REARM_MS = 60_000L": "STABLE_REARM_MS = 90_000L",
+              "FULLSCREEN_START_TIMEOUT_MS = 45_000L": "FULLSCREEN_START_TIMEOUT_MS = 60_000L",
+              "PREVIEW_START_TIMEOUT_MS = 45_000L": "PREVIEW_START_TIMEOUT_MS = 60_000L",
+              "SOURCE_REFRESH_TIMEOUT_MS = 30_000L": "SOURCE_REFRESH_TIMEOUT_MS = 45_000L",
+              ".connectTimeout(15, TimeUnit.SECONDS)": ".connectTimeout(20, TimeUnit.SECONDS)",
+              ".readTimeout(30, TimeUnit.SECONDS)": ".readTimeout(45, TimeUnit.SECONDS)",
+              ".writeTimeout(30, TimeUnit.SECONDS)": ".writeTimeout(45, TimeUnit.SECONDS)",
+          }.items():
+              replace_once(mgr, old, new)
+
+          replace_once(
+              mgr,
+              '  private const val SOURCE_REFRESH_TIMEOUT_MS = 45_000L\n',
+              '  private const val SOURCE_REFRESH_TIMEOUT_MS = 45_000L\n  private const val SURFACE_REPAIR_DELAY_MS = 1_500L\n  private const val MAX_SURFACE_REPAIRS_PER_TUNE = 1\n',
+          )
+          replace_once(
+              mgr,
+              '  private var codecError: String? = null\n',
+              '  private var codecError: String? = null\n  private var surfaceRepairAttempts = 0\n',
+          )
+
+          replace_once(
+              mgr,
+              '  private val opaqueTypeConfirmation = Runnable {\n    val instance = player ?: return@Runnable\n    if (owner == Owner.NONE || !firstFrameRendered || opaqueRouteCacheKey == null) return@Runnable\n    if (instance.playbackState != Player.STATE_READY) return@Runnable\n    confirmSuccessfulStreamType()\n    recordDiagnostic("opaque-type-stable", lastPlaybackError, instance)\n  }\n',
+              '''  private val opaqueTypeConfirmation = Runnable {
+            val instance = player ?: return@Runnable
+            if (owner == Owner.NONE || !firstFrameRendered || opaqueRouteCacheKey == null) return@Runnable
+            if (instance.playbackState != Player.STATE_READY) return@Runnable
+            confirmSuccessfulStreamType()
+            recordDiagnostic("opaque-type-stable", lastPlaybackError, instance)
+          }
+          private val surfaceRepairCheck = Runnable {
+            val instance = player ?: return@Runnable
+            if (owner == Owner.NONE || player !== instance || firstFrameRendered) return@Runnable
+            if (instance.playbackState != Player.STATE_READY || !instance.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)) return@Runnable
+            tryRepairActiveVideoSurface(instance, "ready-no-first-frame")
+          }
+''',
+          )
+
+          surface_pattern = r'''  fun attachSurface\(surfaceOwner: Owner, surface: FrameLayout\) = runOnMain \{.*?^fun setResizeMode'''
+          surface_replacement = '''  fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+            when (surfaceOwner) {
+              Owner.PREVIEW -> previewSurface = surface
+              Owner.FULLSCREEN -> fullscreenSurface = surface
+              Owner.NONE -> return@runOnMain
+            }
+            val video = ensurePlayerViewIn(surfaceOwner, surface)
+            if (owner == surfaceOwner) {
+              val instance = player
+              video.player = instance
+              video.visibility = if (instance != null) View.VISIBLE else View.GONE
+              if (instance != null && activeSource != null) {
+                instance.playWhenReady = true
+                recordDiagnostic("surface-attached", lastPlaybackError, instance)
+                if (!firstFrameRendered) {
+                  armStartupTimeout()
+                  main.removeCallbacks(surfaceRepairCheck)
+                  main.postDelayed(surfaceRepairCheck, SURFACE_REPAIR_DELAY_MS)
+                }
+              }
+            }
+          }
+          fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+            val attached = when (surfaceOwner) {
+              Owner.PREVIEW -> previewSurface
+              Owner.FULLSCREEN -> fullscreenSurface
+              Owner.NONE -> null
+            }
+            if (attached !== surface) return@runOnMain
+            val instance = player
+            if (owner == surfaceOwner && instance != null) {
+              instance.playWhenReady = false
+              main.removeCallbacks(startupTimeout)
+              main.removeCallbacks(surfaceRepairCheck)
+              recordDiagnostic("surface-detached", lastPlaybackError, instance)
+              publishState("loading", "surface-detached")
+            }
+            clearPlayerView(surfaceOwner, removeFromParent = true)
+            when (surfaceOwner) {
+              Owner.PREVIEW -> previewSurface = null
+              Owner.FULLSCREEN -> fullscreenSurface = null
+              Owner.NONE -> Unit
+            }
+          }
+          fun setResizeMode'''
+          sub_once(mgr, surface_pattern, surface_replacement, re.S | re.M)
+
+          replace_once(
+              mgr,
+              '    firstFrameRendered = false\n    recoveryAttempts = 0\n',
+              '    firstFrameRendered = false\n    surfaceRepairAttempts = 0\n    recoveryAttempts = 0\n',
+          )
+
+          replace_once(
+              mgr,
+              '              Player.STATE_READY -> {\n                main.removeCallbacks(bufferingWatchdog)\n                resetBufferingWatchdogState()\n                ensureActiveSurfaceBound(created, "state-ready")\n                if (firstFrameRendered && stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis()\n                publishTracks(created.currentTracks)\n              }',
+              '''              Player.STATE_READY -> {
+                main.removeCallbacks(bufferingWatchdog)
+                resetBufferingWatchdogState()
+                ensureActiveSurfaceBound(created, "state-ready")
+                main.removeCallbacks(surfaceRepairCheck)
+                if (!firstFrameRendered && created.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)) {
+                  main.postDelayed(surfaceRepairCheck, SURFACE_REPAIR_DELAY_MS)
+                }
+                if (firstFrameRendered && stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis()
+                publishTracks(created.currentTracks)
+              }''',
+          )
+          replace_once(
+              mgr,
+              '            main.removeCallbacks(startupTimeout)\n            main.removeCallbacks(bufferingWatchdog)\n            main.removeCallbacks(delayedRecovery)\n',
+              '            main.removeCallbacks(startupTimeout)\n            main.removeCallbacks(bufferingWatchdog)\n            main.removeCallbacks(surfaceRepairCheck)\n            main.removeCallbacks(delayedRecovery)\n',
+          )
+          replace_once(
+              mgr,
+              '            main.removeCallbacks(startupTimeout)\n            main.removeCallbacks(bufferingWatchdog)\n            main.removeCallbacks(opaqueTypeConfirmation)\n            resetBufferingWatchdogState()\n            recordDiagnostic("player-error", error, created)',
+              '            main.removeCallbacks(startupTimeout)\n            main.removeCallbacks(bufferingWatchdog)\n            main.removeCallbacks(surfaceRepairCheck)\n            main.removeCallbacks(opaqueTypeConfirmation)\n            resetBufferingWatchdogState()\n            recordDiagnostic("player-error", error, created)',
+          )
+          replace_once(
+              mgr,
+              '          override fun onTracksChanged(tracks: Tracks) = publishTracks(tracks)\n',
+              '''          override fun onTracksChanged(tracks: Tracks) {
+            publishTracks(tracks)
+            if (!firstFrameRendered && tracks.isTypeSelected(C.TRACK_TYPE_VIDEO)) {
+              main.removeCallbacks(surfaceRepairCheck)
+              main.postDelayed(surfaceRepairCheck, SURFACE_REPAIR_DELAY_MS)
+            }
+          }
+''',
+          )
+
+          helpers_pattern = r'''  private fun playerViewFor\(target: Owner\): PlayerView\? = when \(target\) \{.*?(?=  // Inflated, not `PlayerView\(context\)`:)'''
+          helpers = '''  private fun playerViewFor(target: Owner): PlayerView? = when (target) {
+            Owner.PREVIEW -> previewPlayerView
+            Owner.FULLSCREEN -> fullscreenPlayerView
+            Owner.NONE -> null
+          }
+
+          private fun cachePlayerView(target: Owner, value: PlayerView?) {
+            when (target) {
+              Owner.PREVIEW -> previewPlayerView = value
+              Owner.FULLSCREEN -> fullscreenPlayerView = value
+              Owner.NONE -> Unit
+            }
+          }
+
+          private fun clearPlayerView(target: Owner, removeFromParent: Boolean) {
+            val video = playerViewFor(target) ?: return
+            try { video.player = null } catch (_: Throwable) {}
+            if (removeFromParent) {
+              try { (video.parent as? ViewGroup)?.removeView(video) } catch (_: Throwable) {}
+            }
+            cachePlayerView(target, null)
+          }
+
+          private fun findSurfaceView(root: View): SurfaceView? {
+            if (root is SurfaceView) return root
+            if (root !is ViewGroup) return null
+            for (index in 0 until root.childCount) {
+              findSurfaceView(root.getChildAt(index))?.let { return it }
+            }
+            return null
+          }
+
+          private fun hasUsableVideoSurface(video: PlayerView): Boolean {
+            if (!video.isAttachedToWindow) return false
+            val surfaceView = findSurfaceView(video) ?: return true
+            return surfaceView.isAttachedToWindow && runCatching { surfaceView.holder.surface.isValid }.getOrDefault(false)
+          }
+
+          private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
+            val activeOwner = owner
+            if (activeOwner == Owner.NONE || player !== instance) return false
+            val target = when (activeOwner) {
+              Owner.PREVIEW -> previewSurface
+              Owner.FULLSCREEN -> fullscreenSurface
+              Owner.NONE -> null
+            } ?: return false
+            val video = ensurePlayerViewIn(activeOwner, target)
+            if (video.player === instance && video.visibility == View.VISIBLE && hasUsableVideoSurface(video)) return false
+            return try {
+              video.player = instance
+              video.visibility = View.VISIBLE
+              if (activeSource != null) instance.playWhenReady = true
+              recordDiagnostic("surface-rebind:$event", lastPlaybackError, instance)
+              true
+            } catch (failure: Throwable) {
+              Log.w(TAG, "surface rebind failed: $event", failure)
+              false
+            }
+          }
+
+          private fun tryRepairActiveVideoSurface(instance: ExoPlayer, event: String): Boolean {
+            if (owner == Owner.NONE || player !== instance || firstFrameRendered) return false
+            if (!instance.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)) return false
+            if (surfaceRepairAttempts >= MAX_SURFACE_REPAIRS_PER_TUNE) return false
+            surfaceRepairAttempts += 1
+            val activeOwner = owner
+            val target = when (activeOwner) {
+              Owner.PREVIEW -> previewSurface
+              Owner.FULLSCREEN -> fullscreenSurface
+              Owner.NONE -> null
+            } ?: return false
+            return try {
+              val old = playerViewFor(activeOwner)
+              val oldSurfaceUsable = old?.let(::hasUsableVideoSurface) == true
+              clearPlayerView(activeOwner, removeFromParent = true)
+              val fresh = ensurePlayerViewIn(activeOwner, target)
+              fresh.player = instance
+              fresh.visibility = View.VISIBLE
+              instance.playWhenReady = activeSource != null
+              recordDiagnostic("video-surface-recreated:$event:oldValid=$oldSurfaceUsable", lastPlaybackError, instance)
+              true
+            } catch (failure: Throwable) {
+              Log.w(TAG, "video surface recreation failed: $event", failure)
+              false
+            }
+          }
+
+'''
+          sub_once(mgr, helpers_pattern, helpers, re.S)
+
+          old_ensure = '''  private fun ensurePlayerViewIn(surfaceOwner: Owner, target: FrameLayout): PlayerView {
+            playerViewFor(surfaceOwner)?.let { existing -> if (existing.parent === target) return existing }
+            val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {'''
+          new_ensure = '''  private fun ensurePlayerViewIn(surfaceOwner: Owner, target: FrameLayout): PlayerView {
+            playerViewFor(surfaceOwner)?.let { existing ->
+              if (existing.parent === target) return existing
+              try { existing.player = null } catch (_: Throwable) {}
+              try { (existing.parent as? ViewGroup)?.removeView(existing) } catch (_: Throwable) {}
+              cachePlayerView(surfaceOwner, null)
+            }
+            // Clean up any orphan PlayerView left in this React-native host by a
+            // previous transient Fabric detach before creating the authoritative one.
+            for (index in target.childCount - 1 downTo 0) {
+              val child = target.getChildAt(index)
+              if (child is PlayerView) {
+                try { child.player = null } catch (_: Throwable) {}
+                target.removeViewAt(index)
+              }
+            }
+            val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {'''
+          replace_once(mgr, old_ensure, new_ensure)
+          replace_once(
+              mgr,
+              '''    main.removeCallbacks(bufferingWatchdog)
+    main.removeCallbacks(delayedRecovery)
+    main.removeCallbacks(sourceRefreshTimeout)''',
+              '''    main.removeCallbacks(bufferingWatchdog)
+    main.removeCallbacks(surfaceRepairCheck)
+    main.removeCallbacks(delayedRecovery)
+    main.removeCallbacks(sourceRefreshTimeout)''',
+          )
+
+          # ------------------------------------------------------------------
+          # React/Fabric host lifecycle: distinguish temporary detach from final
+          # drop and never leave orphan PlayerView/SurfaceView children behind.
+          # ------------------------------------------------------------------
+          media_surface = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackSurface.kt")
+          media_surface.write_text('''package com.charmiptv.app
+
+import android.content.Context
+import android.widget.FrameLayout
+import com.facebook.react.uimanager.SimpleViewManager
+import com.facebook.react.uimanager.ThemedReactContext
+import com.facebook.react.uimanager.annotations.ReactProp
+
+/** React Native host for the active Media3 video surface. */
+class NativePlaybackSurface(context: Context) : FrameLayout(context) {
+  private var owner = NativePlaybackManager.Owner.NONE
+  private var disposed = false
+
+  init {
+    clipChildren = true
+    clipToPadding = true
+  }
+
+  fun setOwner(value: String?) {
+    if (disposed) return
+    val next = when (value) {
+      "preview" -> NativePlaybackManager.Owner.PREVIEW
+      "fullscreen" -> NativePlaybackManager.Owner.FULLSCREEN
+      else -> NativePlaybackManager.Owner.NONE
+    }
+    if (owner == next) return
+    if (owner != NativePlaybackManager.Owner.NONE) NativePlaybackManager.detachSurface(owner, this)
+    owner = next
+    if (owner != NativePlaybackManager.Owner.NONE && isAttachedToWindow) NativePlaybackManager.attachSurface(owner, this)
+  }
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    if (!disposed && owner != NativePlaybackManager.Owner.NONE) NativePlaybackManager.attachSurface(owner, this)
+  }
+
+  override fun onDetachedFromWindow() {
+    if (!disposed && owner != NativePlaybackManager.Owner.NONE) NativePlaybackManager.detachSurface(owner, this)
+    super.onDetachedFromWindow()
+  }
+
+  fun dispose() {
+    if (disposed) return
+    disposed = true
+    if (owner != NativePlaybackManager.Owner.NONE) NativePlaybackManager.detachSurface(owner, this)
+    owner = NativePlaybackManager.Owner.NONE
+    removeAllViews()
+  }
+}
+
+class NativePlaybackSurfaceManager : SimpleViewManager<NativePlaybackSurface>() {
+  override fun getName() = "CharmNativePlaybackSurface"
+  override fun createViewInstance(context: ThemedReactContext) = NativePlaybackSurface(context)
+
+  @ReactProp(name = "owner")
+  fun setOwner(view: NativePlaybackSurface, value: String?) = view.setOwner(value)
+
+  override fun onDropViewInstance(view: NativePlaybackSurface) {
+    view.dispose()
+    super.onDropViewInstance(view)
+  }
+}
+''')
+
+          # ------------------------------------------------------------------
+          # VLC: mirror NONE owner semantics, detach/reattach video correctly,
+          # and release a newly-created native player when surface attach fails.
+          # ------------------------------------------------------------------
+          vlc_surface = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt")
+          vlc_surface.write_text('''package com.charmiptv.app
+
+import android.content.Context
+import android.widget.FrameLayout
+import com.facebook.react.uimanager.SimpleViewManager
+import com.facebook.react.uimanager.ThemedReactContext
+import com.facebook.react.uimanager.annotations.ReactProp
+
+class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
+  private var owner = NativeVlcPlaybackManager.Owner.NONE
+  private var disposed = false
+
+  fun setOwner(value: String?) {
+    if (disposed) return
+    val next = when (value) {
+      "preview" -> NativeVlcPlaybackManager.Owner.PREVIEW
+      "fullscreen" -> NativeVlcPlaybackManager.Owner.FULLSCREEN
+      else -> NativeVlcPlaybackManager.Owner.NONE
+    }
+    if (owner == next) return
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.detachSurface(owner, this)
+    owner = next
+    if (owner != NativeVlcPlaybackManager.Owner.NONE && isAttachedToWindow) NativeVlcPlaybackManager.attachSurface(owner, this)
+  }
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    if (!disposed && owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.attachSurface(owner, this)
+  }
+
+  override fun onDetachedFromWindow() {
+    if (!disposed && owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.detachSurface(owner, this)
+    super.onDetachedFromWindow()
+  }
+
+  fun dispose() {
+    if (disposed) return
+    disposed = true
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) NativeVlcPlaybackManager.detachSurface(owner, this)
+    owner = NativeVlcPlaybackManager.Owner.NONE
+    removeAllViews()
+  }
+}
+
+class NativeVlcPlaybackSurfaceManager : SimpleViewManager<NativeVlcPlaybackSurface>() {
+  override fun getName(): String = "CharmNativeVlcPlaybackSurface"
+  override fun createViewInstance(reactContext: ThemedReactContext) = NativeVlcPlaybackSurface(reactContext)
+
+  @ReactProp(name = "owner")
+  fun setOwner(view: NativeVlcPlaybackSurface, owner: String?) = view.setOwner(owner)
+
+  override fun onDropViewInstance(view: NativeVlcPlaybackSurface) {
+    view.dispose()
+    super.onDropViewInstance(view)
+  }
+}
+''')
+
+          vlc = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt")
+          replace_once(
+              vlc,
+              '''    if (owner == surfaceOwner) attachVideoLayout(surfaceOwner)
+  }
+
+  fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {''',
+              '''    if (owner == surfaceOwner && attachVideoLayout(surfaceOwner)) {
+      mediaPlayer?.play()
+    }
+  }
+
+  fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {''',
+          )
+          replace_once(
+              vlc,
+              '''    if (attached !== surface) return@runOnMain
+    if (videoLayout?.parent === surface) surface.removeView(videoLayout)
+    when (surfaceOwner) {''',
+              '''    if (attached !== surface) return@runOnMain
+    if (owner == surfaceOwner) {
+      try { mediaPlayer?.pause() } catch (_: Throwable) {}
+      try { mediaPlayer?.detachViews() } catch (_: Throwable) {}
+    }
+    if (videoLayout?.parent === surface) surface.removeView(videoLayout)
+    when (surfaceOwner) {''',
+          )
+          replace_once(
+              vlc,
+              '''    if (!attachVideoLayout(requestedOwner)) {
+      listener?.onState(identity, "error", "surface-unavailable")
+      return@runOnMain
+    }''',
+              '''    if (!attachVideoLayout(requestedOwner)) {
+      playing = false
+      owner = Owner.NONE
+      activeIdentity = null
+      CharmMemoryCoordinator.setPlaybackStarting(false)
+      releasePlayerOnly(removeLayout = true)
+      listener?.onState(identity, "error", "surface-unavailable")
+      return@runOnMain
+    }''',
+          )
+
+          # ------------------------------------------------------------------
+          # EPG/playlist refreshes already run off the UI thread and use a
+          # staging/atomic swap. Do not abort them merely because Guide/player is
+          # active; that was the exact source of the user's deferred-final-swap.
+          # ------------------------------------------------------------------
+          epg = Path("frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt")
+          replace_once(
+              epg,
+              '''              if ((rawProgrammeCount and 0x1ffL) == 0L) {
+                val owner = TvRemoteModule.remoteContext
+                if (owner == "guide" || owner == "player" || owner == "modal") {
+                  throw IllegalStateException("EPG refresh deferred for active TV interaction")
+                }
+              }
+''',
+              '',
+          )
+
+          playlist = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaylistParser.kt")
+          replace_once(
+              playlist,
+              '''          rawLineCount += 1L
+          if ((rawLineCount and 0xffL) == 0L) {
+            val owner = TvRemoteModule.remoteContext
+            if (owner == "guide" || owner == "player" || owner == "modal") {
+              throw IllegalStateException("Playlist refresh deferred for active TV interaction")
+            }
+          }
+''',
+              '''          rawLineCount += 1L
+''',
+          )
+
+          # Preserve common provider-specific M3U headers by translating them to
+          # the existing URL|Header=Value representation consumed by StreamPlayer.
+          replace_once(playlist, "package com.charmiptv.app\n\n", "package com.charmiptv.app\n\nimport android.net.Uri\n")
+          replace_once(playlist, "import okhttp3.Response\n", "import okhttp3.Response\nimport org.json.JSONObject\n")
+          replace_once(
+              playlist,
+              '''  private data class Pending(
+    val tvgId: String,
+    val name: String,
+    val group: String,
+    val logo: String,
+  )''',
+              '''  private data class Pending(
+    val tvgId: String,
+    val name: String,
+    val group: String,
+    val logo: String,
+    val headers: LinkedHashMap<String, String> = LinkedHashMap(),
+  )''',
+          )
+          replace_once(
+              playlist,
+              '''          val meta = pending ?: continue
+          if (line.isEmpty() || line.startsWith('#')) continue
+          pending = null
+          if (!isAllowedStreamUrl(line)) {
+            rejected += 1
+            continue
+          }
+
+          if (meta.tvgId.isNotEmpty()) {
+            tvgCounts[meta.tvgId] = (tvgCounts[meta.tvgId] ?: 0) + 1
+          }
+          if (rawEntries.size < MAX_CHANNELS) {
+            rawEntries.add(RawEntry(meta.tvgId, meta.name, meta.group, meta.logo, line))''',
+              '''          val meta = pending ?: continue
+          if (line.isEmpty()) continue
+          if (line.startsWith('#')) {
+            collectStreamHeaderDirective(line, meta.headers)
+            continue
+          }
+          pending = null
+          val resolvedUrl = applyStreamHeaders(line, meta.headers)
+          if (!isAllowedStreamUrl(resolvedUrl)) {
+            rejected += 1
+            continue
+          }
+
+          if (meta.tvgId.isNotEmpty()) {
+            tvgCounts[meta.tvgId] = (tvgCounts[meta.tvgId] ?: 0) + 1
+          }
+          if (rawEntries.size < MAX_CHANNELS) {
+            rawEntries.add(RawEntry(meta.tvgId, meta.name, meta.group, meta.logo, resolvedUrl))''',
+          )
+          replace_once(
+              playlist,
+              '''  private fun isAllowedStreamUrl(raw: String): Boolean {''',
+              '''  private fun collectStreamHeaderDirective(line: String, headers: MutableMap<String, String>): Boolean {
+    val lower = line.lowercase(Locale.US)
+    fun store(name: String, value: String) {
+      val clean = value.trim()
+      if (clean.isNotEmpty()) headers[name] = clean
+    }
+    when {
+      lower.startsWith("#extvlcopt:http-user-agent=") -> store("User-Agent", line.substringAfter('='))
+      lower.startsWith("#extvlcopt:http-referrer=") || lower.startsWith("#extvlcopt:http-referer=") -> store("Referer", line.substringAfter('='))
+      lower.startsWith("#extvlcopt:http-cookie=") -> store("Cookie", line.substringAfter('='))
+      lower.startsWith("#exthttp:") -> runCatching {
+        val json = JSONObject(line.substringAfter(':').trim())
+        val iterator = json.keys()
+        while (iterator.hasNext()) {
+          val rawKey = iterator.next()
+          val canonical = when (rawKey.lowercase(Locale.US)) {
+            "user-agent" -> "User-Agent"
+            "referer", "referrer" -> "Referer"
+            "cookie" -> "Cookie"
+            else -> null
+          } ?: continue
+          store(canonical, json.optString(rawKey, ""))
+        }
+      }
+      else -> return false
+    }
+    return true
+  }
+
+  private fun applyStreamHeaders(raw: String, headers: Map<String, String>): String {
+    if (headers.isEmpty()) return raw
+    val base = raw.substringBefore('|').trim()
+    val existing = raw.substringAfter('|', "").trim()
+    val encoded = headers.entries.joinToString("&") { (key, value) -> "${Uri.encode(key)}=${Uri.encode(value)}" }
+    return if (existing.isEmpty()) "$base|$encoded" else "$base|$encoded&$existing"
+  }
+
+  private fun isAllowedStreamUrl(raw: String): Boolean {''',
+          )
+
+          source_parsing = Path("frontend/src/core/sourceParsing.ts")
+          replace_once(
+              source_parsing,
+              '''function clipId(id: string): string {
+  if (id.length <= MAX_CHANNEL_ID_LEN) return id;
+  return id.slice(0, MAX_CHANNEL_ID_LEN);
+}
+''',
+              '''function clipId(id: string): string {
+  if (id.length <= MAX_CHANNEL_ID_LEN) return id;
+  return id.slice(0, MAX_CHANNEL_ID_LEN);
+}
+
+function collectStreamHeaderDirective(line: string, headers: Record<string, string>): boolean {
+  const lower = line.toLowerCase();
+  const store = (name: string, value: string) => {
+    const clean = value.trim();
+    if (clean) headers[name] = clean;
+  };
+  if (lower.startsWith("#extvlcopt:http-user-agent=")) {
+    store("User-Agent", line.slice(line.indexOf("=") + 1));
+    return true;
+  }
+  if (lower.startsWith("#extvlcopt:http-referrer=") || lower.startsWith("#extvlcopt:http-referer=")) {
+    store("Referer", line.slice(line.indexOf("=") + 1));
+    return true;
+  }
+  if (lower.startsWith("#extvlcopt:http-cookie=")) {
+    store("Cookie", line.slice(line.indexOf("=") + 1));
+    return true;
+  }
+  if (lower.startsWith("#exthttp:")) {
+    try {
+      const parsed = JSON.parse(line.slice(line.indexOf(":") + 1));
+      if (parsed && typeof parsed === "object") {
+        for (const [key, value] of Object.entries(parsed)) {
+          const canonical = key.toLowerCase() === "user-agent"
+            ? "User-Agent"
+            : key.toLowerCase() === "referer" || key.toLowerCase() === "referrer"
+              ? "Referer"
+              : key.toLowerCase() === "cookie"
+                ? "Cookie"
+                : null;
+          if (canonical && typeof value === "string") store(canonical, value);
+        }
+      }
+    } catch {}
+    return true;
+  }
+  return false;
+}
+
+function applyStreamHeaders(raw: string, headers: Record<string, string>): string {
+  const entries = Object.entries(headers);
+  if (!entries.length) return raw;
+  const pipe = raw.indexOf("|");
+  const base = (pipe >= 0 ? raw.slice(0, pipe) : raw).trim();
+  const existing = pipe >= 0 ? raw.slice(pipe + 1).trim() : "";
+  const encoded = entries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join("&");
+  return existing ? `${base}|${encoded}&${existing}` : `${base}|${encoded}`;
+}
+''',
+          )
+          replace_once(
+              source_parsing,
+              '''  let pending: { line: string; attrs: Record<string, string>; name: string } | null = null;''',
+              '''  let pending: { line: string; attrs: Record<string, string>; name: string; headers: Record<string, string> } | null = null;''',
+          )
+          replace_once(
+              source_parsing,
+              '''      pending = { line, attrs, name };''',
+              '''      pending = { line, attrs, name, headers: {} };''',
+          )
+          replace_once(
+              source_parsing,
+              '''    if (!pending) continue;
+    if (!line || line.startsWith("#")) continue;
+
+    const url = line;''',
+              '''    if (!pending) continue;
+    if (!line) continue;
+    if (line.startsWith("#")) {
+      collectStreamHeaderDirective(line, pending.headers);
+      continue;
+    }
+
+    const url = applyStreamHeaders(line, pending.headers);''',
+          )
+
+          # ------------------------------------------------------------------
+          # Do not let a learned opaque-stream type restart a healthy live
+          # session. Media3's own native type cache remains the non-reactive
+          # optimization for the next tune.
+          # ------------------------------------------------------------------
+          stream_player = Path("frontend/src/components/StreamPlayer.tsx")
+          replace_once(stream_player, '  useChannelPlaybackProfile,\n', '')
+          replace_once(stream_player, '  const profile = useChannelPlaybackProfile(currentChannelKey);\n', '')
+          replace_once(
+              stream_player,
+              '''  const declaredKind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
+  const learnedHint = profile?.confirmedType ?? streamTypeHint;
+  const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);''',
+              '''  const declaredKind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
+  // Never let a profile update restart the current healthy stream. Native Media3
+  // keeps its own opaque-type cache and applies learned routing on the next tune.
+  const kind = declaredKind;''',
+          )
+
+          # Structural guards before spending time on native toolchain/build.
+          checks = {
+            mgr: [
+              "MIN_BUFFER_MS_NORMAL = 20_000", "MAX_BUFFER_MS_NORMAL = 90_000",
+              "PLAYBACK_BUFFER_MS_NORMAL = 5_000", "REBUFFER_BUFFER_MS_NORMAL = 12_000",
+              "HUNG_BUFFER_REPREPARE_MS = 35_000L", "TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L",
+              "HARD_STALL_RECOVERY_MS = 70_000L", "STABLE_REARM_MS = 90_000L",
+              "FULLSCREEN_START_TIMEOUT_MS = 60_000L", ".readTimeout(45, TimeUnit.SECONDS)",
+              "video-surface-recreated:$event", "surfaceRepairCheck",
+            ],
+            epg: ["database.replaceBatches(batches)"],
+            playlist: ["collectStreamHeaderDirective", "applyStreamHeaders"],
+            stream_player: ["const kind = declaredKind;"],
+          }
+          for path, tokens in checks.items():
+              text = path.read_text()
+              for token in tokens:
+                  if token not in text:
+                      raise SystemExit(f"Missing expected repair token in {path}: {token}")
+          if "EPG refresh deferred for active TV interaction" in epg.read_text():
+              raise SystemExit("EPG interaction abort gate still present")
+          if "Playlist refresh deferred for active TV interaction" in playlist.read_text():
+              raise SystemExit("Playlist interaction abort gate still present")
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android native toolchain
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
+
+      - name: Install JavaScript dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build pinned LGPL FFmpeg audio extension
+        working-directory: frontend
+        run: |
+          chmod +x scripts/build-media3-ffmpeg-audio.sh
+          ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/27.1.12297006" ./scripts/build-media3-ffmpeg-audio.sh
+
+      - name: Configure deterministic low-memory build
+        working-directory: frontend
+        run: |
+          cat >> android/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=768m -XX:+UseG1GC -Dfile.encoding=UTF-8
+          org.gradle.parallel=false
+          org.gradle.workers.max=1
+          org.gradle.vfs.watch=false
+          kotlin.compiler.execution.strategy=in-process
+          kotlin.daemon.enabled=false
+          reactNativeArchitectures=armeabi-v7a,arm64-v8a
+          EOF
+
+      - name: Build universal sideload APK
+        working-directory: frontend
+        run: |
+          chmod +x android/gradlew
+          ./android/gradlew -p android :app:assembleSideload --no-daemon --max-workers=1 --stacktrace
+
+      - name: Verify universal APK contents
+        working-directory: frontend
+        run: |
+          APK="android/app/build/outputs/apk/sideload/app-sideload.apk"
+          test -f "$APK"
+          unzip -l "$APK" | grep -Eq "(assets/index\.android\.bundle|assets/.*\.bundle)"
+          unzip -l "$APK" | grep -q "lib/armeabi-v7a/"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/"
+          mkdir -p artifacts
+          cp "$APK" "artifacts/CharmIPTV-full-playback-repair-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV-full-playback-repair-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+
+      - name: Commit validated fixes to playback branch
+        shell: bash
+        run: |
+          git config user.name "Charm Fix Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt \
+            frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackSurface.kt \
+            frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt \
+            frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt \
+            frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt \
+            frontend/android/app/src/main/java/com/charmiptv/app/NativePlaylistParser.kt \
+            frontend/src/components/StreamPlayer.tsx \
+            frontend/src/core/sourceParsing.ts
+          git commit -m "fix(player): repair TV video surfaces and refresh pipeline"
+          git push origin HEAD:"$TARGET_BRANCH"
+
+      - name: Upload sideload APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: CharmIPTV-full-playback-repair-${{ github.run_number }}
+          path: |
+            frontend/artifacts/CharmIPTV-full-playback-repair-${{ github.run_number }}.apk
+            frontend/artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
