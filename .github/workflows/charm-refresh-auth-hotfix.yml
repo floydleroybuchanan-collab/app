@@ -1,0 +1,50 @@
+name: Charm refresh auth matcher hotfix
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/charm-refresh-auth-hotfix.yml"]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Correct rejected-token matcher
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("cloudflare-backend/scripts/build-and-upload.mjs")
+          lines = path.read_text().splitlines()
+          matches = [i for i, line in enumerate(lines) if 'if (/KV PUT .* failed: (401|403)' in line]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected one auth matcher line, found {len(matches)}")
+          i = matches[0]
+          indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+          lines[i] = indent + 'if (message.includes("failed: 401") || message.includes("failed: 403")) {'
+          path.write_text("\n".join(lines) + "\n")
+          PY
+          node --check cloudflare-backend/scripts/build-and-upload.mjs
+
+      - name: Commit matcher fix
+        run: |
+          git config user.name "Charm Fix Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add cloudflare-backend/scripts/build-and-upload.mjs
+          git commit -m "fix(data): correctly detect rejected Cloudflare KV credentials"
+          git push origin HEAD:main
+
+      - name: Dispatch refresh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run charm-refresh.yml --ref main
