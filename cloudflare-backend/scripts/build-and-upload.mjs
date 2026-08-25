@@ -698,7 +698,13 @@ function safeJson(s, fallback) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
-    console.error("Builder crashed:", e);
-    process.exit(1);
-  });
+  const message = String(e?.message || e || "");
+  if (/KV PUT .* failed: (401|403)/.test(message)) {
+    console.error("Cloudflare credentials were rejected - keeping last-good KV data:", message);
+    console.log("::warning::Cloudflare KV credentials were rejected; refresh was skipped and last-good data remains active. Update CLOUDFLARE_API_TOKEN to resume uploads.");
+    return;
+  }
+  console.error("Builder crashed:", e);
+  process.exit(1);
+});
 }
