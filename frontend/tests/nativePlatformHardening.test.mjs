@@ -124,7 +124,7 @@ test("player recovery is bounded and history waits for stable playback", async (
   ]);
   assert.match(player, /STABLE_HISTORY_DELAY_MS = 5000/);
   assert.doesNotMatch(player, /MAX_TOKEN_REFRESH_CHANNELS/);
-  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 25_000L/);
+  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 35_000L/);
   assert.match(native, /if \(!firstFrameRendered \|\| instance\.playbackState != Player\.STATE_BUFFERING\) return@Runnable/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
   assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);

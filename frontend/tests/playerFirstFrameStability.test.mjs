@@ -19,17 +19,17 @@ test("Media3 publishes stable playback only after native onRenderedFirstFrame", 
 
 test("Media3 keeps bounded native startup and four-attempt post-playback recovery", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /FULLSCREEN_START_TIMEOUT_MS = 45_000L/);
-  assert.match(native, /PREVIEW_START_TIMEOUT_MS = 45_000L/);
-  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 25_000L/);
-  assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 35_000L/);
+  assert.match(native, /FULLSCREEN_START_TIMEOUT_MS = 60_000L/);
+  assert.match(native, /PREVIEW_START_TIMEOUT_MS = 60_000L/);
+  assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 35_000L/);
+  assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
   assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
   assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/);
   assert.match(native, /recoveryAttempts \+= 1/);
   assert.match(native, /main\.postDelayed\(delayedRecovery, delayMs\)/);
   assert.match(native, /instance\.prepare\(\)/);
-  assert.match(native, /STABLE_REARM_MS = 60_000L/);
+  assert.match(native, /STABLE_REARM_MS = 90_000L/);
 });
 
 test("Media3 TS watchdog requires no progress before recovery", async () => {
@@ -42,7 +42,7 @@ test("Media3 TS watchdog requires no progress before recovery", async () => {
 
 test("Media3 recovers bounded terminal live reads before exposing Retry", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /readTimeout\(30, TimeUnit\.SECONDS\)/);
+  assert.match(native, /readTimeout\(45, TimeUnit.SECONDS\)/);
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.match(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /recordDiagnostic\("player-error", error, created\)/);

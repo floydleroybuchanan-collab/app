@@ -68,15 +68,15 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /HlsMediaSource\.Factory/);
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(manager, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
-  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 15_000/);
-  assert.match(manager, /MAX_BUFFER_MS_LOW_RAM = 45_000/);
-  assert.match(manager, /PLAYBACK_BUFFER_MS_LOW_RAM = 4_000/);
-  assert.match(manager, /REBUFFER_BUFFER_MS_LOW_RAM = 8_000/);
-  assert.match(manager, /MIN_BUFFER_MS_NORMAL = 15_000/);
-  assert.match(manager, /MAX_BUFFER_MS_NORMAL = 45_000/);
-  assert.match(manager, /PLAYBACK_BUFFER_MS_NORMAL = 4_000/);
-  assert.match(manager, /REBUFFER_BUFFER_MS_NORMAL = 8_000/);
-  assert.match(manager, /readTimeout\(30, TimeUnit\.SECONDS\)/);
+  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 20_000/);
+  assert.match(manager, /MAX_BUFFER_MS_LOW_RAM = 90_000/);
+  assert.match(manager, /PLAYBACK_BUFFER_MS_LOW_RAM = 5_000/);
+  assert.match(manager, /REBUFFER_BUFFER_MS_LOW_RAM = 12_000/);
+  assert.match(manager, /MIN_BUFFER_MS_NORMAL = 20_000/);
+  assert.match(manager, /MAX_BUFFER_MS_NORMAL = 90_000/);
+  assert.match(manager, /PLAYBACK_BUFFER_MS_NORMAL = 5_000/);
+  assert.match(manager, /REBUFFER_BUFFER_MS_NORMAL = 12_000/);
+  assert.match(manager, /readTimeout\(45, TimeUnit.SECONDS\)/);
   assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
 });
 
@@ -94,7 +94,7 @@ test("playback diagnostics capture container, codecs, resolution and decoders wi
   assert.match(manager, /videoDecoder/);
   assert.match(manager, /audioDecoder/);
   assert.match(manager, /codecError/);
-  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 15_000/);
-  assert.match(manager, /readTimeout\(30, TimeUnit\.SECONDS\)/);
+  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 20_000/);
+  assert.match(manager, /readTimeout\(45, TimeUnit.SECONDS\)/);
   assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
 });
