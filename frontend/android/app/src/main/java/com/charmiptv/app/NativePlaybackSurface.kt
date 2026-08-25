@@ -56,7 +56,12 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativePlaybackManager.Owner.NONE
   private var surfaceRepairAttempted = false
 
-  private val surfaceHealthCheck = Runnable {
+  // Explicit Runnable type required: this lambda posts itself back
+  // (postDelayed(surfaceHealthCheck, ...) below), and without an explicit
+  // declared type Kotlin's inference can't resolve that self-reference
+  // ("Type checking has run into a recursive problem") -- same reason
+  // NativePlaybackManager.bufferingWatchdog is annotated the same way.
+  private val surfaceHealthCheck: Runnable = Runnable {
     val activeOwner = owner
     if (activeOwner == NativePlaybackManager.Owner.NONE || !isAttachedToWindow) return@Runnable
     val playerView = currentPlayerView() ?: return@Runnable
