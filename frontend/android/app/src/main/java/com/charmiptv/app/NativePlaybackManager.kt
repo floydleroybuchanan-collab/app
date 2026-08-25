@@ -92,66 +92,43 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
-  // Buffer targets: an earlier pass pulled these all the way down to
-  // TiViMate's own shallow/fast numbers (1,000/2,500/500/1,000ms) to shorten
-  // visible freezes. Further on-device testing found that too tight for this
-  // app's less-curated provider connections -- ordinary jitter kept escalating
-  // into full stalls before it had a chance to resolve on its own -- so they
-  // were relaxed back out ("relax IPTV recovery"). minBufferMs/maxBufferMs
-  // stay above TiViMate's own numbers deliberately: this app has to absorb
-  // jitter from arbitrary Xtream/Stalker panels TiViMate's curated streams
-  // don't represent. TARGET_BUFFER_BYTES below is an unrelated total-memory
-  // ceiling, not part of this latency tuning.
-  private const val MIN_BUFFER_MS_LOW_RAM = 15_000
-  private const val MAX_BUFFER_MS_LOW_RAM = 45_000
-  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 4_000
-  private const val REBUFFER_BUFFER_MS_LOW_RAM = 8_000
+  // Charm intentionally uses a very generous live-IPTV jitter profile. TiViMate
+  // remains an architecture/lifecycle reference only; these timing values are
+  // deliberately wider so provider jitter, slow panels, and long segment gaps
+  // do not trigger destructive recovery on TV hardware.
+  private const val MIN_BUFFER_MS_LOW_RAM = 20_000
+  private const val MAX_BUFFER_MS_LOW_RAM = 90_000
+  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 5_000
+  private const val REBUFFER_BUFFER_MS_LOW_RAM = 12_000
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
-  private const val MIN_BUFFER_MS_NORMAL = 15_000
-  private const val MAX_BUFFER_MS_NORMAL = 45_000
-  private const val PLAYBACK_BUFFER_MS_NORMAL = 4_000
-  private const val REBUFFER_BUFFER_MS_NORMAL = 8_000
+  private const val MIN_BUFFER_MS_NORMAL = 20_000
+  private const val MAX_BUFFER_MS_NORMAL = 90_000
+  private const val PLAYBACK_BUFFER_MS_NORMAL = 5_000
+  private const val REBUFFER_BUFFER_MS_NORMAL = 12_000
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
-  // Three-stage response to a stalled STATE_BUFFERING, widened from an
-  // earlier flat ~5s TiViMate-matched watchdog after on-device testing showed
-  // that threshold firing a disruptive stop()+reprepare for jitter or a
-  // temporarily-detached Fabric surface that would have resolved on its own
-  // (see setKeepContentOnPlayerReset above). TRANSPORT (raw continuous
-  // MPEG-TS) keeps extra slack over HLS/DASH: recovering it needs a whole
-  // fresh HTTP request/reconnect (see recoverOnce's skipBarePrepare below),
-  // not just a retried segment. Once past the relevant threshold,
-  // ensureActiveSurfaceBound below gets one chance to repair a merely-unbound
-  // video surface before HARD_STALL_RECOVERY_MS of genuine no-progress
-  // actually triggers recovery.
-  private const val HUNG_BUFFER_REPREPARE_MS = 25_000L
-  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 35_000L
-  private const val HARD_STALL_RECOVERY_MS = 45_000L
-  private const val STABLE_REARM_MS = 60_000L
-  // Kept at 4 escalating recovery actions (bare re-prepare -> rebuild source
-  // -> fresh source from JS -> full player release+recreate) rather than
-  // trimming to TiViMate's 3: those are distinct recovery strategies, not
-  // just retries of the same action, and dropping one would be losing
-  // capability rather than adopting a TiViMate number. The backoff delays
-  // between them are TiViMate's own 1s/2s/4s escalation.
+
+  // Buffering alone is not a failure. Normal streams receive 35 seconds of
+  // no-progress observation, opaque/raw transport streams 50 seconds, and a
+  // full recovery cannot happen until 70 seconds of genuine no progress.
+  private const val HUNG_BUFFER_REPREPARE_MS = 35_000L
+  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L
+  private const val HARD_STALL_RECOVERY_MS = 70_000L
+  private const val STABLE_REARM_MS = 90_000L
   private const val MAX_AUTO_RECOVERIES = 4
   private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 2_000L, 4_000L)
-  private const val FULLSCREEN_START_TIMEOUT_MS = 45_000L
-  private const val PREVIEW_START_TIMEOUT_MS = 45_000L
+  private const val FULLSCREEN_START_TIMEOUT_MS = 60_000L
+  private const val PREVIEW_START_TIMEOUT_MS = 60_000L
   private const val SOURCE_REFRESH_TIMEOUT_MS = 30_000L
   private const val OPAQUE_PROBE_CACHE_SIZE = 256
   private const val OPAQUE_TYPE_PREFS = "charm_media3_stream_types"
   private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
   private const val TAG = "CharmMedia3"
 
-  // Widened from an earlier flat 5s (matched to TiViMate) after on-device
-  // testing found that too aggressive: it triggered recovery on connections
-  // that were merely slow rather than actually dead, particularly against
-  // less responsive Xtream/Stalker panel infrastructure.
   private val httpClient = OkHttpClient.Builder()
     .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(30, TimeUnit.SECONDS)
-    .writeTimeout(30, TimeUnit.SECONDS)
+    .connectTimeout(20, TimeUnit.SECONDS)
+    .readTimeout(45, TimeUnit.SECONDS)
+    .writeTimeout(45, TimeUnit.SECONDS)
     .retryOnConnectionFailure(true)
     .build()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
@@ -161,23 +138,9 @@ object NativePlaybackManager {
   private var activity: Activity? = null
   private var previewSurface: FrameLayout? = null
   private var fullscreenSurface: FrameLayout? = null
-  // Each surface owns its own permanently-parented PlayerView, never moved to
-  // the other one. See attachSurface/ensurePlayerViewIn below and
-  // res/layout/charm_player_view.xml for why this replaced a single shared,
-  // reparented PlayerView.
   private var previewPlayerView: PlayerView? = null
   private var fullscreenPlayerView: PlayerView? = null
   private var player: ExoPlayer? = null
-  // Applied to every ExoPlayer this object creates (see ensurePlayer below), not
-  // just the currently-live one. setMuted() below updates this before touching
-  // player.volume so a freshly created/recreated instance -- on first prepare(),
-  // or after fullPlayerAndSourceRecovery's release+recreate -- starts at the
-  // caller's last-requested mute state instead of defaulting to unmuted (1.0).
-  // A brand-new ExoPlayer was previously left unmuted until the JS mute effect
-  // happened to re-fire, which it only does when its `muted` prop value itself
-  // changes -- never merely because a new native player was created underneath
-  // it -- so "mute live preview" silently stopped applying on every channel
-  // change (StreamPlayer.tsx remounts a fresh player per channel) or recovery.
   private var mutedState = false
   private var listener: Listener? = null
   private var owner: Owner = Owner.NONE
@@ -197,8 +160,6 @@ object NativePlaybackManager {
   private var opaqueRouteCacheKey: String? = null
   private var opaqueRouteWasCached = false
 
-  // Per-channel diagnostics. These are reset on a new tune and updated by
-  // Media3 renderer callbacks; diagnostics never create a second stream request.
   private var detectedMimeType: String? = null
   private var resolvedUri: String? = null
   private var probeHttpResponseCode: Int? = null
@@ -246,26 +207,24 @@ object NativePlaybackManager {
     val hungForMs = nowMs - bufferingSinceMs
     val transport = activeSource?.sourceType == "transport"
     val observationThresholdMs = if (transport) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS
-  if (hungForMs < observationThresholdMs) {
-    main.postDelayed(bufferingWatchdog, minOf(HUNG_BUFFER_REPREPARE_MS, observationThresholdMs - hungForMs))
-    return@Runnable
-  }
+    if (hungForMs < observationThresholdMs) {
+      main.postDelayed(bufferingWatchdog, minOf(HUNG_BUFFER_REPREPARE_MS, observationThresholdMs - hungForMs))
+      return@Runnable
+    }
 
-  // Buffering by itself is not a failure. Repair a missing video surface
-  // first, then continue observing until the hard no-progress threshold.
-  if (ensureActiveSurfaceBound(instance, "buffer-watchdog")) {
-    bufferingSinceMs = nowMs
-    main.postDelayed(bufferingWatchdog, observationThresholdMs)
-    return@Runnable
-  }
-  if (hungForMs < HARD_STALL_RECOVERY_MS) {
-    recordDiagnostic("buffer-stall-observed", lastPlaybackError, instance)
-    main.postDelayed(bufferingWatchdog, HARD_STALL_RECOVERY_MS - hungForMs)
-    return@Runnable
-  }
+    if (ensureActiveSurfaceBound(instance, "buffer-watchdog")) {
+      bufferingSinceMs = nowMs
+      main.postDelayed(bufferingWatchdog, observationThresholdMs)
+      return@Runnable
+    }
+    if (hungForMs < HARD_STALL_RECOVERY_MS) {
+      recordDiagnostic("buffer-stall-observed", lastPlaybackError, instance)
+      main.postDelayed(bufferingWatchdog, HARD_STALL_RECOVERY_MS - hungForMs)
+      return@Runnable
+    }
 
-  recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
-  recoverOnce(instance, skipBarePrepare = transport)
+    recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
+    recoverOnce(instance, skipBarePrepare = transport)
   }
   private val delayedRecovery = Runnable {
     val instance = player ?: return@Runnable
@@ -289,69 +248,63 @@ object NativePlaybackManager {
   fun setListener(next: Listener?) = runOnMain { listener = next }
   fun installIntoActivity(activity: Activity) = runOnMain { this.activity = activity }
   fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
-  when (surfaceOwner) { Owner.PREVIEW -> previewSurface = surface; Owner.FULLSCREEN -> fullscreenSurface = surface; Owner.NONE -> return@runOnMain }
-  val video = ensurePlayerViewIn(surfaceOwner, surface)
-  if (owner == surfaceOwner) {
-    val instance = player
-    video.player = instance
-    video.visibility = if (instance != null) View.VISIBLE else View.GONE
-    if (instance != null && activeSource != null) {
-      instance.playWhenReady = true
-      recordDiagnostic("surface-attached", lastPlaybackError, instance)
+    when (surfaceOwner) {
+      Owner.PREVIEW -> previewSurface = surface
+      Owner.FULLSCREEN -> fullscreenSurface = surface
+      Owner.NONE -> return@runOnMain
+    }
+    val video = ensurePlayerViewIn(surfaceOwner, surface)
+    if (owner == surfaceOwner) {
+      val instance = player
+      video.player = instance
+      video.visibility = if (instance != null) View.VISIBLE else View.GONE
+      if (instance != null && activeSource != null) {
+        instance.playWhenReady = true
+        recordDiagnostic("surface-attached", lastPlaybackError, instance)
+      }
     }
   }
-}
-fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
-  val attached = when (surfaceOwner) { Owner.PREVIEW -> previewSurface; Owner.FULLSCREEN -> fullscreenSurface; Owner.NONE -> null }
-  if (attached !== surface) return@runOnMain
-  val video = playerViewFor(surfaceOwner)
-  val instance = player
-  if (owner == surfaceOwner && instance != null) {
-    // Pause before unbinding video so audio can never keep running with
-    // no output surface. A replacement surface resumes this same player.
-    instance.playWhenReady = false
-    recordDiagnostic("surface-detached", lastPlaybackError, instance)
-    publishState("loading", "surface-detached")
+  fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+    val attached = when (surfaceOwner) {
+      Owner.PREVIEW -> previewSurface
+      Owner.FULLSCREEN -> fullscreenSurface
+      Owner.NONE -> null
+    }
+    if (attached !== surface) return@runOnMain
+    val video = playerViewFor(surfaceOwner)
+    val instance = player
+    if (owner == surfaceOwner && instance != null) {
+      instance.playWhenReady = false
+      recordDiagnostic("surface-detached", lastPlaybackError, instance)
+      publishState("loading", "surface-detached")
+    }
+    if (video?.parent === surface) {
+      try { video.player = null } catch (_: Throwable) {}
+    }
+    when (surfaceOwner) {
+      Owner.PREVIEW -> { previewSurface = null; previewPlayerView = null }
+      Owner.FULLSCREEN -> { fullscreenSurface = null; fullscreenPlayerView = null }
+      Owner.NONE -> Unit
+    }
   }
-  if (video?.parent === surface) { try { video.player = null } catch (_: Throwable) {} }
-  when (surfaceOwner) {
-    Owner.PREVIEW -> { previewSurface = null; previewPlayerView = null }
-    Owner.FULLSCREEN -> { fullscreenSurface = null; fullscreenPlayerView = null }
-    Owner.NONE -> Unit
-  }
-}
-fun setResizeMode(mode: String?) = runOnMain {
-    playerViewFor(owner)?.resizeMode = when (mode) { "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL; else -> AspectRatioFrameLayout.RESIZE_MODE_FIT }
+  fun setResizeMode(mode: String?) = runOnMain {
+    playerViewFor(owner)?.resizeMode = when (mode) {
+      "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+      "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+      else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    }
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
-      // Do not silently drop this. A fullscreen session's async teardown (its
-      // own prepare()/stop() round trip through runOnMain) can still be
-      // in-flight on the native side at the exact moment Guide remounts and
-      // asks for a preview -- JS's session bookkeeper has no visibility into
-      // this native-only check, so without an explicit error here the preview
-      // surface is left forever unbound (permanently black, since nothing else
-      // ever re-drives this generation) while a still-live fullscreen player
-      // can keep producing audio in the background. Publishing "error" lets
-      // Guide's existing previewStatus/previewId retry-on-refocus path recover
-      // instead of hanging indefinitely.
       publishState("error", "owner-reserved")
       return@runOnMain
     }
-    // A manual engine switch must never leave two native decoders alive. VLC's
-    // prepare() already stops us the same way; this was previously the only
-    // direction missing, so switching Media3 <- VLC had no native-level
-    // guarantee VLC actually released the decoder/surface first.
     NativeVlcPlaybackManager.stopForEngineSwitch()
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
     val previousOwner = owner
     owner = requestedOwner
-    // Only one surface's view should ever hold the player at a time. Not a
-    // no-op even for a same-owner re-tune: this clears a stale bind left by
-    // an interrupted prior attempt (e.g. surface-unavailable below never got
-    // to VISIBLE/player-bound at all).
     if (previousOwner != Owner.NONE && previousOwner != requestedOwner) {
       playerViewFor(previousOwner)?.let { it.player = null; it.visibility = View.GONE }
     }
@@ -428,17 +381,6 @@ fun setResizeMode(mode: String?) = runOnMain {
     stopInternal(releasePlayer); onStopped?.invoke()
   }
   fun suspendForBackground() = runOnMain { stopInternal(releasePlayer = true) }
-  /**
-   * Stop and release the ExoPlayer instance when the user switches to a
-   * different playback engine. Deliberately does NOT clear listener/activity/
-   * surface references the way releaseAll() does: those stay valid for the
-   * app's lifetime and are needed again the instant the user switches back to
-   * Media3. NativePlaybackModule's listener is only ever registered once, at
-   * NativeModule construction — nulling it here (as releaseAll() used to,
-   * before this method existed) permanently silenced every future onState/
-   * onTracks/onDiagnostic callback to JS after the first engine switch away
-   * from Media3, which looked like "Media3 stops working after using VLC".
-   */
   fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
   fun releaseAll() = runOnMain {
     stopInternal(releasePlayer = true)
@@ -453,9 +395,6 @@ fun setResizeMode(mode: String?) = runOnMain {
   private fun stopInternal(releasePlayer: Boolean) {
     cancelRecoveryCallbacks()
     val instance = player
-    // Resolved before `owner` is reset below — that reset is exactly why this
-    // is captured first rather than looked up again inside the releasePlayer
-    // block, which would otherwise resolve to nothing.
     val video = playerViewFor(owner)
     try { instance?.stop() } catch (_: Throwable) {}
     try { instance?.clearMediaItems() } catch (_: Throwable) {}
@@ -482,9 +421,6 @@ fun setResizeMode(mode: String?) = runOnMain {
       if (lowRam) PLAYBACK_BUFFER_MS_LOW_RAM else PLAYBACK_BUFFER_MS_NORMAL,
       if (lowRam) REBUFFER_BUFFER_MS_LOW_RAM else REBUFFER_BUFFER_MS_NORMAL,
     ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(true).build()
-    // Use Media3's platform-appropriate codec adapter choice. Decoder fallback
-    // remains enabled so a broken vendor decoder can fall through to another
-    // supported MediaCodec implementation.
     val renderers = DefaultRenderersFactory(context)
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
       .setEnableDecoderFallback(true)
@@ -529,10 +465,6 @@ fun setResizeMode(mode: String?) = runOnMain {
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
             main.removeCallbacks(delayedRecovery)
-            // Do not treat one decoded frame as proof that an opaque container
-            // guess is correct. Some wrong guesses can render briefly and fail a
-            // few seconds later. Keep candidate routing alive until the same
-            // existing stable-playback window has elapsed.
             main.removeCallbacks(opaqueTypeConfirmation)
             if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, STABLE_REARM_MS)
             resetBufferingWatchdogState()
@@ -602,50 +534,38 @@ fun setResizeMode(mode: String?) = runOnMain {
   }
 
   private fun playerViewFor(target: Owner): PlayerView? = when (target) {
-  Owner.PREVIEW -> previewPlayerView
-  Owner.FULLSCREEN -> fullscreenPlayerView
-  Owner.NONE -> null
-}
-
-private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
-  val activeOwner = owner
-  if (activeOwner == Owner.NONE || player !== instance) return false
-  val target = when (activeOwner) {
-    Owner.PREVIEW -> previewSurface
-    Owner.FULLSCREEN -> fullscreenSurface
+    Owner.PREVIEW -> previewPlayerView
+    Owner.FULLSCREEN -> fullscreenPlayerView
     Owner.NONE -> null
-  } ?: return false
-  val video = ensurePlayerViewIn(activeOwner, target)
-  if (video.player === instance && video.visibility == View.VISIBLE) return false
-  return try {
-    video.player = instance
-    video.visibility = View.VISIBLE
-    if (activeSource != null) instance.playWhenReady = true
-    recordDiagnostic("surface-rebind:$event", lastPlaybackError, instance)
-    true
-  } catch (failure: Throwable) {
-    Log.w(TAG, "surface rebind failed: $event", failure)
-    false
   }
-}
 
-  // Inflated, not `PlayerView(context)`: surface_type has no runtime setter and
-  // must be set in XML (see res/layout/charm_player_view.xml). This view is
-  // permanently parented in `target` and never moved to the other surface, so
-  // PlayerView's default SurfaceView output is safe here — see attachSurface
-  // above and the layout file for why that matters.
+  private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
+    val activeOwner = owner
+    if (activeOwner == Owner.NONE || player !== instance) return false
+    val target = when (activeOwner) {
+      Owner.PREVIEW -> previewSurface
+      Owner.FULLSCREEN -> fullscreenSurface
+      Owner.NONE -> null
+    } ?: return false
+    val video = ensurePlayerViewIn(activeOwner, target)
+    if (video.player === instance && video.visibility == View.VISIBLE) return false
+    return try {
+      video.player = instance
+      video.visibility = View.VISIBLE
+      if (activeSource != null) instance.playWhenReady = true
+      recordDiagnostic("surface-rebind:$event", lastPlaybackError, instance)
+      true
+    } catch (failure: Throwable) {
+      Log.w(TAG, "surface rebind failed: $event", failure)
+      false
+    }
+  }
+
   private fun ensurePlayerViewIn(surfaceOwner: Owner, target: FrameLayout): PlayerView {
     playerViewFor(surfaceOwner)?.let { existing -> if (existing.parent === target) return existing }
     val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {
       useController = false
       setShutterBackgroundColor(Color.BLACK)
-      // Automatic stall recovery (bufferingWatchdog -> recoverOnce) calls
-      // instance.stop() before every rebuildMediaSource(), which transitions
-      // through STATE_IDLE. With this false, PlayerView blanks to the shutter on
-      // every one of those internal resets — visible as a black flash every time
-      // the player quietly reprepares itself, even when it recovers cleanly a
-      // moment later. Keep the last decoded frame up instead; only a genuine
-      // user-initiated stop()/release() should ever show black.
       setKeepContentOnPlayerReset(true)
       resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.GONE
@@ -741,11 +661,6 @@ private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolea
       return
     }
 
-    // Do not open a separate GET just to sniff an opaque live URL. A number of
-    // IPTV providers allow only one active connection per token/session, and the
-    // old probe could consume or disturb the same stream Media3 then tried to play.
-    // Start the existing single Media3 player directly on the live-first candidate
-    // and let a real parser/container mismatch advance the bounded candidate list.
     probeReason = "direct:transport"
     resolvedUri = redactUriForDiagnostics(source.uri)
     recordDiagnostic("opaque-direct-start", lastPlaybackError, instance)
@@ -843,14 +758,6 @@ private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolea
     cancelRecoveryCallbacks()
     recordDiagnostic("definitive-$reason", lastPlaybackError, instance)
     CharmMemoryCoordinator.setPlaybackStarting(false)
-    // Recovery is exhausted: release the decoder instead of leaving it parked
-    // on a failed session until the next tune happens to reuse or replace it.
-    // Deferred via post(), not called inline — finishWithError can be reached
-    // synchronously from Player.Listener.onPlayerError (a repeat failure after
-    // MAX_AUTO_RECOVERIES is already spent takes the line 529 branch straight
-    // out of that callback), and releasing an ExoPlayer from inside its own
-    // callback stack is the same hazard fullPlayerAndSourceRecovery already
-    // avoids by running its release through a posted Runnable instead of inline.
     if (instance != null) {
       main.post {
         if (player === instance) {
