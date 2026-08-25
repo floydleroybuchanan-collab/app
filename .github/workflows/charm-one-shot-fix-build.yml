@@ -1,0 +1,508 @@
+name: Charm one-shot playback guide refresh fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/charm-one-shot-fix-build.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix-main-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Patch Cloudflare refresh payload
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path} but found {count}: {old[:100]!r}")
+              path.write_text(text.replace(old, new, 1))
+              print(f"patched {path}")
+
+          builder = Path("cloudflare-backend/scripts/build-and-upload.mjs")
+          replace_once(
+              builder,
+              '    await kvPut(acc, ns, token, "windows", JSON.stringify(windows), "text/plain");',
+              '''    const windowsJson = Buffer.from(JSON.stringify(windows));
+              const windowsGz = gzipSync(windowsJson);
+              console.log(`Windows payload: ${windowsJson.length} bytes plain -> ${windowsGz.length} bytes gzip`);
+              await kvPut(acc, ns, token, "windows_gz", windowsGz, "application/octet-stream");''',
+          )
+
+          worker = Path("cloudflare-backend/worker/src/index.js")
+          replace_once(
+              worker,
+              ' *   windows     -> JSON string         ({ [channelId]: { n, l, g, p:[{t,s,e,c}] } })',
+              ' *   windows_gz  -> gzip bytes of JSON  ({ [channelId]: { n, l, g, p:[{t,s,e,c}] } })',
+          )
+          replace_once(
+              worker,
+              '''async function serveChannel(env, id, cors) {
+            const text = await env.KV.get("windows");
+            if (!text) return jsonResponse({ error: "not_ready" }, { status: 503, maxAge: 15, cors });
+
+            let map;
+            try {
+              map = JSON.parse(text);
+            } catch {
+              return jsonResponse({ error: "bad_data" }, { status: 500, cors });
+            }''',
+              '''async function serveChannel(env, id, cors) {
+            let text = null;
+            const compressed = await env.KV.get("windows_gz", "arrayBuffer");
+            if (compressed) {
+              try {
+                const source = new Response(compressed).body;
+                if (!source) throw new Error("empty compressed windows payload");
+                text = await new Response(source.pipeThrough(new DecompressionStream("gzip"))).text();
+              } catch {
+                return jsonResponse({ error: "bad_data" }, { status: 500, cors });
+              }
+            } else {
+              // Backward-compatible fallback while an older KV snapshot is still present.
+              text = await env.KV.get("windows");
+            }
+            if (!text) return jsonResponse({ error: "not_ready" }, { status: 503, maxAge: 15, cors });
+
+            let map;
+            try {
+              map = JSON.parse(text);
+            } catch {
+              return jsonResponse({ error: "bad_data" }, { status: 500, cors });
+            }''',
+          )
+          PY
+
+      - name: Validate worker
+        run: node --test cloudflare-backend/worker/test/index.test.mjs
+
+      - name: Commit refresh fix to main
+        shell: bash
+        run: |
+          git config user.name "Charm Fix Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add cloudflare-backend/scripts/build-and-upload.mjs cloudflare-backend/worker/src/index.js
+          if git diff --cached --quiet; then
+            echo "No main refresh changes to commit"
+          else
+            git commit -m "fix(data): gzip large channel windows KV payload"
+            git push origin HEAD:main
+          fi
+
+      - name: Run refresh against Cloudflare
+        shell: bash
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          M3U_URL: ${{ secrets.M3U_URL }}
+          EPG_URL: ${{ secrets.EPG_URL }}
+          GUIDE_WINDOW_HOURS: ${{ vars.GUIDE_WINDOW_HOURS || vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '12' }}
+          APP_VERSION: "2.0.0-beta.1"
+          MAINTENANCE: "false"
+        run: |
+          missing=0
+          for name in CF_ACCOUNT_ID CF_KV_NAMESPACE_ID CF_API_TOKEN M3U_URL EPG_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::Missing $name; skipping live Cloudflare validation"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            node cloudflare-backend/scripts/build-and-upload.mjs
+          fi
+
+  fix-build-apk:
+    needs: fix-main-refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TARGET_BRANCH: claude/repo-branch-access-dxx6wf
+      EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL }}
+      EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL || vars.EXPO_PUBLIC_EPG_URL }}
+      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
+      CMAKE_BUILD_PARALLEL_LEVEL: "1"
+      CI: "1"
+    steps:
+      - name: Checkout playback branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: claude/repo-branch-access-dxx6wf
+          fetch-depth: 0
+
+      - name: Apply guarded playback and Guide fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path} but found {count}: {old[:120]!r}")
+              path.write_text(text.replace(old, new, 1))
+              print(f"patched {path}: {old[:70]!r}")
+
+          mgr = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")
+          for old, new in [
+              ("private const val MIN_BUFFER_MS_LOW_RAM = 1_000", "private const val MIN_BUFFER_MS_LOW_RAM = 15_000"),
+              ("private const val MAX_BUFFER_MS_LOW_RAM = 2_500", "private const val MAX_BUFFER_MS_LOW_RAM = 45_000"),
+              ("private const val PLAYBACK_BUFFER_MS_LOW_RAM = 500", "private const val PLAYBACK_BUFFER_MS_LOW_RAM = 4_000"),
+              ("private const val REBUFFER_BUFFER_MS_LOW_RAM = 1_000", "private const val REBUFFER_BUFFER_MS_LOW_RAM = 8_000"),
+              ("private const val MIN_BUFFER_MS_NORMAL = 1_000", "private const val MIN_BUFFER_MS_NORMAL = 15_000"),
+              ("private const val MAX_BUFFER_MS_NORMAL = 2_500", "private const val MAX_BUFFER_MS_NORMAL = 45_000"),
+              ("private const val PLAYBACK_BUFFER_MS_NORMAL = 500", "private const val PLAYBACK_BUFFER_MS_NORMAL = 4_000"),
+              ("private const val REBUFFER_BUFFER_MS_NORMAL = 1_000", "private const val REBUFFER_BUFFER_MS_NORMAL = 8_000"),
+          ]:
+              replace_once(mgr, old, new)
+
+          replace_once(
+              mgr,
+              '''private const val HUNG_BUFFER_REPREPARE_MS = 5_000L
+            private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 7_000L
+            private const val STABLE_REARM_MS = 30_000L''',
+              '''private const val HUNG_BUFFER_REPREPARE_MS = 25_000L
+            private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 35_000L
+            private const val HARD_STALL_RECOVERY_MS = 45_000L
+            private const val STABLE_REARM_MS = 60_000L''',
+          )
+          replace_once(mgr, "private const val FULLSCREEN_START_TIMEOUT_MS = 12_000L", "private const val FULLSCREEN_START_TIMEOUT_MS = 45_000L")
+          replace_once(mgr, "private const val PREVIEW_START_TIMEOUT_MS = 8_000L", "private const val PREVIEW_START_TIMEOUT_MS = 45_000L")
+          replace_once(mgr, "private const val SOURCE_REFRESH_TIMEOUT_MS = 20_000L", "private const val SOURCE_REFRESH_TIMEOUT_MS = 30_000L")
+          replace_once(mgr, ".connectTimeout(5, TimeUnit.SECONDS)", ".connectTimeout(15, TimeUnit.SECONDS)")
+          replace_once(mgr, ".readTimeout(5, TimeUnit.SECONDS)", ".readTimeout(30, TimeUnit.SECONDS)")
+          replace_once(mgr, ".writeTimeout(5, TimeUnit.SECONDS)", ".writeTimeout(30, TimeUnit.SECONDS)")
+
+          replace_once(
+              mgr,
+              '''    recordDiagnostic("start-timeout", lastPlaybackError, instance)
+            recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")''',
+              '''    if (ensureActiveSurfaceBound(instance, "startup-timeout")) {
+              recordDiagnostic("startup-surface-rebound", lastPlaybackError, instance)
+              armStartupTimeout()
+              return@Runnable
+            }
+            recordDiagnostic("start-timeout", lastPlaybackError, instance)
+            recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")''',
+          )
+
+          replace_once(
+              mgr,
+              '''    val recoveryThresholdMs = if (transport) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS
+            if (hungForMs < recoveryThresholdMs) {
+              main.postDelayed(bufferingWatchdog, minOf(HUNG_BUFFER_REPREPARE_MS, recoveryThresholdMs - hungForMs))
+              return@Runnable
+            }
+
+            recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
+            // A continuous MPEG-TS socket needs a fresh HTTP request when it is truly
+            // stalled. Bare prepare() is not useful enough here and was the source of
+            // repeated native-reprepare loops on live TS channels.
+            recoverOnce(instance, skipBarePrepare = transport)''',
+              '''    val observationThresholdMs = if (transport) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS
+            if (hungForMs < observationThresholdMs) {
+              main.postDelayed(bufferingWatchdog, minOf(HUNG_BUFFER_REPREPARE_MS, observationThresholdMs - hungForMs))
+              return@Runnable
+            }
+
+            // Buffering alone is not a failure signal. First repair a missing video
+            // surface, then continue waiting until the hard no-progress threshold.
+            if (ensureActiveSurfaceBound(instance, "buffer-watchdog")) {
+              bufferingSinceMs = nowMs
+              main.postDelayed(bufferingWatchdog, observationThresholdMs)
+              return@Runnable
+            }
+            if (hungForMs < HARD_STALL_RECOVERY_MS) {
+              recordDiagnostic("buffer-stall-observed", lastPlaybackError, instance)
+              main.postDelayed(bufferingWatchdog, HARD_STALL_RECOVERY_MS - hungForMs)
+              return@Runnable
+            }
+
+            recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
+            // Only a genuine 45-second no-progress stall reaches stream recovery.
+            recoverOnce(instance, skipBarePrepare = transport)''',
+          )
+
+          replace_once(
+              mgr,
+              '''  fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+            when (surfaceOwner) { Owner.PREVIEW -> previewSurface = surface; Owner.FULLSCREEN -> fullscreenSurface = surface; Owner.NONE -> return@runOnMain }
+            val video = ensurePlayerViewIn(surfaceOwner, surface)
+            if (owner == surfaceOwner) {
+              video.player = player
+              video.visibility = if (player != null) View.VISIBLE else View.GONE
+            }
+          }
+          fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+            val attached = when (surfaceOwner) { Owner.PREVIEW -> previewSurface; Owner.FULLSCREEN -> fullscreenSurface; Owner.NONE -> null }
+            if (attached !== surface) return@runOnMain
+            val video = playerViewFor(surfaceOwner)
+            if (video?.parent === surface) { try { video.player = null } catch (_: Throwable) {} }
+            when (surfaceOwner) {
+              Owner.PREVIEW -> { previewSurface = null; previewPlayerView = null }
+              Owner.FULLSCREEN -> { fullscreenSurface = null; fullscreenPlayerView = null }
+              Owner.NONE -> Unit
+            }
+          }''',
+              '''  fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+            when (surfaceOwner) { Owner.PREVIEW -> previewSurface = surface; Owner.FULLSCREEN -> fullscreenSurface = surface; Owner.NONE -> return@runOnMain }
+            val video = ensurePlayerViewIn(surfaceOwner, surface)
+            if (owner == surfaceOwner) {
+              val instance = player
+              video.player = instance
+              video.visibility = if (instance != null) View.VISIBLE else View.GONE
+              if (instance != null && activeSource != null) {
+                instance.playWhenReady = true
+                recordDiagnostic("surface-attached", lastPlaybackError, instance)
+              }
+            }
+          }
+          fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+            val attached = when (surfaceOwner) { Owner.PREVIEW -> previewSurface; Owner.FULLSCREEN -> fullscreenSurface; Owner.NONE -> null }
+            if (attached !== surface) return@runOnMain
+            val video = playerViewFor(surfaceOwner)
+            val instance = player
+            if (owner == surfaceOwner && instance != null) {
+              // Never allow audio to continue indefinitely with no video output.
+              // A replacement surface will re-bind and resume this same player.
+              instance.playWhenReady = false
+              recordDiagnostic("surface-detached", lastPlaybackError, instance)
+              publishState("loading", "surface-detached")
+            }
+            if (video?.parent === surface) { try { video.player = null } catch (_: Throwable) {} }
+            when (surfaceOwner) {
+              Owner.PREVIEW -> { previewSurface = null; previewPlayerView = null }
+              Owner.FULLSCREEN -> { fullscreenSurface = null; fullscreenPlayerView = null }
+              Owner.NONE -> Unit
+            }
+          }''',
+          )
+
+          replace_once(
+              mgr,
+              '''  private fun playerViewFor(target: Owner): PlayerView? = when (target) {
+            Owner.PREVIEW -> previewPlayerView
+            Owner.FULLSCREEN -> fullscreenPlayerView
+            Owner.NONE -> null
+          }
+
+          // Inflated, not `PlayerView(context)`:''',
+              '''  private fun playerViewFor(target: Owner): PlayerView? = when (target) {
+            Owner.PREVIEW -> previewPlayerView
+            Owner.FULLSCREEN -> fullscreenPlayerView
+            Owner.NONE -> null
+          }
+
+          private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
+            val activeOwner = owner
+            if (activeOwner == Owner.NONE || player !== instance) return false
+            val target = when (activeOwner) {
+              Owner.PREVIEW -> previewSurface
+              Owner.FULLSCREEN -> fullscreenSurface
+              Owner.NONE -> null
+            } ?: return false
+            val video = ensurePlayerViewIn(activeOwner, target)
+            val needsRebind = video.player !== instance || video.visibility != View.VISIBLE
+            if (!needsRebind) return false
+            return try {
+              video.player = instance
+              video.visibility = View.VISIBLE
+              if (activeSource != null) instance.playWhenReady = true
+              recordDiagnostic("surface-rebind:$event", lastPlaybackError, instance)
+              true
+            } catch (failure: Throwable) {
+              Log.w(TAG, "surface rebind failed: $event", failure)
+              false
+            }
+          }
+
+          // Inflated, not `PlayerView(context)`:''',
+          )
+
+          replace_once(
+              mgr,
+              '''              Player.STATE_READY -> {
+                main.removeCallbacks(bufferingWatchdog)
+                resetBufferingWatchdogState()''',
+              '''              Player.STATE_READY -> {
+                main.removeCallbacks(bufferingWatchdog)
+                resetBufferingWatchdogState()
+                ensureActiveSurfaceBound(created, "state-ready")''',
+          )
+
+          guide = Path("frontend/app/(tabs)/guide.tsx")
+          replace_once(
+              guide,
+              '''  const previewVisible =
+            !hidePreview &&
+            !!channel?.url &&
+            previewId === channel.id &&
+            previewStatus !== "error";''',
+              '''  const previewVisible =
+            !hidePreview &&
+            !!channel?.url &&
+            previewId === channel.id;''',
+          )
+          replace_once(
+              guide,
+              '''  const onPreviewStatus = useCallback((status: StreamStatus) => {
+            setPreviewStatus(status);
+          }, []);''',
+              '''  const onPreviewStatus = useCallback((status: StreamStatus) => {
+            setPreviewStatus(status);
+            if (status !== "error") return;
+            // Normal Media3 errors do not pass through React ErrorBoundary. Keep
+            // the preview surface mounted and give native teardown time to finish,
+            // then remount the player generation automatically.
+            if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
+            previewRecoverTimer.current = setTimeout(() => {
+              previewRecoverTimer.current = null;
+              setPreviewStatus("loading");
+              setPreviewEpoch((value) => value + 1);
+            }, 1_500);
+          }, []);''',
+          )
+
+          native_epg = Path("frontend/src/nativeEpg.ts")
+          replace_once(native_epg, "const PLAYLIST_FETCH_TIMEOUT_MS = 45_000;", "const PLAYLIST_FETCH_TIMEOUT_MS = 45_000;\nconst MATCH_SYNC_TIMEOUT_MS = 8_000;")
+          replace_once(
+              native_epg,
+              '''export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> { if (nativeModule?.upsertPlaylistEpgMatches) await nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch); if (ramModule) await ramModule.replaceMatches(matches); }''',
+              '''export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> {
+            const tasks: Promise<unknown>[] = [];
+            if (nativeModule?.upsertPlaylistEpgMatches) tasks.push(nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch));
+            if (ramModule) tasks.push(ramModule.replaceMatches(matches));
+            if (!tasks.length) return;
+
+            // DB persistence and the RAM index are independent. Run them together,
+            // and never let final bookkeeping pin Guide progress at 99% forever.
+            let timeout: ReturnType<typeof setTimeout> | null = null;
+            try {
+              await Promise.race([
+                Promise.all(tasks.map((task) => task.catch(() => undefined))).then(() => undefined),
+                new Promise<void>((resolve) => { timeout = setTimeout(resolve, MATCH_SYNC_TIMEOUT_MS); }),
+              ]);
+            } finally {
+              if (timeout) clearTimeout(timeout);
+            }
+          }''',
+          )
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android native toolchain
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
+
+      - name: Install JavaScript dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build pinned LGPL FFmpeg audio extension
+        working-directory: frontend
+        run: |
+          chmod +x scripts/build-media3-ffmpeg-audio.sh
+          ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/27.1.12297006" ./scripts/build-media3-ffmpeg-audio.sh
+
+      - name: Configure deterministic low-memory build
+        working-directory: frontend
+        run: |
+          cat >> android/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=768m -XX:+UseG1GC -Dfile.encoding=UTF-8
+          org.gradle.parallel=false
+          org.gradle.workers.max=1
+          org.gradle.vfs.watch=false
+          kotlin.compiler.execution.strategy=in-process
+          kotlin.daemon.enabled=false
+          reactNativeArchitectures=armeabi-v7a,arm64-v8a
+          EOF
+
+      - name: Build universal sideload APK
+        working-directory: frontend
+        run: |
+          chmod +x android/gradlew
+          ./android/gradlew -p android :app:assembleSideload --no-daemon --max-workers=1 --stacktrace
+
+      - name: Verify universal APK contents
+        working-directory: frontend
+        run: |
+          APK="android/app/build/outputs/apk/sideload/app-sideload.apk"
+          test -f "$APK"
+          unzip -l "$APK" | grep -Eq "(assets/index\.android\.bundle|assets/.*\.bundle)"
+          unzip -l "$APK" | grep -q "lib/armeabi-v7a/"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/"
+          mkdir -p artifacts
+          cp "$APK" "artifacts/CharmIPTV-relaxed-player-fixes-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV-relaxed-player-fixes-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+
+      - name: Commit validated fixes to playback branch
+        shell: bash
+        run: |
+          git config user.name "Charm Fix Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt frontend/app/'(tabs)'/guide.tsx frontend/src/nativeEpg.ts
+          if git diff --cached --quiet; then
+            echo "No playback changes to commit"
+          else
+            git commit -m "fix(player): relax IPTV recovery and repair video surface lifecycle"
+            git push origin HEAD:"$TARGET_BRANCH"
+          fi
+
+      - name: Upload sideload APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: CharmIPTV-relaxed-player-fixes-${{ github.run_number }}
+          path: |
+            frontend/artifacts/CharmIPTV-relaxed-player-fixes-${{ github.run_number }}.apk
+            frontend/artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
