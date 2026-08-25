@@ -15,6 +15,7 @@ import {
   refreshNativeUserGuide,
   configureNativeEpgSource,
   configureNativeGuideOwnership,
+  configureNativeUserGuideSources,
   upsertNativePlaylistChannels,
   upsertNativePlaylistEpgMatches,
 } from "@/src/nativeEpg";
@@ -36,6 +37,7 @@ import {
 } from "@/src/core/sourceRefreshPreferences";
 import { getLogoPriority, type LogoPriority } from "@/src/core/logoPreferences";
 import { getEpgSourcePreferences, type EpgSourcePreferences } from "@/src/core/epgSourcePreferences";
+import { getMultiEpgSources } from "@/src/core/multiEpgSources";
 import { indexDeclaredStreamTypes } from "@/src/core/playbackProfileIndex";
 
 export const API_BASE = "";
@@ -174,15 +176,62 @@ function activeEpgBindings(
   return { ids: Array.from(ids), names: Array.from(names) };
 }
 
-async function applyPersistedGuideOwnership(): Promise<EpgSourcePreferences> {
-  const prefs = await getEpgSourcePreferences();
+type EffectiveGuideOwnership = EpgSourcePreferences & {
+  /** Legacy custom-guide assignments, used only to refresh that legacy source. */
+  legacyUserOverrideIds: ReadonlySet<string>;
+  /** Every enabled custom source must be excluded from primary XMLTV matching. */
+  customOwnedChannelIds: ReadonlySet<string>;
+};
+
+async function applyPersistedGuideOwnership(): Promise<EffectiveGuideOwnership> {
+  const [prefs, extraSources, refreshPreferences] = await Promise.all([
+    getEpgSourcePreferences(),
+    getMultiEpgSources(),
+    getSourceRefreshPreferences(),
+  ]);
+
+  // The legacy source imports its durable Room bindings on first launch. Keep
+  // that path, then reconcile the full saved source registry so cold starts do
+  // not depend on opening an EPG settings screen before native Guide reads are
+  // ownership-correct.
   await configureNativeGuideOwnership(
     prefs.primaryEnabled,
     prefs.userEnabled,
     prefs.userUrl,
     prefs.userOverrides,
   );
-  return prefs;
+  await configureNativeUserGuideSources(
+    prefs.primaryEnabled,
+    [
+      {
+        id: "user",
+        url: prefs.userUrl,
+        enabled: prefs.userEnabled,
+        refreshHours: refreshPreferences.epgHours,
+      },
+      ...extraSources.map((source) => ({
+        id: source.id,
+        url: source.url,
+        enabled: source.enabled,
+        refreshHours: source.refreshHours,
+      })),
+    ],
+    { clearRam: false },
+  );
+
+  const legacyUserOverrideIds = new Set<string>();
+  const customOwnedChannelIds = new Set<string>();
+  if (prefs.userEnabled && prefs.userUrl) {
+    for (const channelId of Object.keys(prefs.userOverrides)) {
+      legacyUserOverrideIds.add(channelId);
+      customOwnedChannelIds.add(channelId);
+    }
+  }
+  for (const source of extraSources) {
+    if (!source.enabled || !source.url) continue;
+    for (const channelId of Object.keys(source.overrides)) customOwnedChannelIds.add(channelId);
+  }
+  return { ...prefs, legacyUserOverrideIds, customOwnedChannelIds };
 }
 
 function applyNativeImportProgress(phase: string, ratio: number): void {
@@ -236,6 +285,11 @@ async function syncMatchesToNative(channels: Channel[], guideEpoch: number): Pro
   for (const channel of remapped) {
     const manual = Object.prototype.hasOwnProperty.call(manualEpgRemaps, channel.id);
     const xmltvId = (channel.tvg_id || "").trim();
+    // The joined SQLite table and RAM cache need only real XMLTV bindings.
+    // Sending every unmatched playlist row through the bridge twice (SQLite +
+    // RAM) made finalization scale with the entire provider catalog and could
+    // pin the JS bridge at 99%, especially with custom-guide source owners.
+    if (!xmltvId) continue;
     rows.push({
       playlistId: channel.id,
       xmltvId,
@@ -248,8 +302,11 @@ async function syncMatchesToNative(channels: Channel[], guideEpoch: number): Pro
   }
   const writeFingerprint = `matches-v2:${rows.length}:${fingerprintState.chars}:${(fingerprintState.h1 >>> 0).toString(16)}:${(fingerprintState.h2 >>> 0).toString(16)}`;
   if (writeFingerprint === lastNativeMatchWriteFingerprint) return;
-  await upsertNativePlaylistEpgMatches(rows, guideEpoch);
-  lastNativeMatchWriteFingerprint = writeFingerprint;
+  const finished = await upsertNativePlaylistEpgMatches(rows, guideEpoch);
+  // A timeout leaves the native write in flight. Do not mark it synchronized:
+  // the next source pass must be able to retry instead of leaving the Guide
+  // permanently pointed at an old match table.
+  if (finished) lastNativeMatchWriteFingerprint = writeFingerprint;
 }
 
 function resolveGuideWindowBounds(startISO?: string, hours = 6): {
@@ -798,15 +855,12 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
 
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
       const ownership = await applyPersistedGuideOwnership();
-      const userOverrideIds = ownership.userEnabled
-        ? new Set(Object.keys(ownership.userOverrides))
-        : new Set<string>();
       const refreshPreferences = await getSourceRefreshPreferences();
       // The custom source manager performs a deliberate full XMLTV index when
       // the user presses Refresh Custom EPG. Background/scheduled refreshes only
       // need to spend network/CPU/disk when at least one playlist channel is
       // actually owned by the custom source.
-      if (ownership.userEnabled && ownership.userUrl && userOverrideIds.size > 0) {
+      if (ownership.userEnabled && ownership.userUrl && ownership.legacyUserOverrideIds.size > 0) {
         await refreshNativeUserGuide(ownership.userUrl);
       }
       if (!ownership.primaryEnabled) {
@@ -831,7 +885,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       }
       if (!SOURCE_EPG) throw new Error("EPG is not configured for this build (missing EXPO_PUBLIC_EPG_URL).");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
-      const activeBindings = activeEpgBindings(channels, userOverrideIds);
+      const activeBindings = activeEpgBindings(channels, ownership.customOwnedChannelIds);
       await configureNativeEpgSource(sourceUrl(SOURCE_EPG), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
       const epg = await refreshNativeEpg(
         sourceUrl(SOURCE_EPG),
@@ -990,12 +1044,20 @@ async function loadProgrammeCacheMisses(
       // Never let stale built-in rows bleed into a user override or into primary-off
       // mode just because the ownership-aware join correctly returned no row.
       if (missingAfterJoin.length) {
-        const ownership = await getEpgSourcePreferences();
-        const userOwned = ownership.userEnabled
-          ? ownership.userOverrides
-          : {};
+        const [ownership, extraSources] = await Promise.all([
+          getEpgSourcePreferences(),
+          getMultiEpgSources(),
+        ]);
+        const customOwned = new Set<string>();
+        if (ownership.userEnabled && ownership.userUrl) {
+          for (const channelId of Object.keys(ownership.userOverrides)) customOwned.add(channelId);
+        }
+        for (const source of extraSources) {
+          if (!source.enabled || !source.url) continue;
+          for (const channelId of Object.keys(source.overrides)) customOwned.add(channelId);
+        }
         const primaryFallbackIds = ownership.primaryEnabled
-          ? missingAfterJoin.filter((id) => !Object.prototype.hasOwnProperty.call(userOwned, id))
+          ? missingAfterJoin.filter((id) => !customOwned.has(id))
           : [];
 
         if (primaryFallbackIds.length) {
@@ -1268,16 +1330,13 @@ export async function refreshEpgOnly(): Promise<SourceStatus> {
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
       await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
       const ownership = await applyPersistedGuideOwnership();
-      const overrideIds = ownership.userEnabled
-        ? new Set(Object.keys(ownership.userOverrides))
-        : new Set<string>();
       const refreshPreferences = await getSourceRefreshPreferences();
 
       // Scheduled/background custom-guide work is only useful when at least one
       // playlist channel is explicitly owned by the custom XMLTV source. Manual
       // refresh in the Custom EPG manager still performs a full source index so
       // users can discover XMLTV channels before creating assignments.
-      if (ownership.userEnabled && ownership.userUrl && overrideIds.size > 0) {
+      if (ownership.userEnabled && ownership.userUrl && ownership.legacyUserOverrideIds.size > 0) {
         await refreshNativeUserGuide(ownership.userUrl);
       }
 
@@ -1305,7 +1364,7 @@ export async function refreshEpgOnly(): Promise<SourceStatus> {
 
       if (!SOURCE_EPG) throw new Error("EPG is not configured for this build (missing EXPO_PUBLIC_EPG_URL).");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
-      const activeBindings = activeEpgBindings(cached.channels, overrideIds);
+      const activeBindings = activeEpgBindings(cached.channels, ownership.customOwnedChannelIds);
       await configureNativeEpgSource(sourceUrl(SOURCE_EPG), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
       const epg = await refreshNativeEpg(
         sourceUrl(SOURCE_EPG),

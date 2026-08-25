@@ -82,14 +82,20 @@ test("fullscreen exit returns currently tuned channel to the originating Guide g
 
 test("Program Details Watch now preserves Guide return anchor", async () => { const modal = await source("src/components/ProgramModal.tsx"); assert.match(modal, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: pathname\?\.startsWith\("\/guide"\) \}\)/); });
 
-test("preview/fullscreen owner handoff binds replacement PlayerView before retiring previous target", async () => {
+test("preview/fullscreen handoff leaves exactly one PlayerView attached to Media3", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   const start = native.indexOf("fun prepare(requestedOwner: Owner");
   const end = native.indexOf("fun provideFreshSource", start);
   const prepare = start >= 0 && end > start ? native.slice(start, end) : "";
   const bindReplacement = prepare.indexOf("video.player = instance");
-  const retirePrevious = prepare.indexOf("playerViewFor(previousOwner)");
+  const retireInactive = prepare.indexOf("clearInactivePlayerView(requestedOwner)");
   assert.ok(bindReplacement >= 0, "prepare must bind the requested PlayerView");
-  assert.ok(retirePrevious >= 0, "prepare must retire the previous PlayerView on owner changes");
-  assert.ok(bindReplacement < retirePrevious, "replacement PlayerView must be bound before the previous PlayerView is cleared");
+  assert.ok(retireInactive >= 0, "prepare must retire inactive PlayerViews on every owner handoff");
+  assert.ok(bindReplacement < retireInactive, "replacement PlayerView must be bound before an inactive PlayerView is cleared");
+  const softStop = native.indexOf("private fun stopInternal(releasePlayer: Boolean)");
+  const clearAll = native.indexOf("clearAllPlayerViews()", softStop);
+  assert.ok(softStop >= 0 && clearAll > softStop, "a retained ExoPlayer must never retain an old surface");
+  const surfaceCheck = native.indexOf("private fun ensureActiveSurfaceBound");
+  const repairClear = native.indexOf("clearInactivePlayerView(activeOwner)", surfaceCheck);
+  assert.ok(surfaceCheck >= 0 && repairClear > surfaceCheck, "watchdog surface repair must also clear a stale peer surface");
 });

@@ -154,16 +154,21 @@ export async function queryNativeGuideWindow(playlistChannelIds: string[], start
 export async function touchNativePlaylistRefresh(playlistEpoch: number): Promise<void> { if (nativeModule?.touchPlaylistRefresh) await nativeModule.touchPlaylistRefresh(playlistEpoch); }
 export async function upsertNativePlaylistChannels(channels: NativePlaylistChannelRow[], playlistEpoch: number, contentFingerprint: string): Promise<boolean> { if (!nativeModule?.upsertPlaylistChannels || !channels.length) return false; return nativeModule.upsertPlaylistChannels(channels, playlistEpoch, contentFingerprint); }
 export async function nativePlaylistIsCurrent(contentFingerprint: string): Promise<boolean> { if (!nativeModule?.isPlaylistCurrent || !contentFingerprint) return false; return nativeModule.isPlaylistCurrent(contentFingerprint); }
-export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<void> {
+/**
+ * Returns false only when the bounded caller wait elapsed. The native writes
+ * continue in their own queues; callers must not record a completed
+ * fingerprint until this returns true or a later source pass will never retry.
+ */
+export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<boolean> {
   const tasks: Promise<unknown>[] = [];
   if (nativeModule?.upsertPlaylistEpgMatches) tasks.push(nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch));
   if (ramModule) tasks.push(ramModule.replaceMatches(matches));
-  if (!tasks.length) return;
+  if (!tasks.length) return true;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   try {
-    await Promise.race([
-      Promise.all(tasks.map((task) => task.catch(() => undefined))).then(() => undefined),
-      new Promise<void>((resolve) => { timeout = setTimeout(resolve, MATCH_SYNC_TIMEOUT_MS); }),
+    return await Promise.race([
+      Promise.all(tasks.map((task) => task.catch(() => undefined))).then(() => true),
+      new Promise<boolean>((resolve) => { timeout = setTimeout(() => resolve(false), MATCH_SYNC_TIMEOUT_MS); }),
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);

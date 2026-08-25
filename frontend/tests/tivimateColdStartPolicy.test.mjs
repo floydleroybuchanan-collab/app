@@ -53,6 +53,31 @@ test("cold-start Guide freshness follows active EPG ownership", async () => {
   assert.match(native, /putDouble\("epgProgramCount", effectiveProgramCount\.toDouble\(\)\)/);
 });
 
+test("source refresh restores every saved custom-guide owner before primary matching", async () => {
+  const native = await source("src/source.native.ts");
+  const ownership = native.match(/async function applyPersistedGuideOwnership\(\)[\s\S]*?\n}\n\nfunction applyNativeImportProgress/)?.[0] || "";
+  assert.match(ownership, /getMultiEpgSources\(\)/);
+  assert.match(ownership, /configureNativeGuideOwnership\(/);
+  assert.match(ownership, /configureNativeUserGuideSources\(/);
+  assert.match(ownership, /customOwnedChannelIds/);
+  assert.match(ownership, /!source\.enabled \|\| !source\.url/);
+  assert.match(native, /activeEpgBindings\(channels, ownership\.customOwnedChannelIds\)/);
+  assert.match(native, /activeEpgBindings\(cached\.channels, ownership\.customOwnedChannelIds\)/);
+});
+
+test("Guide finalization only bridges usable matches and retries an unconfirmed write", async () => {
+  const [native, bridge] = await Promise.all([
+    source("src/source.native.ts"),
+    source("src/nativeEpg.ts"),
+  ]);
+  const sync = native.match(/async function syncMatchesToNative\([\s\S]*?\n}\n\nfunction resolveGuideWindowBounds/)?.[0] || "";
+  assert.match(sync, /if \(!xmltvId\) continue/);
+  assert.match(sync, /const finished = await upsertNativePlaylistEpgMatches\(rows, guideEpoch\)/);
+  assert.match(sync, /if \(finished\) lastNativeMatchWriteFingerprint = writeFingerprint/);
+  assert.match(bridge, /Promise<boolean>/);
+  assert.match(bridge, /setTimeout\(\(\) => resolve\(false\), MATCH_SYNC_TIMEOUT_MS\)/);
+});
+
 test("zero source freshness remains due instead of falling back to playlist age", async () => {
   const native = await source("src/source.native.ts");
   assert.match(native, /const playlistLast = cached\.playlistRefreshedAt != null \? cached\.playlistRefreshedAt : cached\.ts/);

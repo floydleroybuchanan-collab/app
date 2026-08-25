@@ -258,6 +258,11 @@ object NativePlaybackManager {
       val instance = player
       video.player = instance
       video.visibility = if (instance != null) View.VISIBLE else View.GONE
+      // A React/Fabric host can be replaced while an old owner is being
+      // soft-stopped.  Keep exactly one PlayerView bound to the singleton
+      // decoder: two SurfaceViews attached to one ExoPlayer can leave audio
+      // running while video is rendered to the retired target.
+      clearInactivePlayerView(surfaceOwner)
       if (instance != null && activeSource != null) {
         instance.playWhenReady = true
         recordDiagnostic("surface-attached", lastPlaybackError, instance)
@@ -303,7 +308,6 @@ object NativePlaybackManager {
     NativeVlcPlaybackManager.stopForEngineSwitch()
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
-    val previousOwner = owner
     val video = playerViewFor(requestedOwner)
     if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
 
@@ -313,14 +317,11 @@ object NativePlaybackManager {
     owner = requestedOwner
     video.player = instance
     video.visibility = View.VISIBLE
-    if (previousOwner != Owner.NONE && previousOwner != requestedOwner) {
-      playerViewFor(previousOwner)?.let { previousVideo ->
-        if (previousVideo !== video) {
-          previousVideo.player = null
-          previousVideo.visibility = View.GONE
-        }
-      }
-    }
+    // Bind the new target first so Media3 never observes a no-surface gap,
+    // then detach every inactive target.  `owner` may already be NONE after a
+    // soft preview stop, so using previousOwner here leaves the old preview
+    // PlayerView attached and produces audio-only/black fullscreen playback.
+    clearInactivePlayerView(requestedOwner)
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
     val baseSource = PlaybackSource(channelKey.trim(), uri, LinkedHashMap(headers), contentType?.trim()?.takeIf { it.isNotEmpty() }, sourceTypeFor(uri, contentType))
@@ -404,7 +405,6 @@ object NativePlaybackManager {
   private fun stopInternal(releasePlayer: Boolean) {
     cancelRecoveryCallbacks()
     val instance = player
-    val video = playerViewFor(owner)
     try { instance?.stop() } catch (_: Throwable) {}
     try { instance?.clearMediaItems() } catch (_: Throwable) {}
     owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0; stableSinceMs = 0L
@@ -412,9 +412,12 @@ object NativePlaybackManager {
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
     CharmMemoryCoordinator.setPlaybackStarting(false)
-    video?.visibility = View.GONE
+    // A soft stop intentionally retains ExoPlayer for the imminent
+    // preview/fullscreen handoff, not its old SurfaceView.  Always unbind all
+    // targets before returning so a retired preview cannot steal video output
+    // or make the watchdog recover a healthy transport stream.
+    clearAllPlayerViews()
     if (releasePlayer) {
-      try { video?.player = null } catch (_: Throwable) {}
       try { instance?.release() } catch (_: Throwable) {}
       player = null
     }
@@ -548,6 +551,27 @@ object NativePlaybackManager {
     Owner.NONE -> null
   }
 
+  /**
+   * ExoPlayer owns one decoder and therefore must expose one active video
+   * target.  The replacement target is always bound before this runs.
+   */
+  private fun clearInactivePlayerView(activeOwner: Owner) {
+    val inactive = when (activeOwner) {
+      Owner.PREVIEW -> fullscreenPlayerView
+      Owner.FULLSCREEN -> previewPlayerView
+      Owner.NONE -> null
+    }
+    try { inactive?.player = null } catch (_: Throwable) {}
+    inactive?.visibility = View.GONE
+  }
+
+  private fun clearAllPlayerViews() {
+    for (video in arrayOf(previewPlayerView, fullscreenPlayerView)) {
+      try { video?.player = null } catch (_: Throwable) {}
+      video?.visibility = View.GONE
+    }
+  }
+
   private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
     val activeOwner = owner
     if (activeOwner == Owner.NONE || player !== instance) return false
@@ -557,10 +581,14 @@ object NativePlaybackManager {
       Owner.NONE -> null
     } ?: return false
     val video = ensurePlayerViewIn(activeOwner, target)
-    if (video.player === instance && video.visibility == View.VISIBLE) return false
+    if (video.player === instance && video.visibility == View.VISIBLE) {
+      clearInactivePlayerView(activeOwner)
+      return false
+    }
     return try {
       video.player = instance
       video.visibility = View.VISIBLE
+      clearInactivePlayerView(activeOwner)
       if (activeSource != null) instance.playWhenReady = true
       recordDiagnostic("surface-rebind:$event", lastPlaybackError, instance)
       true
