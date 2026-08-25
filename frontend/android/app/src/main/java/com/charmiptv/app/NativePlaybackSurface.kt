@@ -33,6 +33,8 @@ import java.lang.ref.WeakReference
  */
 class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   companion object {
+    private const val SURFACE_HEALTH_GRACE_MS = 1_000L
+    private const val SURFACE_RECHECK_MS = 750L
     private var previewHost: WeakReference<NativePlaybackSurface>? = null
     private var fullscreenHost: WeakReference<NativePlaybackSurface>? = null
 
@@ -94,7 +96,7 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
     if (!playerView.isAttachedToWindow || !renderView.isAttachedToWindow) return false
     return when (renderView) {
       is SurfaceView -> try {
-        renderView.holder.surface?.isValid == true
+        renderView.holder.surface.isValid
       } catch (_: Throwable) {
         false
       }
@@ -202,11 +204,6 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
     }
     owner = NativePlaybackManager.Owner.NONE
     removeAllViews()
-  }
-
-  private companion object Timings {
-    const val SURFACE_HEALTH_GRACE_MS = 1_000L
-    const val SURFACE_RECHECK_MS = 750L
   }
 }
 
