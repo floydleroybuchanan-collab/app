@@ -1,10 +1,10 @@
 {
   "name": "CharmIPTV: Phoenix",
-  "install": "cd frontend && npm ci --legacy-peer-deps --no-audit --no-fund && { [ -f .env ] || printf 'EXPO_PUBLIC_CHARM_API_URL=http://localhost:8787\\n' > .env; } && cd ../cloudflare-backend/worker && npm install --no-audit --no-fund",
+  "install": "cd frontend && npm ci --legacy-peer-deps --no-audit --no-fund && { [ -f .env ] || printf 'EXPO_PUBLIC_CHARM_API_URL=http://localhost:8787\\n' > .env; } && cd ../cloudflare-backend/worker && npm ci --no-audit --no-fund",
   "terminals": [
     {
       "name": "worker",
-      "command": "cd cloudflare-backend/worker && npx wrangler dev --port 8787 --local"
+      "command": "cd cloudflare-backend/worker && npx wrangler dev --config ../../wrangler.toml --port 8787 --local"
     },
     {
       "name": "metro",
