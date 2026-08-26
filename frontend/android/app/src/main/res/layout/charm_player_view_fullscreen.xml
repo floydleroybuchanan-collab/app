@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Fullscreen Media3 output. PR #23 / expo-video used SurfaceView for fullscreen
-  (hardware overlay) and TextureView only for Guide preview. SurfaceView is
-  construction-only on PlayerView, so this layout is separate from the preview
-  TextureView layout.
--->
+<!-- Kept so older inflate paths stay valid. Same TextureView contract as preview. -->
 <androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/charm_player_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    app:surface_type="surface_view" />
+    android:background="@android:color/transparent"
+    app:surface_type="texture_view"
+    app:use_artwork="false"
+    app:shutter_background_color="@android:color/transparent" />

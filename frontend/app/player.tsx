@@ -491,7 +491,7 @@ export default function PlayerScreen() {
               }
             }}
             onStatus={handleStreamStatus}
-            style={scaleMode === "zoom" ? [StyleSheet.absoluteFill, styles.zoomedVideo] : StyleSheet.absoluteFill}
+            style={StyleSheet.absoluteFill}
           />
         </ErrorBoundary>
       ) : null}
@@ -592,9 +592,8 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000", overflow: "hidden" },
+  root: { flex: 1, backgroundColor: "#000", overflow: "visible" },
   touchCatcher: { backgroundColor: "transparent" },
-  zoomedVideo: { transform: [{ scale: 1.2 }] },
   errorOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.54)" },
   errorTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 13 },
   errorText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5 },

@@ -314,9 +314,9 @@ object NativeVlcPlaybackManager {
     val player = mediaPlayer ?: return false
     try { player.detachViews() } catch (_: Throwable) {}
     return try {
-      // Preview: TextureView (composites in the rail). Fullscreen: SurfaceView
-      // (same hardware overlay as PR #23 expo-video / RCTVLCPlayer).
-      player.attachViews(layout, null, false, surfaceOwner == Owner.PREVIEW)
+      // TextureView for preview and fullscreen. SurfaceView on Onn Google TV
+      // paints behind the React Native stack (audio continues, picture stays black).
+      player.attachViews(layout, null, false, true)
       true
     } catch (failure: Throwable) {
       Log.w(TAG, "VLC attachViews failed", failure)

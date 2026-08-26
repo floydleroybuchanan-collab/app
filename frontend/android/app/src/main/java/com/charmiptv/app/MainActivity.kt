@@ -280,9 +280,8 @@ class MainActivity : ReactActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    // Prevent Android TV / Fire TV from dimming, sleeping, or launching a
-    // screensaver while CharmIPTV is active. Playback screens inherit this
-    // window flag automatically, so a long-running channel remains awake.
+    // Prevent the Onn box / Android TV from dimming or launching a screensaver
+    // while CharmIPTV is active.
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
     // Set the theme to AppTheme BEFORE onCreate to support
@@ -293,6 +292,10 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
+    (findViewById<android.view.ViewGroup>(android.R.id.content))?.let { content ->
+      content.clipChildren = false
+      content.clipToPadding = false
+    }
   }
 
   override fun getMainComponentName(): String = "main"

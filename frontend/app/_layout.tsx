@@ -153,7 +153,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, width, height }}>
+    <GestureHandlerRootView style={{ flex: 1, width, height, overflow: "visible", backgroundColor: "transparent" }}>
       <SafeAreaProvider>
         <TvCalibrationProvider>
           <TvCalibrationFrame>
@@ -167,7 +167,7 @@ export default function RootLayout() {
                 <ErrorBoundary>
                   <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#070711" } }}>
                     <Stack.Screen name="(tabs)" />
-                    <Stack.Screen name="player" options={{ animation: "fade" }} />
+                    <Stack.Screen name="player" options={{ animation: "none", contentStyle: { backgroundColor: "#000" } }} />
                   </Stack>
                 </ErrorBoundary>
                 <ErrorBoundary>

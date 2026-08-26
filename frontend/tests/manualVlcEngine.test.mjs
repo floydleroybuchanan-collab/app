@@ -17,7 +17,7 @@ test("LibVLC is native, single-owner, hardware-first, and fully releasable", asy
   const [manager, module, app, gradle] = await Promise.all([read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt"), read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackModule.kt"), read("android/app/src/main/java/com/charmiptv/app/MainApplication.kt"), read("android/app/build.gradle")]);
   assert.match(gradle, /org\.videolan\.android:libvlc-all:3\.7\.5/); assert.match(gradle, /libc\+\+_shared\.so/); assert.match(app, /add\(NativeVlcPlaybackPackage\(\)\)/);
   assert.match(manager, /releasePlayerOnly\(removeLayout = false\)/); assert.match(manager, /MediaPlayer\(core\)/); assert.match(manager, /media\.setHWDecoderEnabled\((?:source\.)?hardwareDecode, false\)/); assert.match(manager, /fun releaseAll\(\)/);
-  assert.match(manager, /attachViews\(layout, null, false, surfaceOwner == Owner\.PREVIEW\)/);
+  assert.match(manager, /attachViews\(layout, null, false, true\)/);
   assert.match(manager, /LibVLC delivers events off the main thread/);
   assert.match(module, /LifecycleEventListener/); assert.match(module, /onHostDestroy\(\).*releaseAll/s);
   const surface = await read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt");

@@ -117,7 +117,5 @@ export function TvCalibrationFrame({ children, style }: { children: React.ReactN
         marginLeft: playerEdges.margin.left,
       }
     : null;
-  // Fullscreen uses a SurfaceView overlay (PR #23). Keep this frame clipped so
-  // flex layout stays bounded; overscan is padding/margin only.
-  return <View style={[{ flex: 1, overflow: "hidden" }, playerStyle, style]}>{children}</View>;
+  return <View style={[{ flex: 1, overflow: "visible", backgroundColor: "transparent" }, playerStyle, style]}>{children}</View>;
 }

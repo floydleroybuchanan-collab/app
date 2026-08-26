@@ -8,7 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
-import android.view.SurfaceView
+import android.view.TextureView
 import android.view.View
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -256,14 +256,15 @@ object NativePlaybackManager {
       Owner.NONE -> return@runOnMain
     }
     val video = ensurePlayerViewIn(surfaceOwner, surface)
+    unclipVideoAncestors(surface)
+    unclipVideoAncestors(video)
     if (owner == surfaceOwner) {
       val instance = player
+      // Keep VISIBLE even before the decoder exists so TextureView gets a
+      // non-zero layout. GONE children are not measured; Amlogic Onn boxes
+      // then keep audio while video stays locked to a 0×0 surface.
+      video.visibility = View.VISIBLE
       video.player = instance
-      video.visibility = if (instance != null) View.VISIBLE else View.GONE
-      // A React/Fabric host can be replaced while an old owner is being
-      // soft-stopped.  Keep exactly one PlayerView bound to the singleton
-      // decoder: two SurfaceViews attached to one ExoPlayer can leave audio
-      // running while video is rendered to the retired target.
       clearInactivePlayerView(surfaceOwner)
       if (instance != null && activeSource != null) {
         instance.playWhenReady = true
@@ -440,11 +441,10 @@ object NativePlaybackManager {
     val renderers = DefaultRenderersFactory(context)
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
       .setEnableDecoderFallback(true)
-      // RC.1's working Media3 path forced asynchronous MediaCodec queueing.
-      // Removing this changed the video renderer for every container, while
-      // audio continued through its independent renderer. Restore the proven
-      // decoder contract; fallback remains enabled for codec selection errors.
-      .forceEnableMediaCodecAsynchronousQueueing()
+      // Onn Google TV (Amlogic) often emits no video frames with forced async
+      // MediaCodec queueing while audio continues. Disable async so hardware
+      // video can paint; FFmpeg remains the audio extension fallback.
+      .forceDisableMediaCodecAsynchronousQueueing()
     return ExoPlayer.Builder(context, renderers)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
@@ -621,23 +621,32 @@ object NativePlaybackManager {
   }
 
   private fun ensurePlayerViewIn(surfaceOwner: Owner, target: FrameLayout): PlayerView {
-    playerViewFor(surfaceOwner)?.let { existing -> if (existing.parent === target) return existing }
-    val layoutId = if (surfaceOwner == Owner.FULLSCREEN) {
-      R.layout.charm_player_view_fullscreen
-    } else {
-      R.layout.charm_player_view
+    playerViewFor(surfaceOwner)?.let { existing ->
+      if (existing.parent === target) {
+        existing.visibility = View.VISIBLE
+        unclipVideoAncestors(existing)
+        return existing
+      }
     }
-    val video = (LayoutInflater.from(target.context).inflate(layoutId, target, false) as PlayerView).apply {
+    val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {
       useController = false
       clipChildren = false
       clipToPadding = false
-      setShutterBackgroundColor(Color.BLACK)
+      setBackgroundColor(Color.TRANSPARENT)
+      setShutterBackgroundColor(Color.TRANSPARENT)
+      setUseArtwork(false)
       setKeepContentOnPlayerReset(true)
       resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-      visibility = View.GONE
-      (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+      visibility = View.VISIBLE
+      setLayerType(View.LAYER_TYPE_NONE, null)
+      (videoSurfaceView as? TextureView)?.let { texture ->
+        texture.isOpaque = true
+        texture.setLayerType(View.LAYER_TYPE_NONE, null)
+      }
     }
     target.addView(video, fillParent())
+    unclipVideoAncestors(target)
+    unclipVideoAncestors(video)
     when (surfaceOwner) {
       Owner.PREVIEW -> previewPlayerView = video
       Owner.FULLSCREEN -> fullscreenPlayerView = video

@@ -26,7 +26,7 @@ test("Media3 uses the hardened live-TV buffers and bounded native recovery polic
   assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 20_000/); assert.match(native, /MAX_BUFFER_MS_LOW_RAM = 90_000/); assert.match(native, /PLAYBACK_BUFFER_MS_LOW_RAM = 5_000/); assert.match(native, /REBUFFER_BUFFER_MS_LOW_RAM = 12_000/); assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/); assert.match(native, /MIN_BUFFER_MS_NORMAL = 20_000/); assert.match(native, /MAX_BUFFER_MS_NORMAL = 90_000/); assert.match(native, /PLAYBACK_BUFFER_MS_NORMAL = 5_000/); assert.match(native, /REBUFFER_BUFFER_MS_NORMAL = 12_000/); assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/); assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/); assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 35_000L/); assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L/); assert.match(native, /MAX_AUTO_RECOVERIES = 4/); assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/); assert.match(native, /readTimeout\(45, TimeUnit.SECONDS\)/); assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/); assert.match(native, /instance\.prepare\(\)/);
 });
 
-test("direct MPEG-TS keeps its extractor while all video containers retain RC.1 async codec queueing", async () => {
+test("direct MPEG-TS keeps its extractor while hardware video uses the Onn-safe codec path", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)\.createMediaSource\(item\)/);
   assert.match(native, /DefaultExtractorsFactory\(\)\.setTsExtractorFlags\(/);
@@ -34,7 +34,7 @@ test("direct MPEG-TS keeps its extractor while all video containers retain RC.1 
   assert.match(native, /DefaultTsPayloadReaderFactory\.FLAG_DETECT_ACCESS_UNITS/);
   assert.match(native, /"transport" -> builder\.setMimeType\(MimeTypes\.VIDEO_MP2T\)/);
   assert.match(native, /setEnableDecoderFallback\(true\)/);
-  assert.match(native, /forceEnableMediaCodecAsynchronousQueueing\(\)/);
+  assert.match(native, /forceDisableMediaCodecAsynchronousQueueing\(\)/);
 });
 
 test("first frame is the stable-playing gate and cancels delayed recovery", async () => {
@@ -43,7 +43,7 @@ test("first frame is the stable-playing gate and cancels delayed recovery", asyn
 });
 
 test("native PlayerView is mounted inside the React playback target instead of below opaque screens", async () => {
-  const [native, surface, adapter, previewLayout, fullscreenLayout, calibration, player, shell] = await Promise.all([
+  const [native, surface, adapter, previewLayout, fullscreenLayout, calibration, player, layout] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackSurface.kt"),
     source("src/components/StreamPlayer.tsx"),
@@ -51,24 +51,27 @@ test("native PlayerView is mounted inside the React playback target instead of b
     source("android/app/src/main/res/layout/charm_player_view_fullscreen.xml"),
     source("src/tvCalibration.tsx"),
     source("app/player.tsx"),
-    source("src/components/PurpleTvShell.tsx"),
+    source("app/_layout.tsx"),
   ]);
-  assert.match(native, /attachSurface/); assert.match(native, /target\.addView\(video, fillParent\(\)\)/); assert.match(native, /setShutterBackgroundColor\(Color\.BLACK\)/); assert.match(native, /clipChildren = false/);
-  assert.match(native, /R\.layout\.charm_player_view_fullscreen/);
+  assert.match(native, /attachSurface/); assert.match(native, /target\.addView\(video, fillParent\(\)\)/); assert.match(native, /setShutterBackgroundColor\(Color\.TRANSPARENT\)/); assert.match(native, /clipChildren = false/);
+  assert.match(native, /unclipVideoAncestors/);
   assert.match(native, /setAudioAttributes/);
-  assert.match(native, /setZOrderMediaOverlay\(true\)/);
+  assert.match(native, /isOpaque = true/);
+  assert.doesNotMatch(native, /setZOrderMediaOverlay/);
   assert.doesNotMatch(native, /playWhenReady = false/);
   assert.doesNotMatch(native, /content\.removeView\(reactRoot\)/);
   assert.match(surface, /class NativePlaybackSurface/); assert.match(surface, /NativePlaybackManager\.attachSurface/);
   assert.match(surface, /clipChildren = false/);
   assert.doesNotMatch(surface, /surfaceHealthCheck/);
   assert.match(adapter, /CharmNativePlaybackSurface/);
+  assert.match(adapter, /renderToHardwareTextureAndroid=\{false\}/);
   assert.match(previewLayout, /app:surface_type="texture_view"/);
-  assert.match(fullscreenLayout, /app:surface_type="surface_view"/);
-  assert.match(calibration, /overflow: "hidden"/);
-  assert.match(player, /overflow: "hidden"/);
+  assert.match(fullscreenLayout, /app:surface_type="texture_view"/);
+  assert.match(calibration, /overflow: "visible"/);
+  assert.match(player, /overflow: "visible"/);
   assert.match(player, /!isTV \? \(/);
-  assert.match(shell, /root: \{ flex: 1, flexDirection: "row", backgroundColor: tvColors\.canvas, overflow: "hidden" \}/);
+  assert.doesNotMatch(player, /zoomedVideo|transform: \[\{ scale/);
+  assert.match(layout, /animation: "none"/);
 });
 
 test("audio and subtitles hot-apply through TrackSelectionParameters", async () => {

@@ -396,10 +396,10 @@ export function StreamPlayer({
   if (Platform.OS !== "android") return <View pointerEvents="none" collapsable={false} style={style} />;
   if (playerEngine === "vlc") {
     return nativeVlcPlaybackAvailable()
-      ? <NativeVlcPlaybackSurface owner={owner} pointerEvents="none" collapsable={false} style={style} />
+      ? <NativeVlcPlaybackSurface owner={owner} pointerEvents="none" collapsable={false} renderToHardwareTextureAndroid={false} style={style} />
       : <View pointerEvents="none" collapsable={false} style={style} />;
   }
   return nativePlaybackAvailable()
-    ? <NativePlaybackSurface owner={owner} pointerEvents="none" collapsable={false} style={style} />
+    ? <NativePlaybackSurface owner={owner} pointerEvents="none" collapsable={false} renderToHardwareTextureAndroid={false} style={style} />
     : <View pointerEvents="none" collapsable={false} style={style} />;
 }

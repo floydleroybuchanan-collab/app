@@ -22,6 +22,14 @@ class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
     clipToPadding = false
   }
 
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    unclipVideoAncestors(this)
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
+      NativeVlcPlaybackManager.attachSurface(owner, this)
+    }
+  }
+
   fun setOwner(value: String?) {
     val next = when (value) {
       "preview" -> NativeVlcPlaybackManager.Owner.PREVIEW
@@ -40,13 +48,6 @@ class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
       removeAllViews()
     }
     owner = next
-    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
-      NativeVlcPlaybackManager.attachSurface(owner, this)
-    }
-  }
-
-  override fun onAttachedToWindow() {
-    super.onAttachedToWindow()
     if (owner != NativeVlcPlaybackManager.Owner.NONE) {
       NativeVlcPlaybackManager.attachSurface(owner, this)
     }

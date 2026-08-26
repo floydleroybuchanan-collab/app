@@ -1,6 +1,9 @@
 package com.charmiptv.app
 
 import android.content.Context
+import android.graphics.Color
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.media3.ui.PlayerView
 import com.facebook.react.uimanager.SimpleViewManager
@@ -9,18 +12,12 @@ import com.facebook.react.uimanager.annotations.ReactProp
 import java.lang.ref.WeakReference
 
 /**
- * React Native host for the Media3 video output.
+ * React Native host for the Media3 TextureView.
  *
- * The decoder/player belongs to NativePlaybackManager, while this view owns only
- * a render target. React/Fabric is allowed to detach a mounted native view from
- * the window temporarily during layout/navigation work. That must not be treated
- * as destruction: keeping the same PlayerView child lets SurfaceView recreate its
- * physical Surface and reconnect to the same ExoPlayer without inflating another
- * PlayerView, opening another stream, or rebuilding the decoder.
- *
- * Do not rebuild the PlayerView after a "surface health" timeout. A TextureView
- * that is still 0×0 one second after attach is common during RN layout; detaching
- * it pauses (or used to pause) the decoder and leaves fullscreen black and silent.
+ * Fabric and react-native-screens default to clipChildren=true and often leave a
+ * hardware layer behind after a fade. Either one blanks TextureView while ExoPlayer
+ * keeps playing audio. This host unclips its ancestor chain and never treats a
+ * temporary window detach as destruction.
  */
 class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   companion object {
@@ -45,8 +42,8 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativePlaybackManager.Owner.NONE
 
   init {
-    clipChildren = false
-    clipToPadding = false
+    setBackgroundColor(Color.TRANSPARENT)
+    unclipVideoAncestors(this)
   }
 
   private fun currentPlayerView(): PlayerView? {
@@ -59,7 +56,6 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
 
   private fun retireAfterReplacement(replacedOwner: NativePlaybackManager.Owner) {
     if (owner != replacedOwner) return
-
     try { currentPlayerView()?.player = null } catch (_: Throwable) {}
     owner = NativePlaybackManager.Owner.NONE
     removeAllViews()
@@ -68,6 +64,7 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   private fun claimAndAttach() {
     val claimedOwner = owner
     if (claimedOwner == NativePlaybackManager.Owner.NONE) return
+    unclipVideoAncestors(this)
 
     val previous = claimedHost(claimedOwner)
     if (previous !== this) {
@@ -109,7 +106,16 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    unclipVideoAncestors(this)
     if (owner != NativePlaybackManager.Owner.NONE) claimAndAttach()
+  }
+
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    if (w <= 0 || h <= 0 || owner == NativePlaybackManager.Owner.NONE) return
+    // First real layout after a 0×0 GONE/unmeasured host. Rebind so MediaCodec
+    // is not left outputting to a dead TextureView while audio continues.
+    if (oldw <= 0 || oldh <= 0) claimAndAttach()
   }
 
   override fun onDetachedFromWindow() {
@@ -124,6 +130,21 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
     }
     owner = NativePlaybackManager.Owner.NONE
     removeAllViews()
+  }
+}
+
+internal fun unclipVideoAncestors(start: View) {
+  var node: Any? = start
+  var hops = 0
+  while (node is ViewGroup && hops < 32) {
+    node.clipChildren = false
+    node.clipToPadding = false
+    try { node.clipToOutline = false } catch (_: Throwable) {}
+    if (node.alpha >= 0.999f && node.layerType != View.LAYER_TYPE_NONE) {
+      try { node.setLayerType(View.LAYER_TYPE_NONE, null) } catch (_: Throwable) {}
+    }
+    node = node.parent
+    hops += 1
   }
 }
 
