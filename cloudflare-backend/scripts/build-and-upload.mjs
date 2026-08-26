@@ -665,7 +665,10 @@ export async function main() {
         .map((p) => ({ t: p.t, s: p.s, e: p.e, c: p.c }));
       windows[c.id] = { n: c.name, l: c.logo || "", g: c.category, p: w };
     }
-    await kvPut(acc, ns, token, "windows", JSON.stringify(windows), "text/plain");
+    const windowsJson = Buffer.from(JSON.stringify(windows));
+    const windowsGz = gzipSync(windowsJson);
+    console.log(`Windows payload: ${windowsJson.length} bytes plain -> ${windowsGz.length} bytes gzip`);
+    await kvPut(acc, ns, token, "windows_gz", windowsGz, "application/octet-stream");
   }
 
   const config = {
@@ -695,7 +698,13 @@ function safeJson(s, fallback) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
-    console.error("Builder crashed:", e);
-    process.exit(1);
-  });
+  const message = String(e?.message || e || "");
+  if (message.includes("failed: 401") || message.includes("failed: 403")) {
+    console.error("Cloudflare credentials were rejected - keeping last-good KV data:", message);
+    console.log("::warning::Cloudflare KV credentials were rejected; refresh was skipped and last-good data remains active. Update CLOUDFLARE_API_TOKEN to resume uploads.");
+    return;
+  }
+  console.error("Builder crashed:", e);
+  process.exit(1);
+});
 }

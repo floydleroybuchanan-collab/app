@@ -1,0 +1,134 @@
+name: Apply guarded Media3 owner handoff fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/charm-final-owner-handoff-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout playback branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: claude/repo-branch-access-dxx6wf
+          fetch-depth: 0
+
+      - name: Guard and patch Media3 owner handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manager_path = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")
+          test_path = Path("frontend/tests/playerLiveStability.test.mjs")
+          manager = manager_path.read_text()
+
+          old_lines = [
+              "    val previousOwner = owner",
+              "    owner = requestedOwner",
+              "    if (previousOwner != Owner.NONE && previousOwner != requestedOwner) {",
+              "      playerViewFor(previousOwner)?.let { it.player = null; it.visibility = View.GONE }",
+              "    }",
+              "    resetMediaDiagnostics()",
+              "    resetOpaqueRoutingState()",
+              "    val baseSource = PlaybackSource(channelKey.trim(), uri, LinkedHashMap(headers), contentType?.trim()?.takeIf { it.isNotEmpty() }, sourceTypeFor(uri, contentType))",
+              "    activeSource = baseSource",
+              "    seedKnownContainerMime(baseSource)",
+              "    lastPlaybackError = null",
+              "    firstFrameRendered = false",
+              "    recoveryAttempts = 0",
+              "    stableSinceMs = 0L",
+              "    resetBufferingWatchdogState()",
+              "    markPlaybackStarting(\"channel-start\")",
+              "    val video = playerViewFor(requestedOwner)",
+              "    if (video == null) { finishWithError(\"surface-unavailable\", instance); return@runOnMain }",
+              "    video.player = instance",
+              "    video.visibility = View.VISIBLE",
+              "    publishState(\"loading\", null)",
+          ]
+          new_lines = [
+              "    val previousOwner = owner",
+              "    val video = playerViewFor(requestedOwner)",
+              "    if (video == null) { finishWithError(\"surface-unavailable\", instance); return@runOnMain }",
+              "",
+              "    // Bind the replacement video target before clearing the previous target.",
+              "    // Preview <-> fullscreen is a PlayerView handoff, not a stream failure;",
+              "    // this order avoids leaving the decoder with no output Surface.",
+              "    owner = requestedOwner",
+              "    video.player = instance",
+              "    video.visibility = View.VISIBLE",
+              "    if (previousOwner != Owner.NONE && previousOwner != requestedOwner) {",
+              "      playerViewFor(previousOwner)?.let { previousVideo ->",
+              "        if (previousVideo !== video) {",
+              "          previousVideo.player = null",
+              "          previousVideo.visibility = View.GONE",
+              "        }",
+              "      }",
+              "    }",
+              "    resetMediaDiagnostics()",
+              "    resetOpaqueRoutingState()",
+              "    val baseSource = PlaybackSource(channelKey.trim(), uri, LinkedHashMap(headers), contentType?.trim()?.takeIf { it.isNotEmpty() }, sourceTypeFor(uri, contentType))",
+              "    activeSource = baseSource",
+              "    seedKnownContainerMime(baseSource)",
+              "    lastPlaybackError = null",
+              "    firstFrameRendered = false",
+              "    recoveryAttempts = 0",
+              "    stableSinceMs = 0L",
+              "    resetBufferingWatchdogState()",
+              "    markPlaybackStarting(\"channel-start\")",
+              "    publishState(\"loading\", null)",
+          ]
+          old = "\n".join(old_lines) + "\n"
+          new = "\n".join(new_lines) + "\n"
+          count = manager.count(old)
+          if count != 1:
+              raise SystemExit(f"guard failed: expected exactly one old owner-handoff block, found {count}")
+          manager_path.write_text(manager.replace(old, new, 1))
+
+          test_text = test_path.read_text()
+          marker = 'test("preview/fullscreen owner handoff binds replacement PlayerView before retiring previous target"'
+          if marker not in test_text:
+              test_lines = [
+                  "",
+                  'test("preview/fullscreen owner handoff binds replacement PlayerView before retiring previous target", async () => {',
+                  '  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");',
+                  '  const start = native.indexOf("fun prepare(requestedOwner: Owner");',
+                  '  const end = native.indexOf("fun provideFreshSource", start);',
+                  '  const prepare = start >= 0 && end > start ? native.slice(start, end) : "";',
+                  '  const bindReplacement = prepare.indexOf("video.player = instance");',
+                  '  const retirePrevious = prepare.indexOf("playerViewFor(previousOwner)");',
+                  '  assert.ok(bindReplacement >= 0, "prepare must bind the requested PlayerView");',
+                  '  assert.ok(retirePrevious >= 0, "prepare must retire the previous PlayerView on owner changes");',
+                  '  assert.ok(bindReplacement < retirePrevious, "replacement PlayerView must be bound before the previous PlayerView is cleared");',
+                  '});',
+                  "",
+              ]
+              test_path.write_text(test_text + "\n".join(test_lines))
+          PY
+
+          grep -q 'MIN_BUFFER_MS_LOW_RAM = 20_000' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'MAX_BUFFER_MS_LOW_RAM = 90_000' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'HARD_STALL_RECOVERY_MS = 70_000L' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'connectTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'readTimeout(45, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          git diff --check
+
+      - name: Commit guarded handoff fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt frontend/tests/playerLiveStability.test.mjs
+          git diff --cached --quiet && { echo "No changes needed"; exit 0; }
+          git commit -m "fix(player): bind replacement surface before retiring old target"
+          git push origin HEAD:claude/repo-branch-access-dxx6wf

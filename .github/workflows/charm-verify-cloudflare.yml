@@ -1,0 +1,111 @@
+name: Verify Charm Cloudflare refresh
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/charm-verify-cloudflare.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Dispatch and verify real refresh
+        id: verify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          before="$(gh run list --workflow charm-refresh.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+          gh workflow run charm-refresh.yml --ref main
+
+          run_id=""
+          for _ in $(seq 1 30); do
+            candidate="$(gh run list --workflow charm-refresh.yml --branch main --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+            if [ -n "$candidate" ] && [ "$candidate" != "0" ] && [ "$candidate" != "$before" ]; then
+              run_id="$candidate"
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$run_id" ]; then
+            echo "Could not resolve dispatched refresh run" >&2
+            echo "status=FAIL" >> "$GITHUB_OUTPUT"
+            echo "run_id=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          for _ in $(seq 1 180); do
+            state="$(gh run view "$run_id" --json status --jq '.status')"
+            [ "$state" = "completed" ] && break
+            sleep 5
+          done
+
+          gh run view "$run_id" --log > /tmp/refresh.log 2>&1 || true
+          conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // "unknown"')"
+
+          required=(
+            'KV wrote "channels_gz"'
+            'KV wrote "guide_gz"'
+            'KV wrote "windows_gz"'
+            'KV wrote "config"'
+            'Charm IPTV builder finished'
+          )
+          missing=0
+          for token in "${required[@]}"; do
+            if ! grep -Fq "$token" /tmp/refresh.log; then
+              echo "Missing success marker: $token"
+              missing=1
+            fi
+          done
+          if grep -Fq 'Cloudflare credentials were rejected' /tmp/refresh.log; then
+            echo "Cloudflare credentials are still being rejected"
+            missing=1
+          fi
+
+          if [ "$conclusion" = "success" ] && [ "$missing" -eq 0 ]; then
+            status="PASS"
+          else
+            status="FAIL"
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          tail -n 120 /tmp/refresh.log > /tmp/refresh-tail.log || true
+
+      - name: Record verification result
+        shell: bash
+        env:
+          VERIFY_STATUS: ${{ steps.verify.outputs.status }}
+          REFRESH_RUN_ID: ${{ steps.verify.outputs.run_id }}
+          REFRESH_CONCLUSION: ${{ steps.verify.outputs.conclusion }}
+        run: |
+          {
+            echo "status=$VERIFY_STATUS"
+            echo "refresh_run_id=$REFRESH_RUN_ID"
+            echo "conclusion=$REFRESH_CONCLUSION"
+            echo "verified_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${REFRESH_RUN_ID}"
+            echo
+            echo "--- refresh log tail ---"
+            cat /tmp/refresh-tail.log 2>/dev/null || true
+          } > .github/cloudflare-verify-status.txt
+
+          git config user.name "Charm Verify Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/cloudflare-verify-status.txt
+          git commit -m "ci: record Cloudflare refresh verification"
+          git push origin HEAD:main
