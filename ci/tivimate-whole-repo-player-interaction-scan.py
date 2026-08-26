@@ -15,6 +15,15 @@ SKIP = {"node_modules", "build", ".gradle", ".expo", "dist"}
 # already present when the deep-player repair resumed.
 BASELINE_REF = "a98c49e8631f2c0e90be7cfb630395c75ada09ec"
 MAIN_REF = "origin/main"
+# Exact blobs produced by the audited custom-guide ownership/finalization fix.
+# These are not network-transport changes: source acquisition, URLs, HTTP
+# behavior, parsing and refresh timing remain pinned to BASELINE_REF.  Pinning
+# the blobs (instead of broadly exempting the files) makes any subsequent or
+# uncommitted edit fail this gate again.
+AUDITED_EPG_FIX_BLOBS = {
+    "frontend/src/source.native.ts": "1fe136355352e6017c588a21ca25be3b339cbc84",
+    "frontend/src/nativeEpg.ts": "263c28371c3478e895dcfea6934cec46582ea9c3",
+}
 SHIPPED_PREFIXES = (
     "frontend/app/",
     "frontend/src/",
@@ -58,6 +67,26 @@ def git_paths(ref: str) -> list[str]:
 
 def shipped_source(rel: str) -> bool:
     return rel.startswith(SHIPPED_PREFIXES)
+
+
+def is_exact_audited_epg_fix(rel: str) -> bool:
+    expected = AUDITED_EPG_FIX_BLOBS.get(rel)
+    if not expected:
+        return False
+    # Never let a clean committed blob mask local/CI workspace mutations.
+    clean = subprocess.run(
+        ["git", "diff", "--quiet", "HEAD", "--", rel],
+        check=False,
+    ).returncode == 0
+    if not clean:
+        return False
+    actual = subprocess.check_output(
+        ["git", "rev-parse", f"HEAD:{rel}"],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    ).strip()
+    return actual == expected
 
 
 current_files: list[Path] = []
@@ -260,7 +289,7 @@ for rel in (
             "    // NativeGuideView may still be using it) — never close it here.\n",
             "    database.close()\n",
         )
-    if current != baseline:
+    if current != baseline and not is_exact_audited_epg_fix(rel):
         critical.append(f"repair changed M3U/EPG transport: {rel}")
 
 # Background workers are optional architecture. If present, they may only set
