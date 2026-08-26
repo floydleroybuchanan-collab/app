@@ -34,20 +34,20 @@ test("Media3 keeps bounded native startup and four-attempt post-playback recover
 
 test("Media3 TS watchdog requires no progress before recovery", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /val madeProgress = bufferedPosition > bufferingLastBufferedPositionMs \|\| position > bufferingLastPositionMs/);
-  assert.match(native, /if \(madeProgress\) \{[\s\S]*?bufferingSinceMs = nowMs/);
+  assert.match(native, /val madeProgress = instance\.isPlaying \|\|/);
+  assert.match(native, /position != C\.TIME_UNSET && position > bufferingLastPositionMs/);
   assert.match(native, /val observationThresholdMs = if \(transport\) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS/);
-  assert.match(native, /recoverOnce\(instance, skipBarePrepare = transport\)/);
+  assert.match(native, /recoverOnce\(instance, skipBarePrepare = false\)/);
 });
 
 test("Media3 recovers bounded terminal live reads before exposing Retry", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /readTimeout\(45, TimeUnit.SECONDS\)/);
+  assert.match(native, /readTimeout\(0, TimeUnit.SECONDS\)/);
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.match(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /recordDiagnostic\("player-error", error, created\)/);
   assert.match(playerError, /forceFreshSource = isAuthenticationFailure\(error\)/);
-  assert.match(playerError, /skipBarePrepare = activeSource\?\.sourceType == "transport"/);
+  assert.match(playerError, /skipBarePrepare = isContainerMismatch\(error\)/);
   assert.doesNotMatch(playerError, /publishState\("error"/);
   assert.doesNotMatch(native, /Toast\.makeText|showDiagnostic\(/);
   assert.match(native, /private fun recoverOnce\(instance: ExoPlayer, forceFreshSource: Boolean = false, skipBarePrepare: Boolean = false\): Boolean/);

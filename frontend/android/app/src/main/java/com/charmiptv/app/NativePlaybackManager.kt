@@ -129,8 +129,11 @@ object NativePlaybackManager {
   private val httpClient = OkHttpClient.Builder()
     .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
     .connectTimeout(20, TimeUnit.SECONDS)
-    .readTimeout(45, TimeUnit.SECONDS)
-    .writeTimeout(45, TimeUnit.SECONDS)
+    // Live IPTV is a long-lived byte stream. A 45s read timeout was aborting
+    // healthy Onn playback about once a minute, climbing the 3-step recovery
+    // ladder, then showing Retry.
+    .readTimeout(0, TimeUnit.SECONDS)
+    .writeTimeout(0, TimeUnit.SECONDS)
     .retryOnConnectionFailure(true)
     .build()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
@@ -189,14 +192,29 @@ object NativePlaybackManager {
   }
   private val bufferingWatchdog: Runnable = Runnable {
     val instance = player ?: return@Runnable
-    if (!firstFrameRendered || instance.playbackState != Player.STATE_BUFFERING) return@Runnable
+    if (!firstFrameRendered) return@Runnable
+    // Live MPEG-TS/HLS on Amlogic often reports BUFFERING while frames are
+    // still presenting, and currentPosition is TIME_UNSET. That used to look
+    // like a hung decoder and called recoverOnce every minute.
+    if (instance.isPlaying || (instance.playWhenReady && instance.playbackState == Player.STATE_READY)) {
+      bufferingSinceMs = System.currentTimeMillis()
+      if (instance.playbackState == Player.STATE_BUFFERING) {
+        main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
+      }
+      return@Runnable
+    }
+    if (instance.playbackState != Player.STATE_BUFFERING) return@Runnable
 
     val nowMs = System.currentTimeMillis()
     val bufferedPosition = instance.bufferedPosition
     val position = instance.currentPosition
-    val madeProgress = bufferedPosition > bufferingLastBufferedPositionMs || position > bufferingLastPositionMs
-    bufferingLastBufferedPositionMs = bufferedPosition
-    bufferingLastPositionMs = position
+    val bufferedDuration = instance.totalBufferedDuration
+    val madeProgress = instance.isPlaying ||
+      (position != C.TIME_UNSET && position > bufferingLastPositionMs) ||
+      (bufferedPosition != C.TIME_UNSET && bufferedPosition > bufferingLastBufferedPositionMs) ||
+      (bufferedDuration != C.TIME_UNSET && bufferedDuration > 0L)
+    if (position != C.TIME_UNSET) bufferingLastPositionMs = position
+    if (bufferedPosition != C.TIME_UNSET) bufferingLastBufferedPositionMs = bufferedPosition
 
     if (madeProgress) {
       bufferingSinceMs = nowMs
@@ -226,7 +244,7 @@ object NativePlaybackManager {
     }
 
     recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
-    recoverOnce(instance, skipBarePrepare = transport)
+    recoverOnce(instance, skipBarePrepare = false)
   }
   private val delayedRecovery = Runnable {
     val instance = player ?: return@Runnable
@@ -464,7 +482,7 @@ object NativePlaybackManager {
                   main.removeCallbacks(bufferingWatchdog)
                   main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
                 }
-                publishState("loading", null)
+                if (!created.isPlaying) publishState("loading", null)
               }
               Player.STATE_READY -> {
                 main.removeCallbacks(bufferingWatchdog)
@@ -476,7 +494,7 @@ object NativePlaybackManager {
               Player.STATE_ENDED -> {
                 recordDiagnostic("stream-ended", lastPlaybackError, created)
                 rearmRecoveryAfterStablePlayback()
-                recoverOnce(created, skipBarePrepare = true)
+                recoverOnce(created, skipBarePrepare = false)
               }
               else -> Unit
             }
@@ -506,8 +524,16 @@ object NativePlaybackManager {
             recoverOnce(
               created,
               forceFreshSource = isAuthenticationFailure(error),
-              skipBarePrepare = activeSource?.sourceType == "transport",
+              skipBarePrepare = isContainerMismatch(error),
             )
+          }
+          override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (!firstFrameRendered) return
+            if (isPlaying) {
+              main.removeCallbacks(bufferingWatchdog)
+              resetBufferingWatchdogState()
+              publishState("playing", null)
+            }
           }
           override fun onTracksChanged(tracks: Tracks) = publishTracks(tracks)
         })

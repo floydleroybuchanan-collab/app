@@ -119,7 +119,7 @@ jobs:
           grep -q 'MAX_BUFFER_MS_LOW_RAM = 90_000' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'HARD_STALL_RECOVERY_MS = 70_000L' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'connectTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'readTimeout(45, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           git diff --check
 
       - name: Commit guarded handoff fix
