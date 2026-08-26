@@ -5,31 +5,18 @@
   the other one (see NativePlaybackManager.attachSurface/ensurePlayerViewIn).
   Only the ExoPlayer bound to it changes.
 
-  An earlier revision shared ONE PlayerView between the two surfaces,
-  reparenting it at runtime, and set app:surface_type="texture_view" to route
-  around a real bug that caused: PlayerView's default surface_type is
-  SurfaceView, which owns a separate compositor window outside the normal view
-  hierarchy — removing/re-adding it across parents forces Android to destroy
-  and recreate its underlying Surface, a documented source of "video renders
-  at the wrong/old size" and "video never comes back, audio keeps playing"
-  bugs (MediaCodec requires a live Surface at all times; see
-  https://github.com/google/ExoPlayer/issues/5825 and
-  https://github.com/google/ExoPlayer/issues/1084).
-
-  TextureView avoids that specific hazard, but trades it for a different one on
-  some lower-end/older Android TV and Fire TV SoCs: rendering video into a
-  TextureView requires the GPU to copy every decoded frame into an OpenGL
-  texture, and some vendor GPU driver combinations on that hardware tier are
-  known to silently fail this copy — decode succeeds (ExoPlayer reports a
-  normal playing state, audio plays normally, no error is ever raised) but
-  nothing ever appears on screen. That is a worse failure mode than the one
-  TextureView was chosen to fix, and on exactly the hardware this app targets.
-
-  Never reparenting the view at all removes the original SurfaceView hazard
-  without needing TextureView, so surface_type is back to PlayerView's default
-  (SurfaceView) here — the broadly hardware-compatible, direct-compositor path.
+  RC.1 rendered both Guide preview and fullscreen through TextureView. Keep
+  that known-good rendering contract: unlike SurfaceView, TextureView is
+  composited inside the normal React/Fabric view hierarchy, so clipping,
+  stacking, opacity and navigation overlays cannot leave decoded video in a
+  separate layer behind the app. The permanent per-owner PlayerViews still
+  preserve the newer handoff/lifecycle improvement; only the render primitive
+  is restored. PlayerView surface_type is construction-only and must be set in
+  XML.
 -->
 <androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/charm_player_view"
     android:layout_width="match_parent"
-    android:layout_height="match_parent" />
+    android:layout_height="match_parent"
+    app:surface_type="texture_view" />
