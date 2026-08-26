@@ -26,7 +26,7 @@ test("Media3 uses the hardened live-TV buffers and bounded native recovery polic
   assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 20_000/); assert.match(native, /MAX_BUFFER_MS_LOW_RAM = 90_000/); assert.match(native, /PLAYBACK_BUFFER_MS_LOW_RAM = 5_000/); assert.match(native, /REBUFFER_BUFFER_MS_LOW_RAM = 12_000/); assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/); assert.match(native, /MIN_BUFFER_MS_NORMAL = 20_000/); assert.match(native, /MAX_BUFFER_MS_NORMAL = 90_000/); assert.match(native, /PLAYBACK_BUFFER_MS_NORMAL = 5_000/); assert.match(native, /REBUFFER_BUFFER_MS_NORMAL = 12_000/); assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/); assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/); assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 35_000L/); assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L/); assert.match(native, /MAX_AUTO_RECOVERIES = 4/); assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/); assert.match(native, /readTimeout\(45, TimeUnit.SECONDS\)/); assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/); assert.match(native, /instance\.prepare\(\)/);
 });
 
-test("direct MPEG-TS uses an explicit TS extractor without forcing legacy TV codecs async", async () => {
+test("direct MPEG-TS keeps its extractor while all video containers retain RC.1 async codec queueing", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)\.createMediaSource\(item\)/);
   assert.match(native, /DefaultExtractorsFactory\(\)\.setTsExtractorFlags\(/);
@@ -34,7 +34,7 @@ test("direct MPEG-TS uses an explicit TS extractor without forcing legacy TV cod
   assert.match(native, /DefaultTsPayloadReaderFactory\.FLAG_DETECT_ACCESS_UNITS/);
   assert.match(native, /"transport" -> builder\.setMimeType\(MimeTypes\.VIDEO_MP2T\)/);
   assert.match(native, /setEnableDecoderFallback\(true\)/);
-  assert.doesNotMatch(native, /forceEnableMediaCodecAsynchronousQueueing\(\)/);
+  assert.match(native, /forceEnableMediaCodecAsynchronousQueueing\(\)/);
 });
 
 test("first frame is the stable-playing gate and cancels delayed recovery", async () => {

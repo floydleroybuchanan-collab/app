@@ -436,6 +436,11 @@ object NativePlaybackManager {
     val renderers = DefaultRenderersFactory(context)
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
       .setEnableDecoderFallback(true)
+      // RC.1's working Media3 path forced asynchronous MediaCodec queueing.
+      // Removing this changed the video renderer for every container, while
+      // audio continued through its independent renderer. Restore the proven
+      // decoder contract; fallback remains enabled for codec selection errors.
+      .forceEnableMediaCodecAsynchronousQueueing()
     return ExoPlayer.Builder(context, renderers)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
