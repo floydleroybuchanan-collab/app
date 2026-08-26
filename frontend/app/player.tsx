@@ -496,10 +496,17 @@ export default function PlayerScreen() {
         </ErrorBoundary>
       ) : null}
 
-      <Pressable style={StyleSheet.absoluteFill} focusable={!isTV} onPress={() => {
-        if (controls) { controlsRef.current = false; setControls(false); setChannelsOpen(false); setTracksOpen(false); }
-        else revealControls();
-      }} testID="player-surface" />
+      {!isTV ? (
+        <Pressable
+          style={[StyleSheet.absoluteFill, styles.touchCatcher]}
+          focusable
+          onPress={() => {
+            if (controls) { controlsRef.current = false; setControls(false); setChannelsOpen(false); setTracksOpen(false); }
+            else revealControls();
+          }}
+          testID="player-surface"
+        />
+      ) : null}
 
       {(!hasStream || status === "error") ? (
         <View style={styles.errorOverlay} pointerEvents="box-none">
@@ -585,7 +592,8 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000", overflow: "hidden" },
+  root: { flex: 1, backgroundColor: "#000", overflow: "visible" },
+  touchCatcher: { backgroundColor: "transparent" },
   zoomedVideo: { transform: [{ scale: 1.2 }] },
   errorOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.54)" },
   errorTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 13 },

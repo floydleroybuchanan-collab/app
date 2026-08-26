@@ -40,7 +40,7 @@ async function load(): Promise<Snapshot> {
       storage.getItem<string>(AUDIO_KEY, "auto"),
     ]);
     cached = {
-      hardwareDecode: hardwareMutationRevision === hardwareRevisionAtStart ? hardwareDecode !== false : cached.hardwareDecode,
+      hardwareDecode: hardwareMutationRevision === hardwareRevisionAtStart ? hardwareDecode === true : cached.hardwareDecode,
       audioOutput: audioMutationRevision === audioRevisionAtStart ? normalizeAudio(audioOutput) : cached.audioOutput,
     };
     loaded = true;

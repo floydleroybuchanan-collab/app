@@ -84,8 +84,11 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   init {
-    clipChildren = true
-    clipToPadding = true
+    // TextureView is composited in the view tree. Clipping this host (or an
+    // ancestor) is a Fire TV / Android TV failure mode: audio continues while
+    // video stays a black rectangle.
+    clipChildren = false
+    clipToPadding = false
   }
 
   private fun currentPlayerView(): PlayerView? {

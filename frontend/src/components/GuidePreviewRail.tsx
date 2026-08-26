@@ -221,9 +221,9 @@ export function GuidePreviewRail({
 }
 
 const styles = StyleSheet.create({
-  panel: { height: 174, flexShrink: 0, flexDirection: "row", alignItems: "stretch", backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, overflow: "hidden" },
+  panel: { height: 174, flexShrink: 0, flexDirection: "row", alignItems: "stretch", backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, overflow: "visible" },
   previewColumn: { width: 292, flexShrink: 0, padding: 7, justifyContent: "center", borderRightWidth: 1, borderRightColor: tvColors.line },
-  preview: { width: "100%", aspectRatio: 16 / 9, maxHeight: 158, flexShrink: 0, backgroundColor: "#05050B", overflow: "hidden", borderRadius: 5 },
+  preview: { width: "100%", aspectRatio: 16 / 9, maxHeight: 158, flexShrink: 0, backgroundColor: "#05050B", overflow: "visible", borderRadius: 5 },
   fallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep, gap: 6, paddingHorizontal: 8 },
   fallbackHint: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, textAlign: "center" },
   liveTag: { position: "absolute", left: 6, bottom: 6, backgroundColor: "rgba(124,58,237,0.92)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },

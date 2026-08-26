@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.TextureView
 import android.view.View
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -607,10 +608,13 @@ object NativePlaybackManager {
     playerViewFor(surfaceOwner)?.let { existing -> if (existing.parent === target) return existing }
     val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {
       useController = false
+      clipChildren = false
+      clipToPadding = false
       setShutterBackgroundColor(Color.BLACK)
       setKeepContentOnPlayerReset(true)
       resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.GONE
+      (videoSurfaceView as? TextureView)?.isOpaque = false
     }
     target.addView(video, fillParent())
     when (surfaceOwner) {

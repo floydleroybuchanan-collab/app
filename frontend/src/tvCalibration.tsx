@@ -117,5 +117,8 @@ export function TvCalibrationFrame({ children, style }: { children: React.ReactN
         marginLeft: playerEdges.margin.left,
       }
     : null;
-  return <View style={[{ flex: 1, overflow: "hidden" }, playerStyle, style]}>{children}</View>;
+  // TextureView video (Guide preview + fullscreen Media3) goes black with
+  // audio-only if any ancestor clips children. Overscan is padding/margin, so
+  // this frame must not clip the player surface.
+  return <View style={[{ flex: 1, overflow: "visible" }, playerStyle, style]}>{children}</View>;
 }

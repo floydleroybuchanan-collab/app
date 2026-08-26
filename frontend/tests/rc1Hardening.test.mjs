@@ -32,6 +32,20 @@ test("source modules never hardcode provider playlist/EPG URLs", async () => {
 
 test("Purple TV APK workflow injects playlist/EPG from secrets", async () => { const workflow = await repoSource(".github/workflows/purple-tv-ui.yml"); assert.match(workflow, /secrets\.M3U_URL/); assert.match(workflow, /secrets\.EPG_URL/); assert.match(workflow, /Require playlist and EPG build configuration/); });
 
+test("Cloudflare workflows use CF_API_TOKEN with legacy CLOUDFLARE_API_TOKEN fallback", async () => {
+  const [refresh, deploy, docs] = await Promise.all([
+    repoSource(".github/workflows/charm-refresh.yml"),
+    repoSource(".github/workflows/deploy-cloudflare-worker.yml"),
+    repoSource("cloudflare-backend/README.md"),
+  ]);
+  assert.match(refresh, /secrets\.CF_API_TOKEN \|\| secrets\.CLOUDFLARE_API_TOKEN/);
+  assert.match(refresh, /secrets\.M3U_URL/);
+  assert.match(refresh, /secrets\.EPG_URL/);
+  assert.match(deploy, /secrets\.CF_API_TOKEN \|\| secrets\.CLOUDFLARE_API_TOKEN/);
+  assert.match(docs, /`M3U_URL` = playlist URL/);
+  assert.match(docs, /`EPG_URL` = XMLTV \/ EPG URL/);
+});
+
 test("native EPG refuses empty live swaps and filters getWindow by channel ids", async () => {
   const [db, mod, bridge, ram] = await Promise.all([source("android/app/src/main/java/com/charmiptv/app/EpgDatabase.kt"), source("android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt"), source("src/nativeEpg.ts"), source("android/app/src/main/java/com/charmiptv/app/EpgRamEngine.kt")]);
   assert.match(db, /Refusing to replace live EPG with an empty feed/); assert.match(db, /channelIds\.chunked\(IN_CLAUSE_CHUNK\)/); assert.match(db, /fun deleteExpired/); assert.match(db, /wal_checkpoint\(PASSIVE\)/); assert.match(mod, /resolveProgrammeStop/); assert.match(mod, /DEFAULT_PROGRAMME_DURATION_MS/); assert.match(mod, /channelIds: ReadableArray/); assert.match(mod, /deleteExpired\(/); assert.match(bridge, /getWindow\(startMs, endMs, uniqueIds\)/); assert.match(db, /queryGuideWindow/); assert.match(mod, /queryGuideWindow/); assert.match(mod, /activeXmltvIds: ReadableArray/); assert.match(mod, /activeChannelNames: ReadableArray/); assert.match(mod, /channelId!!\.lowercase\(\) in acceptedChannelIds/); assert.match(mod, /CharmEpgImportProgress/); assert.match(bridge, /DeviceEventEmitter\.addListener\("CharmEpgImportProgress"/); assert.match(ram, /database\.queryWindow\(startMs, endMs, missing\)/); assert.match(ram, /ENTRY_TTL_MS = 90L \* 60L \* 1000L/); assert.match(ram, /LOW_RAM_CHANNEL_LIMIT = 128/); assert.doesNotMatch(ram, /queryWindow\(startMs, endMs, null\)/);

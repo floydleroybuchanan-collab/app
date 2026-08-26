@@ -535,7 +535,7 @@ export function PurpleTvShell({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", backgroundColor: tvColors.canvas, overflow: "hidden" },
+  root: { flex: 1, flexDirection: "row", backgroundColor: tvColors.canvas, overflow: "visible" },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
   sidebarSpacer: { width: PURPLE_SIDEBAR_WIDTH, height: "100%" },
   sidebar: {

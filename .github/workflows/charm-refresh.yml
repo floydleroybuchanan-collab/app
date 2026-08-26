@@ -51,7 +51,7 @@ jobs:
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           M3U_URL: ${{ secrets.M3U_URL }}
           EPG_URL: ${{ secrets.EPG_URL }}
 
@@ -61,7 +61,7 @@ jobs:
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           M3U_URL: ${{ secrets.M3U_URL }}
           EPG_URL: ${{ secrets.EPG_URL }}
           GUIDE_WINDOW_HOURS: ${{ vars.GUIDE_WINDOW_HOURS || vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '12' }}

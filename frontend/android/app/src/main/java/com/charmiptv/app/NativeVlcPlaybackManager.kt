@@ -4,6 +4,7 @@ import android.app.Activity
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import org.videolan.libvlc.LibVLC
@@ -46,6 +47,7 @@ object NativeVlcPlaybackManager {
   }
 
   private const val START_TIMEOUT_MS = 60_000L
+  private const val TAG = "CharmVlc"
 
   private val main = Handler(Looper.getMainLooper())
   private var activity: Activity? = null
@@ -152,75 +154,47 @@ object NativeVlcPlaybackManager {
       bufferProfile = bufferProfile.trim().lowercase(),
     )
 
-    val core = ensureCore()
-    val player = MediaPlayer(core)
-    mediaPlayer = player
-    player.volume = if (mutedState) 0 else 100
-    configureAudioOutput(player, source.audioOutput)
-    player.setEventListener { event ->
-      if (mediaPlayer !== player || activeIdentity != identity) return@setEventListener
-      when (event.type) {
-        MediaPlayer.Event.Opening,
-        MediaPlayer.Event.Buffering -> listener?.onState(identity, "loading", null)
-        MediaPlayer.Event.Playing -> {
-          playing = true
-          main.removeCallbacks(startupTimeout)
-          CharmMemoryCoordinator.setPlaybackStarting(false)
-          listener?.onState(identity, "playing", null)
-          publishTracks(player, identity)
-        }
-        MediaPlayer.Event.EncounteredError -> {
-          playing = false
-          main.removeCallbacks(startupTimeout)
-          CharmMemoryCoordinator.setPlaybackStarting(false)
-          listener?.onState(identity, "error", "vlc-playback-error")
-          main.post {
-            if (mediaPlayer === player && activeIdentity == identity) {
-              releasePlayerOnly(removeLayout = false)
-              activeIdentity = null
-              if (owner == identity.owner) owner = Owner.NONE
-            }
-          }
-        }
-        MediaPlayer.Event.EndReached -> {
-          playing = false
-          main.removeCallbacks(startupTimeout)
-          CharmMemoryCoordinator.setPlaybackStarting(false)
-          listener?.onState(identity, "error", "stream-ended")
-          main.post {
-            if (mediaPlayer === player && activeIdentity == identity) {
-              releasePlayerOnly(removeLayout = false)
-              activeIdentity = null
-              if (owner == identity.owner) owner = Owner.NONE
-            }
-          }
+    try {
+      val core = ensureCore() ?: throw IllegalStateException("LibVLC unavailable")
+      val player = MediaPlayer(core)
+      mediaPlayer = player
+      player.volume = if (mutedState) 0 else 100
+      configureAudioOutput(player, source.audioOutput)
+      player.setEventListener { event ->
+        // LibVLC delivers events off the main thread. Emitting into React Native
+        // from that thread is a documented hard crash on engine switch.
+        when (event.type) {
+          MediaPlayer.Event.Opening -> main.post { publishLoading(player, identity) }
+          MediaPlayer.Event.Playing -> main.post { publishPlaying(player, identity) }
+          MediaPlayer.Event.EncounteredError -> main.post { publishFailure(player, identity, "vlc-playback-error") }
+          MediaPlayer.Event.EndReached -> main.post { publishFailure(player, identity, "stream-ended") }
+          else -> Unit
         }
       }
-    }
 
-    if (!attachVideoLayout(requestedOwner)) {
+      attachVideoLayout(requestedOwner)
+      listener?.onState(identity, "loading", null)
+      val media = Media(core, Uri.parse(source.uri))
+      media.setHWDecoderEnabled(source.hardwareDecode, false)
+      media.addOption(":network-caching=${networkCachingMs(source.bufferProfile)}")
+      source.headers.forEach { (key, value) ->
+        when (key.lowercase()) {
+          "user-agent" -> media.addOption(":http-user-agent=$value")
+          "referer", "referrer" -> media.addOption(":http-referrer=$value")
+        }
+      }
+      player.media = media
+      media.release()
+      player.play()
+      main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+    } catch (failure: Throwable) {
+      Log.e(TAG, "VLC prepare failed", failure)
       CharmMemoryCoordinator.setPlaybackStarting(false)
-      listener?.onState(identity, "error", "surface-unavailable")
+      listener?.onState(identity, "error", "vlc-init-failed")
       releasePlayerOnly(removeLayout = false)
       activeIdentity = null
       owner = Owner.NONE
-      return@runOnMain
     }
-
-    listener?.onState(identity, "loading", null)
-    val media = Media(core, Uri.parse(source.uri))
-    media.setHWDecoderEnabled(source.hardwareDecode, false)
-    media.addOption(":network-caching=${networkCachingMs(source.bufferProfile)}")
-    source.headers.forEach { (key, value) ->
-      when (key.lowercase()) {
-        "user-agent" -> media.addOption(":http-user-agent=$value")
-        "referer", "referrer" -> media.addOption(":http-referrer=$value")
-      }
-    }
-    player.media = media
-    media.release()
-    player.play()
-    main.postDelayed(startupTimeout, START_TIMEOUT_MS)
   }
 
   fun setResizeMode(mode: String?) = runOnMain {
@@ -267,10 +241,45 @@ object NativeVlcPlaybackManager {
     activity = null
   }
 
-  private fun ensureCore(): LibVLC {
+  private fun publishLoading(player: MediaPlayer, identity: Identity) {
+    if (mediaPlayer !== player || activeIdentity != identity) return
+    listener?.onState(identity, "loading", null)
+  }
+
+  private fun publishPlaying(player: MediaPlayer, identity: Identity) {
+    if (mediaPlayer !== player || activeIdentity != identity) return
+    playing = true
+    main.removeCallbacks(startupTimeout)
+    CharmMemoryCoordinator.setPlaybackStarting(false)
+    listener?.onState(identity, "playing", null)
+    publishTracks(player, identity)
+  }
+
+  private fun publishFailure(player: MediaPlayer, identity: Identity, reason: String) {
+    if (mediaPlayer !== player || activeIdentity != identity) return
+    playing = false
+    main.removeCallbacks(startupTimeout)
+    CharmMemoryCoordinator.setPlaybackStarting(false)
+    listener?.onState(identity, "error", reason)
+    if (mediaPlayer === player && activeIdentity == identity) {
+      releasePlayerOnly(removeLayout = false)
+      activeIdentity = null
+      if (owner == identity.owner) owner = Owner.NONE
+    }
+  }
+
+  private fun ensureCore(): LibVLC? {
     libVlc?.let { return it }
-    val context = activity ?: error("Activity unavailable")
-    return LibVLC(context.applicationContext, arrayListOf()).also { libVlc = it }
+    val context = activity ?: return null
+    return try {
+      LibVLC(
+        context.applicationContext,
+        arrayListOf("--audio-time-stretch"),
+      ).also { libVlc = it }
+    } catch (failure: Throwable) {
+      Log.e(TAG, "LibVLC init failed", failure)
+      null
+    }
   }
 
   private fun configureAudioOutput(player: MediaPlayer, audioOutput: String) {
@@ -297,20 +306,27 @@ object NativeVlcPlaybackManager {
       Owner.FULLSCREEN -> fullscreenSurface
       Owner.NONE -> null
     } ?: return false
-    if (!surface.isAttachedToWindow) return false
     val context = activity ?: return false
-    val layout = videoLayout ?: VLCVideoLayout(context).also { videoLayout = it }
+    val layout = videoLayout ?: VLCVideoLayout(context).also {
+      it.clipChildren = false
+      it.clipToPadding = false
+      videoLayout = it
+    }
     (layout.parent as? ViewGroup)?.removeView(layout)
     surface.removeAllViews()
     surface.addView(layout, FrameLayout.LayoutParams(-1, -1))
     val player = mediaPlayer ?: return false
     try { player.detachViews() } catch (_: Throwable) {}
-    try {
-      player.attachViews(layout, null, false, false)
-    } catch (_: Throwable) {
-      return false
+    return try {
+      // TextureView composites inside React/Fabric. SurfaceView (the previous
+      // false flag) renders in a separate hole and is the black-screen / crash
+      // path when switching engines under an opaque RN tree.
+      player.attachViews(layout, null, false, true)
+      true
+    } catch (failure: Throwable) {
+      Log.w(TAG, "VLC attachViews failed", failure)
+      false
     }
-    return true
   }
 
   private fun publishTracks(player: MediaPlayer, identity: Identity) {

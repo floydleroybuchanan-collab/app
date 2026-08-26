@@ -10,10 +10,15 @@ The JavaScript bundle is packaged in the APK, so Metro is not required.
 2. In GitHub, open **Settings > Secrets and variables > Actions > Variables**.
 3. Create the repository variable `EXPO_PUBLIC_CHARM_API_URL` containing the
    Worker URL without a trailing slash.
-4. For **direct-fetch** Purple TV / Purple Next APKs, set repository **secrets**
-   (preferred, same as charm-refresh):
+4. For Cloudflare refresh/deploy and **direct-fetch** Purple TV / Purple Next
+   APKs, set repository **secrets** (Settings → Secrets and variables → Actions):
    - `M3U_URL` — playlist URL
    - `EPG_URL` — XMLTV / EPG URL
+   - `CF_ACCOUNT_ID` — Cloudflare account ID
+   - `CF_KV_NAMESPACE_ID` — KV namespace ID
+   - `CF_API_TOKEN` — Cloudflare API token (Workers KV + Workers Scripts edit)
+
+   Workflows still accept the older `CLOUDFLARE_API_TOKEN` name as a fallback.
 
    Optional fallbacks (Actions **variables**): `EXPO_PUBLIC_M3U_URL`,
    `EXPO_PUBLIC_EPG_URL`, and `EXPO_PUBLIC_GUIDE_WINDOW_HOURS` (default `6`).

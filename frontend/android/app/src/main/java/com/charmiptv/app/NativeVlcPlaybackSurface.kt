@@ -9,13 +9,18 @@ import com.facebook.react.uimanager.annotations.ReactProp
 /**
  * React Native host for the manual LibVLC compatibility engine.
  *
- * It mirrors the Media3 surface lifetime: null/unknown owners mean NONE,
- * temporary Fabric/window detaches release only the physical video target, and
- * final React disposal explicitly clears the host. NativeVlcPlaybackManager
- * remains the sole owner of the decoder/player instance.
+ * Match Media3's lifetime: register the host as soon as the owner prop is set,
+ * even before onAttachedToWindow. Fabric may detach/reattach this view during
+ * an engine switch; that must not be treated as destruction or LibVLC is left
+ * with no layout (black + silent) or is torn down mid-decode (native crash).
  */
 class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativeVlcPlaybackManager.Owner.NONE
+
+  init {
+    clipChildren = false
+    clipToPadding = false
+  }
 
   fun setOwner(value: String?) {
     val next = when (value) {
@@ -23,13 +28,19 @@ class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
       "fullscreen" -> NativeVlcPlaybackManager.Owner.FULLSCREEN
       else -> NativeVlcPlaybackManager.Owner.NONE
     }
-    if (owner == next) return
+    if (owner == next) {
+      if (owner != NativeVlcPlaybackManager.Owner.NONE) {
+        NativeVlcPlaybackManager.attachSurface(owner, this)
+      }
+      return
+    }
 
-    if (owner != NativeVlcPlaybackManager.Owner.NONE && isAttachedToWindow) {
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
       NativeVlcPlaybackManager.detachSurface(owner, this)
+      removeAllViews()
     }
     owner = next
-    if (owner != NativeVlcPlaybackManager.Owner.NONE && isAttachedToWindow) {
+    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
       NativeVlcPlaybackManager.attachSurface(owner, this)
     }
   }
@@ -42,9 +53,9 @@ class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   override fun onDetachedFromWindow() {
-    if (owner != NativeVlcPlaybackManager.Owner.NONE) {
-      NativeVlcPlaybackManager.detachSurface(owner, this)
-    }
+    // Do not call detachSurface() here. Fabric may detach and reattach this
+    // same host during Settings engine switches and layout. VLCVideoLayout
+    // owns the TextureView lifecycle; final disposal is releaseFromReact().
     super.onDetachedFromWindow()
   }
 
