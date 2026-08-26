@@ -8,10 +8,11 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
-import android.view.TextureView
+import android.view.SurfaceView
 import android.view.View
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
@@ -280,9 +281,10 @@ object NativePlaybackManager {
     val video = playerViewFor(surfaceOwner)
     val instance = player
     if (owner == surfaceOwner && instance != null) {
-      instance.playWhenReady = false
+      // Unbind the view only. Pausing here is what turned a black-with-audio
+      // TextureView into a black-and-silent player after the surface health
+      // check rebuilt a 0-size target.
       recordDiagnostic("surface-detached", lastPlaybackError, instance)
-      publishState("loading", "surface-detached")
     }
     if (video?.parent === surface) {
       try { video.player = null } catch (_: Throwable) {}
@@ -316,6 +318,7 @@ object NativePlaybackManager {
     // Preview <-> fullscreen is a PlayerView handoff, not a stream failure;
     // this order avoids leaving the decoder with no output Surface.
     owner = requestedOwner
+    applyAudioAttributes(instance, requestedOwner)
     video.player = instance
     video.visibility = View.VISIBLE
     // Bind the new target first so Media3 never observes a no-surface gap,
@@ -447,6 +450,7 @@ object NativePlaybackManager {
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
       .build().also { created ->
         player = created
+        applyAudioAttributes(created, owner)
         created.volume = if (mutedState) 0f else 1f
         created.addListener(object : Player.Listener {
           override fun onPlaybackStateChanged(playbackState: Int) {
@@ -604,9 +608,26 @@ object NativePlaybackManager {
     }
   }
 
+  private fun applyAudioAttributes(instance: ExoPlayer, surfaceOwner: Owner) {
+    // Match PR #23 expo-video: fullscreen takes AUDIOFOCUS_GAIN / doNotMix;
+    // preview mixes so it cannot steal the TV's audio session.
+    instance.setAudioAttributes(
+      AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+        .build(),
+      surfaceOwner == Owner.FULLSCREEN,
+    )
+  }
+
   private fun ensurePlayerViewIn(surfaceOwner: Owner, target: FrameLayout): PlayerView {
     playerViewFor(surfaceOwner)?.let { existing -> if (existing.parent === target) return existing }
-    val video = (LayoutInflater.from(target.context).inflate(R.layout.charm_player_view, target, false) as PlayerView).apply {
+    val layoutId = if (surfaceOwner == Owner.FULLSCREEN) {
+      R.layout.charm_player_view_fullscreen
+    } else {
+      R.layout.charm_player_view
+    }
+    val video = (LayoutInflater.from(target.context).inflate(layoutId, target, false) as PlayerView).apply {
       useController = false
       clipChildren = false
       clipToPadding = false
@@ -614,7 +635,7 @@ object NativePlaybackManager {
       setKeepContentOnPlayerReset(true)
       resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.GONE
-      (videoSurfaceView as? TextureView)?.isOpaque = false
+      (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
     }
     target.addView(video, fillParent())
     when (surfaceOwner) {

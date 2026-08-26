@@ -43,25 +43,32 @@ test("first frame is the stable-playing gate and cancels delayed recovery", asyn
 });
 
 test("native PlayerView is mounted inside the React playback target instead of below opaque screens", async () => {
-  const [native, surface, adapter, layout, calibration, player, shell] = await Promise.all([
+  const [native, surface, adapter, previewLayout, fullscreenLayout, calibration, player, shell] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackSurface.kt"),
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/res/layout/charm_player_view.xml"),
+    source("android/app/src/main/res/layout/charm_player_view_fullscreen.xml"),
     source("src/tvCalibration.tsx"),
     source("app/player.tsx"),
     source("src/components/PurpleTvShell.tsx"),
   ]);
-  assert.match(native, /attachSurface/); assert.match(native, /target\.addView\(video, fillParent\(\)\)/); assert.match(native, /setShutterBackgroundColor\(Color\.BLACK\)/); assert.match(native, /clipChildren = false/); assert.match(native, /TextureView\)\?\.isOpaque = false/);
+  assert.match(native, /attachSurface/); assert.match(native, /target\.addView\(video, fillParent\(\)\)/); assert.match(native, /setShutterBackgroundColor\(Color\.BLACK\)/); assert.match(native, /clipChildren = false/);
+  assert.match(native, /R\.layout\.charm_player_view_fullscreen/);
+  assert.match(native, /setAudioAttributes/);
+  assert.match(native, /setZOrderMediaOverlay\(true\)/);
+  assert.doesNotMatch(native, /playWhenReady = false/);
   assert.doesNotMatch(native, /content\.removeView\(reactRoot\)/);
   assert.match(surface, /class NativePlaybackSurface/); assert.match(surface, /NativePlaybackManager\.attachSurface/);
   assert.match(surface, /clipChildren = false/);
+  assert.doesNotMatch(surface, /surfaceHealthCheck/);
   assert.match(adapter, /CharmNativePlaybackSurface/);
-  assert.match(layout, /app:surface_type="texture_view"/, "RC.1 TextureView compositing must be preserved for React preview and fullscreen surfaces");
-  assert.match(calibration, /overflow: "visible"/);
-  assert.match(player, /overflow: "visible"/);
+  assert.match(previewLayout, /app:surface_type="texture_view"/);
+  assert.match(fullscreenLayout, /app:surface_type="surface_view"/);
+  assert.match(calibration, /overflow: "hidden"/);
+  assert.match(player, /overflow: "hidden"/);
   assert.match(player, /!isTV \? \(/);
-  assert.match(shell, /root: \{ flex: 1, flexDirection: "row", backgroundColor: tvColors\.canvas, overflow: "visible" \}/);
+  assert.match(shell, /root: \{ flex: 1, flexDirection: "row", backgroundColor: tvColors\.canvas, overflow: "hidden" \}/);
 });
 
 test("audio and subtitles hot-apply through TrackSelectionParameters", async () => {

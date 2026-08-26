@@ -108,11 +108,7 @@ object NativeVlcPlaybackManager {
     if (attached !== surface) return@runOnMain
 
     if (owner == surfaceOwner) {
-      try { mediaPlayer?.pause() } catch (_: Throwable) {}
       try { mediaPlayer?.detachViews() } catch (_: Throwable) {}
-      playing = false
-      main.removeCallbacks(startupTimeout)
-      activeIdentity?.let { listener?.onState(it, "loading", "surface-detached") }
     }
     if (videoLayout?.parent === surface) surface.removeView(videoLayout)
     when (surfaceOwner) {
@@ -318,10 +314,9 @@ object NativeVlcPlaybackManager {
     val player = mediaPlayer ?: return false
     try { player.detachViews() } catch (_: Throwable) {}
     return try {
-      // TextureView composites inside React/Fabric. SurfaceView (the previous
-      // false flag) renders in a separate hole and is the black-screen / crash
-      // path when switching engines under an opaque RN tree.
-      player.attachViews(layout, null, false, true)
+      // Preview: TextureView (composites in the rail). Fullscreen: SurfaceView
+      // (same hardware overlay as PR #23 expo-video / RCTVLCPlayer).
+      player.attachViews(layout, null, false, surfaceOwner == Owner.PREVIEW)
       true
     } catch (failure: Throwable) {
       Log.w(TAG, "VLC attachViews failed", failure)

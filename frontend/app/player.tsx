@@ -592,7 +592,7 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000", overflow: "visible" },
+  root: { flex: 1, backgroundColor: "#000", overflow: "hidden" },
   touchCatcher: { backgroundColor: "transparent" },
   zoomedVideo: { transform: [{ scale: 1.2 }] },
   errorOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.54)" },
