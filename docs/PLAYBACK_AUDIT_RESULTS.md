@@ -75,7 +75,7 @@ The scanner is a structural check, not exhaustive runtime verification; backend/
 ## Validation status
 
 - `npm ci`: passed (1,006 installed packages).
-- `npm test`: **268/268 passed**, including real dependency-injected coordinator races and generation tests, artifact encryption/tamper tests and existing wiring/focus/guide regressions.
+- `npm test`: **269/269 passed**, including real dependency-injected coordinator races and generation tests, artifact encryption/tamper/CI-wiring tests and existing wiring/focus/guide regressions.
 - `npm run typecheck`, `npm run lint`, `npm run verify:native-config`, `npm run verify:native-guide`: passed.
 - `node --test cloudflare-backend/worker/test/index.test.mjs cloudflare-backend/scripts/build-and-upload.test.mjs`: **16/16 passed**.
 - Whole-repository scan: 0 candidate-critical findings; both main notes manually reviewed above.
@@ -95,6 +95,24 @@ The scanner is a structural check, not exhaustive runtime verification; backend/
 6. On the target TV: refresh playlist, test opaque/TS/HLS channels and AC-3/E-AC-3/DTS audio; run more than two minutes; exercise preview/fullscreen/back and rapid channel switches; test manual pause across overlays, Fit/Fill/Zoom/Stretch, audio/subtitles, Retry after bounded failure, and unsupported-header fallback. Capture logcat/Health diagnostics without provider credentials. Check decoder/process memory during these transitions.
 
 Primary API references consulted: [Media3 formats](https://developer.android.com/media/media3/exoplayer/supported-formats), [Media3 1.8 RTSP factory](https://github.com/androidx/media/blob/1.8.0/libraries/exoplayer_rtsp/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource.java), [VLC 3 HTTP access](https://github.com/videolan/vlc/blob/3.0.x/modules/access/http.c), and [VLC 3 RTSP access](https://github.com/videolan/vlc/blob/3.0.x/modules/access/live555.cpp). The installed LibVLC 3.7.5 AAR's public API/options were also inspected; no decompiled application code was used.
+
+## Source secret verification
+
+The repository Secrets API reports `M3U_URL` and `EPG_URL`, both last updated August 19, 2026. No Actions variables exist. These names match the README and native Android source wiring. Cloudflare credentials were updated August 25 but are used for metadata deployments/refreshes, not direct Android media playback. The audited sideload workflow now reads only the two source secrets, fails if missing and disables dotenv loading; it cannot silently select an old `EXPO_PUBLIC_*_URL` variable or local dotenv source.
+
+GitHub does not return stored secret values through its Secrets UI/API. Their correctness against the owner's intended current playlist/EPG remains **unconfirmed pending the owner's reply**; existence and names alone do not prove the stored feeds are current. No secrets were changed or printed by this audit.
+
+## Encrypted artifact retrieval
+
+Only `sideload.zip.enc` and its authenticated envelope JSON are uploaded. The public recipient key is `ci/sideload-artifact-public.pem`, fingerprint `dc4d53415cf474571c2a3a403767259246aca514529f75b20ffce77ed951f421`.
+
+The corresponding private key is stored only at `C:\Users\floyd\charm-audit-artifacts\keys\sideload-artifact-private.pem`. Back it up privately; do not commit or upload it. After extracting a CI artifact beside its envelope JSON, decrypt locally with:
+
+```text
+node ci/protect-sideload-artifact.mjs decrypt <private-key.pem> <sideload.zip.enc> <sideload-private.zip>
+```
+
+Extract the decrypted ZIP to obtain the APK, checksum, build provenance and verification reports. The agent will supply the decrypted local APK after the final build is verified.
 
 ## Complete changed-path inventory
 

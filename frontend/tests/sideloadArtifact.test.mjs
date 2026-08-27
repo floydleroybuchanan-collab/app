@@ -6,6 +6,20 @@ import { join } from "node:path";
 import test from "node:test";
 import { decryptArtifact, encryptArtifact } from "../../ci/protect-sideload-artifact.mjs";
 
+test("sideload CI includes only the public recipient key and uploads ciphertext", async () => {
+  const publicKey = await readFile(new URL("../../ci/sideload-artifact-public.pem", import.meta.url), "utf8");
+  assert.match(publicKey, /^-----BEGIN PUBLIC KEY-----/);
+  assert.doesNotMatch(publicKey, /PRIVATE KEY/);
+  const workflow = await readFile(new URL("../../.github/workflows/build-media3-sideload-now.yml", import.meta.url), "utf8");
+  assert.match(workflow, /EXPO_PUBLIC_M3U_URL: \$\{\{ secrets.M3U_URL \}\}/);
+  assert.match(workflow, /EXPO_PUBLIC_EPG_URL: \$\{\{ secrets.EPG_URL \}\}/);
+  assert.match(workflow, /EXPO_NO_DOTENV: "1"/);
+  assert.doesNotMatch(workflow, /vars.EXPO_PUBLIC_(?:M3U|EPG)_URL/);
+  const upload = workflow.slice(workflow.indexOf("- name: Upload encrypted sideload artifact"));
+  assert.match(upload, /frontend\/protected-artifacts\/sideload.zip.enc/);
+  assert.doesNotMatch(upload, /frontend\/artifacts\//);
+});
+
 async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), "charm-artifact-test-"));
   t.after(async () => {
