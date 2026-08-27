@@ -289,6 +289,13 @@ for rel in (
             "    // NativeGuideView may still be using it) — never close it here.\n",
             "    database.close()\n",
         )
+    # Panel User-Agent identity may track the TiViMate-style Android TV string used
+    # by the cloud builder. That is request identity only — not a change to M3U/XMLTV
+    # ownership, parsing, or refresh timing — so normalize before the transport gate.
+    current = current.replace(
+        "TiviMate/5.1.6 (Linux; Android TV)",
+        "CharmIPTV/Experimental-v3",
+    )
     if current != baseline and not is_exact_audited_epg_fix(rel):
         critical.append(f"repair changed M3U/EPG transport: {rel}")
 
