@@ -30,7 +30,7 @@ const PROFILES: Record<PowerProfile, PowerProfileTuning> = {
     previewArmDelayedMs: 1700,
     rapidSurfHoldMs: 600,
     logosOffWhileSurfingDefault: false,
-    programmeRowCacheLimit: 720,
+    programmeRowCacheLimit: 384,
     guideRepeatIntervalMs: 72,
   },
   weak: {
@@ -41,7 +41,7 @@ const PROFILES: Record<PowerProfile, PowerProfileTuning> = {
     previewArmDelayedMs: 2600,
     rapidSurfHoldMs: 900,
     logosOffWhileSurfingDefault: true,
-    programmeRowCacheLimit: 320,
+    programmeRowCacheLimit: 192,
     guideRepeatIntervalMs: 92,
   },
   max_preview: {
@@ -52,10 +52,19 @@ const PROFILES: Record<PowerProfile, PowerProfileTuning> = {
     previewArmDelayedMs: 1250,
     rapidSurfHoldMs: 400,
     logosOffWhileSurfingDefault: false,
-    programmeRowCacheLimit: 960,
+    programmeRowCacheLimit: 512,
     guideRepeatIntervalMs: 64,
   },
 };
+
+// Android's ActivityManager memory class is a hard safety boundary for retained
+// programme rows. It intentionally does not rewrite the user's selected profile:
+// preview timing/remote cadence can remain Max Preview while cache size stays safe.
+let deviceLowRamCacheCap = false;
+
+export function setDeviceLowRamCacheCap(enabled: boolean): void {
+  deviceLowRamCacheCap = !!enabled;
+}
 
 export function resolvePowerProfile(value: string | null | undefined): PowerProfile {
   if (value === "weak" || value === "max_preview" || value === "normal") return value;
@@ -63,7 +72,14 @@ export function resolvePowerProfile(value: string | null | undefined): PowerProf
 }
 
 export function getPowerProfileTuning(profile: PowerProfile): PowerProfileTuning {
-  return PROFILES[profile] || PROFILES.normal;
+  const base = PROFILES[profile] || PROFILES.normal;
+  if (!deviceLowRamCacheCap || base.programmeRowCacheLimit <= PROFILES.weak.programmeRowCacheLimit) {
+    return base;
+  }
+  return {
+    ...base,
+    programmeRowCacheLimit: PROFILES.weak.programmeRowCacheLimit,
+  };
 }
 
 export const POWER_PROFILE_OPTIONS: { label: string; value: PowerProfile }[] = [

@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, BackHandler, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import dayjs from "dayjs";
@@ -9,13 +9,16 @@ import { useStore } from "@/src/store";
 import { reminderKey } from "@/src/utils/time";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
+import { resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 
 export function ProgramModal() {
   const { activeProgram, closeProgram, toggleReminder, reminders } = useStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [msg, setMsg] = React.useState<string | null>(null);
   // Optimistic override so the label flips the instant the user presses Remind/Cancel.
   const [optimisticReminded, setOptimisticReminded] = React.useState<boolean | null>(null);
+  const [focusClaim, setFocusClaim] = React.useState(false);
   // Ref-only busy guard — never disable the focused TV button (that crashes Fire TV).
   const mountedRef = React.useRef(true);
 
@@ -29,7 +32,29 @@ export function ProgramModal() {
   React.useEffect(() => {
     setMsg(null);
     setOptimisticReminded(null);
+    if (!activeProgram) {
+      setFocusClaim(false);
+      return;
+    }
+    setFocusClaim(false);
+    const frame = requestAnimationFrame(() => setFocusClaim(true));
+    return () => cancelAnimationFrame(frame);
   }, [activeProgram]);
+
+  React.useEffect(() => {
+    if (!activeProgram) return;
+    if (pathname?.startsWith("/guide")) setGuideNavigationActive(false);
+    setRemoteContext("modal");
+    return () => {
+      const restore = pathname?.startsWith("/player")
+        ? "player"
+        : pathname?.startsWith("/guide")
+          ? "guide"
+          : "default";
+      const restored = resetRemoteContextIfOwned("modal", restore);
+      if (restored && restore === "guide") setGuideNavigationActive(true);
+    };
+  }, [activeProgram, pathname]);
 
   // Close on the hardware / remote BACK button while the sheet is open.
   React.useEffect(() => {
@@ -54,7 +79,7 @@ export function ProgramModal() {
   const watch = () => {
     void Haptics.selectionAsync().catch(() => {});
     closeProgram();
-    openFullscreenPlayer(router, channel.id);
+    openFullscreenPlayer(router, channel.id, { returnToGuide: pathname?.startsWith("/guide") });
   };
 
   const onReminder = () => {
@@ -122,7 +147,7 @@ export function ProgramModal() {
             <View style={styles.actions}>
               <Pressable
                 style={({ focused }: any) => [styles.btn, styles.watchBtn, focused && styles.btnFocused]}
-                hasTVPreferredFocus
+                hasTVPreferredFocus={focusClaim}
                 onPress={watch}
                 testID="program-watch-btn"
               >

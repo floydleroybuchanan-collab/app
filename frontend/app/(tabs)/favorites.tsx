@@ -1,6 +1,7 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FocusedTabMount } from "@/src/components/FocusedTabMount";
+import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -13,6 +14,8 @@ import { fonts, radius, tvColors } from "@/src/theme";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { nextFavoriteFolderName } from "@/src/core/favoriteFolders";
+import { useGuidePrograms } from "@/src/core/guideProgramsStore";
+import { addTvLongPressListener } from "@/src/utils/tvRemote";
 
 function byName(a: Channel, b: Channel) {
   return (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" });
@@ -27,6 +30,7 @@ const FavoriteRow = memo(function FavoriteRow({
   folderMode,
   onPlay,
   onLongPress,
+  onFocusChannel,
 }: {
   channel: Channel;
   number: number;
@@ -36,13 +40,18 @@ const FavoriteRow = memo(function FavoriteRow({
   folderMode: boolean;
   onPlay: (channel: Channel) => void;
   onLongPress: (id: string) => void;
+  onFocusChannel: (id: string | null) => void;
 }) {
-  const current = nowNext(channel.programs, now).current;
+  const programmes = useGuidePrograms(channel.id);
+  const current = nowNext(programmes, now).current;
+  const isTV = Platform.OS !== "web" && Platform.isTV;
   const progress = current ? progressPct(current, now) : 0;
   return (
     <Pressable
+      onFocus={() => onFocusChannel(channel.id)}
+      onBlur={() => onFocusChannel(null)}
       onPress={() => onPlay(channel)}
-      onLongPress={() => onLongPress(channel.id)}
+      onLongPress={isTV ? undefined : () => onLongPress(channel.id)}
       delayLongPress={450}
       style={({ focused }: any) => [styles.row, focused && styles.focused]}
     >
@@ -69,7 +78,7 @@ const FavoriteRow = memo(function FavoriteRow({
   );
 });
 
-export default function FavoritesScreen() {
+function FavoritesScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const {
@@ -85,7 +94,7 @@ export default function FavoritesScreen() {
     removeFavoriteFolder,
     clock24h,
   } = useStore();
-  void clock24h; // re-render times when 12/24h setting flips
+  void clock24h;
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const [folderId, setFolderId] = useState<string | "all">("all");
   const folderMode = folderId !== "all";
@@ -95,19 +104,25 @@ export default function FavoritesScreen() {
     return new Set(folder?.channelIds || []);
   }, [favoriteFolders, folderId, folderMode]);
 
-  // Always list all favorites so a selected folder can assign members (long-press).
-  // When browsing a folder, members sort first.
   const items = useMemo(() => {
-    const all = [...channels].filter((c) => favoriteSet.has(c.id)).sort(byName);
+    // Build only the favorite subset. `[...channels].filter(...)` cloned the
+    // whole playlist before discarding nearly all of it on large providers.
+    const all: Channel[] = [];
+    for (const channel of channels) if (favoriteSet.has(channel.id)) all.push(channel);
+    all.sort(byName);
     if (!folderMemberSet) return all;
-    return [...all].sort((a, b) => {
+    all.sort((a, b) => {
       const aIn = folderMemberSet.has(a.id) ? 0 : 1;
       const bIn = folderMemberSet.has(b.id) ? 0 : 1;
       if (aIn !== bIn) return aIn - bIn;
       return byName(a, b);
     });
+    return all;
   }, [channels, favoriteSet, folderMemberSet]);
   const [now, setNow] = useState(() => new Date());
+  const [preferInitialFocus, setPreferInitialFocus] = useState(true);
+  const focusedChannelIdRef = useRef<string | null>(null);
+  const isTV = Platform.OS !== "web" && Platform.isTV;
 
   useEffect(() => {
     if (!isFocused) return;
@@ -115,6 +130,14 @@ export default function FavoritesScreen() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, [isFocused]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setPreferInitialFocus(true);
+      const timer = setTimeout(() => setPreferInitialFocus(false), 180);
+      return () => clearTimeout(timer);
+    }, []),
+  );
 
   const play = useCallback((channel: Channel) => {
     void Haptics.selectionAsync().catch(() => undefined);
@@ -127,6 +150,19 @@ export default function FavoritesScreen() {
     if (folderMode) toggleFavoriteFolderChannel(folderId, id);
     else toggleFavorite(id);
   }, [folderId, folderMode, toggleFavorite, toggleFavoriteFolderChannel]);
+
+  const noteChannelFocus = useCallback((id: string | null) => {
+    focusedChannelIdRef.current = id;
+  }, []);
+
+  useEffect(() => {
+    if (!isTV || !isFocused) return;
+    return addTvLongPressListener((key) => {
+      if (key !== "SELECT") return;
+      const id = focusedChannelIdRef.current;
+      if (id) onLongPress(id);
+    });
+  }, [isFocused, isTV, onLongPress]);
 
   const onRenameSelectedFolder = useCallback(() => {
     if (!folderMode) return;
@@ -159,12 +195,18 @@ export default function FavoritesScreen() {
                 ? `${folderMemberSet.size} in folder · ${items.length} favorites`
                 : `${items.length} favorites`}
             </Text>
-            <Ionicons name="search-outline" size={15} color={tvColors.textMuted} />
+            <Pressable
+              onPress={() => router.replace("/search" as any)}
+              style={({ focused }: any) => [styles.searchHit, focused && styles.focused]}
+              testID="favorites-open-search"
+            >
+              <Ionicons name="search-outline" size={15} color={tvColors.textMuted} />
+            </Pressable>
           </View>
         </View>
 
         <View style={styles.folderRow}>
-          <Pressable onPress={() => setFolderId("all")} style={({ focused }: any) => [styles.folderChip, folderId === "all" && styles.folderActive, focused && styles.focused]}>
+          <Pressable hasTVPreferredFocus={preferInitialFocus && items.length > 0} onFocus={() => setPreferInitialFocus(false)} onPress={() => setFolderId("all")} style={({ focused }: any) => [styles.folderChip, folderId === "all" && styles.folderActive, focused && styles.focused]}>
             <Text style={styles.folderText}>All</Text>
           </Pressable>
           {favoriteFolders.map((folder) => (
@@ -181,10 +223,7 @@ export default function FavoritesScreen() {
             </Pressable>
           ))}
           {folderMode ? (
-            <Pressable
-              onPress={onRenameSelectedFolder}
-              style={({ focused }: any) => [styles.folderChip, focused && styles.focused]}
-            >
+            <Pressable onPress={onRenameSelectedFolder} style={({ focused }: any) => [styles.folderChip, focused && styles.focused]}>
               <Text style={styles.folderText}>Rename</Text>
             </Pressable>
           ) : null}
@@ -218,6 +257,7 @@ export default function FavoritesScreen() {
                 inFolder={!!folderMemberSet?.has(item.id)}
                 onPlay={play}
                 onLongPress={onLongPress}
+                onFocusChannel={noteChannelFocus}
               />
             )}
           />
@@ -226,7 +266,7 @@ export default function FavoritesScreen() {
             <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
             <Text style={styles.emptyTitle}>No favorites yet</Text>
             <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
-            <Pressable onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
+            <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
               <Text style={styles.guideText}>Open TV Guide</Text>
             </Pressable>
           </View>
@@ -247,6 +287,7 @@ const styles = StyleSheet.create({
   addHint: { flex: 1, maxWidth: 360, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 10.5, marginTop: 2 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
   count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },
+  searchHit: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
   folderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingTop: 10, paddingBottom: 4 },
   folderChip: { minHeight: 28, justifyContent: "center", paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
   folderActive: { borderColor: tvColors.purpleBright, backgroundColor: tvColors.purpleDeep },
@@ -269,3 +310,11 @@ const styles = StyleSheet.create({
   guideButton: { minHeight: 32, justifyContent: "center", paddingHorizontal: 14, borderRadius: 5, backgroundColor: tvColors.purple, borderWidth: 2, borderColor: "transparent", marginTop: 4 },
   guideText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
 });
+
+export default function FavoritesScreen() {
+  return (
+    <FocusedTabMount>
+      <FavoritesScreenContent />
+    </FocusedTabMount>
+  );
+}

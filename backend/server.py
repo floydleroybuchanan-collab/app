@@ -7,6 +7,7 @@ import asyncio
 import logging
 import ipaddress
 import socket
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -15,7 +16,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 import jwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, status
 from fastapi.responses import PlainTextResponse, Response
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
@@ -51,6 +52,45 @@ _credentials_exc = HTTPException(
     detail="Could not validate credentials",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+# ---------------------------------------------------------------------------
+# Login rate limiting — single admin account, in-memory, single-process.
+# bcrypt already adds latency per attempt; this adds a hard per-IP ceiling.
+# ---------------------------------------------------------------------------
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 8
+MAX_TRACKED_LOGIN_IPS = 5000
+_login_failures: dict[str, list[float]] = {}
+
+
+def _prune_login_failures(now: float) -> None:
+    if len(_login_failures) <= MAX_TRACKED_LOGIN_IPS:
+        return
+    stale = [
+        ip
+        for ip, attempts in _login_failures.items()
+        if not attempts or now - attempts[-1] > LOGIN_RATE_LIMIT_WINDOW_SECONDS
+    ]
+    for ip in stale:
+        _login_failures.pop(ip, None)
+    if len(_login_failures) > MAX_TRACKED_LOGIN_IPS:
+        overflow = len(_login_failures) - MAX_TRACKED_LOGIN_IPS
+        for ip in list(_login_failures.keys())[:overflow]:
+            _login_failures.pop(ip, None)
+
+
+def _check_login_rate_limit(client_ip: str) -> None:
+    now = time.monotonic()
+    attempts = [t for t in _login_failures.get(client_ip, []) if now - t < LOGIN_RATE_LIMIT_WINDOW_SECONDS]
+    _login_failures[client_ip] = attempts
+    if len(attempts) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+
+def _record_login_failure(client_ip: str) -> None:
+    now = time.monotonic()
+    _login_failures.setdefault(client_ip, []).append(now)
+    _prune_login_failures(now)
 
 
 def hash_password(p: str) -> str:
@@ -189,9 +229,22 @@ def _parse_xmltv_time(s: str) -> Optional[datetime]:
 
 
 def parse_xmltv(source):
-    """Return (icons_by_channel_id, programs_by_channel_id)."""
+    """Return (icons_by_channel_id, programs_by_channel_id).
+
+    Programmes outside a bounded window are dropped during parsing rather than
+    kept forever in CACHE["programs"] and filtered only at read time. XMLTV
+    feeds can span weeks of data; without this, every refresh cycle holds the
+    full feed as live Python objects (dict/str overhead runs 5-10x the raw XML
+    size) until the next refresh, which is a real OOM risk against
+    MAX_EPG_DECOMPRESSED_BYTES's 512MB default. The window is generous enough
+    to cover normal guide browsing (date picker + up to 72h forward windows)
+    while bounding pathological/very-long feeds.
+    """
     icons = {}
     programs = {}
+    now = datetime.now(timezone.utc)
+    min_stop = now - timedelta(days=2)
+    max_start = now + timedelta(days=10)
     stream = io.BytesIO(source.encode("utf-8")) if isinstance(source, str) else source
     try:
         iterator = ET.iterparse(stream, events=("start", "end"))
@@ -219,7 +272,13 @@ def parse_xmltv(source):
                 cid = elem.get("channel", "")
                 start = _parse_xmltv_time(elem.get("start", ""))
                 stop = _parse_xmltv_time(elem.get("stop", ""))
-                if cid and start is not None:
+                in_window = (
+                    cid
+                    and start is not None
+                    and start <= max_start
+                    and (stop is None or stop >= min_stop)
+                )
+                if in_window:
                     children = {
                         child.tag.rsplit("}", 1)[-1]: child
                         for child in elem
@@ -378,7 +437,9 @@ class AdminLogin(BaseModel):
 
 
 @api_router.post("/auth/login")
-async def admin_login(body: AdminLogin):
+async def admin_login(body: AdminLogin, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_login_rate_limit(client_ip)
     admin = await db.admins.find_one({"_id": "admin"})
     # Username and password are both case-sensitive.
     if (
@@ -386,6 +447,7 @@ async def admin_login(body: AdminLogin):
         or not admin
         or not verify_password(body.password, admin.get("password_hash", ""))
     ):
+        _record_login_failure(client_ip)
         raise HTTPException(status_code=401, detail="Incorrect username or password")
     return {"access_token": create_access_token("admin"), "token_type": "bearer"}
 

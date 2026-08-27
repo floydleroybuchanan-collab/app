@@ -1,23 +1,38 @@
 import type { Router } from "expo-router";
-import { stopPreviewForFullscreen } from "@/src/core/playbackSession";
+import {
+  stopPreviewForFullscreen,
+  waitForFullscreenRelease,
+} from "@/src/core/playbackSession";
 
-export const FULLSCREEN_HANDOFF_SETTLE_MS = 90;
-let pendingHandoff: ReturnType<typeof setTimeout> | null = null;
+let handoffSequence = 0;
 
 /**
- * Shared entry into fullscreen playback. Always tears down the guide preview
- * session first and gives native MediaCodec/LibVLC one short release window so
- * Fire TV never allocates preview + fullscreen decoders at the same time.
+ * Single-owner handoff. A new fullscreen route is never mounted while an older
+ * fullscreen MediaCodec release is still settling, and preview teardown also
+ * completes before fullscreen claims the single native PlayerView.
  */
 export function openFullscreenPlayer(
   router: Pick<Router, "push">,
   channelId: string,
+  options?: { returnToGuide?: boolean; returnGuideGroup?: string },
 ): void {
   if (!channelId) return;
-  stopPreviewForFullscreen();
-  if (pendingHandoff) clearTimeout(pendingHandoff);
-  pendingHandoff = setTimeout(() => {
-    pendingHandoff = null;
-    router.push({ pathname: "/player", params: { channelId } });
-  }, FULLSCREEN_HANDOFF_SETTLE_MS);
+  const sequence = ++handoffSequence;
+
+  void waitForFullscreenRelease()
+    .then(() => stopPreviewForFullscreen())
+    .catch(() => undefined)
+    .then(() => {
+      if (sequence !== handoffSequence) return;
+      router.push({
+        pathname: "/player",
+        params: {
+          channelId,
+          returnToGuide: options?.returnToGuide ? "1" : undefined,
+          returnGuideGroup: options?.returnToGuide && options.returnGuideGroup
+            ? options.returnGuideGroup
+            : undefined,
+        },
+      });
+    });
 }

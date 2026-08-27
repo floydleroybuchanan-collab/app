@@ -43,6 +43,10 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 - `CF_ACCOUNT_ID` = your Account ID
 - `CF_KV_NAMESPACE_ID` = your KV Namespace ID
 - `CF_API_TOKEN` = the token from step 2
+- `M3U_URL` = playlist URL
+- `EPG_URL` = XMLTV / EPG URL
+
+Deploy still accepts the older GitHub secret name `CLOUDFLARE_API_TOKEN` as a fallback for the token.
 
 ### 4) Deploy the Worker
 From `cloudflare-backend/worker/`:
@@ -77,5 +81,6 @@ curl https://<your-worker-url>/channel/<some-id>
 ## Local run of the builder (optional)
 ```bash
 CF_ACCOUNT_ID=... CF_KV_NAMESPACE_ID=... CF_API_TOKEN=... \
+M3U_URL=... EPG_URL=... \
   node cloudflare-backend/scripts/build-and-upload.mjs
 ```

@@ -1,18 +1,21 @@
 name: Build CharmIPTV perf universal APK
 
-# Manual + dedicated branch only. Running this on every PR to main doubled hosted-runner
+# Manual + dedicated delivery branches only. Running this on every PR to main doubled hosted-runner
 # demand alongside Purple TV APK and made capacity incidents cancel all checks.
 on:
   workflow_dispatch:
   push:
     branches:
       - perf/opt-fix
+      - agent/tivimate-deep-player-quickactions-repair
+      - agent/media3-player-core-rebuild
     paths:
       - "frontend/**"
       - ".github/workflows/build-phoenix-apk.yml"
 
 permissions:
   contents: read
+  issues: write
 
 # Keep queued/running APK jobs alive across retriggers — cancel storms left PRs red
 # even when typecheck/lint would have passed.
@@ -31,12 +34,12 @@ jobs:
     env:
       EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL }}
       EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL || vars.EXPO_PUBLIC_EPG_URL }}
-      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '6' }}
+      EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
       CI: "1"
 
     steps:
-      - name: Checkout perf/opt-fix
+      - name: Checkout player recovery branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node
@@ -102,16 +105,25 @@ jobs:
           unzip -l "$APK" | grep -q "lib/armeabi-v7a/"
           unzip -l "$APK" | grep -q "lib/arm64-v8a/"
           mkdir -p artifacts
-          cp "$APK" "artifacts/CharmIPTV-perf-opt-fix-Universal-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/CharmIPTV-perf-opt-fix-Universal-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/CharmIPTV-player-recovery-Universal-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV-player-recovery-Universal-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
 
       - name: Upload universal APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: CharmIPTV-perf-opt-fix-Universal-${{ github.run_number }}
+          name: CharmIPTV-player-recovery-Universal-${{ github.run_number }}
           path: |
-            frontend/artifacts/CharmIPTV-perf-opt-fix-Universal-${{ github.run_number }}.apk
+            frontend/artifacts/CharmIPTV-player-recovery-Universal-${{ github.run_number }}.apk
             frontend/artifacts/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Publish APK run pointer to PR 29
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/29/comments" \
+            -f body="CharmIPTV sideload APK build run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} | job=${{ job.status }} | commit=${GITHUB_SHA}"

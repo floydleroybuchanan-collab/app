@@ -1,13 +1,6 @@
 /**
- * Playback session owner for Fire TV.
- *
- * Two roles (preview vs fullscreen) so the guide cannot tear down an active
- * fullscreen decoder, and generation tokens so stale engine events cannot
- * overwrite the status of a newer channel.
- *
- * Phases: idle → preparing → playing
- *                    ↘ recovering → (engine swap / retry)
- *                                 ↘ failed
+ * Playback ownership registry for preview vs fullscreen.
+ * Kept platform-agnostic so it can be unit-tested outside React Native.
  */
 
 export type SessionRole = "preview" | "fullscreen";
@@ -22,8 +15,8 @@ export type SessionFailReason =
   | "superseded"
   | "crashed";
 
-type StopFn = () => void;
-
+type StopFn = () => void | Promise<void>;
+type NativeRoleFn = (role: SessionRole) => void | Promise<void>;
 type RoleState = {
   generation: number;
   stops: Set<StopFn>;
@@ -39,28 +32,102 @@ const roles: Record<SessionRole, RoleState> = {
   preview: createRole(),
   fullscreen: createRole(),
 };
+let fullscreenReserved = false;
+let fullscreenReservationRevision = 0;
+let ownershipRevision = 0;
+let nativeReleaseHandler: NativeRoleFn | null = null;
+let nativePauseHandler: NativeRoleFn | null = null;
+const roleStopPromises: Record<SessionRole, Promise<void> | null> = {
+  preview: null,
+  fullscreen: null,
+};
+const ownershipListeners = new Set<() => void>();
 
-function invokeStops(role: SessionRole): void {
-  const state = roles[role];
-  for (const stop of Array.from(state.stops)) {
-    try {
-      stop();
-    } catch {
-      /* native teardown best-effort */
-    }
+function publishOwnership(): void {
+  ownershipRevision += 1;
+  for (const listener of Array.from(ownershipListeners)) {
+    try { listener(); } catch {}
   }
-  // A stop callback belongs to the decoder generation that just ended. Keeping
-  // it registered lets later channel loads fire stale native teardown twice.
-  state.stops.clear();
 }
 
-/** Start (or replace) a session for this role. Returns the generation token. */
-export function beginSession(role: SessionRole): number {
+function reserveFullscreen(): void {
+  fullscreenReserved = true;
+  fullscreenReservationRevision += 1;
+}
+
+function invokeStops(role: SessionRole): Promise<void> {
   const state = roles[role];
-  invokeStops(role);
+  const pending: Promise<void>[] = [];
+  for (const stop of Array.from(state.stops)) {
+    try {
+      const result = stop();
+      if (result && typeof result.then === "function") pending.push(result);
+    } catch {}
+  }
+  state.stops.clear();
+  return Promise.allSettled(pending).then(() => undefined);
+}
+
+async function invokeNative(handler: NativeRoleFn | null, role: SessionRole): Promise<void> {
+  if (!handler) return;
+  try { await handler(role); } catch {}
+}
+
+export function setNativePlaybackReleaseHandler(handler: NativeRoleFn | null): void {
+  nativeReleaseHandler = handler;
+}
+
+export function setNativePlaybackPauseHandler(handler: NativeRoleFn | null): void {
+  nativePauseHandler = handler;
+}
+
+export function subscribePlaybackOwnership(listener: () => void): () => void {
+  ownershipListeners.add(listener);
+  return () => ownershipListeners.delete(listener);
+}
+
+export function getPlaybackOwnershipRevision(): number {
+  return ownershipRevision;
+}
+
+export function isPreviewPlaybackAllowed(): boolean {
+  return !fullscreenReserved &&
+    roles.fullscreen.phase === "idle" &&
+    !roleStopPromises.fullscreen &&
+    !roleStopPromises.preview;
+}
+
+export function beginSession(role: SessionRole): number {
+  if (role === "preview" && !isPreviewPlaybackAllowed()) {
+    const state = roles.preview;
+    state.generation += 1;
+    state.phase = "idle";
+    state.reason = "superseded";
+    publishOwnership();
+    return 0;
+  }
+
+  if (role === "fullscreen") {
+    reserveFullscreen();
+    const preview = roles.preview;
+    // Fullscreen entry must wait on stopPreviewForFullscreen before this point.
+    // If a caller violates that handoff, never start a second native release in
+    // parallel; invalidate only the JS callbacks and let the existing stop own it.
+    void invokeStops("preview");
+    preview.generation += 1;
+    preview.phase = "idle";
+    preview.reason = "superseded";
+  }
+
+  const state = roles[role];
+  // Every new generation invalidates and drains callbacks from the previous
+  // generation. Fullscreen channel changes still keep the singleton Media3
+  // player alive because native release is not invoked here.
+  void invokeStops(role);
   state.generation += 1;
   state.phase = "preparing";
   state.reason = null;
+  publishOwnership();
   return state.generation;
 }
 
@@ -80,31 +147,13 @@ export function isSessionCurrent(role: SessionRole, generation: number): boolean
   return roles[role].generation === generation;
 }
 
-/**
- * Register a decoder teardown for the current generation only.
- * Stale registrations (wrong generation) are stopped immediately and ignored.
- */
-export function registerSessionStop(
-  role: SessionRole,
-  generation: number,
-  stop: StopFn,
-): () => void {
+export function registerSessionStop(role: SessionRole, generation: number, stop: StopFn): () => void {
   const state = roles[role];
-  if (generation !== state.generation) {
-    try {
-      stop();
-    } catch {
-      /* ignore */
-    }
-    return () => undefined;
-  }
+  if (generation !== state.generation) return () => undefined;
   state.stops.add(stop);
-  return () => {
-    state.stops.delete(stop);
-  };
+  return () => state.stops.delete(stop);
 }
 
-/** Update phase if generation is still current. Returns false when stale. */
 export function setSessionPhase(
   role: SessionRole,
   generation: number,
@@ -115,55 +164,98 @@ export function setSessionPhase(
   if (generation !== state.generation) return false;
   state.phase = phase;
   state.reason = reason;
+  publishOwnership();
   return true;
 }
 
+/** Resolves after any currently active preview decoder/native stop finishes. */
+export function waitForPreviewRelease(): Promise<void> {
+  return roleStopPromises.preview ?? Promise.resolve();
+}
+
 /**
- * Tear down decoders for one role and invalidate in-flight events.
- * Does not touch the other role.
+ * Resolves only after the current fullscreen Media3/MediaCodec teardown has
+ * completed. New Guide -> fullscreen handoffs wait here so an old fullscreen
+ * release can never overlap the next preview/fullscreen decoder generation.
  */
+export function waitForFullscreenRelease(): Promise<void> {
+  return roleStopPromises.fullscreen ?? Promise.resolve();
+}
+
 export function stopSession(
   role: SessionRole,
   reason: SessionFailReason = "user-stop",
-): void {
+): Promise<void> {
+  const existing = roleStopPromises[role];
+  if (existing) return existing;
+
   const state = roles[role];
-  invokeStops(role);
+  const callbacks = invokeStops(role);
+  const nativeRelease = invokeNative(nativeReleaseHandler, role);
   state.generation += 1;
+  const stoppedGeneration = state.generation;
+  const reservationRevisionAtStop = fullscreenReservationRevision;
   state.phase = "idle";
   state.reason = reason;
+  publishOwnership();
+
+  let stopPromise: Promise<void>;
+  stopPromise = Promise.allSettled([callbacks, nativeRelease]).then(() => {
+    if (roleStopPromises[role] === stopPromise) roleStopPromises[role] = null;
+    // A later fullscreen reservation must never be cleared by completion of an
+    // older teardown. This is the race that allowed a stale fullscreen stop to
+    // collide with a newly mounted Guide preview/decoder.
+    if (
+      role === "fullscreen" &&
+      state.generation === stoppedGeneration &&
+      fullscreenReservationRevision === reservationRevisionAtStop
+    ) {
+      fullscreenReserved = false;
+    }
+    publishOwnership();
+  });
+  roleStopPromises[role] = stopPromise;
+  return stopPromise;
 }
 
-/** Invoke stop callbacks without bumping generation (rapid-scan pause). */
-export function pauseSessionDecoders(role: SessionRole): void {
-  invokeStops(role);
+export function pauseSessionDecoders(role: SessionRole): Promise<void> {
+  if (role === "fullscreen") return invokeNative(nativePauseHandler, role);
+  return invokeStops(role);
 }
 
-/** Guide → player handoff: kill preview only so fullscreen can allocate safely. */
-export function stopPreviewForFullscreen(): void {
-  stopSession("preview", "superseded");
+export function stopPreviewSession(reason: SessionFailReason = "superseded"): Promise<void> {
+  return stopSession("preview", reason);
 }
 
-export function stopFullscreenSession(reason: SessionFailReason = "user-stop"): void {
-  stopSession("fullscreen", reason);
+export function stopPreviewForFullscreen(): Promise<void> {
+  reserveFullscreen();
+  publishOwnership();
+  return stopPreviewSession("superseded");
 }
 
-/** Emergency: stop both roles (ErrorBoundary / process-wide recovery). */
-export function stopAllPlaybackSessions(reason: SessionFailReason = "user-stop"): void {
-  stopSession("preview", reason);
-  stopSession("fullscreen", reason);
+export function stopFullscreenSession(reason: SessionFailReason = "user-stop"): Promise<void> {
+  return stopSession("fullscreen", reason);
 }
 
-/** @deprecated Prefer role-scoped stop helpers. Kept as a named alias for clarity. */
+export function stopAllPlaybackSessions(reason: SessionFailReason = "user-stop"): Promise<void> {
+  return Promise.allSettled([stopPreviewSession(reason), stopFullscreenSession(reason)]).then(() => undefined);
+}
+
 export function forceStopAllStreams(): void {
-  stopAllPlaybackSessions("user-stop");
+  void stopAllPlaybackSessions("user-stop");
 }
 
-/** Test/reset helper — clears registry state. */
 export function resetPlaybackSessionsForTests(): void {
   for (const role of Object.keys(roles) as SessionRole[]) {
     roles[role].stops.clear();
     roles[role].generation = 0;
     roles[role].phase = "idle";
     roles[role].reason = null;
+    roleStopPromises[role] = null;
   }
+  fullscreenReserved = false;
+  fullscreenReservationRevision = 0;
+  nativeReleaseHandler = null;
+  nativePauseHandler = null;
+  publishOwnership();
 }

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import {
   FlatList,
   Pressable,
@@ -7,7 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -92,13 +93,14 @@ function ReminderCard({
   );
 }
 
-export default function RemindersScreen() {
+function RemindersScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { width } = useWindowDimensions();
   const { openDrawer } = usePurpleTvDrawer();
   const { reminders, removeReminder, channelById, channelLogos } = useStore();
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [preferInitialFocus, setPreferInitialFocus] = useState(true);
 
   useTvBackHandler(
     useCallback(() => {
@@ -114,8 +116,16 @@ export default function RemindersScreen() {
     return () => clearInterval(timer);
   }, [isFocused]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setPreferInitialFocus(true);
+      const timer = setTimeout(() => setPreferInitialFocus(false), 700);
+      return () => clearTimeout(timer);
+    }, []),
+  );
+
   const upcoming = useMemo(() => {
-    return [...reminders]
+    return reminders
       .map((item) => {
         const channel = channelById(item.channelId);
         return {
@@ -155,13 +165,12 @@ export default function RemindersScreen() {
 
   return (
     <PurpleTvShell active="/reminders">
-      {/* Full-bleed page — same canvas as Guide/Live TV. Drawer is overlay-only
-          when opened; there is no permanent left nav rail on this screen. */}
       <View style={styles.page} testID="reminders-page">
         <View style={styles.topBar}>
           <View style={styles.topActions}>
             <Pressable
-              hasTVPreferredFocus
+              hasTVPreferredFocus={preferInitialFocus}
+              onFocus={() => setPreferInitialFocus(false)}
               onPress={returnToGuide}
               style={({ focused }: any) => [styles.returnButton, focused && styles.returnFocused]}
               testID="reminders-return-guide"
@@ -395,3 +404,11 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
   },
 });
+
+export default function RemindersScreen() {
+  return (
+    <FocusedTabMount>
+      <RemindersScreenContent />
+    </FocusedTabMount>
+  );
+}

@@ -1,0 +1,35 @@
+commit=47c9a06ce0fdf89585333aa54ad2860a366120a3
+run_id=32662442899
+run_url=https://github.com/floydleroybuchanan-collab/app/actions/runs/32662442899
+status=COMPLETE
+dependencies=success
+config=success
+tests=success
+typecheck=success
+lint=success
+whole_repo_scan=success
+invariants=success
+native_compile=success
+no_apk=success
+apk_build=NOT_RUN
+
+CharmIPTV whole-repository player interaction scan
+current_files_scanned=214
+current_function_declarations=1256
+current_timer_sites=73
+current_listener_sites=39
+current_network_fetch_sites=18
+main_files_scanned=144
+main_function_declarations=601
+main_timer_sites=61
+main_listener_sites=16
+main_network_fetch_sites=7
+candidate_critical_findings=0
+main_reference_findings=2
+
+CANDIDATE_CRITICAL
+none
+
+MAIN_REFERENCE_FINDINGS
+main startup-timeout path can override a forced engine instead of terminating the owned decoder
+main does not consistently release Media3 before publishing a fatal stream error

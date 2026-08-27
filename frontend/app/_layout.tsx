@@ -9,13 +9,23 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { useAppFonts } from "@/src/hooks/use-app-fonts";
-import { GuideProvider, useStore } from "@/src/store";
+import { GuideProvider, useStore, type StartScreen } from "@/src/store";
 import { ProgramModal } from "@/src/components/ProgramModal";
 import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 import { PointerOverlay } from "@/src/components/PointerOverlay";
 import { PurpleTvDrawerProvider } from "@/src/components/PurpleTvShell";
+import { SourceRefreshScheduler } from "@/src/components/SourceRefreshScheduler";
+import { TvQuickActionsOverlay } from "@/src/components/TvQuickActionsOverlay";
 import { TvCalibrationFrame, TvCalibrationProvider } from "@/src/tvCalibration";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
+import { StartupVersion4 } from "@/src/components/StartupVersion4";
+import { storage } from "@/src/utils/storage";
+
+const START_SCREEN_KEY = "gs_start_screen";
+
+function resolveStartupScreen(value: unknown): StartScreen {
+  return value === "guide" || value === "last_channel" || value === "home" ? value : "home";
+}
 
 // Keep real errors visible for TV QA; only silence known noisy module warnings.
 LogBox.ignoreLogs([
@@ -43,8 +53,9 @@ function ReminderCleanup() {
   const { reminders, removeReminder } = useStore();
 
   useEffect(() => {
-    if (reminders.length === 0) return;
-    // Expire due reminders without hijacking an active player session.
+    if (reminders.length === 0 || pathname?.startsWith("/player")) return;
+    // Expire due reminders only outside fullscreen playback. OS notification
+    // delivery remains independent; this cleanup is maintenance, not playback work.
     // Notification tap handling (NotificationRouter) is the user-driven switch path.
     const check = () => {
       const now = Date.now();
@@ -59,7 +70,7 @@ function ReminderCleanup() {
     };
     check();
     // Slow interval — reminders are sparse; avoid wakeups on weak boxes.
-    const timer = setInterval(check, pathname?.startsWith("/player") ? 60000 : 30000);
+    const timer = setInterval(check, 30000);
     return () => clearInterval(timer);
   }, [pathname, reminders, removeReminder]);
 
@@ -69,21 +80,61 @@ function ReminderCleanup() {
 function StartScreenRedirect() {
   const router = useRouter();
   const pathname = usePathname();
-  const { startScreen, lastChannelId, loading } = useStore();
+  const { lastChannelId, loading, startScreen } = useStore();
+  const [startupPreference, setStartupPreference] = React.useState<StartScreen | null>(null);
+  const [startupPreferencesReady, setStartupPreferencesReady] = React.useState(false);
   const doneRef = React.useRef(false);
+  const persistenceChainRef = React.useRef<Promise<void>>(Promise.resolve());
+  const lastQueuedStartScreenRef = React.useRef<StartScreen | null>(null);
 
   useEffect(() => {
-    if (doneRef.current || loading) return;
+    let active = true;
+    void (async () => {
+      const stored = resolveStartupScreen(await storage.getItem<string>(START_SCREEN_KEY, "home"));
+      if (!active) return;
+      setStartupPreference(stored);
+      setStartupPreferencesReady(true);
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    // Store hydration reads gs_start_screen before loading can become false.
+    // Once hydrated, serialize writes so rapid Settings edits cannot finish out
+    // of order. Retry one silent AsyncStorage failure without creating a timer,
+    // polling loop, or repeated Guide/EPG/cache work.
+    if (loading) return;
+    const next = resolveStartupScreen(startScreen);
+    if (lastQueuedStartScreenRef.current === next) return;
+    lastQueuedStartScreenRef.current = next;
+    persistenceChainRef.current = persistenceChainRef.current.then(async () => {
+      const saved = await storage.setItem(START_SCREEN_KEY, next);
+      if (!saved) await storage.setItem(START_SCREEN_KEY, next);
+    });
+  }, [loading, startScreen]);
+
+  useEffect(() => {
+    if (doneRef.current || !startupPreferencesReady || !startupPreference) return;
     if (pathname && pathname !== "/" && pathname !== "/index") return;
-    doneRef.current = true;
-    if (startScreen === "guide") {
+
+    if (startupPreference === "guide") {
+      doneRef.current = true;
       router.replace("/guide" as any);
       return;
     }
-    if (startScreen === "last_channel" && lastChannelId) {
-      openFullscreenPlayer(router, lastChannelId);
+
+    if (startupPreference === "last_channel") {
+      // Last-channel playback needs the channel catalog hydrated first. If no
+      // remembered channel exists, Guide is the deterministic fallback.
+      if (loading) return;
+      doneRef.current = true;
+      if (lastChannelId) openFullscreenPlayer(router, lastChannelId);
+      else router.replace("/guide" as any);
+      return;
     }
-  }, [lastChannelId, loading, pathname, router, startScreen]);
+
+    doneRef.current = true;
+  }, [lastChannelId, loading, pathname, router, startupPreference, startupPreferencesReady]);
 
   return null;
 }
@@ -102,7 +153,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, width, height }}>
+    <GestureHandlerRootView style={{ flex: 1, width, height, overflow: "visible", backgroundColor: "transparent" }}>
       <SafeAreaProvider>
         <TvCalibrationProvider>
           <TvCalibrationFrame>
@@ -110,18 +161,23 @@ export default function RootLayout() {
               <PurpleTvDrawerProvider>
                 <StatusBar style="light" />
                 <NotificationRouter />
+                <SourceRefreshScheduler />
                 <ReminderCleanup />
                 <StartScreenRedirect />
                 <ErrorBoundary>
                   <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#070711" } }}>
                     <Stack.Screen name="(tabs)" />
-                    <Stack.Screen name="player" options={{ animation: "fade" }} />
+                    <Stack.Screen name="player" options={{ animation: "none", contentStyle: { backgroundColor: "#000" } }} />
                   </Stack>
                 </ErrorBoundary>
                 <ErrorBoundary>
                   <ProgramModal />
                 </ErrorBoundary>
+                <ErrorBoundary>
+                  <TvQuickActionsOverlay />
+                </ErrorBoundary>
                 <PointerOverlay />
+                <StartupVersion4 />
               </PurpleTvDrawerProvider>
             </GuideProvider>
           </TvCalibrationFrame>

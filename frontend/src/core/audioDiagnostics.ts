@@ -1,11 +1,11 @@
 /**
- * Per-stream Media3/VLC audio selection diagnostics.
+ * Per-stream Media3 audio selection diagnostics.
  * Keeps a bounded last-known snapshot for Settings export and logcat QA.
  * Never stores full stream URLs.
  */
 
 export type AudioDiagnosticsSnapshot = {
-  engine: "media3" | "vlc" | string;
+  engine: "media3" | string;
   role: "preview" | "fullscreen" | string;
   /** Short non-identifying stream fingerprint (kind + length + hash). */
   streamKey: string;
@@ -35,6 +35,15 @@ export function fingerprintStreamUri(uri: string, kind?: string): string {
   return `${kind || "unknown"}:${clean.length}:${(hash >>> 0).toString(16)}:${leaf}`;
 }
 
+/** Match a diagnostic key without needing the player's stream-kind classifier. */
+export function matchesStreamFingerprint(uri: string, streamKey: string): boolean {
+  const candidate = fingerprintStreamUri(uri);
+  const candidateBody = candidate.slice(candidate.indexOf(":") + 1);
+  const key = String(streamKey || "");
+  const keyBody = key.slice(key.indexOf(":") + 1);
+  return !!candidateBody && candidateBody === keyBody;
+}
+
 export function recordAudioDiagnostics(
   input: Omit<AudioDiagnosticsSnapshot, "at"> & { at?: string },
 ): AudioDiagnosticsSnapshot {
@@ -44,7 +53,6 @@ export function recordAudioDiagnostics(
   };
   lastSnapshot = snapshot;
   try {
-    // Always emit — TV silent-stream QA depends on logcat, not only __DEV__.
     console.info(
       "[CharmIPTV audio]",
       [
@@ -70,7 +78,13 @@ export function recordAudioDiagnostics(
 }
 
 export function getLastAudioDiagnostics(): AudioDiagnosticsSnapshot | null {
-  return lastSnapshot;
+  if (!lastSnapshot) return null;
+  // Public consumers that need current-channel lookup do not know the internal
+  // HLS/TS classifier. Normalize only this returned view; retained/logged
+  // diagnostics still keep the original kind for debugging.
+  const key = lastSnapshot.streamKey;
+  const body = key.slice(key.indexOf(":") + 1);
+  return { ...lastSnapshot, streamKey: `unknown:${body}` };
 }
 
 /** Flatten for diagnostics text export. */

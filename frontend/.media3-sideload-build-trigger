@@ -1,0 +1,4 @@
+CharmIPTV Media3 sideload build trigger
+Requested: 2026-08-23
+Dedicated build trigger: 6
+Reason: validate consolidated opaque HTTP(S) sniffing, redirect-aware routing, session cache, codec/decoder/resolution diagnostics, and preserved recovery budgets

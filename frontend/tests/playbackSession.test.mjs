@@ -3,177 +3,91 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import {
-  beginSession,
-  getSessionPhase,
-  isSessionCurrent,
-  pauseSessionDecoders,
-  registerSessionStop,
-  resetPlaybackSessionsForTests,
-  setSessionPhase,
-  stopPreviewForFullscreen,
-  stopFullscreenSession,
-  stopAllPlaybackSessions,
-} from "../src/core/playbackSession.ts";
-import { alternateEngine, detectStreamKind, preferredEngine } from "../src/core/streamPolicy.ts";
-
+import { beginSession, getSessionPhase, isPreviewPlaybackAllowed, isSessionCurrent, pauseSessionDecoders, registerSessionStop, resetPlaybackSessionsForTests, setNativePlaybackReleaseHandler, setSessionPhase, stopPreviewForFullscreen, stopFullscreenSession, stopAllPlaybackSessions, waitForFullscreenRelease } from "../src/core/playbackSession.ts";
+import { detectStreamKind, media3ContentType, preferredEngine } from "../src/core/streamPolicy.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("playback session generations isolate preview from fullscreen", () => {
+test("fullscreen reservation releases preview before allocating its decoder", async () => { resetPlaybackSessionsForTests(); const previewGen = beginSession("preview"); let stopped = 0; registerSessionStop("preview", previewGen, () => { stopped += 1; }); await stopPreviewForFullscreen(); assert.equal(stopped, 1); assert.equal(isPreviewPlaybackAllowed(), false); const fullGen = beginSession("fullscreen"); assert.equal(isSessionCurrent("preview", previewGen), false); assert.equal(isSessionCurrent("fullscreen", fullGen), true); });
+test("stale session events are rejected after channel generation bump", () => { resetPlaybackSessionsForTests(); const gen1 = beginSession("fullscreen"); assert.equal(setSessionPhase("fullscreen", gen1, "playing"), true); const gen2 = beginSession("fullscreen"); assert.equal(setSessionPhase("fullscreen", gen1, "failed", "stream-error"), false); assert.equal(getSessionPhase("fullscreen"), "preparing"); assert.equal(setSessionPhase("fullscreen", gen2, "playing"), true); });
+test("pause preview callbacks do not invalidate generation", () => { resetPlaybackSessionsForTests(); const gen = beginSession("preview"); let stops = 0; registerSessionStop("preview", gen, () => { stops += 1; }); pauseSessionDecoders("preview"); assert.equal(stops, 1); assert.equal(isSessionCurrent("preview", gen), true); });
+test("new generation drains stale callbacks exactly once", () => { resetPlaybackSessionsForTests(); const gen = beginSession("fullscreen"); let stops = 0; registerSessionStop("fullscreen", gen, () => { stops += 1; }); beginSession("fullscreen"); assert.equal(stops, 1); stopFullscreenSession(); assert.equal(stops, 1); });
+test("preview cannot re-arm until fullscreen fully releases", async () => {
   resetPlaybackSessionsForTests();
-  const previewGen = beginSession("preview");
-  const fullGen = beginSession("fullscreen");
-  assert.equal(isSessionCurrent("preview", previewGen), true);
-  assert.equal(isSessionCurrent("fullscreen", fullGen), true);
-
-  let previewStopped = 0;
-  let fullStopped = 0;
-  registerSessionStop("preview", previewGen, () => {
-    previewStopped += 1;
-  });
-  registerSessionStop("fullscreen", fullGen, () => {
-    fullStopped += 1;
-  });
-
-  stopPreviewForFullscreen();
-  assert.equal(previewStopped, 1);
-  assert.equal(fullStopped, 0);
-  assert.equal(isSessionCurrent("preview", previewGen), false);
-  assert.equal(isSessionCurrent("fullscreen", fullGen), true);
+  let releaseFullscreen;
+  setNativePlaybackReleaseHandler((role) => role === "fullscreen" ? new Promise((resolve) => { releaseFullscreen = resolve; }) : undefined);
+  beginSession("fullscreen");
+  const stopped = stopFullscreenSession();
+  assert.equal(isPreviewPlaybackAllowed(), false);
+  assert.equal(beginSession("preview"), 0);
+  releaseFullscreen();
+  await stopped;
+  assert.equal(isPreviewPlaybackAllowed(), true);
+  const preview = beginSession("preview");
+  setNativePlaybackReleaseHandler(null);
+  await stopAllPlaybackSessions();
+  assert.equal(isSessionCurrent("preview", preview), false);
 });
 
-test("stale session events are rejected after channel generation bump", () => {
+test("duplicate fullscreen stops share one native decoder teardown", async () => {
   resetPlaybackSessionsForTests();
-  const gen1 = beginSession("fullscreen");
-  assert.equal(setSessionPhase("fullscreen", gen1, "playing"), true);
-  assert.equal(getSessionPhase("fullscreen"), "playing");
-
-  const gen2 = beginSession("fullscreen");
-  assert.equal(setSessionPhase("fullscreen", gen1, "failed", "stream-error"), false);
-  assert.equal(getSessionPhase("fullscreen"), "preparing");
-  assert.equal(setSessionPhase("fullscreen", gen2, "playing"), true);
-  assert.equal(isSessionCurrent("fullscreen", gen1), false);
-});
-
-test("pauseSessionDecoders does not invalidate generation", () => {
-  resetPlaybackSessionsForTests();
-  const gen = beginSession("preview");
-  let stops = 0;
-  registerSessionStop("preview", gen, () => {
-    stops += 1;
-  });
-  pauseSessionDecoders("preview");
-  assert.equal(stops, 1);
-  assert.equal(isSessionCurrent("preview", gen), true);
-  // Stops are cleared after pause so a remount must re-register.
-  pauseSessionDecoders("preview");
-  assert.equal(stops, 1);
-});
-
-test("begin/stop clear stale decoder callbacks after invoking them once", () => {
-  resetPlaybackSessionsForTests();
-  const gen1 = beginSession("fullscreen");
-  let stops = 0;
-  registerSessionStop("fullscreen", gen1, () => {
-    stops += 1;
+  let releases = 0;
+  let finishRelease;
+  setNativePlaybackReleaseHandler((role) => {
+    if (role !== "fullscreen") return undefined;
+    releases += 1;
+    return new Promise((resolve) => { finishRelease = resolve; });
   });
   beginSession("fullscreen");
-  assert.equal(stops, 1);
-  stopFullscreenSession();
-  assert.equal(stops, 1);
+  const first = stopFullscreenSession();
+  const second = stopFullscreenSession();
+  assert.equal(first, second);
+  assert.equal(releases, 1);
+  let waited = false;
+  const waiter = waitForFullscreenRelease().then(() => { waited = true; });
+  await Promise.resolve();
+  assert.equal(waited, false);
+  finishRelease();
+  await Promise.all([first, second, waiter]);
+  assert.equal(waited, true);
+  setNativePlaybackReleaseHandler(null);
 });
 
-test("fullscreen stop does not tear down a later preview session", () => {
-  resetPlaybackSessionsForTests();
-  beginSession("fullscreen");
-  const previewGen = beginSession("preview");
-  let previewStopped = 0;
-  registerSessionStop("preview", previewGen, () => {
-    previewStopped += 1;
-  });
-  stopFullscreenSession();
-  assert.equal(previewStopped, 0);
-  assert.equal(isSessionCurrent("preview", previewGen), true);
-  stopAllPlaybackSessions();
-  assert.equal(isSessionCurrent("preview", previewGen), false);
-});
-
-test("capability-based engine selection still prefers Media3 for HLS and VLC for TS", () => {
-  assert.equal(detectStreamKind("https://x/live.m3u8"), "hls");
-  assert.equal(preferredEngine("hls"), "media3");
-  assert.equal(detectStreamKind("https://x/live.ts"), "transport");
-  assert.equal(preferredEngine("transport"), "vlc");
-  assert.equal(alternateEngine("media3", true), "vlc");
-  assert.equal(alternateEngine("media3", false), null);
-});
-
-test("play entry points hand off through openFullscreenPlayer", async () => {
-  const files = [
-    "app/(tabs)/guide.tsx",
-    "app/(tabs)/index.tsx",
-    "app/(tabs)/favorites.tsx",
-    "app/(tabs)/channels.tsx",
-    "app/(tabs)/search.tsx",
-    "app/(tabs)/catchup.tsx",
-    "src/components/ProgramModal.tsx",
-    "src/components/PurpleChannelCollection.tsx",
-    "app/_layout.tsx",
-  ];
-  for (const file of files) {
-    const body = await source(file);
-    assert.match(body, /openFullscreenPlayer/, `${file} should use openFullscreenPlayer`);
-    assert.doesNotMatch(
-      body,
-      /pathname:\s*["']\/player["']/,
-      `${file} should not push /player directly`,
-    );
+test("MPEG-TS routing preserves a transport hint into native Media3", () => {
+  for (const uri of [
+    "https://x/live.ts",
+    "https://x/live.m2ts?token=1",
+    "http://provider/live/123?output=ts",
+    "http://provider/live/123?format=mpegts",
+  ]) {
+    const kind = detectStreamKind(uri);
+    assert.equal(kind, "transport");
+    assert.equal(media3ContentType(kind), "transport");
+    assert.equal(preferredEngine(kind), "media3");
   }
 });
 
-test("StreamPlayer and player route use role-scoped session teardown", async () => {
-  const [playerComp, playerRoute, handoff, vlcPatch, packageJson] = await Promise.all([
-    source("src/components/StreamPlayer.tsx"),
-    source("app/player.tsx"),
-    source("src/utils/openFullscreenPlayer.ts"),
-    source("patches/react-native-vlc-media-player+1.0.98.patch"),
-    source("package.json"),
-  ]);
-  assert.match(playerComp, /beginSession\(role\)/);
-  assert.match(playerComp, /isSessionCurrent/);
-  assert.match(playerComp, /sessionRole/);
-  assert.match(playerComp, /role === "preview"/);
-  assert.doesNotMatch(playerComp, /rapidBurstRef|pauseSessionDecoders\(role\)/);
-  assert.match(playerComp, /clearFullscreenCircuit/);
-  assert.match(playerComp, /stopPlayer\?\.\(\)/);
-  assert.doesNotMatch(playerComp, /setNativeProps\?\.\(\{ clear: true \}\)/);
-  assert.match(playerComp, /AppState\.addEventListener/);
-  assert.match(playerComp, /replaceQueueRef/);
-  assert.match(playerComp, /mode === "preview"/);
-  assert.match(playerComp, /mediaOptions/);
-  assert.match(playerComp, /onStatusRef\.current/);
-  assert.match(playerComp, /surfaceType=\{Platform\.OS === "android" \? "textureView"/);
-  assert.match(playerComp, /player\.muted = muted/);
-  assert.match(playerRoute, /onStatus=\{handleStreamStatus\}/);
-  assert.doesNotMatch(playerRoute, /onStatus=\{\(next, reason\) =>/);
-  assert.doesNotMatch(playerComp, /key=\{`vlc:\$\{uri\}:\$\{sessionGeneration\}`\}/);
-  assert.doesNotMatch(playerComp, /forceStopAllStreams\(\)/);
-  assert.match(playerRoute, /pauseSessionDecoders\("fullscreen"\)/);
-  assert.match(playerRoute, /stopFullscreenSession/);
-  assert.match(playerRoute, /sessionRole="fullscreen"/);
-  assert.match(playerRoute, /clearFullscreenCircuit/);
-  assert.match(playerRoute, /MAX_AUTO_STREAM_RETRIES/);
-  assert.match(playerRoute, /isFullscreenCircuitOpen/);
-  assert.match(playerRoute, /clearStreamFailure\(channelIdRef\.current\)/);
-  assert.match(playerRoute, /failReason === "circuit-open"/);
-  assert.doesNotMatch(
-    playerRoute,
-    /if \(next === "error" \|\| reason === "silent-audio"\) \{\s*noteStreamFailure/,
-  );
-  assert.match(playerRoute, /restartStream\(false\)/);
-  assert.match(handoff, /FULLSCREEN_HANDOFF_SETTLE_MS = 90/);
-  assert.match(vlcPatch, /removeLifecycleEventListener/);
-  assert.match(vlcPatch, /requestPlaybackAudioFocus/);
-  assert.match(vlcPatch, /mMediaPlayer = null/);
-  assert.match(packageJson, /"postinstall": "patch-package"/);
+test("all automatic stream routing is Media3-only", () => { for (const uri of ["https://x/live.m3u8", "https://x/live.ts", "http://provider/live/u/p/1", "rtsp://x/live"]) assert.equal(preferredEngine(detectStreamKind(uri)), "media3"); });
+
+test("play entry points hand off through openFullscreenPlayer", async () => { const files = ["app/(tabs)/guide.tsx", "app/(tabs)/index.tsx", "app/(tabs)/favorites.tsx", "app/(tabs)/channels.tsx", "app/(tabs)/search.tsx", "src/components/ProgramModal.tsx", "src/components/PurpleChannelCollection.tsx", "app/_layout.tsx"]; for (const file of files) { const body = await source(file); assert.match(body, /openFullscreenPlayer/); assert.doesNotMatch(body, /pathname:\s*["']\/player["']/); } });
+
+test("StreamPlayer is only a command adapter to Activity-owned native Media3", async () => { const [adapter, native, handoff] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("src/utils/openFullscreenPlayer.ts")]); assert.match(adapter, /prepareNativeFullscreen/); assert.match(adapter, /prepareNativePreview/); assert.match(adapter, /stopNativePreview/); assert.match(adapter, /stopNativeFullscreen/); assert.doesNotMatch(adapter, /VideoView|createVideoPlayer|VLCPlayer|react-native-vlc-media-player/); assert.match(native, /private var player: ExoPlayer\? = null/); assert.match(native, /R\.layout\.charm_player_view/); assert.match(native, /onRenderedFirstFrame/); assert.match(handoff, /waitForFullscreenRelease\(\)[\s\S]*?stopPreviewForFullscreen\(\)/); assert.doesNotMatch(handoff, /FULLSCREEN_HANDOFF_SETTLE_MS|PREVIEW_RELEASE_TIMEOUT_MS|Promise\.race/); });
+
+test("fullscreen launched from Guide returns current tuned channel to the originating Guide group", async () => {
+  const [guide, player] = await Promise.all([source("app/(tabs)/guide.tsx"), source("app/player.tsx")]);
+  assert.match(guide, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: true, returnGuideGroup: group \}\)/);
+  assert.match(player, /pendingChannelIdRef\.current \|\| channelIdRef\.current/);
+  assert.match(player, /const returnGuideGroup = String\(params\.returnGuideGroup \|\| ""\)\.trim\(\) \|\| "All"/);
+  assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: returnGuideGroup \}\)/);
+});
+
+test("single native watchdog requires true no-progress before reconnect", async () => {
+  const [adapter, native] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")]);
+  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
+  assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS/);
+  assert.match(native, /if \(!firstFrameRendered\) return@Runnable/);
+  assert.match(native, /instance\.playbackState != Player\.STATE_BUFFERING/);
+  assert.match(native, /val madeProgress = instance\.isPlaying \|\|/);
+  assert.match(native, /instance\.prepare\(\)/);
+  assert.doesNotMatch(adapter, /player\.currentTime|setInterval|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
 });
