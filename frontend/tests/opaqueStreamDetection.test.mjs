@@ -64,6 +64,8 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /DEFAULT_STREAM_USER_AGENT = "TiviMate\/5\.1\.6 \(Linux; Android TV\)"/);
   assert.match(manager, /properties\["User-Agent"\] = DEFAULT_STREAM_USER_AGENT/);
   assert.match(manager, /properties\["Accept"\] = "\*\/\*"/);
+  assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
+  assert.match(manager, /silentAudioCheck/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);
   assert.match(manager, /cachedType == "progressive" && isOpaqueHttpUri/);
@@ -80,20 +82,27 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
 });
 
 test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback budgets", async () => {
-  const manager = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  const [manager, clients] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"),
+  ]);
   assert.match(manager, /if \(source\.sourceType != "unknown" \|\| !isHttpOrHttps\(source\.uri\)\)/);
   assert.match(manager, /HlsMediaSource\.Factory/);
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
-  assert.match(manager, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
+  assert.match(clients, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
   assert.match(manager, /fun tivimateBufferDurationsMs/);
   assert.match(manager, /else -> intArrayOf\(20_000, 90_000, 5_000, 12_000\)/);
   assert.match(manager, /RECONNECT_STALL_MS = 50_000L/);
-  assert.match(manager, /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
+  assert.match(clients, /readTimeout\(0, TimeUnit.SECONDS\)/);
   assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
 });
 
 test("playback diagnostics capture container, codecs, resolution and decoders without changing recovery budgets", async () => {
-  const manager = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  const [manager, clients] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"),
+  ]);
   assert.match(manager, /created\.addAnalyticsListener/);
   assert.match(manager, /onVideoInputFormatChanged/);
   assert.match(manager, /onAudioInputFormatChanged/);
@@ -106,7 +115,8 @@ test("playback diagnostics capture container, codecs, resolution and decoders wi
   assert.match(manager, /videoDecoder/);
   assert.match(manager, /audioDecoder/);
   assert.match(manager, /codecError/);
+  assert.match(manager, /silentAudioCheck/);
   assert.match(manager, /fun tivimateBufferDurationsMs/);
-  assert.match(manager, /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(clients, /readTimeout\(0, TimeUnit.SECONDS\)/);
   assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
 });

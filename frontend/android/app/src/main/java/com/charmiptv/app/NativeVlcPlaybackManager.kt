@@ -47,6 +47,8 @@ object NativeVlcPlaybackManager {
   }
 
   private const val START_TIMEOUT_MS = 60_000L
+  private const val MAX_AUTO_RECOVERIES = 4
+  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
   private const val TAG = "CharmVlc"
 
   private val main = Handler(Looper.getMainLooper())
@@ -58,22 +60,23 @@ object NativeVlcPlaybackManager {
   private var fullscreenSurface: FrameLayout? = null
   private var owner = Owner.NONE
   private var activeIdentity: Identity? = null
+  private var activeSource: PlaybackSource? = null
   private var listener: Listener? = null
   private var playing = false
   private var mutedState = false
+  private var recoveryAttempts = 0
 
   private val startupTimeout = Runnable {
     val identity = activeIdentity ?: return@Runnable
     if (playing || owner == Owner.NONE) return@Runnable
-    CharmMemoryCoordinator.setPlaybackStarting(false)
-    listener?.onState(identity, "error", "start-timeout")
-    main.post {
-      if (activeIdentity == identity) {
-        releasePlayerOnly(removeLayout = false)
-        activeIdentity = null
-        owner = Owner.NONE
-      }
-    }
+    if (recoverOnce(identity, "start-timeout")) return@Runnable
+    finishWithError(identity, "start-timeout")
+  }
+
+  private val delayedRecovery = Runnable {
+    val identity = activeIdentity ?: return@Runnable
+    val source = activeSource ?: return@Runnable
+    performReconnect(identity, source)
   }
 
   fun installIntoActivity(next: Activity) = runOnMain { activity = next }
@@ -135,10 +138,12 @@ object NativeVlcPlaybackManager {
 
     NativePlaybackManager.stopForEngineSwitch()
     main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
     releasePlayerOnly(removeLayout = false)
 
     owner = requestedOwner
     playing = false
+    recoveryAttempts = 0
     CharmMemoryCoordinator.setPlaybackStarting(true)
     val identity = Identity(requestedOwner, nextGeneration, nextChannelKey.trim())
     activeIdentity = identity
@@ -149,7 +154,11 @@ object NativeVlcPlaybackManager {
       audioOutput = audioOutput.trim().lowercase(),
       bufferProfile = bufferProfile.trim().lowercase(),
     )
+    activeSource = source
+    startMedia(identity, source, announceLoading = true)
+  }
 
+  private fun startMedia(identity: Identity, source: PlaybackSource, announceLoading: Boolean) {
     try {
       val core = ensureCore() ?: throw IllegalStateException("LibVLC unavailable")
       val player = MediaPlayer(core)
@@ -162,14 +171,14 @@ object NativeVlcPlaybackManager {
         when (event.type) {
           MediaPlayer.Event.Opening -> main.post { publishLoading(player, identity) }
           MediaPlayer.Event.Playing -> main.post { publishPlaying(player, identity) }
-          MediaPlayer.Event.EncounteredError -> main.post { publishFailure(player, identity, "vlc-playback-error") }
-          MediaPlayer.Event.EndReached -> main.post { publishFailure(player, identity, "stream-ended") }
+          MediaPlayer.Event.EncounteredError -> main.post { onPlaybackProblem(player, identity, "vlc-playback-error") }
+          MediaPlayer.Event.EndReached -> main.post { onPlaybackProblem(player, identity, "stream-ended") }
           else -> Unit
         }
       }
 
-      attachVideoLayout(requestedOwner)
-      listener?.onState(identity, "loading", null)
+      attachVideoLayout(identity.owner)
+      if (announceLoading) listener?.onState(identity, "loading", null)
       val media = Media(core, Uri.parse(source.uri))
       media.setHWDecoderEnabled(source.hardwareDecode, false)
       media.addOption(":network-caching=${networkCachingMs(source.bufferProfile)}")
@@ -183,17 +192,18 @@ object NativeVlcPlaybackManager {
       if (source.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
         media.addOption(":http-user-agent=TiviMate/5.1.6 (Linux; Android TV)")
       }
+      if (source.headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
+        media.addOption(":http-header=Accept: */*")
+      }
       player.media = media
       media.release()
       player.play()
+      main.removeCallbacks(startupTimeout)
       main.postDelayed(startupTimeout, START_TIMEOUT_MS)
     } catch (failure: Throwable) {
       Log.e(TAG, "VLC prepare failed", failure)
-      CharmMemoryCoordinator.setPlaybackStarting(false)
-      listener?.onState(identity, "error", "vlc-init-failed")
-      releasePlayerOnly(removeLayout = false)
-      activeIdentity = null
-      owner = Owner.NONE
+      if (recoverOnce(identity, "vlc-init-failed")) return
+      finishWithError(identity, "vlc-init-failed")
     }
   }
 
@@ -249,23 +259,65 @@ object NativeVlcPlaybackManager {
   private fun publishPlaying(player: MediaPlayer, identity: Identity) {
     if (mediaPlayer !== player || activeIdentity != identity) return
     playing = true
+    recoveryAttempts = 0
     main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
     CharmMemoryCoordinator.setPlaybackStarting(false)
     listener?.onState(identity, "playing", null)
     publishTracks(player, identity)
   }
 
-  private fun publishFailure(player: MediaPlayer, identity: Identity, reason: String) {
+  private fun onPlaybackProblem(player: MediaPlayer, identity: Identity, reason: String) {
     if (mediaPlayer !== player || activeIdentity != identity) return
     playing = false
     main.removeCallbacks(startupTimeout)
+    if (recoverOnce(identity, reason)) return
+    finishWithError(identity, reason)
+  }
+
+  private fun recoverOnce(identity: Identity, reason: String): Boolean {
+    if (activeIdentity != identity || owner == Owner.NONE) return false
+    val source = activeSource ?: return false
+    if (recoveryAttempts >= MAX_AUTO_RECOVERIES) return false
+    val delayMs = RECOVERY_BACKOFF_MS.getOrElse(recoveryAttempts) { 6_000L }
+    recoveryAttempts += 1
+    main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
+    CharmMemoryCoordinator.setPlaybackStarting(true)
+    listener?.onState(identity, "loading", "native-reprepare")
+    Log.i(TAG, "VLC recovery $recoveryAttempts for $reason")
+    if (delayMs == 0L) {
+      performReconnect(identity, source)
+    } else {
+      main.postDelayed(delayedRecovery, delayMs)
+    }
+    return true
+  }
+
+  private fun performReconnect(identity: Identity, source: PlaybackSource) {
+    if (activeIdentity != identity || owner == Owner.NONE) return
+    releasePlayerOnly(removeLayout = false)
+    playing = false
+    startMedia(identity, source, announceLoading = false)
+  }
+
+  private fun finishWithError(identity: Identity, reason: String) {
+    playing = false
+    main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
     CharmMemoryCoordinator.setPlaybackStarting(false)
     listener?.onState(identity, "error", reason)
-    if (mediaPlayer === player && activeIdentity == identity) {
+    if (activeIdentity == identity) {
       releasePlayerOnly(removeLayout = false)
       activeIdentity = null
+      activeSource = null
       if (owner == identity.owner) owner = Owner.NONE
     }
+  }
+
+  private fun publishFailure(player: MediaPlayer, identity: Identity, reason: String) {
+    if (mediaPlayer !== player || activeIdentity != identity) return
+    finishWithError(identity, reason)
   }
 
   private fun ensureCore(): LibVLC? {
@@ -349,8 +401,11 @@ object NativeVlcPlaybackManager {
 
   private fun stopInternal(releasePlayer: Boolean) {
     main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
     playing = false
+    recoveryAttempts = 0
     activeIdentity = null
+    activeSource = null
     owner = Owner.NONE
     CharmMemoryCoordinator.setPlaybackStarting(false)
     if (releasePlayer) {

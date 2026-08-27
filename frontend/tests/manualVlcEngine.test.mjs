@@ -19,6 +19,10 @@ test("LibVLC is native, single-owner, hardware-first, and fully releasable", asy
   assert.match(manager, /releasePlayerOnly\(removeLayout = false\)/); assert.match(manager, /MediaPlayer\(core\)/); assert.match(manager, /media\.setHWDecoderEnabled\((?:source\.)?hardwareDecode, false\)/); assert.match(manager, /fun releaseAll\(\)/);
   assert.match(manager, /attachViews\(layout, null, false, true\)/);
   assert.match(manager, /LibVLC delivers events off the main thread/);
+  assert.match(manager, /MAX_AUTO_RECOVERIES = 4/);
+  assert.match(manager, /recoverOnce\(identity/);
+  assert.match(manager, /performReconnect\(identity, source\)/);
+  assert.match(manager, /onPlaybackProblem/);
   assert.match(module, /LifecycleEventListener/); assert.match(module, /onHostDestroy\(\).*releaseAll/s);
   const surface = await read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt");
   assert.match(surface, /clipChildren = false/);

@@ -172,12 +172,9 @@ internal object NativePlaylistParser {
     // cleartext HTTP for both playlist and XMLTV endpoints; sideload builds
     // explicitly permit that transport. Stream URLs inside the M3U are also
     // retained verbatim.
-    val client = OkHttpClientProvider.getOkHttpClient().newBuilder()
-      .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-      .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    // Share CookieJar with Media3 so panel session cookies from M3U apply to streams.
+    val client = CharmHttpClients.playlistClient(OkHttpClientProvider.getOkHttpClient()).newBuilder()
       .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-      .followRedirects(true)
-      .followSslRedirects(true)
       .build()
     val request = Request.Builder()
       .url(cleanUrl)
@@ -344,6 +341,20 @@ internal object NativePlaylistParser {
         path.endsWith(".mp3") || path.endsWith(".aac") || path.endsWith(".ogg") ||
         path.endsWith(".wav") || path.endsWith(".flac") || path.endsWith(".amr") ||
         path.endsWith(".cmfv") || path.endsWith(".cmfa") -> "progressive"
+      else -> "unknown"
+    }
+  }
+
+  /** Catalog drawer hint only — never forces Media3 opaque routing. */
+  fun catalogKind(url: String): String {
+    val path = streamIdentityUrl(url).substringBefore('?')
+    return when {
+      Regex("/series/", RegexOption.IGNORE_CASE).containsMatchIn(path) -> "series"
+      Regex("/movie/", RegexOption.IGNORE_CASE).containsMatchIn(path) ||
+        Regex("/movies/", RegexOption.IGNORE_CASE).containsMatchIn(path) ||
+        Regex("/vod/", RegexOption.IGNORE_CASE).containsMatchIn(path) -> "movie"
+      Regex("/live/", RegexOption.IGNORE_CASE).containsMatchIn(path) ||
+        Regex("/timeshift/", RegexOption.IGNORE_CASE).containsMatchIn(path) -> "live"
       else -> "unknown"
     }
   }

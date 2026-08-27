@@ -10,9 +10,9 @@ import java.io.InputStream
 import java.util.Locale
 
 /**
- * Bounded format probe used only for opaque HTTP(S) IPTV URLs that have no
- * extension/query/playlist hint. It intentionally does not run for normal HLS,
- * TS, DASH or progressive URLs, so ordinary channel zaps keep their fast path.
+ * Bounded format probe used only in unit/signature tests for opaque HTTP(S)
+ * IPTV URLs. Live Media3 startup intentionally does **not** call this — a second
+ * GET races the real ExoPlayer connection. Keep sniffing helpers here for tests.
  */
 internal object NativeOpaqueStreamProbe {
   data class Result(

@@ -627,6 +627,10 @@ function SettingsScreenContent() {
                     : "Unavailable"}
                 />
                 <InfoRow
+                  label="FFmpeg audio extension"
+                  value={codecCapabilities ? (codecCapabilities.ffmpegAudio ? "Available (AC-3 soft decode)" : "Missing — rebuild APK") : "Unavailable"}
+                />
+                <InfoRow
                   label="Advertised video max"
                   value={codecCapabilities?.maxWidth ? `${codecCapabilities.maxWidth} × ${codecCapabilities.maxHeight}` : "Unavailable"}
                 />
@@ -641,7 +645,7 @@ function SettingsScreenContent() {
                 />
                 <InfoRow
                   label="Last audio silent"
-                  value={latestAudio ? (latestAudio.silentAudio ? "Yes" : "No") : "—"}
+                  value={latestAudio ? (latestAudio.silentAudio ? "Yes — Media3 retried FFmpeg/track cycle" : "No") : "—"}
                 />
                 <InfoRow
                   label="Audio tracks seen"

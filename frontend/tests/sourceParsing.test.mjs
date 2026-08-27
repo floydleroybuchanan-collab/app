@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   allocateChannelId,
+  catalogKind,
   enforcePlaylistTextLimit,
   fingerprintKey,
   isAllowedPlaylistUrl,
@@ -97,6 +98,13 @@ https://provider.example/live/1
   assert.match(channels[0].url, /User-Agent=ProviderBox%2F1\.0/);
   assert.match(channels[0].url, /Referer=https%3A%2F%2Fprovider\.example%2F/);
   assert.doesNotMatch(channels[0].url, /network-caching/);
+});
+
+test("catalogKind maps Xtream path buckets without changing streamType", () => {
+  assert.equal(catalogKind("http://panel.example:25461/live/user/pass/1"), "live");
+  assert.equal(catalogKind("http://panel.example/movie/user/pass/9"), "movie");
+  assert.equal(catalogKind("http://panel.example/series/user/pass/3"), "series");
+  assert.equal(streamType("http://panel.example:25461/live/user/pass/1"), "unknown");
 });
 
 test("allocateChannelId stays deterministic for the same URL", () => {

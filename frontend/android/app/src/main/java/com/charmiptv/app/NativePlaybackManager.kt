@@ -41,10 +41,7 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import okhttp3.ConnectionPool
-import okhttp3.OkHttpClient
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 @OptIn(UnstableApi::class)
 object NativePlaybackManager {
@@ -114,6 +111,7 @@ object NativePlaybackManager {
   private const val START_TIMEOUT_MS = 60_000L
   private const val SOURCE_REFRESH_TIMEOUT_MS = 15_000L
   private const val OPAQUE_CONFIRM_MS = 5_000L
+  private const val SILENT_AUDIO_CHECK_MS = 4_000L
   private const val MAX_AUTO_RECOVERIES = 4
   private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
   private const val OPAQUE_PROBE_CACHE_SIZE = 256
@@ -121,16 +119,9 @@ object NativePlaybackManager {
   private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
   private const val TAG = "CharmMedia3"
 
-  private val httpClient = OkHttpClient.Builder()
-    .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
-    .connectTimeout(20, TimeUnit.SECONDS)
-    // Live IPTV is a long-lived byte stream. A 45s read timeout was aborting
-    // healthy Onn playback about once a minute, climbing the 3-step recovery
-    // ladder, then showing Retry.
-    .readTimeout(0, TimeUnit.SECONDS)
-    .writeTimeout(0, TimeUnit.SECONDS)
-    .retryOnConnectionFailure(true)
-    .build()
+  // Shared CookieJar with playlist fetch so panel Set-Cookie survives into stream GETs.
+  // Live IPTV uses unbounded read (a finite read timeout aborted healthy Onn playback).
+  private val httpClient = CharmHttpClients.mediaClient()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > OPAQUE_PROBE_CACHE_SIZE
   }
@@ -183,8 +174,45 @@ object NativePlaybackManager {
   private var videoDecoder: String? = null
   private var audioDecoder: String? = null
   private var codecError: String? = null
+  private var silentAudioRecoveryUsed = false
 
-  private val startupTimeout = Runnable {
+  private val silentAudioCheck = Runnable {
+    val instance = player ?: return@Runnable
+    if (owner == Owner.NONE || !firstFrameRendered) return@Runnable
+    if (audioDecoder != null) return@Runnable
+    if (mutedState) return@Runnable
+    val tracks = instance.currentTracks
+    val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+    val hasUsable = audioGroups.any { group ->
+      (0 until group.length).any { index -> group.isTrackSupported(index) && group.isTrackSelected(index) }
+    }
+    if (hasUsable && audioMimeType != null && audioDecoder != null) return@Runnable
+    // Video painted but no audio decoder attached — common for AC3/E-AC3 when
+    // hardware decode fails and FFmpeg needs a source rebuild to attach.
+    if (!silentAudioRecoveryUsed) {
+      silentAudioRecoveryUsed = true
+      recordDiagnostic("silent-audio-recovery", lastPlaybackError, instance)
+      val nextSupported = audioGroups.firstNotNullOfOrNull { group ->
+        val gi = tracks.groups.indexOf(group)
+        (0 until group.length).firstOrNull { group.isTrackSupported(it) }?.let { ti -> gi to ti }
+      }
+      if (nextSupported != null) {
+        val (gi, ti) = nextSupported
+        val builder = instance.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        val mediaGroup = tracks.groups.getOrNull(gi)?.mediaTrackGroup
+        if (mediaGroup != null) {
+          builder.addOverride(TrackSelectionOverride(mediaGroup, ti))
+          instance.trackSelectionParameters = builder.build()
+        }
+      }
+      if (recoverOnce(instance, skipBarePrepare = true)) {
+        main.postDelayed(silentAudioCheck, SILENT_AUDIO_CHECK_MS)
+        return@Runnable
+      }
+    }
+    recordDiagnostic("silent-audio", lastPlaybackError, instance)
+    finishWithError("silent-audio", instance)
+  }
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
     if (ensureActiveSurfaceBound(instance, "startup-timeout")) {
@@ -552,7 +580,9 @@ object NativePlaybackManager {
             main.removeCallbacks(bufferingWatchdog)
             main.removeCallbacks(delayedRecovery)
             main.removeCallbacks(opaqueTypeConfirmation)
+            main.removeCallbacks(silentAudioCheck)
             if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)
+            main.postDelayed(silentAudioCheck, SILENT_AUDIO_CHECK_MS)
             resetBufferingWatchdogState()
             CharmMemoryCoordinator.setPlaybackStarting(false)
             recordDiagnostic("first-frame", lastPlaybackError, created)
@@ -610,6 +640,7 @@ object NativePlaybackManager {
 
           override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
             audioDecoder = decoderName
+            main.removeCallbacks(silentAudioCheck)
             recordDiagnostic("audio-decoder-initialized", lastPlaybackError, created)
           }
 
@@ -960,6 +991,7 @@ object NativePlaybackManager {
     main.removeCallbacks(delayedRecovery)
     main.removeCallbacks(sourceRefreshTimeout)
     main.removeCallbacks(opaqueTypeConfirmation)
+    main.removeCallbacks(silentAudioCheck)
     pendingSourceRefresh = null
     resetBufferingWatchdogState()
   }
@@ -986,6 +1018,7 @@ object NativePlaybackManager {
     videoDecoder = null
     audioDecoder = null
     codecError = null
+    silentAudioRecoveryUsed = false
   }
   private fun markPlaybackStarting(reason: String) { CharmMemoryCoordinator.setPlaybackStarting(true); Log.d(TAG, "playback-starting: $reason") }
   private fun isAuthenticationFailure(error: PlaybackException?): Boolean = findHttpResponseCode(error) in setOf(401, 403)

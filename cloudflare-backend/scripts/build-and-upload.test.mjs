@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   buildGuideData,
+  catalogKind,
   parseM3U,
   parseM3UWithMeta,
   parseXMLTV,
   readGuideWindowHours,
+  streamType,
 } from "./build-and-upload.mjs";
 
 test("builder uses a six-hour guide default and safe bounds", () => {
@@ -46,6 +48,23 @@ https://example.test/aetv.m3u8
   assert.deepEqual(playlist.epgUrls, ["http://example.test/guide.xml.gz"]);
   assert.equal(playlist.channels.length, 1);
   assert.equal(playlist.channels[0].tvgId, "AETV.us");
+});
+
+test("builder keeps EXTVLCOPT HTTP headers and stream_type / catalog_kind", () => {
+  const playlist = parseM3UWithMeta(`#EXTM3U
+#EXTINF:-1 tvg-id="xt.1" group-title="Live",Xtream Live
+#EXTVLCOPT:http-user-agent=ProviderBox/1.0
+#EXTVLCOPT:network-caching=1000
+http://panel.example:25461/live/user/pass/1234
+`);
+  assert.equal(playlist.channels.length, 1);
+  assert.match(playlist.channels[0].url, /\|/);
+  assert.match(playlist.channels[0].url, /User-Agent=ProviderBox/);
+  assert.doesNotMatch(playlist.channels[0].url, /network-caching/);
+  assert.equal(playlist.channels[0].stream_type, "unknown");
+  assert.equal(playlist.channels[0].catalog_kind, "live");
+  assert.equal(streamType("https://cdn.example/live/a.m3u8"), "hls");
+  assert.equal(catalogKind("http://panel.example/movie/user/pass/9"), "movie");
 });
 
 test("builder matches EPG when playlist tvg-id has a source suffix", () => {

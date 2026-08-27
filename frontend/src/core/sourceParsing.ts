@@ -80,6 +80,19 @@ export function streamType(url: string): string {
   return "unknown";
 }
 
+/**
+ * Xtream-style catalog bucket from URL path. Does not change Media3 sourceType —
+ * extensionless live stays `unknown` for the opaque router. Used by Movies/Series
+ * drawers so `/movie/` and `/series/` rows are not missed when group-title is empty.
+ */
+export function catalogKind(url: string): "live" | "movie" | "series" | "unknown" {
+  const path = streamIdentityUrl(url).split("?")[0];
+  if (/\/series\//i.test(path) || /\/series\/?\d+$/i.test(path)) return "series";
+  if (/\/movie\//i.test(path) || /\/movies\//i.test(path) || /\/vod\//i.test(path)) return "movie";
+  if (/\/live\//i.test(path) || /\/timeshift\//i.test(path)) return "live";
+  return "unknown";
+}
+
 /** Identity URL without VLC-style pipe headers. */
 export function streamIdentityUrl(url: string): string {
   return url.split("|")[0].trim().toLowerCase();

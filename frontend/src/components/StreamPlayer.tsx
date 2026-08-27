@@ -197,7 +197,12 @@ export function StreamPlayer({
       // Avoid Guide previewEpoch remount storms while fullscreen owns the decoder.
       onStatusRef.current("loading", null);
     } else {
-      const reason: SessionFailReason = event.reason === "start-timeout" ? "start-timeout" : "stream-error";
+      const reason: SessionFailReason =
+        event.reason === "start-timeout"
+          ? "start-timeout"
+          : event.reason === "silent-audio"
+            ? "silent-audio"
+            : "stream-error";
       setSessionPhase(role, generation, "failed", reason);
       if (role === "fullscreen") setNativePlaybackStarting(false);
       onStatusRef.current("error", reason);

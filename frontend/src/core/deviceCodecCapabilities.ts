@@ -8,6 +8,8 @@ export type DeviceCodecCapabilities = {
   aac: boolean;
   ac3: boolean;
   eac3: boolean;
+  /** Media3 FFmpeg audio extension (.so) loaded — needed for AC3/E-AC3 soft decode. */
+  ffmpegAudio: boolean;
   maxWidth: number;
   maxHeight: number;
 };
@@ -31,6 +33,7 @@ export function getDeviceCodecCapabilities(): Promise<DeviceCodecCapabilities | 
         aac: !!raw.aac,
         ac3: !!raw.ac3,
         eac3: !!raw.eac3,
+        ffmpegAudio: !!raw.ffmpegAudio,
         maxWidth: Number(raw.maxWidth || 0),
         maxHeight: Number(raw.maxHeight || 0),
       };

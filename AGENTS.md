@@ -35,7 +35,7 @@ CharmIPTV Phoenix — Expo/React Native Android TV guide + IPTV player (`fronten
 
 ### Settings locations
 - **Appearance**: Instant Guide / reduce motion, density, group layout, preview mute/hide
-- **Player**: buffer size Small/Medium/Large (maps to low_latency / balanced / stable), preferred audio language, silent-audio fallback, Media3 + VLC knobs, subtitles
+- **Player**: buffer size Small/Medium/Large (maps to low_latency / balanced / stable), preferred audio language, silent-audio recovery (track cycle + Media3/FFmpeg rebuild when video paints without audio), Media3 + VLC knobs, subtitles. Health reports FFmpeg audio extension availability.
 - **Health**: match/failure counts plus last audio diagnostics snapshot
 
 ### Standard commands
