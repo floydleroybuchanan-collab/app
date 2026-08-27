@@ -10,7 +10,7 @@ import { evaluateDrawerBack } from "../src/core/drawerNavigationPolicy.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("stream classification preserves probing while live defaults to TiViMate-class VLC", () => {
+test("stream classification keeps Media3 first and reserves VLC for unsupported protocols", () => {
   assert.equal(detectStreamKind("https://x/live.m3u8?token=1"), "hls");
   assert.equal(detectStreamKind("https://x/manifest.mpd"), "dash");
   assert.equal(detectStreamKind("https://cdn/hls/playlist.m3u8"), "hls");
@@ -20,19 +20,28 @@ test("stream classification preserves probing while live defaults to TiViMate-cl
   assert.equal(preferredEngine("hls"), "media3");
   assert.equal(preferredEngine("dash"), "media3");
   assert.equal(preferredEngine("progressive"), "media3");
-  assert.equal(preferredEngine("transport"), "vlc");
-  assert.equal(preferredEngine("unknown"), "vlc");
+  assert.equal(preferredEngine("transport"), "media3");
+  assert.equal(preferredEngine("unknown"), "media3");
   assert.equal(preferredEngine("srt"), "vlc");
   assert.equal(preferredEngine("rtmp"), "vlc");
-  assert.equal(preferredEngine("rtsp"), "vlc");
+  assert.equal(preferredEngine("rtsp"), "media3");
 });
 
 test("pipe headers decode valid values and never throw on malformed percent encoding", () => {
-  const parsed = parsePipeHeaders("https://x/live|Referer=https%3A%2F%2Fexample.com&X-Bad=%E0%A4%A");
+  const parsed = parsePipeHeaders("https://x/live|Referer=https%3A%2F%2Fexample.com&User-Agent=Provider+Box&X-Bad=%E0%A4%A");
   assert.equal(parsed.uri, "https://x/live");
   assert.equal(parsed.headers.Referer, "https://example.com");
+  assert.equal(parsed.headers["User-Agent"], "Provider Box");
   assert.equal(parsed.headers["X-Bad"], "%E0%A4%A");
-  assert.equal(parsed.headers["User-Agent"], "TiviMate/5.1.6 (Linux; Android TV)");
+});
+
+test("pipe headers cannot inject an invalid native HTTP request", () => {
+  const parsed = parsePipeHeaders("  https://x/live  |Good-Header=ok&Bad%20Name=no&X-Injection=one%0D%0ATwo&X-Nul=one%00two");
+  assert.equal(parsed.uri, "https://x/live");
+  assert.equal(parsed.headers["Good-Header"], "ok");
+  assert.equal(parsed.headers["Bad Name"], undefined);
+  assert.equal(parsed.headers["X-Injection"], undefined);
+  assert.equal(parsed.headers["X-Nul"], undefined);
 });
 
 test("drawer edge is a typed remote owner and stale blur cleanup cannot clobber main drawer", async () => {
@@ -165,21 +174,21 @@ test("player delegates More to the single global Quick Actions owner", async () 
   assert.doesNotMatch(player, /playerOverlay.*"more"/);
 });
 
-test("Media3 recovery is one bounded native post-first-frame watchdog", async () => {
+test("Media3 recovery is event-driven, single-attempt, and has no healthy-playback watchdog", async () => {
   const [adapter, native] = await Promise.all([
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
   ]);
-  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
-  assert.match(native, /if \(!firstFrameRendered\) return@Runnable/);
-  assert.match(native, /instance\.isPlaying/);
-  assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
-  assert.match(native, /recoveryAttempts \+= 1[\s\S]*?performRecovery\(instance\)/);
-  assert.match(native, /main\.postDelayed\(bufferingWatchdog, WATCHDOG_POLL_MS\)/);
+  assert.match(native, /MAX_ERROR_RECOVERIES = 1/);
+  assert.match(native, /ERROR_RECOVERY_DELAY_MS = 1_000L/);
+  assert.match(native, /if \(recoveryAttempts >= MAX_ERROR_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
+  assert.match(native, /override fun onPlayerError[\s\S]*?recoverOnce\(/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(/);
+  assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|WATCHDOG_POLL_MS|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|silentAudioCheck/);
   assert.match(native, /override fun onRenderedFirstFrame\(\)[\s\S]*?firstFrameRendered = true[\s\S]*?removeCallbacks\(delayedRecovery\)[\s\S]*?publishState\("playing", null\)/);
-  assert.doesNotMatch(adapter, /player\.currentTime|MEDIA3_FROZEN_CLOCK_MS|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
+  assert.match(adapter, /tryAutomaticVlcFallback/);
+  assert.match(adapter, /activateNativePlaybackEngine/);
+  assert.doesNotMatch(adapter, /player\.currentTime|setInterval|MEDIA3_FROZEN_CLOCK_MS|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
 });
 
 test("fullscreen keeps recovery inside the native player and never refreshes sources", async () => {

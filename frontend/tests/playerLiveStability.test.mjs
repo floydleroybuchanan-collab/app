@@ -21,27 +21,27 @@ test("channel changes build a fresh Media3 source on the same native ExoPlayer",
   assert.doesNotMatch(player, /decoderArmed|pauseSessionDecoders|CHANNEL_ZAP_SETTLE_MS|armDecoderAfterSettle/);
 });
 
-test("Media3 uses TiViMate buffer profiles and reconnect-on-error policy", async () => {
+test("Media3 uses bounded TV buffers and one event-driven reconnect", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /fun tivimateBufferDurationsMs/);
-  assert.match(native, /"low_latency" -> intArrayOf\(8_000, 30_000, 2_000, 5_000\)/);
-  assert.match(native, /"balanced" -> intArrayOf\(15_000, 60_000, 3_000, 8_000\)/);
-  assert.match(native, /else -> intArrayOf\(20_000, 90_000, 5_000, 12_000\)/);
+  assert.match(native, /"low_latency" -> intArrayOf\(1_000, 5_000, 500, 1_000\)/);
+  assert.match(native, /"balanced" -> intArrayOf\(3_000, 15_000, 1_000, 2_000\)/);
+  assert.match(native, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
   assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/);
   assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/);
   assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/);
-  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
-  assert.match(native, /START_TIMEOUT_MS = 60_000L/);
+  assert.match(native, /START_TIMEOUT_MS = 30_000L/);
   assert.match(native, /DefaultHlsExtractorFactory\(liveTsFlags, true\)/);
   assert.match(native, /DashMediaSource\.Factory/);
   assert.match(native, /setWakeMode\(C\.WAKE_MODE_NETWORK\)/);
   assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS|HUNG_BUFFER_REPREPARE_MS/);
-  assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(await source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"), /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(native, /MAX_ERROR_RECOVERIES = 1/);
+  assert.match(native, /ERROR_RECOVERY_DELAY_MS = 1_000L/);
+  assert.match(await source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"), /readTimeout\(20, TimeUnit.SECONDS\)/);
   assert.match(native, /CharmHttpClients\.mediaClient\(\)/);
-  assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/);
-  assert.match(native, /instance\.prepare\(\)/);
+  assert.match(native, /recoveryAttempts >= MAX_ERROR_RECOVERIES/);
+  assert.match(native, /fullPlayerAndSourceRecovery\(instance, source\)/);
+  assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES|silentAudioCheck/);
 });
 
 test("direct MPEG-TS keeps its extractor while hardware video uses the Onn-safe codec path", async () => {

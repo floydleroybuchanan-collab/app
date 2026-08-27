@@ -16,10 +16,9 @@ import org.videolan.libvlc.util.VLCVideoLayout
 /**
  * TiViMate-class LibVLC live engine.
  *
- * Default routing for opaque / MPEG-TS / RTSP-class streams selects VLC
- * (Settings can still force Media3). One MediaPlayer exists at a time and Media3
- * is fully released before a VLC tune starts. Opaque `/live/.../id` URLs rotate
- * `.ts` / `.m3u8` / `.mp4` suffixes on start-timeout like TiViMate-class clients.
+ * Media3 is the default. This compatibility engine is entered only after the
+ * serialized coordinator has fully released Media3, or when Settings forces it.
+ * The exact provider URL is retained from playlist to player.
  *
  * Onn / Amlogic: never play without a measured host surface, and never inherit
  * Guide preview mute into fullscreen (same contract as NativePlaybackManager).
@@ -59,10 +58,9 @@ object NativeVlcPlaybackManager {
     fun onTracks(identity: Identity, audio: List<TrackInfo>, subtitles: List<TrackInfo>)
   }
 
-  private const val START_TIMEOUT_MS = 60_000L
-  private const val OPAQUE_FIRST_URI_TIMEOUT_MS = 12_000L
-  private const val MAX_AUTO_RECOVERIES = 4
-  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
+  private const val START_TIMEOUT_MS = 30_000L
+  private const val MAX_ERROR_RECOVERIES = 1
+  private const val ERROR_RECOVERY_DELAY_MS = 1_000L
   private const val TAG = "CharmVlc"
 
   private val main = Handler(Looper.getMainLooper())
@@ -80,8 +78,7 @@ object NativeVlcPlaybackManager {
   private var playing = false
   private var mutedState = false
   private var recoveryAttempts = 0
-  private var uriLadder: List<String> = emptyList()
-  private var uriLadderIndex = 0
+  private var resizeMode = "fit"
 
   private val startupTimeout: Runnable = Runnable {
     val pending = pendingPrepare
@@ -96,7 +93,6 @@ object NativeVlcPlaybackManager {
     }
     val identity = activeIdentity ?: return@Runnable
     if (playing || owner == Owner.NONE) return@Runnable
-    if (advanceUriLadder(identity, "start-timeout")) return@Runnable
     if (recoverOnce(identity, "start-timeout")) return@Runnable
     finishWithError(identity, "start-timeout")
   }
@@ -207,7 +203,6 @@ object NativeVlcPlaybackManager {
     }
     pendingPrepare = null
 
-    NativePlaybackManager.stopForEngineSwitch()
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
     releasePlayerOnly(removeLayout = false)
@@ -219,13 +214,11 @@ object NativeVlcPlaybackManager {
     }
     playing = false
     recoveryAttempts = 0
-    uriLadder = CharmStreamUrls.opaqueUriVariants(uri)
-    uriLadderIndex = 0
     CharmMemoryCoordinator.setPlaybackStarting(true)
     val identity = Identity(requestedOwner, nextGeneration, nextChannelKey.trim())
     activeIdentity = identity
     val source = PlaybackSource(
-      uri = uriLadder.first(),
+      uri = uri,
       headers = LinkedHashMap(headers),
       hardwareDecode = hardwareDecode,
       audioOutput = audioOutput.trim().lowercase(),
@@ -241,7 +234,6 @@ object NativeVlcPlaybackManager {
       val player = MediaPlayer(core)
       mediaPlayer = player
       player.volume = if (mutedState) 0 else 100
-      configureAudioOutput(player, source.audioOutput)
       player.setEventListener { event ->
         // LibVLC delivers events off the main thread. Emitting into React Native
         // from that thread is a documented hard crash on engine switch.
@@ -263,12 +255,15 @@ object NativeVlcPlaybackManager {
       media.setHWDecoderEnabled(source.hardwareDecode, false)
       val cachingMs = networkCachingMs(source.bufferProfile)
       media.addOption(":network-caching=$cachingMs")
-      // TiViMate-class live HTTP: keep cache/clock aligned so MPEG-TS does not
-      // open as "playing" with a dead video clock on Amlogic.
+      // Keep network and live caching aligned; VLC's own clock correction stays
+      // enabled so audio and video cannot be forced onto independent clocks.
       media.addOption(":live-caching=$cachingMs")
-      media.addOption(":clock-jitter=0")
-      media.addOption(":clock-synchro=0")
       media.addOption(":http-reconnect")
+      when (source.audioOutput) {
+        "stereo" -> media.addOption(":stereo-mode=0")
+        "passthrough" -> media.addOption(":spdif")
+        else -> Unit
+      }
       if (source.uri.startsWith("rtsp", ignoreCase = true)) {
         media.addOption(":rtsp-tcp")
       }
@@ -300,21 +295,21 @@ object NativeVlcPlaybackManager {
       }
       player.play()
       main.removeCallbacks(startupTimeout)
-      val firstOpaque = uriLadder.size > 1 && uriLadderIndex == 0
-      main.postDelayed(startupTimeout, if (firstOpaque) OPAQUE_FIRST_URI_TIMEOUT_MS else START_TIMEOUT_MS)
+      main.postDelayed(startupTimeout, START_TIMEOUT_MS)
     } catch (failure: Throwable) {
       Log.e(TAG, "VLC prepare failed", failure)
-      if (advanceUriLadder(identity, "vlc-init-failed")) return
       if (recoverOnce(identity, "vlc-init-failed")) return
       finishWithError(identity, "vlc-init-failed")
     }
   }
 
   fun setResizeMode(mode: String?) = runOnMain {
-    if (mode == "fit" || mode.isNullOrBlank()) {
-      try { mediaPlayer?.setAspectRatio(null) } catch (_: Throwable) {}
-      try { mediaPlayer?.setScale(0f) } catch (_: Throwable) {}
+    val normalized = mode?.trim()?.lowercase()
+    resizeMode = when (normalized) {
+      "fill", "zoom", "stretch" -> normalized
+      else -> "fit"
     }
+    mediaPlayer?.let { applyResizeMode(it) }
   }
 
   fun pause() = runOnMain { mediaPlayer?.pause() }
@@ -348,11 +343,6 @@ object NativeVlcPlaybackManager {
     onStopped?.invoke()
   }
 
-  fun stopForEngineSwitch() = runOnMain {
-    pendingPrepare = null
-    stopInternal(releasePlayer = true)
-  }
-
   fun releaseAll() = runOnMain {
     pendingPrepare = null
     stopInternal(releasePlayer = true)
@@ -369,7 +359,6 @@ object NativeVlcPlaybackManager {
   private fun publishPlaying(player: MediaPlayer, identity: Identity) {
     if (mediaPlayer !== player || activeIdentity != identity) return
     playing = true
-    recoveryAttempts = 0
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
     CharmMemoryCoordinator.setPlaybackStarting(false)
@@ -385,47 +374,21 @@ object NativeVlcPlaybackManager {
     if (mediaPlayer !== player || activeIdentity != identity) return
     playing = false
     main.removeCallbacks(startupTimeout)
-    if (advanceUriLadder(identity, reason)) return
     if (recoverOnce(identity, reason)) return
     finishWithError(identity, reason)
   }
 
-  private fun advanceUriLadder(identity: Identity, reason: String): Boolean {
-    if (activeIdentity != identity || owner == Owner.NONE) return false
-    val source = activeSource ?: return false
-    if (uriLadderIndex + 1 >= uriLadder.size) return false
-    uriLadderIndex += 1
-    val nextUri = uriLadder[uriLadderIndex]
-    val next = source.copy(uri = nextUri)
-    activeSource = next
-    recoveryAttempts = 0
-    main.removeCallbacks(startupTimeout)
-    main.removeCallbacks(delayedRecovery)
-    releasePlayerOnly(removeLayout = false)
-    playing = false
-    CharmMemoryCoordinator.setPlaybackStarting(true)
-    Log.i(TAG, "VLC URI ladder $uriLadderIndex/${uriLadder.size} after $reason → $nextUri")
-    listener?.onState(identity, "loading", "native-reprepare")
-    startMedia(identity, next, announceLoading = false)
-    return true
-  }
-
   private fun recoverOnce(identity: Identity, reason: String): Boolean {
     if (activeIdentity != identity || owner == Owner.NONE) return false
-    val source = activeSource ?: return false
-    if (recoveryAttempts >= MAX_AUTO_RECOVERIES) return false
-    val delayMs = RECOVERY_BACKOFF_MS.getOrElse(recoveryAttempts) { 6_000L }
+    if (activeSource == null) return false
+    if (recoveryAttempts >= MAX_ERROR_RECOVERIES) return false
     recoveryAttempts += 1
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
     CharmMemoryCoordinator.setPlaybackStarting(true)
     listener?.onState(identity, "loading", "native-reprepare")
     Log.i(TAG, "VLC recovery $recoveryAttempts for $reason")
-    if (delayMs == 0L) {
-      performReconnect(identity, source)
-    } else {
-      main.postDelayed(delayedRecovery, delayMs)
-    }
+    main.postDelayed(delayedRecovery, ERROR_RECOVERY_DELAY_MS)
     return true
   }
 
@@ -469,24 +432,11 @@ object NativeVlcPlaybackManager {
     }
   }
 
-  private fun configureAudioOutput(player: MediaPlayer, audioOutput: String) {
-    try {
-      when (audioOutput) {
-        "stereo" -> player.setAudioOutputDevice("stereo")
-        "passthrough" -> player.setAudioOutputDevice("encoded")
-        else -> Unit
-      }
-    } catch (_: Throwable) {
-      // Some OEM audio stacks reject explicit devices. VLC's default remains usable.
-    }
-  }
-
-  // TiViMate buffer size mapping: Small / Medium / Large (ms).
-  // Large mirrors Media3's Onn-proven min-buffer class (20s).
+  // Small / Medium / Large live caching (ms).
   private fun networkCachingMs(profile: String): Int = when (profile) {
-    "low_latency" -> 2_000
-    "balanced" -> 5_000
-    else -> 20_000
+    "low_latency" -> 1_000
+    "balanced" -> 3_000
+    else -> 5_000
   }
 
   private fun surfaceFor(surfaceOwner: Owner): FrameLayout? = when (surfaceOwner) {
@@ -517,11 +467,23 @@ object NativeVlcPlaybackManager {
       // TextureView for preview and fullscreen. SurfaceView on Onn Google TV
       // paints behind the React Native stack (audio continues, picture stays black).
       player.attachViews(layout, null, false, true)
+      applyResizeMode(player)
       true
     } catch (failure: Throwable) {
       Log.w(TAG, "VLC attachViews failed", failure)
       false
     }
+  }
+
+  private fun applyResizeMode(player: MediaPlayer) {
+    val scale = when (resizeMode) {
+      // FIT_SCREEN preserves aspect ratio and crops only the overflow.
+      "fill", "zoom" -> MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
+      // FILL uses the full host rectangle, intentionally changing aspect ratio.
+      "stretch" -> MediaPlayer.ScaleType.SURFACE_FILL
+      else -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
+    }
+    try { player.setVideoScale(scale) } catch (_: Throwable) {}
   }
 
   private fun publishTracks(player: MediaPlayer, identity: Identity) {

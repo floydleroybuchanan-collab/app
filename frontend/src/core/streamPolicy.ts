@@ -1,4 +1,5 @@
 export type Engine = "media3" | "vlc";
+export type EnginePreference = "auto" | Engine;
 /** CMAF is packaging (fMP4) carried inside HLS or DASH — not a separate engine path. */
 export type StreamKind =
   | "hls"
@@ -6,6 +7,8 @@ export type StreamKind =
   | "progressive"
   | "rtsp"
   | "rtmp"
+  | "rtp"
+  | "udp"
   | "transport"
   | "srt"
   | "webrtc"
@@ -17,8 +20,10 @@ function kindFromHint(raw: string | null | undefined): StreamKind | null {
   if (hint === "hls" || hint === "m3u8" || hint.includes("application/x-mpegurl") || hint.includes("application/vnd.apple.mpegurl")) return "hls";
   if (hint === "dash" || hint === "mpd" || hint.includes("application/dash+xml")) return "dash";
   if (hint === "ts" || hint === "m2ts" || hint === "transport" || hint === "mpegts" || hint === "mpeg-ts" || hint.includes("video/mp2t")) return "transport";
-  if (hint === "rtsp") return "rtsp";
+  if (hint === "rtsp" || hint === "rtsps") return "rtsp";
   if (hint === "rtmp" || hint === "rtmps") return "rtmp";
+  if (hint === "rtp") return "rtp";
+  if (hint === "udp") return "udp";
   if (hint === "srt" || hint === "rist") return "srt";
   if (hint === "webrtc") return "webrtc";
   if (hint === "progressive" || hint === "mp4") return "progressive";
@@ -28,7 +33,7 @@ function kindFromHint(raw: string | null | undefined): StreamKind | null {
 /**
  * Resolve the real live transport. URL markers win when present, then the
  * playlist/native parser hint fills in extensionless provider URLs. This keeps
- * direct MPEG-TS on the explicit TS extractor/watchdog path instead of silently
+ * direct MPEG-TS on the explicit TS extractor path instead of silently
  * downgrading it to generic progressive playback.
  */
 export const DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)";
@@ -36,8 +41,10 @@ export const DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)";
 export function detectStreamKind(uri: string, streamTypeHint?: string | null): StreamKind {
   const lower = uri.toLowerCase();
   const protocol = lower.split(":", 1)[0];
-  if (protocol === "rtsp") return "rtsp";
+  if (protocol === "rtsp" || protocol === "rtsps") return "rtsp";
   if (protocol === "rtmp" || protocol === "rtmps") return "rtmp";
+  if (protocol === "rtp") return "rtp";
+  if (protocol === "udp") return "udp";
   if (protocol === "srt" || protocol === "rist") return "srt";
   if (protocol === "webrtc" || (protocol === "http" && lower.includes("webrtc"))) return "webrtc";
   if (
@@ -67,15 +74,28 @@ export function detectStreamKind(uri: string, streamTypeHint?: string | null): S
 }
 
 function safeDecode(value: string): string {
-  try { return decodeURIComponent(value); } catch { return value; }
+  // Android's URLEncoder emits application/x-www-form-urlencoded `+` for a
+  // space, while JS encodeURIComponent emits `%20`. Native and web playlist
+  // parsers both feed this path, so accept either representation.
+  const formEncoded = value.replace(/\+/g, "%20");
+  try { return decodeURIComponent(formEncoded); } catch { return value; }
+}
+
+// OkHttp rejects an entire request when even one supplied header has an
+// illegal name/value. M3U pipe headers are provider-controlled input, so keep
+// only RFC 7230 token names and single-line values before they reach native.
+const HTTP_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+function safeHeader(key: string, value: string): boolean {
+  return HTTP_HEADER_NAME.test(key) && !/[\0\r\n]/.test(value);
 }
 
 export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record<string, string> } {
   const pipeIndex = rawUri.indexOf("|");
   if (pipeIndex < 0) {
-    return { uri: rawUri, headers: { "User-Agent": DEFAULT_STREAM_USER_AGENT } };
+    return { uri: rawUri.trim(), headers: { "User-Agent": DEFAULT_STREAM_USER_AGENT } };
   }
-  const uri = rawUri.slice(0, pipeIndex);
+  const uri = rawUri.slice(0, pipeIndex).trim();
   // Preserve headers supplied by the stream/provider. When the playlist omits
   // User-Agent, use the same TiViMate-style Android TV UA the cloud builder
   // already retries with so IPTV panels that gate on that identity still deliver bytes.
@@ -85,7 +105,7 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
     if (equals <= 0) continue;
     const key = safeDecode(pair.slice(0, equals)).trim();
     const value = safeDecode(pair.slice(equals + 1)).trim();
-    if (key && value) headers[key] = value;
+    if (key && value && safeHeader(key, value)) headers[key] = value;
   }
   if (!Object.keys(headers).some((key) => key.toLowerCase() === "user-agent")) {
     headers["User-Agent"] = DEFAULT_STREAM_USER_AGENT;
@@ -94,7 +114,7 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
 }
 
 export function isNativeMedia3SupportedStreamKind(kind: StreamKind): boolean {
-  return kind === "hls" || kind === "dash" || kind === "progressive" || kind === "transport" || kind === "unknown";
+  return kind === "hls" || kind === "dash" || kind === "progressive" || kind === "transport" || kind === "rtsp" || kind === "unknown";
 }
 
 export function isVlcSupportedStreamKind(kind: StreamKind): boolean {
@@ -103,16 +123,27 @@ export function isVlcSupportedStreamKind(kind: StreamKind): boolean {
   return kind !== "webrtc";
 }
 
-/** TiViMate-class routing: LibVLC for live/opaque IPTV; Media3 for clear HLS/DASH/files. */
+/** Automatic routing always gives Media3 the first attempt when it supports the protocol. */
 export function preferredEngine(kind: StreamKind): Engine {
-  if (kind === "hls" || kind === "dash" || kind === "progressive") return "media3";
+  return isNativeMedia3SupportedStreamKind(kind) ? "media3" : "vlc";
+}
+
+export function initialEngine(preference: EnginePreference, kind: StreamKind): Engine {
+  if (preference === "media3" || preference === "vlc") return preference;
+  return preferredEngine(kind);
+}
+
+/** Automatic mode has exactly one cross-engine fallback: Media3 -> VLC. */
+export function fallbackEngine(preference: EnginePreference, current: Engine, kind: StreamKind): Engine | null {
+  if (preference !== "auto" || current !== "media3" || !isVlcSupportedStreamKind(kind)) return null;
   return "vlc";
 }
 
 /**
  * Media3 contentType hint for the native source factory. Unknown HTTP(S) URLs
  * deliberately remain unknown so the native learned-type cache and bounded
- * single-player candidate router can classify them without a second decoder.
+ * single-player candidate router can classify them without a second connection
+ * or decoder.
  */
 export function media3ContentType(kind: StreamKind): "hls" | "dash" | "transport" | "progressive" | "unknown" {
   if (kind === "dash") return "dash";

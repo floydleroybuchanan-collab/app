@@ -180,7 +180,6 @@ internal object NativePlaylistParser {
       .url(cleanUrl)
       .header("User-Agent", "TiviMate/5.1.6 (Linux; Android TV)")
       .header("Accept", "application/x-mpegURL,application/vnd.apple.mpegurl,audio/mpegurl,application/xml,text/xml,*/*")
-      .header("Accept", "*/*")
       .build()
     val response = client.newCall(request).execute()
     if (!response.isSuccessful) {
@@ -290,7 +289,7 @@ internal object NativePlaylistParser {
     val colon = identity.indexOf(':')
     if (colon <= 0) return false
     return when (identity.substring(0, colon).lowercase(Locale.US)) {
-      "http", "https", "rtsp", "rtsps", "rtmp", "rtmps" -> true
+      "http", "https", "rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp", "srt", "rist" -> true
       else -> false
     }
   }
@@ -306,6 +305,8 @@ internal object NativePlaylistParser {
    */
   private fun streamType(url: String): String {
     val clean = streamIdentityUrl(url)
+    val protocol = clean.substringBefore(':')
+    if (protocol in setOf("rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp", "srt", "rist")) return protocol
     val path = clean.substringBefore('?')
     val query = clean.substringAfter('?', "")
     val paddedQuery = if (query.isEmpty()) "" else "&$query&"

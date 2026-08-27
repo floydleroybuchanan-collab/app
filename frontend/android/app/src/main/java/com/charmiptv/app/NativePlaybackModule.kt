@@ -57,7 +57,7 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   @ReactMethod fun selectSubtitle(groupIndex: Double, trackIndex: Double) { NativePlaybackManager.selectSubtitle(groupIndex.toInt(), trackIndex.toInt(), null) }
   @ReactMethod fun selectSubtitleLanguage(language: String?) { NativePlaybackManager.selectSubtitle(null, null, language) }
   @ReactMethod fun subtitlesOff() { NativePlaybackManager.selectSubtitle(null, null, null) }
-  @ReactMethod fun stopPreview(promise: Promise) { stopOwner(NativePlaybackManager.Owner.PREVIEW, releasePlayer = false, promise) }
+  @ReactMethod fun stopPreview(releasePlayer: Boolean, promise: Promise) { stopOwner(NativePlaybackManager.Owner.PREVIEW, releasePlayer, promise) }
   @ReactMethod fun stopFullscreen(releasePlayer: Boolean, promise: Promise) { stopOwner(NativePlaybackManager.Owner.FULLSCREEN, releasePlayer, promise) }
   @ReactMethod fun getOwner(promise: Promise) { promise.resolve(NativePlaybackManager.currentOwner().name.lowercase()) }
 

@@ -44,7 +44,7 @@ import {
   usePlaybackBufferProfile,
   type PlaybackBufferProfile,
 } from "@/src/core/playbackBufferProfile";
-import { usePlayerEnginePreference } from "@/src/playerEnginePreference";
+import { usePlayerEnginePreference, type PlayerEnginePreference } from "@/src/playerEnginePreference";
 import { useVlcPlaybackPreferences } from "@/src/core/vlcPlaybackPreferences";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
@@ -511,7 +511,7 @@ function SettingsScreenContent() {
               <SettingsCard title="Playback" icon="play-circle-outline">
                 <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
-                  Live IPTV (Xtream-style) defaults to VLC — the TiViMate-class path. Media3 stays available for clear HLS/DASH. Only the selected engine owns the decoder.
+                  Automatic starts every supported stream in Media3/ExoPlayer. If Media3 reaches a final playback failure, it releases completely before VLC takes over.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"
@@ -530,12 +530,16 @@ function SettingsScreenContent() {
                   onChange={remoteShortcuts.setLongDown}
                 />
                 <Text style={styles.help}>Long OK/Select is reserved for contextual Quick Actions. Directional D-pad keys remain deterministic; Long Down is the only remappable D-pad hold.</Text>
-                <ChoiceRow<"media3" | "vlc">
+                <ChoiceRow<PlayerEnginePreference>
                   label="Player engine" value={playerEngine}
-                  options={[{ label: "VLC (recommended for live)", value: "vlc" }, { label: "Media3", value: "media3" }]}
+                  options={[
+                    { label: "Automatic (Media3 → VLC)", value: "auto" },
+                    { label: "Media3 only", value: "media3" },
+                    { label: "VLC only", value: "vlc" },
+                  ]}
                   onChange={setPlayerEngine}
                 />
-                {playerEngine === "vlc" ? (<>
+                {playerEngine !== "media3" ? (<>
                   <ToggleRow label="VLC hardware decoding" value={vlcPlayback.hardwareDecode} onChange={vlcPlayback.setHardwareDecode} />
                   <ChoiceRow<"auto" | "stereo" | "passthrough"> label="VLC audio output" value={vlcPlayback.audioOutput} options={[{ label: "Auto", value: "auto" }, { label: "Stereo", value: "stereo" }, { label: "Passthrough", value: "passthrough" }]} onChange={vlcPlayback.setAudioOutput} />
                 </>) : null}
@@ -549,7 +553,7 @@ function SettingsScreenContent() {
                   ]}
                   onChange={setPlaybackBufferProfile}
                 />
-                <Text style={styles.help}>TiViMate-style buffer size: Small starts sooner, Large absorbs provider jitter. Large is the Onn-proven default.</Text>
+                <Text style={styles.help}>Small starts sooner; Medium balances startup and jitter; Large is the 48 MB-capped TV default.</Text>
                 <ChoiceRow<SleepTimerMinutes>
                   label="Sleep timer"
                   value={sleepTimerMinutes}
@@ -644,8 +648,8 @@ function SettingsScreenContent() {
                   value={latestAudio?.mimeType || "—"}
                 />
                 <InfoRow
-                  label="Last audio silent"
-                  value={latestAudio ? (latestAudio.silentAudio ? "Yes — Media3 retried FFmpeg/track cycle" : "No") : "—"}
+                  label="Last audio decoder"
+                  value={latestAudio?.decoder || "—"}
                 />
                 <InfoRow
                   label="Audio tracks seen"

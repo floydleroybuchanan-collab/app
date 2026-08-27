@@ -29,13 +29,13 @@ object CharmHttpClients {
       .followSslRedirects(true)
       .build()
 
-  /** Live media: unbounded read (long-lived IPTV byte stream). */
+  /** Live media: timeout applies between reads, not to total stream duration. */
   fun mediaClient(): OkHttpClient =
     OkHttpClient.Builder()
       .cookieJar(cookieJar)
       .connectionPool(okhttp3.ConnectionPool(6, 5, TimeUnit.MINUTES))
       .connectTimeout(20, TimeUnit.SECONDS)
-      .readTimeout(0, TimeUnit.SECONDS)
+      .readTimeout(20, TimeUnit.SECONDS)
       .writeTimeout(0, TimeUnit.SECONDS)
       .retryOnConnectionFailure(true)
       .followRedirects(true)

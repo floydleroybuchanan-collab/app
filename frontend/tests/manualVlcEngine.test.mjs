@@ -6,17 +6,17 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFile(join(root, path), "utf8");
 
-test("TiViMate-class VLC is the default live engine with Media3 still selectable", async () => {
-  const [player, preference, policy] = await Promise.all([read("src/components/StreamPlayer.tsx"), read("src/playerEnginePreference.ts"), read("src/core/streamPolicy.ts")]);
-  assert.match(preference, /"media3" \| "vlc"/); assert.match(preference, /cachedPreference: PlayerEnginePreference = "vlc"/); assert.match(preference, /gs_player_engine_preference_v2/);
-  assert.match(player, /playerEngine === "media3"/); assert.match(player, /playerEngine === "vlc"/);
-  assert.match(player, /stopNativeFullscreen\(true\)/); assert.match(player, /stopNativeVlcFullscreen\(true\)/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
+test("automatic mode starts Media3 and serializes one VLC fallback", async () => {
+  const [player, preference, policy, coordinator] = await Promise.all([read("src/components/StreamPlayer.tsx"), read("src/playerEnginePreference.ts"), read("src/core/streamPolicy.ts"), read("src/core/nativePlaybackCoordinator.ts")]);
+  assert.match(preference, /"auto" \| "media3" \| "vlc"/); assert.match(preference, /cachedPreference: PlayerEnginePreference = "auto"/); assert.match(preference, /gs_player_engine_preference_v3/);
+  assert.match(player, /initialEngine\(playerEngine, kind\)/); assert.match(player, /tryAutomaticVlcFallback/);
+  assert.match(player, /activateNativePlaybackEngine/); assert.doesNotMatch(player, /stopNativeFullscreen|stopNativeVlcFullscreen|Promise\.allSettled/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
   assert.match(player, /state !== "background"/);
   assert.match(player, /Never stopFullscreenSession/);
   assert.match(player, /role === "fullscreen"/);
   assert.match(player, /setNativeVlcMuted\(false\)/);
-  assert.match(policy, /isNativeMedia3SupportedStreamKind/); assert.match(policy, /isVlcSupportedStreamKind/);
-  assert.match(policy, /return "vlc"/);
+  assert.match(policy, /isNativeMedia3SupportedStreamKind/); assert.match(policy, /isVlcSupportedStreamKind/); assert.match(policy, /return isNativeMedia3SupportedStreamKind\(kind\) \? "media3" : "vlc"/);
+  assert.match(coordinator, /let operation: Promise<void> = Promise\.resolve\(\)/); assert.doesNotMatch(coordinator, /Promise\.all|Promise\.allSettled/);
 });
 
 test("LibVLC is native, single-owner, hardware-first, and fully releasable", async () => {
@@ -25,16 +25,16 @@ test("LibVLC is native, single-owner, hardware-first, and fully releasable", asy
   assert.match(manager, /releasePlayerOnly\(removeLayout = false\)/); assert.match(manager, /MediaPlayer\(core\)/); assert.match(manager, /media\.setHWDecoderEnabled\((?:source\.)?hardwareDecode, false\)/); assert.match(manager, /fun releaseAll\(\)/);
   assert.match(manager, /attachViews\(layout, null, false, true\)/);
   assert.match(manager, /LibVLC delivers events off the main thread/);
-  assert.match(manager, /MAX_AUTO_RECOVERIES = 4/);
+  assert.match(manager, /MAX_ERROR_RECOVERIES = 1/);
   assert.match(manager, /recoverOnce\(identity/);
   assert.match(manager, /performReconnect\(identity, source\)/);
   assert.match(manager, /onPlaybackProblem/);
-  assert.match(manager, /advanceUriLadder/);
+  assert.doesNotMatch(manager, /advanceUriLadder|opaqueUriVariants/);
   assert.match(manager, /:http-reconnect/);
   assert.match(manager, /:live-caching=/);
-  assert.match(manager, /:clock-jitter=0/);
+  assert.doesNotMatch(manager, /:clock-jitter=0|:clock-synchro=0/);
   assert.match(manager, /CharmHttpClients\.cookieHeaderFor/);
-  assert.match(manager, /CharmStreamUrls\.opaqueUriVariants/);
+  assert.match(manager, /val media = Media\(core, Uri\.parse\(source\.uri\)\)/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);
   assert.match(manager, /Fullscreen must never inherit Guide preview mute/);
@@ -57,19 +57,18 @@ test("native events carry session identity and lifecycle cleanup", async () => {
   assert.match(bridge, /generation: number/); assert.match(bridge, /channelKey: string/); assert.match(module, /LifecycleEventListener/); assert.match(module, /activeGeneration/); assert.match(module, /activeChannelKey/); assert.match(player, /event\.generation !== generation/); assert.match(player, /event\.channelKey !== currentChannelKey/);
 });
 
-test("locked Media3 safety budgets remain unchanged", async () => {
+test("Media3 safety budgets remain bounded and watchdog-free", async () => {
   const manager = await read("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   for (const marker of [
     'fun tivimateBufferDurationsMs',
-    '"low_latency" -> intArrayOf(8_000, 30_000, 2_000, 5_000)',
-    '"balanced" -> intArrayOf(15_000, 60_000, 3_000, 8_000)',
-    'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)',
-    'RECONNECT_STALL_MS = 50_000L',
-    'START_TIMEOUT_MS = 60_000L',
-    'MAX_AUTO_RECOVERIES = 4',
-    'longArrayOf(0L, 1_000L, 3_000L, 6_000L)',
+    '"low_latency" -> intArrayOf(1_000, 5_000, 500, 1_000)',
+    '"balanced" -> intArrayOf(3_000, 15_000, 1_000, 2_000)',
+    'else -> intArrayOf(10_000, 30_000, 1_500, 3_000)',
+    'START_TIMEOUT_MS = 30_000L',
+    'MAX_ERROR_RECOVERIES = 1',
+    'ERROR_RECOVERY_DELAY_MS = 1_000L',
   ]) assert.match(manager, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.doesNotMatch(manager, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS/);
+  assert.doesNotMatch(manager, /RECONNECT_STALL_MS|bufferingWatchdog|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS/);
 });
 
 

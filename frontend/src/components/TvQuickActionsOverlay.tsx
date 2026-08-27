@@ -411,7 +411,7 @@ export function TvQuickActionsOverlay() {
                 <Action icon="speedometer-outline" label="Buffer size" value={playbackBufferProfileLabel(bufferProfile)} onPress={() => { const next = nextValue(BUFFER_ORDER, bufferProfile); close(); requestAnimationFrame(() => setBufferProfile(next)); }} />
                 <Action icon="moon-outline" label="Sleep timer" value={sleepTimerMinutes ? `${sleepTimerMinutes}m` : "Off"} onPress={() => setSleepTimerMinutes(sleepTimerMinutes === 0 ? 15 : sleepTimerMinutes === 15 ? 30 : sleepTimerMinutes === 30 ? 60 : sleepTimerMinutes === 60 ? 90 : 0)} />
                 <Action icon="bug-outline" label="Diagnostics" value="Save player report" onPress={() => runPlayerCommand("SAVE_DIAGNOSTICS")} />
-                <Action icon="options-outline" label="Playback settings" value="Media3 controls" onPress={openSettings} />
+                <Action icon="options-outline" label="Playback settings" value="Media3 + VLC fallback" onPress={openSettings} />
                 <Action icon="settings-outline" label="All Settings" onPress={openSettings} />
               </>
             )}

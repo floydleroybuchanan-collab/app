@@ -53,7 +53,6 @@ const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
   "start-timeout": "start timeout",
   "engine-swap": "playback reset",
   "stream-error": "stream error",
-  "silent-audio": "no supported audio track",
   "user-stop": "stopped",
   superseded: "replaced",
   crashed: "player crash",
@@ -448,7 +447,7 @@ export default function PlayerScreen() {
     return () => sub.remove();
   }, [channelsOpen, closeOverlayAndRestoreFocus, revealControls, scheduleHide, stopAndExit, tracksOpen]);
 
-  const engineScaleMode: PlayerScaleMode = scaleMode === "fill" ? "zoom" : scaleMode === "stretch" ? "stretch" : "fit";
+  const engineScaleMode: PlayerScaleMode = scaleMode;
 
   return (
     <View style={styles.root}>

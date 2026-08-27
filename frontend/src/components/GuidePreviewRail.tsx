@@ -32,7 +32,6 @@ type Props = {
   previewVisible: boolean;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
-  onPreviewErrorRemount: () => void;
   onPlay: () => void;
   onFavorite: () => void;
   onOpenReminders: () => void;
@@ -71,7 +70,6 @@ export function GuidePreviewRail({
   previewVisible,
   previewEpoch,
   onPreviewStatus,
-  onPreviewErrorRemount,
   onPlay,
   onFavorite,
   onOpenReminders,
@@ -115,7 +113,7 @@ export function GuidePreviewRail({
           <View style={styles.preview}>
             {previewVisible && channel?.url ? (
               <ErrorBoundary
-                onError={onPreviewErrorRemount}
+                onError={() => onPreviewStatus("error")}
                 fallback={() => (
                   <View style={styles.fallback}>
                     <ChannelLogo name={channel.name} logo={channel.logo} disabled={!showLogos} size={132} />

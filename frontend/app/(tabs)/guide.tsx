@@ -110,7 +110,6 @@ function GuideSelectionPreview({
   previewStatus,
   previewEpoch,
   onPreviewStatus,
-  onPreviewErrorRemount,
   onPlay,
   onFavorite,
   onOpenReminders,
@@ -135,7 +134,6 @@ function GuideSelectionPreview({
   previewStatus: StreamStatus;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
-  onPreviewErrorRemount: () => void;
   onPlay: (channel: Channel) => void;
   onFavorite: (channelId: string) => void;
   onOpenReminders: () => void;
@@ -187,7 +185,6 @@ function GuideSelectionPreview({
       previewVisible={previewVisible}
       previewEpoch={previewEpoch}
       onPreviewStatus={onPreviewStatus}
-      onPreviewErrorRemount={onPreviewErrorRemount}
       onPlay={() => channel && onPlay(channel)}
       onFavorite={() => channel && onFavorite(channel.id)}
       onOpenReminders={onOpenReminders}
@@ -298,7 +295,6 @@ function PurpleGuideScreenContent() {
   const [pinDigits, setPinDigits] = useState("");
   const [pinError, setPinError] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewRecoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const surfReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memoryLogoRestoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const runwayPatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -323,11 +319,9 @@ function PurpleGuideScreenContent() {
 
   const cancelGuideTransientTimers = useCallback(() => {
     if (previewTimer.current) clearTimeout(previewTimer.current);
-    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
     if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
     if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
     previewTimer.current = null;
-    previewRecoverTimer.current = null;
     surfReleaseTimer.current = null;
     runwayPatchTimer.current = null;
     pendingRunwayPatchRef.current = null;
@@ -984,22 +978,6 @@ function PurpleGuideScreenContent() {
 
   const onPreviewStatus = useCallback((status: StreamStatus) => {
     setPreviewStatus(status);
-    if (status !== "error") return;
-    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
-    previewRecoverTimer.current = setTimeout(() => {
-      previewRecoverTimer.current = null;
-      setPreviewStatus("loading");
-      setPreviewEpoch((value) => value + 1);
-    }, 1_500);
-  }, []);
-
-  const onPreviewErrorRemount = useCallback(() => {
-    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
-    previewRecoverTimer.current = setTimeout(() => {
-      previewRecoverTimer.current = null;
-      setPreviewStatus("loading");
-      setPreviewEpoch((value) => value + 1);
-    }, 700);
   }, []);
 
   const drawerGroups = useMemo<PurpleGuideGroup[]>(() => {
@@ -1081,7 +1059,6 @@ function PurpleGuideScreenContent() {
               previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
-              onPreviewErrorRemount={onPreviewErrorRemount}
               onPlay={play}
               onFavorite={toggleFavorite}
               onOpenReminders={() => {

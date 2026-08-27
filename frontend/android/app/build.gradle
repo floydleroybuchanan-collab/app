@@ -183,10 +183,11 @@ dependencies {
     // routable when MediaItem supplies a MIME/content-type hint.
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
     implementation("androidx.media3:media3-exoplayer-dash:1.8.0")
+    implementation("androidx.media3:media3-exoplayer-rtsp:1.8.0")
     // Shared CookieJar for playlist + Media3 (JavaNetCookieJar lives here).
     implementation("com.squareup.okhttp3:okhttp-urlconnection:4.12.0")
-    // Manual compatibility engine only. Media3 remains the default and VLC is
-    // never selected automatically after a Media3 failure.
+    // Serialized compatibility fallback. Media3 remains the default and is
+    // fully released before LibVLC receives the same provider URL.
     implementation("org.videolan.android:libvlc-all:3.7.5")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")

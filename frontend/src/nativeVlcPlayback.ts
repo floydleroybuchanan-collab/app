@@ -82,7 +82,7 @@ export function prepareNativeVlcPreview(
   native?.preparePreview(generation, channelKey, uri, headers, hardwareDecode, audioOutput, bufferProfile);
 }
 
-export function setNativeVlcResizeMode(mode: "fit" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
+export function setNativeVlcResizeMode(mode: "fit" | "fill" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
 export function pauseNativeVlcPlayback(): void { native?.pause(); }
 export function resumeNativeVlcPlayback(): void { native?.resume(); }
 export function setNativeVlcMuted(muted: boolean): void { native?.setMuted(muted); }

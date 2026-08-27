@@ -9,7 +9,6 @@ export type SessionFailReason =
   | "start-timeout"
   | "engine-swap"
   | "stream-error"
-  | "silent-audio"
   | "user-stop"
   | "superseded"
   | "crashed";
@@ -190,7 +189,6 @@ export function stopSession(
 
   const state = roles[role];
   const callbacks = invokeStops(role);
-  const nativeRelease = invokeNative(nativeReleaseHandler, role);
   state.generation += 1;
   const stoppedGeneration = state.generation;
   const reservationRevisionAtStop = fullscreenReservationRevision;
@@ -199,20 +197,28 @@ export function stopSession(
   publishOwnership();
 
   let stopPromise: Promise<void>;
-  stopPromise = Promise.allSettled([callbacks, nativeRelease]).then(() => {
-    if (roleStopPromises[role] === stopPromise) roleStopPromises[role] = null;
-    // A later fullscreen reservation must never be cleared by completion of an
-    // older teardown. This is the race that allowed a stale fullscreen stop to
-    // collide with a newly mounted Guide preview/decoder.
-    if (
-      role === "fullscreen" &&
-      state.generation === stoppedGeneration &&
-      fullscreenReservationRevision === reservationRevisionAtStop
-    ) {
-      fullscreenReserved = false;
-    }
-    publishOwnership();
-  });
+  // Keep teardown ordered. A legacy session callback may still release view
+  // state, so let it settle before the single native coordinator performs the
+  // decoder release. Starting both operations together reintroduced the exact
+  // Media3/VLC ownership race this registry exists to prevent.
+  stopPromise = callbacks
+    .catch(() => undefined)
+    .then(() => invokeNative(nativeReleaseHandler, role))
+    .catch(() => undefined)
+    .then(() => {
+      if (roleStopPromises[role] === stopPromise) roleStopPromises[role] = null;
+      // A later fullscreen reservation must never be cleared by completion of an
+      // older teardown. This is the race that allowed a stale fullscreen stop to
+      // collide with a newly mounted Guide preview/decoder.
+      if (
+        role === "fullscreen" &&
+        state.generation === stoppedGeneration &&
+        fullscreenReservationRevision === reservationRevisionAtStop
+      ) {
+        fullscreenReserved = false;
+      }
+      publishOwnership();
+    });
   roleStopPromises[role] = stopPromise;
   return stopPromise;
 }
@@ -236,8 +242,11 @@ export function stopFullscreenSession(reason: SessionFailReason = "user-stop"): 
   return stopSession("fullscreen", reason);
 }
 
-export function stopAllPlaybackSessions(reason: SessionFailReason = "user-stop"): Promise<void> {
-  return Promise.allSettled([stopPreviewSession(reason), stopFullscreenSession(reason)]).then(() => undefined);
+export async function stopAllPlaybackSessions(reason: SessionFailReason = "user-stop"): Promise<void> {
+  // Preview and fullscreen share one native decoder owner. Releasing them in
+  // parallel can make two callers query/stop that owner at the same time.
+  await stopPreviewSession(reason);
+  await stopFullscreenSession(reason);
 }
 
 export function forceStopAllStreams(): void {

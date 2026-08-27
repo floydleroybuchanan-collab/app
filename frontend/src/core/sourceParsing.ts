@@ -16,6 +16,10 @@ const ALLOWED_PLAYLIST_SCHEMES = new Set([
   "rtsps:",
   "rtmp:",
   "rtmps:",
+  "rtp:",
+  "udp:",
+  "srt:",
+  "rist:",
 ]);
 
 export type ParseM3UStats = {
@@ -31,6 +35,8 @@ export type ParseM3UStats = {
  */
 export function streamType(url: string): string {
   const clean = streamIdentityUrl(url);
+  const protocol = clean.slice(0, clean.indexOf(":"));
+  if (["rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp", "srt", "rist"].includes(protocol)) return protocol;
   const path = clean.split("?")[0];
   const query = clean.includes("?") ? clean.slice(clean.indexOf("?") + 1) : "";
   const paddedQuery = query ? `&${query}&` : "";

@@ -19,7 +19,7 @@ test("stream requests default to Charm playlist UA when the M3U omits User-Agent
   assert.equal(parsed.headers.Authorization, "Bearer abc");
 });
 
-test("native recovery escalates through a real playlist-only source refresh and full player rebuild without changing tuning", async () => {
+test("native recovery performs one full rebuild, refreshing only on authentication failure", async () => {
   const [native, bridge, adapter, memory] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("src/nativePlayback.ts"),
@@ -27,15 +27,13 @@ test("native recovery escalates through a real playlist-only source refresh and 
     source("android/app/src/main/java/com/charmiptv/app/CharmMemoryCoordinator.kt"),
   ]);
   assert.match(native, /fun tivimateBufferDurationsMs/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /when \(recoveryAttempts\)[\s\S]*?1 -> \{ instance\.prepare\(\)/);
-  assert.match(native, /2 -> \{[\s\S]*?rebuildMediaSource\(instance, source, "media-source-rebuild"\)/);
-  assert.match(native, /3 -> requestFreshSource\(instance, source\)/);
-  assert.match(native, /4 -> fullPlayerAndSourceRecovery\(instance, source\)/);
-  assert.match(native, /forceFreshSource && recoveryAttempts < 2/);
-  assert.match(native, /skipBarePrepare && recoveryAttempts < 1/);
+  assert.match(native, /MAX_ERROR_RECOVERIES = 1/);
+  assert.match(native, /ERROR_RECOVERY_DELAY_MS = 1_000L/);
+  assert.match(native, /if \(forceFreshSource\) \{[\s\S]*?requestFreshSource\(instance, activeSource\)/);
+  assert.match(native, /private fun performRecovery[\s\S]*?fullPlayerAndSourceRecovery\(instance, source\)/);
+  assert.doesNotMatch(native, /RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES|skipBarePrepare|when \(recoveryAttempts\)/);
   assert.match(native, /isAuthenticationFailure\(error\)/);
-  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(created, skipBarePrepare = true\)/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(created, forceFreshSource = false\)/);
   assert.match(native, /HlsMediaSource\.Factory\(dataSource\)[\s\S]*?DefaultHlsExtractorFactory\(liveTsFlags, true\)[\s\S]*?createMediaSource\(item\)/);
   assert.match(native, /DashMediaSource\.Factory\(dataSource\)\.createMediaSource\(item\)/);
   assert.match(native, /setWakeMode\(C\.WAKE_MODE_NETWORK\)/);

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
 
-export type PlayerEnginePreference = "media3" | "vlc";
+export type PlayerEnginePreference = "auto" | "media3" | "vlc";
 
-const PLAYER_ENGINE_KEY = "gs_player_engine_preference_v2";
-let cachedPreference: PlayerEnginePreference = "vlc";
+const PLAYER_ENGINE_KEY = "gs_player_engine_preference_v3";
+let cachedPreference: PlayerEnginePreference = "auto";
 let loaded = false;
 let loadPromise: Promise<PlayerEnginePreference> | null = null;
 let mutationRevision = 0;
@@ -15,10 +15,10 @@ async function loadPreference(): Promise<PlayerEnginePreference> {
   if (loadPromise) return loadPromise;
   const revisionAtStart = mutationRevision;
   loadPromise = (async () => {
-    const stored = await storage.getItem<string>(PLAYER_ENGINE_KEY, "vlc");
-    // TiViMate-class default is VLC for live IPTV. Older "default"/"media3" keys
-    // lived under v1; v2 defaults to VLC so existing installs pick up the live path.
-    if (mutationRevision === revisionAtStart) cachedPreference = stored === "media3" ? "media3" : "vlc";
+    const stored = await storage.getItem<string>(PLAYER_ENGINE_KEY, "auto");
+    if (mutationRevision === revisionAtStart) {
+      cachedPreference = stored === "media3" || stored === "vlc" ? stored : "auto";
+    }
     loaded = true;
     return cachedPreference;
   })();
@@ -37,7 +37,7 @@ export function getPlayerEnginePreference(): PlayerEnginePreference {
 
 export async function setPlayerEnginePreference(value: PlayerEnginePreference): Promise<void> {
   mutationRevision += 1;
-  cachedPreference = value === "vlc" ? "vlc" : "media3";
+  cachedPreference = value === "media3" || value === "vlc" ? value : "auto";
   loaded = true;
   await storage.setItem(PLAYER_ENGINE_KEY, cachedPreference);
   for (const listener of Array.from(listeners)) {
@@ -55,7 +55,7 @@ export function usePlayerEnginePreference(): [PlayerEnginePreference, (value: Pl
     return () => { mounted = false; listeners.delete(listener); };
   }, []);
   const update = useCallback((next: PlayerEnginePreference) => {
-    const normalized = next === "vlc" ? "vlc" : "media3";
+    const normalized = next === "media3" || next === "vlc" ? next : "auto";
     setValue(normalized);
     void setPlayerEnginePreference(normalized);
   }, []);

@@ -29,14 +29,11 @@ test("StreamPlayer ignores progressive confirms on extensionless live URLs", asy
   assert.match(player, /uriKind === "unknown"/);
 });
 
-test("opaque sniff helper stays bounded even though live startup no longer opens a second GET", async () => {
-  const probe = await source("android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt");
-  assert.match(probe, /MAX_SNIFF_BYTES = 4 \* 1024/);
-  assert.match(probe, /#EXTM3U/);
-  assert.match(probe, /<MPD/);
-  assert.match(probe, /looksLikeTransportStream/);
-  assert.match(probe, /ftyp|styp|moof/);
-  assert.doesNotMatch(probe, /readByteArray\(Long\.MAX_VALUE\)|bytes\(\)/);
+test("opaque startup has no second-GET probe helper", async () => {
+  await assert.rejects(
+    source("android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt"),
+    (error) => error?.code === "ENOENT",
+  );
 });
 
 test("opaque startup uses one Media3 connection, stable confirmation and bounded candidate routing", async () => {
@@ -50,7 +47,7 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.doesNotMatch(manager, /opaqueProbeHttpClient/);
   assert.match(manager, /OPAQUE_PROBE_CACHE_SIZE = 256/);
   assert.match(manager, /OPAQUE_TYPE_PREFS = "charm_media3_stream_types"/);
-  assert.match(manager, /OPAQUE_LIVE_CANDIDATES = listOf\("transport", "hls", "dash", "progressive"\)/);
+  assert.match(manager, /OPAQUE_LIVE_CANDIDATES = listOf\("progressive", "hls", "dash"\)/);
   assert.match(manager, /OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L/);
   assert.match(manager, /probeReason = "direct:\$firstType"/);
   assert.match(manager, /startOpaqueCandidate\(instance, source, cacheKey, firstType/);
@@ -68,15 +65,15 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /properties\["User-Agent"\] = DEFAULT_STREAM_USER_AGENT/);
   assert.match(manager, /properties\["Accept"\] = "\*\/\*"/);
   assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
-  assert.match(manager, /silentAudioCheck/);
+  assert.doesNotMatch(manager, /silentAudioCheck|bufferingWatchdog|RECONNECT_STALL_MS/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);
-  assert.match(manager, /opaqueUri && cachedType != null/);
+  assert.match(manager, /cachedType != null && isPersistableDetectedType\(cachedType\)/);
   assert.match(manager, /isOpaqueHttpUri\(source\.uri\)/);
   assert.match(manager, /buildOpaqueAttempts/);
-  assert.match(manager, /opaqueUriVariants/);
-  assert.match(manager, /CharmStreamUrls\.opaqueUriVariants/);
-  assert.match(urls, /\.ts", "\.m3u8", "\.mp4"/);
+  assert.doesNotMatch(manager, /opaqueUriVariants|CharmStreamUrls\.opaqueUriVariants/);
+  assert.doesNotMatch(urls, /opaqueUriVariants|\.ts", "\.m3u8", "\.mp4"/);
+  assert.match(manager, /OpaqueAttempt\(source\.uri, type\)/);
   assert.match(manager, /hint == "progressive" && !opaque/);
   assert.match(manager, /"progressive" -> \{/);
   assert.match(manager, /opaqueRouteCacheKey != null \|\| isOpaqueHttpUri\(source\.uri\)/);
@@ -100,11 +97,11 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(clients, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
   assert.match(manager, /fun tivimateBufferDurationsMs/);
-  assert.match(manager, /else -> intArrayOf\(20_000, 90_000, 5_000, 12_000\)/);
-  assert.match(manager, /RECONNECT_STALL_MS = 50_000L/);
+  assert.match(manager, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
   assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
-  assert.match(clients, /readTimeout\(0, TimeUnit.SECONDS\)/);
-  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(clients, /readTimeout\(20, TimeUnit.SECONDS\)/);
+  assert.match(manager, /MAX_ERROR_RECOVERIES = 1/);
+  assert.doesNotMatch(manager, /RECONNECT_STALL_MS|RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES/);
   assert.match(manager, /OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L/);
 });
 
@@ -125,8 +122,9 @@ test("playback diagnostics capture container, codecs, resolution and decoders wi
   assert.match(manager, /videoDecoder/);
   assert.match(manager, /audioDecoder/);
   assert.match(manager, /codecError/);
-  assert.match(manager, /silentAudioCheck/);
+  assert.doesNotMatch(manager, /silentAudioCheck|bufferingWatchdog/);
   assert.match(manager, /fun tivimateBufferDurationsMs/);
-  assert.match(clients, /readTimeout\(0, TimeUnit.SECONDS\)/);
-  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(clients, /readTimeout\(20, TimeUnit.SECONDS\)/);
+  assert.match(manager, /MAX_ERROR_RECOVERIES = 1/);
+  assert.doesNotMatch(manager, /RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES|RECONNECT_STALL_MS/);
 });

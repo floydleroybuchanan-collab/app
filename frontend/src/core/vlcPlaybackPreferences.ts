@@ -8,17 +8,11 @@ type Snapshot = {
   audioOutput: VlcAudioOutput;
 };
 
-const HW_KEY = "gs_vlc_hardware_decode";
+const HW_KEY = "gs_vlc_hardware_decode_v2";
 const AUDIO_KEY = "gs_vlc_audio_output";
-// Default off. VLC exists in this app as the manual "compatibility" engine —
-// its whole purpose is playing streams/devices Media3 can't. Hardware decode
-// failing silently on a given Android TV/Fire TV SoC's MediaCodec is a
-// well-known libVLC-Android failure mode: audio keeps playing (a separate,
-// unaffected decode path) while video never renders. That directly
-// contradicts what users reach for VLC to get. Software decode is slower
-// but close to universally correct; users who know their device's hardware
-// decoder works can still opt back in from Settings.
-let cached: Snapshot = { hardwareDecode: false, audioOutput: "auto" };
+// LibVLC's non-forced hardware mode falls back to software when a codec cannot
+// initialize. It is the practical default for HD/4K Android TV streams.
+let cached: Snapshot = { hardwareDecode: true, audioOutput: "auto" };
 let loaded = false;
 let loadPromise: Promise<Snapshot> | null = null;
 let hardwareMutationRevision = 0;
@@ -36,7 +30,7 @@ async function load(): Promise<Snapshot> {
   const audioRevisionAtStart = audioMutationRevision;
   loadPromise = (async () => {
     const [hardwareDecode, audioOutput] = await Promise.all([
-      storage.getItem<boolean>(HW_KEY, false),
+      storage.getItem<boolean>(HW_KEY, true),
       storage.getItem<string>(AUDIO_KEY, "auto"),
     ]);
     cached = {

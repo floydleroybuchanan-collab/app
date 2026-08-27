@@ -16,7 +16,8 @@ test("long OK is owned by contextual quick actions, not the legacy Favorite shor
   const prefs = await text("src/core/remoteShortcutPreferences.ts");
   assert.match(activity, /TvRemoteQuickActions/);
   assert.match(activity, /context == "guide" \|\| context == "player"/);
-  assert.match(activity, /return true\s*\n\s*}\s*\n\s*\/\/ Phase 9 remote ownership/);
+  assert.match(activity, /if \(wasLong\) return true/);
+  assert.match(activity, /\/\/ Phase 9 remote ownership/);
   assert.match(remote, /addTvQuickActionsListener/);
   assert.match(prefs, /longSelect: "controls"/);
   assert.doesNotMatch(prefs, /longSelect: "favorite",/);

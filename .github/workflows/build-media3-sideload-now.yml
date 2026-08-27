@@ -6,6 +6,7 @@ on:
     branches:
       - agent/media3-player-core-rebuild
       - agent/manual-vlc-engine
+      - fix/tivimate-m3u-epg-ci-align
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
@@ -103,48 +104,51 @@ jobs:
         working-directory: .
         run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
 
-      - name: Verify manual VLC and locked Media3 invariants
+      - name: Verify exclusive Media3-first and VLC-fallback invariants
         working-directory: .
         run: |
+          set -euo pipefail
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           VLC=frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt
-          MODULE=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt
-          PROFILE=frontend/src/core/playbackProfileIndex.ts
-          SOURCE=frontend/src/source.native.ts
+          COORDINATOR=frontend/src/core/nativePlaybackCoordinator.ts
+          POLICY=frontend/src/core/streamPolicy.ts
+          PREFERENCE=frontend/src/playerEnginePreference.ts
           SETTINGS='frontend/app/(tabs)/settings.tsx'
           grep -q 'org.videolan.android:libvlc-all:3.7.5' frontend/android/app/build.gradle
+          grep -q 'media3-exoplayer-rtsp:1.8.0' frontend/android/app/build.gradle
           grep -q 'MediaPlayer(core)' "$VLC"
           grep -q 'setHWDecoderEnabled(source.hardwareDecode, false)' "$VLC"
-          grep -q 'NativePlaybackManager.stopForEngineSwitch()' "$VLC"
-          grep -q 'LifecycleEventListener' "$MODULE"
-          grep -q 'activeGeneration' "$MODULE"
-          grep -q 'indexDeclaredStreamTypes(channels)' "$SOURCE"
-          grep -q 'mutationRevision' "$PROFILE"
-          grep -q 'VLC (recommended for live)' "$SETTINGS"
+          ! grep -q 'NativePlaybackManager.stopForEngineSwitch()' "$VLC"
+          grep -q 'let operation: Promise<void> = Promise.resolve()' "$COORDINATOR"
+          grep -q 'active.engine !== engine' "$COORDINATOR"
+          ! grep -Eq 'Promise\.all|Promise\.allSettled' "$COORDINATOR"
+          grep -q 'Automatic (Media3 → VLC)' "$SETTINGS"
+          grep -q 'cachedPreference: PlayerEnginePreference = "auto"' "$PREFERENCE"
+          grep -q 'Automatic mode has exactly one cross-engine fallback' "$POLICY"
           grep -q 'fun tivimateBufferDurationsMs' "$PLAYER"
-          grep -q '"low_latency" -> intArrayOf(8_000, 30_000, 2_000, 5_000)' "$PLAYER"
-          grep -q '"balanced" -> intArrayOf(15_000, 60_000, 3_000, 8_000)' "$PLAYER"
-          grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
+          grep -q '"low_latency" -> intArrayOf(1_000, 5_000, 500, 1_000)' "$PLAYER"
+          grep -q '"balanced" -> intArrayOf(3_000, 15_000, 1_000, 2_000)' "$PLAYER"
+          grep -q 'else -> intArrayOf(10_000, 30_000, 1_500, 3_000)' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
           grep -q 'connectTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'readTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'writeTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'CharmHttpClients.mediaClient()' "$PLAYER"
-          grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
-          grep -q 'START_TIMEOUT_MS = 60_000L' "$PLAYER"
+          grep -q 'START_TIMEOUT_MS = 30_000L' "$PLAYER"
+          grep -q 'MAX_ERROR_RECOVERIES = 1' "$PLAYER"
+          grep -q 'MAX_ERROR_RECOVERIES = 1' "$VLC"
           grep -q 'OPAQUE_CONFIRM_MS = 5_000L' "$PLAYER"
           grep -q 'main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)' "$PLAYER"
           grep -q 'DefaultHlsExtractorFactory(liveTsFlags, true)' "$PLAYER"
           grep -q 'DashMediaSource.Factory' "$PLAYER"
           grep -q 'setWakeMode(C.WAKE_MODE_NETWORK)' "$PLAYER"
-          ! grep -q 'HUNG_BUFFER_REPREPARE_MS\|TRANSPORT_HUNG_BUFFER_REPREPARE_MS\|HARD_STALL_RECOVERY_MS\|STABLE_REARM_MS\|FULLSCREEN_START_TIMEOUT_MS\|PREVIEW_START_TIMEOUT_MS\|MIN_BUFFER_MS_LOW_RAM\|MIN_BUFFER_MS_NORMAL' "$PLAYER"
-          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
+          ! grep -Eq 'RECONNECT_STALL_MS|WATCHDOG_POLL_MS|bufferingWatchdog|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|silentAudioCheck' "$PLAYER"
           grep -q 'mutedState' "$PLAYER"
           grep -q 'mutedState' "$VLC"
-          grep -q 'ensureActiveSurfaceBound' "$PLAYER"
-          grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
-          grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
+          grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("progressive", "hls", "dash")' "$PLAYER"
+          grep -q 'OpaqueAttempt(source.uri, type)' "$PLAYER"
+          test ! -e frontend/android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt
 
       - name: Build pinned LGPL FFmpeg audio extension
         run: |
@@ -187,7 +191,7 @@ jobs:
           mkdir -p artifacts
           cp "$APK" "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk"
           sha256sum "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
-          printf 'source_commit=%s\nvalidation_run=32662442899\n' "${{ github.event.pull_request.head.sha || github.sha }}" > artifacts/BUILD_INFO.txt
+          printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Upload sideload APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
