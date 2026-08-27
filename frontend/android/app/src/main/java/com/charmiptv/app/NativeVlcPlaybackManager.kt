@@ -179,6 +179,9 @@ object NativeVlcPlaybackManager {
           "referer", "referrer" -> media.addOption(":http-referrer=$value")
         }
       }
+      if (source.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+        media.addOption(":http-user-agent=CharmIPTV/Experimental-v3")
+      }
       player.media = media
       media.release()
       player.play()

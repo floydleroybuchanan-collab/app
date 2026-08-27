@@ -31,6 +31,8 @@ function kindFromHint(raw: string | null | undefined): StreamKind | null {
  * direct MPEG-TS on the explicit TS extractor/watchdog path instead of silently
  * downgrading it to generic progressive playback.
  */
+export const DEFAULT_STREAM_USER_AGENT = "CharmIPTV/Experimental-v3";
+
 export function detectStreamKind(uri: string, streamTypeHint?: string | null): StreamKind {
   const lower = uri.toLowerCase();
   const protocol = lower.split(":", 1)[0];
@@ -70,10 +72,13 @@ function safeDecode(value: string): string {
 
 export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record<string, string> } {
   const pipeIndex = rawUri.indexOf("|");
-  if (pipeIndex < 0) return { uri: rawUri, headers: {} };
+  if (pipeIndex < 0) {
+    return { uri: rawUri, headers: { "User-Agent": DEFAULT_STREAM_USER_AGENT } };
+  }
   const uri = rawUri.slice(0, pipeIndex);
-  // Preserve only headers supplied by the stream/provider. A universal fake
-  // player UA can solve one provider while breaking another.
+  // Preserve headers supplied by the stream/provider. When the playlist omits
+  // User-Agent, use the same Charm UA as playlist/EPG fetches so IPTV panels
+  // that block OkHttp's default UA still deliver bytes.
   const headers: Record<string, string> = {};
   for (const pair of rawUri.slice(pipeIndex + 1).split("&")) {
     const equals = pair.indexOf("=");
@@ -81,6 +86,9 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
     const key = safeDecode(pair.slice(0, equals)).trim();
     const value = safeDecode(pair.slice(equals + 1)).trim();
     if (key && value) headers[key] = value;
+  }
+  if (!Object.keys(headers).some((key) => key.toLowerCase() === "user-agent")) {
+    headers["User-Agent"] = DEFAULT_STREAM_USER_AGENT;
   }
   return { uri, headers };
 }

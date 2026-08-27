@@ -101,6 +101,9 @@ object NativePlaybackManager {
   // Amlogic profile (20/90/5/12 + 48MB) that painted video with audio.
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
+  // Match playlist/EPG fetch UA. OkHttp's default "okhttp/x.x" is blocked by many
+  // IPTV panels, which leaves every tune black+silent while the guide still loads.
+  private const val DEFAULT_STREAM_USER_AGENT = "CharmIPTV/Experimental-v3"
 
   // Single reconnect-on-error window (TiViMate does not expose separate
   // transport/hard-stall timers). Keep it patient: Amlogic reports BUFFERING
@@ -354,6 +357,7 @@ object NativePlaybackManager {
       )
       publishState("loading", "awaiting-surface")
       recordDiagnostic("awaiting-surface", lastPlaybackError, instance)
+      armStartupTimeout()
       return@runOnMain
     }
     pendingPrepare = null
@@ -903,7 +907,12 @@ object NativePlaybackManager {
 
   private fun createDataSourceFactory(headers: Map<String, String>): DefaultDataSource.Factory {
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
-    return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient).setDefaultRequestProperties(headers))
+    val properties = LinkedHashMap<String, String>(headers.size + 1)
+    if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+      properties["User-Agent"] = DEFAULT_STREAM_USER_AGENT
+    }
+    properties.putAll(headers)
+    return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient).setDefaultRequestProperties(properties))
   }
   private fun finishWithError(reason: String, instance: ExoPlayer? = player) {
     cancelRecoveryCallbacks()
