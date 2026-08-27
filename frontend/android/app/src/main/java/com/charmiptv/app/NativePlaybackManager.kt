@@ -704,7 +704,9 @@ object NativePlaybackManager {
       true
     } catch (t: Throwable) {
       recordDiagnostic("error-recovery-failed:${t.javaClass.simpleName}", lastPlaybackError, instance)
-      finishWithError("stream-error", instance)
+      // The old instance may already have been released and replaced before
+      // source construction failed. Release the current replacement as well.
+      finishWithError("stream-error")
       false
     }
   }

@@ -89,6 +89,9 @@ test("native release errors reject ownership handoffs and cannot allocate a repl
   ]);
   assert.match(media3, /check\(decoderReleaseFailure == null\)/);
   assert.match(media3, /check\(releaseDecoder\(instance\)\)/);
+  const recovery = media3.slice(media3.indexOf("private fun performRecovery("), media3.indexOf("private fun requestFreshSource("));
+  assert.match(recovery, /catch \(t: Throwable\)[\s\S]*?finishWithError\("stream-error"\)/);
+  assert.doesNotMatch(recovery, /finishWithError\("stream-error", instance\)/);
   assert.match(vlc, /if \(!releasePlayerOnly\(removeLayout = false\)\)/);
   for (const bridge of [media3Bridge, vlcBridge]) assert.match(bridge, /promise.reject\("E_PLAYBACK_RELEASE"/);
 });

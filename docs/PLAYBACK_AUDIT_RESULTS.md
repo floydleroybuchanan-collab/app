@@ -34,6 +34,8 @@ Further issues identified and corrected in this continuation:
 
 The Android decoder-capability query also now handles nullable `videoCapabilities`, removing the genuine Kotlin nullable-receiver warning in `TvRemoteModule.kt`.
 
+A final recovery-path review also found that failure after constructing a replacement Media3 player passed the already-released old instance to fatal cleanup. Cleanup now releases the current replacement, preventing an unowned decoder after source construction fails.
+
 ## Caller and ownership trace
 
 - Guide selection/preview epoch -> `GuidePreviewRail` -> one `StreamPlayer` native surface. Guide owns layout/focus; it does not own recovery timers. Current-channel diagnostics and keyed error-boundary resets do not remount healthy playback.
