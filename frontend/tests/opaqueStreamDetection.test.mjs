@@ -48,7 +48,7 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /detectedTypeCacheKey\(source\)/);
   assert.match(manager, /"channel:\$it"/);
   assert.match(manager, /getSharedPreferences\(OPAQUE_TYPE_PREFS/);
-  assert.match(manager, /main\.postDelayed\(opaqueTypeConfirmation, STABLE_REARM_MS\)/);
+  assert.match(manager, /main\.postDelayed\(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS\)/);
   assert.match(manager, /private val opaqueTypeConfirmation = Runnable/);
   assert.match(manager, /confirmSuccessfulStreamType\(\)/);
   assert.match(manager, /tryNextOpaqueCandidate\(created, error\)/);
@@ -68,16 +68,11 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /HlsMediaSource\.Factory/);
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(manager, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
-  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 20_000/);
-  assert.match(manager, /MAX_BUFFER_MS_LOW_RAM = 90_000/);
-  assert.match(manager, /PLAYBACK_BUFFER_MS_LOW_RAM = 5_000/);
-  assert.match(manager, /REBUFFER_BUFFER_MS_LOW_RAM = 12_000/);
-  assert.match(manager, /MIN_BUFFER_MS_NORMAL = 20_000/);
-  assert.match(manager, /MAX_BUFFER_MS_NORMAL = 90_000/);
-  assert.match(manager, /PLAYBACK_BUFFER_MS_NORMAL = 5_000/);
-  assert.match(manager, /REBUFFER_BUFFER_MS_NORMAL = 12_000/);
+  assert.match(manager, /fun tivimateBufferDurationsMs/);
+  assert.match(manager, /else -> intArrayOf\(10_000, 30_000, 2_500, 5_000\)/);
+  assert.match(manager, /RECONNECT_STALL_MS = 15_000L/);
   assert.match(manager, /readTimeout\(0, TimeUnit.SECONDS\)/);
-  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
+  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
 });
 
 test("playback diagnostics capture container, codecs, resolution and decoders without changing recovery budgets", async () => {
@@ -94,7 +89,7 @@ test("playback diagnostics capture container, codecs, resolution and decoders wi
   assert.match(manager, /videoDecoder/);
   assert.match(manager, /audioDecoder/);
   assert.match(manager, /codecError/);
-  assert.match(manager, /MIN_BUFFER_MS_LOW_RAM = 20_000/);
+  assert.match(manager, /fun tivimateBufferDurationsMs/);
   assert.match(manager, /readTimeout\(0, TimeUnit.SECONDS\)/);
-  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/);
+  assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
 });

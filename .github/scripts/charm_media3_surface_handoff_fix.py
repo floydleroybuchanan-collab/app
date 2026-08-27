@@ -249,9 +249,12 @@ for token in required:
     if token not in final:
         raise SystemExit(f"Missing expected surface ownership token: {token}")
 
-# Preserve whichever jitter profile is currently live on the target branch.
-for token in ["HUNG_BUFFER_REPREPARE_MS", "HARD_STALL_RECOVERY_MS", "READ" if False else "readTimeout"]:
+# Preserve the live TiViMate reconnect/buffer contract on the target branch.
+for token in ["RECONNECT_STALL_MS", "tivimateBufferDurationsMs", "readTimeout"]:
     if token not in final:
         raise SystemExit(f"Unexpected playback manager shape after patch: missing {token}")
+for removed in ["HUNG_BUFFER_REPREPARE_MS", "HARD_STALL_RECOVERY_MS", "TRANSPORT_HUNG_BUFFER_REPREPARE_MS", "STABLE_REARM_MS"]:
+    if removed in final:
+        raise SystemExit(f"Unexpected playback manager shape after patch: removed timer still present: {removed}")
 
-print("Media3 one-target ownership patch applied; live timeout/buffer values preserved")
+print("Media3 one-target ownership patch applied; TiViMate timer/buffer values preserved")

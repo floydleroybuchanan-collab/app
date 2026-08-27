@@ -21,9 +21,22 @@ test("channel changes build a fresh Media3 source on the same native ExoPlayer",
   assert.doesNotMatch(player, /decoderArmed|pauseSessionDecoders|CHANNEL_ZAP_SETTLE_MS|armDecoderAfterSettle/);
 });
 
-test("Media3 uses the hardened live-TV buffers and bounded native recovery policy", async () => {
+test("Media3 uses TiViMate buffer profiles and reconnect-on-error policy", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /MIN_BUFFER_MS_LOW_RAM = 20_000/); assert.match(native, /MAX_BUFFER_MS_LOW_RAM = 90_000/); assert.match(native, /PLAYBACK_BUFFER_MS_LOW_RAM = 5_000/); assert.match(native, /REBUFFER_BUFFER_MS_LOW_RAM = 12_000/); assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/); assert.match(native, /MIN_BUFFER_MS_NORMAL = 20_000/); assert.match(native, /MAX_BUFFER_MS_NORMAL = 90_000/); assert.match(native, /PLAYBACK_BUFFER_MS_NORMAL = 5_000/); assert.match(native, /REBUFFER_BUFFER_MS_NORMAL = 12_000/); assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/); assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/); assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 35_000L/); assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L/); assert.match(native, /MAX_AUTO_RECOVERIES = 4/); assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 2_000L, 4_000L\)/); assert.match(native, /readTimeout\(0, TimeUnit.SECONDS\)/); assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/); assert.match(native, /instance\.prepare\(\)/);
+  assert.match(native, /fun tivimateBufferDurationsMs/);
+  assert.match(native, /"low_latency" -> intArrayOf\(3_000, 10_000, 500, 1_000\)/);
+  assert.match(native, /"balanced" -> intArrayOf\(5_000, 20_000, 1_000, 2_000\)/);
+  assert.match(native, /else -> intArrayOf\(10_000, 30_000, 2_500, 5_000\)/);
+  assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/);
+  assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 32 \* 1024 \* 1024/);
+  assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/);
+  assert.match(native, /RECONNECT_STALL_MS = 15_000L/);
+  assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS|HUNG_BUFFER_REPREPARE_MS/);
+  assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
+  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(native, /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/);
+  assert.match(native, /instance\.prepare\(\)/);
 });
 
 test("direct MPEG-TS keeps its extractor while hardware video uses the Onn-safe codec path", async () => {

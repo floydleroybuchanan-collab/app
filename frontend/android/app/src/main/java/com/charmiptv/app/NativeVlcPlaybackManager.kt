@@ -46,7 +46,8 @@ object NativeVlcPlaybackManager {
     fun onTracks(identity: Identity, audio: List<TrackInfo>, subtitles: List<TrackInfo>)
   }
 
-  private const val START_TIMEOUT_MS = 60_000L
+  // TiViMate-style channel start window (Large buffer class ~10s cache below).
+  private const val START_TIMEOUT_MS = 30_000L
   private const val TAG = "CharmVlc"
 
   private val main = Handler(Looper.getMainLooper())
@@ -290,10 +291,11 @@ object NativeVlcPlaybackManager {
     }
   }
 
+  // TiViMate buffer size mapping: Small / Medium / Large (ms).
   private fun networkCachingMs(profile: String): Int = when (profile) {
-    "low_latency" -> 5_000
-    "balanced" -> 8_000
-    else -> 12_000
+    "low_latency" -> 2_000
+    "balanced" -> 5_000
+    else -> 10_000
   }
 
   private fun attachVideoLayout(surfaceOwner: Owner): Boolean {

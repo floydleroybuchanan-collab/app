@@ -26,14 +26,14 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun prepareFullscreen(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) {
+  fun prepareFullscreen(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?, bufferProfile: String?) {
     attachActivity()
     setIdentity(NativePlaybackManager.Owner.FULLSCREEN, generation.toLong(), channelKey.orEmpty())
-    NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, activeChannelKey, uri, readableMapToStringMap(headers), contentType)
+    NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, activeChannelKey, uri, readableMapToStringMap(headers), contentType, bufferProfile)
   }
 
   @ReactMethod
-  fun preparePreview(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?) {
+  fun preparePreview(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?, bufferProfile: String?) {
     attachActivity()
     // Do NOT bail out here without calling setIdentity() first: that used to
     // leave activeOwner/activeGeneration/activeChannelKey pointing at whatever
@@ -44,7 +44,7 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
     // itself publish a properly-identified error when the owner really is
     // still reserved by fullscreen.
     setIdentity(NativePlaybackManager.Owner.PREVIEW, generation.toLong(), channelKey.orEmpty())
-    NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, activeChannelKey, uri, readableMapToStringMap(headers), contentType)
+    NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, activeChannelKey, uri, readableMapToStringMap(headers), contentType, bufferProfile)
   }
 
   @ReactMethod fun resolveFreshSource(requestId: Double, uri: String?, headers: ReadableMap?, contentType: String?, failureReason: String?) { NativePlaybackManager.provideFreshSource(requestId.toLong(), uri, readableMapToStringMap(headers), contentType, failureReason) }

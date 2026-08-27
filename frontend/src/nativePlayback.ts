@@ -62,8 +62,8 @@ export type NativePlaybackDiagnostic = NativePlaybackIdentity & {
 };
 
 type NativePlaybackModuleShape = {
-  prepareFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void;
-  preparePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void;
+  prepareFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void;
+  preparePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void;
   resolveFreshSource(requestId: number, uri?: string | null, headers?: Record<string, string>, contentType?: string | null, failureReason?: string | null): void;
   setResizeMode(mode?: string | null): void;
   pause(): void;
@@ -86,8 +86,8 @@ const native: NativePlaybackModuleShape | null =
 const emitter = native ? new NativeEventEmitter(NativeModules.NativePlayback) : null;
 
 export function nativePlaybackAvailable(): boolean { return !!native; }
-export function prepareNativeFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void { native?.prepareFullscreen(generation, channelKey, uri, headers, contentType ?? null); }
-export function prepareNativePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null): void { native?.preparePreview(generation, channelKey, uri, headers, contentType ?? null); }
+export function prepareNativeFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.prepareFullscreen(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
+export function prepareNativePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.preparePreview(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function resolveNativePlaybackFreshSource(requestId: number, uri?: string | null, headers: Record<string, string> = {}, contentType?: string | null, failureReason?: string | null): void { native?.resolveFreshSource(requestId, uri ?? null, headers, contentType ?? null, failureReason ?? null); }
 export function setNativePlaybackResizeMode(mode: "fit" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
 export function pauseNativePlayback(): void { native?.pause(); }

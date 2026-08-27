@@ -81,4 +81,13 @@ test("fullscreen launched from Guide returns current tuned channel to the origin
   assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: returnGuideGroup \}\)/);
 });
 
-test("single native watchdog requires true no-progress before TS recovery", async () => { const [adapter, native] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")]); assert.match(native, /HUNG_BUFFER_REPREPARE_MS = 35_000L/); assert.match(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L/); assert.match(native, /if \(!firstFrameRendered \|\| instance\.playbackState != Player\.STATE_BUFFERING\) return@Runnable/); assert.match(native, /val madeProgress = bufferedPosition > bufferingLastBufferedPositionMs \|\| position > bufferingLastPositionMs/); assert.match(native, /activeSource\?\.sourceType == "transport"/); assert.match(native, /instance\.prepare\(\)/); assert.doesNotMatch(adapter, /player\.currentTime|setInterval|REBUFFER_REPREPARE_MS|silentResyncCountRef/); });
+test("single native watchdog requires true no-progress before reconnect", async () => {
+  const [adapter, native] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")]);
+  assert.match(native, /RECONNECT_STALL_MS = 15_000L/);
+  assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS/);
+  assert.match(native, /if \(!firstFrameRendered\) return@Runnable/);
+  assert.match(native, /instance\.playbackState != Player\.STATE_BUFFERING/);
+  assert.match(native, /val madeProgress = instance\.isPlaying \|\|/);
+  assert.match(native, /instance\.prepare\(\)/);
+  assert.doesNotMatch(adapter, /player\.currentTime|setInterval|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
+});

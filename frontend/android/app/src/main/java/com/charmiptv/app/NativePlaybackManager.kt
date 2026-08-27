@@ -94,33 +94,22 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
-  // Charm intentionally uses a very generous live-IPTV jitter profile. TiViMate
-  // remains an architecture/lifecycle reference only; these timing values are
-  // deliberately wider so provider jitter, slow panels, and long segment gaps
-  // do not trigger destructive recovery on TV hardware.
-  private const val MIN_BUFFER_MS_LOW_RAM = 20_000
-  private const val MAX_BUFFER_MS_LOW_RAM = 90_000
-  private const val PLAYBACK_BUFFER_MS_LOW_RAM = 5_000
-  private const val REBUFFER_BUFFER_MS_LOW_RAM = 12_000
+  // TiViMate Playback → Buffer size (Small / Medium / Large). Applied to
+  // Media3 LoadControl from Settings; VLC uses the same profile for network-caching.
+  // low_latency=Small, balanced=Medium, stable=Large (~10s, community default).
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
-  private const val MIN_BUFFER_MS_NORMAL = 20_000
-  private const val MAX_BUFFER_MS_NORMAL = 90_000
-  private const val PLAYBACK_BUFFER_MS_NORMAL = 5_000
-  private const val REBUFFER_BUFFER_MS_NORMAL = 12_000
-  private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
+  private const val TARGET_BUFFER_BYTES_NORMAL = 32 * 1024 * 1024
 
-  // Buffering alone is not a failure. Normal streams receive 35 seconds of
-  // no-progress observation, opaque/raw transport streams 50 seconds, and a
-  // full recovery cannot happen until 70 seconds of genuine no progress.
-  private const val HUNG_BUFFER_REPREPARE_MS = 35_000L
-  private const val TRANSPORT_HUNG_BUFFER_REPREPARE_MS = 50_000L
-  private const val HARD_STALL_RECOVERY_MS = 70_000L
-  private const val STABLE_REARM_MS = 90_000L
+  // TiViMate Playback → Reconnect on Error: one stall window, then reconnect.
+  // Charm previously had separate transport / hard-stall / stable-rearm timers
+  // that TiViMate does not expose; those are removed.
+  private const val RECONNECT_STALL_MS = 15_000L
+  private const val WATCHDOG_POLL_MS = 3_000L
+  private const val START_TIMEOUT_MS = 30_000L
+  private const val SOURCE_REFRESH_TIMEOUT_MS = 15_000L
+  private const val OPAQUE_CONFIRM_MS = 5_000L
   private const val MAX_AUTO_RECOVERIES = 4
-  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 2_000L, 4_000L)
-  private const val FULLSCREEN_START_TIMEOUT_MS = 60_000L
-  private const val PREVIEW_START_TIMEOUT_MS = 60_000L
-  private const val SOURCE_REFRESH_TIMEOUT_MS = 30_000L
+  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
   private const val OPAQUE_PROBE_CACHE_SIZE = 256
   private const val OPAQUE_TYPE_PREFS = "charm_media3_stream_types"
   private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
@@ -150,6 +139,7 @@ object NativePlaybackManager {
   private var listener: Listener? = null
   private var owner: Owner = Owner.NONE
   private var activeSource: PlaybackSource? = null
+  private var activeBufferProfile = "stable"
   private var pendingSourceRefresh: SourceRefreshRequest? = null
   private var nextSourceRefreshRequestId = 1L
   private var lastPlaybackError: PlaybackException? = null
@@ -199,7 +189,7 @@ object NativePlaybackManager {
     if (instance.isPlaying || (instance.playWhenReady && instance.playbackState == Player.STATE_READY)) {
       bufferingSinceMs = System.currentTimeMillis()
       if (instance.playbackState == Player.STATE_BUFFERING) {
-        main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
+        main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
       }
       return@Runnable
     }
@@ -219,30 +209,24 @@ object NativePlaybackManager {
     if (madeProgress) {
       bufferingSinceMs = nowMs
       recordDiagnostic("buffer-progress", lastPlaybackError, instance)
-      main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
+      main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
       return@Runnable
     }
 
     if (bufferingSinceMs == 0L) bufferingSinceMs = nowMs
     val hungForMs = nowMs - bufferingSinceMs
-    val transport = activeSource?.sourceType == "transport"
-    val observationThresholdMs = if (transport) TRANSPORT_HUNG_BUFFER_REPREPARE_MS else HUNG_BUFFER_REPREPARE_MS
-    if (hungForMs < observationThresholdMs) {
-      main.postDelayed(bufferingWatchdog, minOf(HUNG_BUFFER_REPREPARE_MS, observationThresholdMs - hungForMs))
+    if (hungForMs < RECONNECT_STALL_MS) {
+      main.postDelayed(bufferingWatchdog, minOf(WATCHDOG_POLL_MS, RECONNECT_STALL_MS - hungForMs))
       return@Runnable
     }
 
     if (ensureActiveSurfaceBound(instance, "buffer-watchdog")) {
       bufferingSinceMs = nowMs
-      main.postDelayed(bufferingWatchdog, observationThresholdMs)
-      return@Runnable
-    }
-    if (hungForMs < HARD_STALL_RECOVERY_MS) {
-      recordDiagnostic("buffer-stall-observed", lastPlaybackError, instance)
-      main.postDelayed(bufferingWatchdog, HARD_STALL_RECOVERY_MS - hungForMs)
+      main.postDelayed(bufferingWatchdog, RECONNECT_STALL_MS)
       return@Runnable
     }
 
+    // TiViMate Reconnect on Error: one stall budget, then reconnect.
     recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
     recoverOnce(instance, skipBarePrepare = false)
   }
@@ -322,12 +306,13 @@ object NativePlaybackManager {
     }
   }
 
-  fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?) = runOnMain {
+  fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?, bufferProfile: String? = null) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
       publishState("error", "owner-reserved")
       return@runOnMain
     }
     NativeVlcPlaybackManager.stopForEngineSwitch()
+    applyBufferProfile(bufferProfile)
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
     val video = playerViewFor(requestedOwner)
@@ -450,11 +435,9 @@ object NativePlaybackManager {
     player?.let { return it }
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
     val lowRam = CharmMemoryCoordinator.budgets().lowRam
+    val durations = tivimateBufferDurationsMs(activeBufferProfile, lowRam)
     val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(
-      if (lowRam) MIN_BUFFER_MS_LOW_RAM else MIN_BUFFER_MS_NORMAL,
-      if (lowRam) MAX_BUFFER_MS_LOW_RAM else MAX_BUFFER_MS_NORMAL,
-      if (lowRam) PLAYBACK_BUFFER_MS_LOW_RAM else PLAYBACK_BUFFER_MS_NORMAL,
-      if (lowRam) REBUFFER_BUFFER_MS_LOW_RAM else REBUFFER_BUFFER_MS_NORMAL,
+      durations[0], durations[1], durations[2], durations[3],
     ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(true).build()
     val renderers = DefaultRenderersFactory(context)
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
@@ -475,12 +458,11 @@ object NativePlaybackManager {
             when (playbackState) {
               Player.STATE_BUFFERING -> {
                 if (firstFrameRendered) {
-                  rearmRecoveryAfterStablePlayback()
                   bufferingSinceMs = System.currentTimeMillis()
                   bufferingLastBufferedPositionMs = created.bufferedPosition
                   bufferingLastPositionMs = created.currentPosition
                   main.removeCallbacks(bufferingWatchdog)
-                  main.postDelayed(bufferingWatchdog, HUNG_BUFFER_REPREPARE_MS)
+                  main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
                 }
                 if (!created.isPlaying) publishState("loading", null)
               }
@@ -488,13 +470,16 @@ object NativePlaybackManager {
                 main.removeCallbacks(bufferingWatchdog)
                 resetBufferingWatchdogState()
                 ensureActiveSurfaceBound(created, "state-ready")
-                if (firstFrameRendered && stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis()
+                if (firstFrameRendered) {
+                  // TiViMate: successful play clears reconnect budget.
+                  recoveryAttempts = 0
+                  if (stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis()
+                }
                 publishTracks(created.currentTracks)
               }
               Player.STATE_ENDED -> {
                 recordDiagnostic("stream-ended", lastPlaybackError, created)
-                rearmRecoveryAfterStablePlayback()
-                recoverOnce(created, skipBarePrepare = false)
+                recoverOnce(created, skipBarePrepare = true)
               }
               else -> Unit
             }
@@ -502,11 +487,12 @@ object NativePlaybackManager {
           override fun onRenderedFirstFrame() {
             firstFrameRendered = true
             stableSinceMs = System.currentTimeMillis()
+            recoveryAttempts = 0
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
             main.removeCallbacks(delayedRecovery)
             main.removeCallbacks(opaqueTypeConfirmation)
-            if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, STABLE_REARM_MS)
+            if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)
             resetBufferingWatchdogState()
             CharmMemoryCoordinator.setPlaybackStarting(false)
             recordDiagnostic("first-frame", lastPlaybackError, created)
@@ -520,7 +506,6 @@ object NativePlaybackManager {
             resetBufferingWatchdogState()
             recordDiagnostic("player-error", error, created)
             if (tryNextOpaqueCandidate(created, error)) return
-            rearmRecoveryAfterStablePlayback()
             recoverOnce(
               created,
               forceFreshSource = isAuthenticationFailure(error),
@@ -1097,15 +1082,35 @@ object NativePlaybackManager {
     )
     listener?.onDiagnostic(diagnostic)
   }
-  private fun rearmRecoveryAfterStablePlayback() {
-    if (stableSinceMs > 0L && System.currentTimeMillis() - stableSinceMs >= STABLE_REARM_MS) {
-      recoveryAttempts = 0
-      stableSinceMs = 0L
+  private fun applyBufferProfile(raw: String?) {
+    val next = when (raw?.trim()?.lowercase()) {
+      "low_latency", "small" -> "low_latency"
+      "balanced", "medium" -> "balanced"
+      else -> "stable"
     }
+    if (next == activeBufferProfile) return
+    activeBufferProfile = next
+    // LoadControl is construction-only on ExoPlayer; rebuild so Settings
+    // buffer changes match TiViMate's Buffer size apply-on-next-tune-in.
+    val existing = player ?: return
+    try { existing.release() } catch (_: Throwable) {}
+    player = null
   }
+
+  /** TiViMate Small / Medium / Large → ExoPlayer LoadControl durations. */
+  private fun tivimateBufferDurationsMs(profile: String, lowRam: Boolean): IntArray {
+    val durations = when (profile) {
+      "low_latency" -> intArrayOf(3_000, 10_000, 500, 1_000)
+      "balanced" -> intArrayOf(5_000, 20_000, 1_000, 2_000)
+      else -> intArrayOf(10_000, 30_000, 2_500, 5_000)
+    }
+    if (lowRam) durations[1] = minOf(durations[1], 20_000)
+    return durations
+  }
+
   private fun armStartupTimeout() {
     main.removeCallbacks(startupTimeout)
-    if (owner != Owner.NONE) main.postDelayed(startupTimeout, if (owner == Owner.PREVIEW) PREVIEW_START_TIMEOUT_MS else FULLSCREEN_START_TIMEOUT_MS)
+    if (owner != Owner.NONE) main.postDelayed(startupTimeout, START_TIMEOUT_MS)
   }
   private fun publishTracks(tracks: Tracks) {
     val audio = ArrayList<AudioTrackInfo>()

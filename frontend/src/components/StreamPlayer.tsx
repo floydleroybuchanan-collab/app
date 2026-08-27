@@ -338,8 +338,8 @@ export function StreamPlayer({
       } else {
         if (role === "preview") await stopNativeVlcPreview(true); else await stopNativeVlcFullscreen(true);
         if (cancelled || !isSessionCurrent(role, generation)) return;
-        if (role === "preview") prepareNativePreview(generation, currentChannelKey, uri, headers, contentType);
-        else prepareNativeFullscreen(generation, currentChannelKey, uri, headers, contentType);
+        if (role === "preview") prepareNativePreview(generation, currentChannelKey, uri, headers, contentType, bufferProfile);
+        else prepareNativeFullscreen(generation, currentChannelKey, uri, headers, contentType, bufferProfile);
       }
     })();
 
