@@ -193,6 +193,10 @@ object NativePlaybackManager {
       return@Runnable
     }
     recordDiagnostic("start-timeout", lastPlaybackError, instance)
+    // Opaque live URLs often hang on the wrong factory without a parse error, so
+    // tryNextOpaqueCandidate never runs. Rotate transport→hls→dash→progressive
+    // on start-timeout the way TiViMate-class clients rotate formats on stall.
+    if (advanceOpaqueCandidateOnStall(instance, "start-timeout")) return@Runnable
     recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
   }
   private val bufferingWatchdog: Runnable = Runnable {
@@ -831,6 +835,14 @@ object NativePlaybackManager {
 
   private fun tryNextOpaqueCandidate(instance: ExoPlayer, error: PlaybackException): Boolean {
     if (!isContainerMismatch(error)) return false
+    return advanceOpaqueCandidate(instance, "parser", error)
+  }
+
+  /** Advance opaque type on hang/timeout without requiring a container ParserException. */
+  private fun advanceOpaqueCandidateOnStall(instance: ExoPlayer, reason: String): Boolean =
+    advanceOpaqueCandidate(instance, "stall:$reason", lastPlaybackError)
+
+  private fun advanceOpaqueCandidate(instance: ExoPlayer, reason: String, error: PlaybackException?): Boolean {
     val original = opaqueRouteSource ?: return false
     if (opaqueRouteIndex < 0 || opaqueRouteCandidates.isEmpty()) return false
     main.removeCallbacks(opaqueTypeConfirmation)
@@ -847,9 +859,11 @@ object NativePlaybackManager {
     val routed = original.copy(sourceType = nextType)
     activeSource = routed
     detectedMimeType = knownMimeForSource(routed)
-    probeReason = "${probeReason ?: "opaque"};parser-retry:$nextType"
-    recordDiagnostic("opaque-type-retry-$nextType", error, instance)
+    probeReason = "${probeReason ?: "opaque"};$reason-retry:$nextType"
+    // Fresh recovery budget for the new container guess.
+    recoveryAttempts = 0
     lastPlaybackError = null
+    recordDiagnostic("opaque-type-retry-$nextType", error, instance)
     return try {
       rebuildMediaSource(instance, routed, "opaque-type-retry-$nextType")
       true
@@ -897,6 +911,11 @@ object NativePlaybackManager {
         .createMediaSource(item)
       "dash" -> DashMediaSource.Factory(dataSource).createMediaSource(item)
       "transport" -> ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
+      // Opaque last-resort "progressive" is often still live MPEG-TS without a
+      // file extension. Keep the live-TS flags so this candidate is not a
+      // guaranteed black/silent dead end.
+      "progressive" if (opaqueRouteCacheKey != null || isOpaqueHttpUri(source.uri)) ->
+        ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
       else -> DefaultMediaSourceFactory(dataSource).createMediaSource(item)
     }
   }
@@ -908,9 +927,14 @@ object NativePlaybackManager {
 
   private fun createDataSourceFactory(headers: Map<String, String>): DefaultDataSource.Factory {
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
-    val properties = LinkedHashMap<String, String>(headers.size + 1)
+    val properties = LinkedHashMap<String, String>(headers.size + 2)
     if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
       properties["User-Agent"] = DEFAULT_STREAM_USER_AGENT
+    }
+    // Match ordinary IPTV clients / playlist fetch: panels that inspect Accept
+    // often reject bare OkHttp defaults.
+    if (headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
+      properties["Accept"] = "*/*"
     }
     properties.putAll(headers)
     return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient).setDefaultRequestProperties(properties))

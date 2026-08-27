@@ -88,6 +88,7 @@ test("M3U EXTVLCOPT lines become pipe headers for Media3/VLC", () => {
 #EXTINF:-1 tvg-id="ua.1" group-title="News",UA Channel
 #EXTVLCOPT:http-user-agent=ProviderBox/1.0
 #EXTVLCOPT:http-referrer=https://provider.example/
+#EXTVLCOPT:network-caching=1000
 https://provider.example/live/1
 `;
   const channels = parseM3U(text);
@@ -95,6 +96,7 @@ https://provider.example/live/1
   assert.match(channels[0].url, /\|/);
   assert.match(channels[0].url, /User-Agent=ProviderBox%2F1\.0/);
   assert.match(channels[0].url, /Referer=https%3A%2F%2Fprovider\.example%2F/);
+  assert.doesNotMatch(channels[0].url, /network-caching/);
 });
 
 test("allocateChannelId stays deterministic for the same URL", () => {

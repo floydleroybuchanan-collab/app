@@ -275,14 +275,8 @@ internal object NativePlaylistParser {
           if (key.isNotEmpty() && value.isNotEmpty()) headers[key] = value
         }
       }
-      else -> {
-        val equals = payload.indexOf('=')
-        if (equals > 0) {
-          val key = payload.substring(0, equals).trim()
-          val value = payload.substring(equals + 1).trim()
-          if (key.isNotEmpty() && value.isNotEmpty()) headers[key] = value
-        }
-      }
+      // Ignore non-HTTP VLC options (network-caching, http-reconnect, …). Emitting
+      // them as request headers breaks panels/CDNs that TiViMate still plays.
     }
   }
 

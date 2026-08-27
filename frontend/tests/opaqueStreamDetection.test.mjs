@@ -58,14 +58,17 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /private val opaqueTypeConfirmation = Runnable/);
   assert.match(manager, /confirmSuccessfulStreamType\(\)/);
   assert.match(manager, /tryNextOpaqueCandidate\(created, error\)/);
+  assert.match(manager, /advanceOpaqueCandidateOnStall\(instance, "start-timeout"\)/);
   assert.match(manager, /isContainerMismatch/);
   assert.match(manager, /forgetDetectedType\(cacheKey\)/);
   assert.match(manager, /DEFAULT_STREAM_USER_AGENT = "TiviMate\/5\.1\.6 \(Linux; Android TV\)"/);
   assert.match(manager, /properties\["User-Agent"\] = DEFAULT_STREAM_USER_AGENT/);
+  assert.match(manager, /properties\["Accept"\] = "\*\/\*"/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);
   assert.match(manager, /cachedType == "progressive" && isOpaqueHttpUri/);
   assert.match(manager, /hint == "progressive" && !opaque/);
+  assert.match(manager, /"progressive" if \(opaqueRouteCacheKey != null \|\| isOpaqueHttpUri\(source\.uri\)\)/);
   assert.doesNotMatch(manager, /if \(firstFrameRendered \|\| !isContainerMismatch\(error\)\)/);
   const firstFrameStart = manager.indexOf("override fun onRenderedFirstFrame()");
   const firstFrameEnd = manager.indexOf("override fun onPlayerError", firstFrameStart);

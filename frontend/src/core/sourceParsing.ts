@@ -212,14 +212,9 @@ export function parseM3UWithStats(
         const value = header.slice(colon + 1).trim();
         if (key && value) headers[key] = value;
       }
-    } else {
-      const equals = payload.indexOf("=");
-      if (equals > 0) {
-        const key = payload.slice(0, equals).trim();
-        const value = payload.slice(equals + 1).trim();
-        if (key && value) headers[key] = value;
-      }
     }
+    // Ignore non-HTTP VLC options (network-caching, http-reconnect, …). Emitting
+    // them as request headers breaks panels/CDNs that TiViMate still plays.
   };
 
   const appendPipeHeaders = (url: string, headers: Record<string, string>) => {
