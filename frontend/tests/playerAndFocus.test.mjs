@@ -28,7 +28,7 @@ test("stream classification keeps Media3 first and reserves VLC for unsupported 
 });
 
 test("pipe headers decode valid values and never throw on malformed percent encoding", () => {
-  const parsed = parsePipeHeaders("https://x/live|Referer=https%3A%2F%2Fexample.com&User-Agent=Provider+Box&X-Bad=%E0%A4%A");
+  const parsed = parsePipeHeaders("https://x/live|Referer=https%3A%2F%2Fexample.com&User-Agent=Provider%20Box&X-Bad=%E0%A4%A");
   assert.equal(parsed.uri, "https://x/live");
   assert.equal(parsed.headers.Referer, "https://example.com");
   assert.equal(parsed.headers["User-Agent"], "Provider Box");
@@ -42,6 +42,26 @@ test("pipe headers cannot inject an invalid native HTTP request", () => {
   assert.equal(parsed.headers["Bad Name"], undefined);
   assert.equal(parsed.headers["X-Injection"], undefined);
   assert.equal(parsed.headers["X-Nul"], undefined);
+});
+
+test("pipe metadata preserves opaque tokens, literal plus signs and case-insensitive overrides", () => {
+  const url = "https://provider.invalid/live/A+b?token=x%2By&signature=a+b";
+  const parsed = parsePipeHeaders(`${url}|Cookie=session=a+b%2Bc&User-Agent=C%2B%2B%20TV&user-agent=Final+UA&X-Empty=&__proto__=plain`);
+  assert.equal(parsed.uri, url);
+  assert.equal(parsed.headers.Cookie, "session=a+b+c");
+  assert.equal(parsed.headers["User-Agent"], undefined);
+  assert.equal(parsed.headers["user-agent"], "Final+UA");
+  assert.equal(parsed.headers["X-Empty"], "");
+  assert.equal(Object.hasOwn(parsed.headers, "__proto__"), true);
+  assert.equal(parsed.headers.__proto__, "plain");
+});
+
+test("all OkHttp-invalid value characters are rejected before the native bridge", () => {
+  for (const code of [0, 1, 8, 10, 13, 31, 127, 128, 256]) {
+    const value = encodeURIComponent(`a${String.fromCharCode(code)}b`);
+    assert.equal(parsePipeHeaders(`https://x/live|X-Test=${value}`).headers["X-Test"], undefined);
+  }
+  assert.equal(parsePipeHeaders("https://x/live|X-Test=a%09b").headers["X-Test"], "a\tb");
 });
 
 test("drawer edge is a typed remote owner and stale blur cleanup cannot clobber main drawer", async () => {

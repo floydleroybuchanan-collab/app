@@ -48,6 +48,13 @@ export function recordAudioDiagnostics(
 ): AudioDiagnosticsSnapshot {
   const snapshot: AudioDiagnosticsSnapshot = {
     ...input,
+    // Track-list events may follow decoder initialization. Do not erase a real
+    // decoder name with a snapshot that simply did not carry that field.
+    decoder: input.decoder !== undefined ? input.decoder : (
+      lastSnapshot?.engine === input.engine && lastSnapshot.role === input.role &&
+      lastSnapshot.streamKey === input.streamKey && lastSnapshot.mimeType === input.mimeType
+        ? lastSnapshot.decoder : null
+    ),
     at: input.at || new Date().toISOString(),
   };
   lastSnapshot = snapshot;

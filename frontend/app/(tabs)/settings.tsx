@@ -541,6 +541,7 @@ function SettingsScreenContent() {
                 />
                 {playerEngine !== "media3" ? (<>
                   <ToggleRow label="VLC hardware decoding" value={vlcPlayback.hardwareDecode} onChange={vlcPlayback.setHardwareDecode} />
+                  <Text style={styles.help}>VLC 3 supports user agent and referrer, but streams requiring custom HTTP headers or cookies must use Media3.</Text>
                   <ChoiceRow<"auto" | "stereo" | "passthrough"> label="VLC audio output" value={vlcPlayback.audioOutput} options={[{ label: "Auto", value: "auto" }, { label: "Stereo", value: "stereo" }, { label: "Passthrough", value: "passthrough" }]} onChange={vlcPlayback.setAudioOutput} />
                 </>) : null}
                 <ChoiceRow<PlaybackBufferProfile>

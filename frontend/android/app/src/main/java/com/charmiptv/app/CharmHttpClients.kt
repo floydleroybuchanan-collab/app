@@ -1,6 +1,9 @@
 package com.charmiptv.app
 
 import okhttp3.JavaNetCookieJar
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -42,12 +45,22 @@ object CharmHttpClients {
       .followSslRedirects(true)
       .build()
 
+  /** OkHttp's BridgeInterceptor otherwise replaces an explicit Cookie header. */
+  fun mediaClientForHeaders(base: OkHttpClient, headers: Map<String, String>): OkHttpClient {
+    if (headers.keys.none { it.equals("Cookie", ignoreCase = true) }) return base
+    return base.newBuilder().cookieJar(object : CookieJar {
+      override fun loadForRequest(url: HttpUrl): List<Cookie> = emptyList()
+      override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = cookieJar.saveFromResponse(url, cookies)
+    }).build()
+  }
+
   /** Cookie header for LibVLC (no OkHttp stack) from the shared jar. */
   fun cookieHeaderFor(uri: String): String? {
     return try {
-      val cookies = cookieManager.cookieStore.get(java.net.URI(uri))
-      if (cookies.isNullOrEmpty()) null
-      else cookies.joinToString("; ") { "${it.name}=${it.value}" }
+      // CookieManager.get enforces path, Secure and expiry; cookieStore.get
+      // alone only filters by domain and can leak a secure/path-scoped cookie.
+      cookieManager.get(java.net.URI(uri), emptyMap())["Cookie"]
+        ?.joinToString("; ")?.takeIf { it.isNotBlank() }
     } catch (_: Throwable) {
       null
     }

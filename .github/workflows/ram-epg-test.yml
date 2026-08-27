@@ -45,7 +45,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - name: Run frontend regression tests
-        run: npm test -- --runInBand
+        run: npm test
       - name: Build pinned LGPL FFmpeg audio extension
         run: |
           chmod +x scripts/build-media3-ffmpeg-audio.sh

@@ -9,6 +9,7 @@ export type SessionFailReason =
   | "start-timeout"
   | "engine-swap"
   | "stream-error"
+  | "request-headers-unsupported"
   | "user-stop"
   | "superseded"
   | "crashed";
@@ -203,7 +204,7 @@ export function stopSession(
   // Media3/VLC ownership race this registry exists to prevent.
   stopPromise = callbacks
     .catch(() => undefined)
-    .then(() => invokeNative(nativeReleaseHandler, role))
+    .then(() => state.generation === stoppedGeneration ? invokeNative(nativeReleaseHandler, role) : undefined)
     .catch(() => undefined)
     .then(() => {
       if (roleStopPromises[role] === stopPromise) roleStopPromises[role] = null;

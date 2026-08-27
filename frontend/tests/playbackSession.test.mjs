@@ -5,10 +5,99 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { beginSession, getSessionPhase, isPreviewPlaybackAllowed, isSessionCurrent, pauseSessionDecoders, registerSessionStop, resetPlaybackSessionsForTests, setNativePlaybackReleaseHandler, setSessionPhase, stopPreviewForFullscreen, stopFullscreenSession, stopAllPlaybackSessions, waitForFullscreenRelease } from "../src/core/playbackSession.ts";
 import { detectStreamKind, media3ContentType, preferredEngine } from "../src/core/streamPolicy.ts";
+import { createPlaybackCoordinator } from "../src/core/serializedPlaybackCoordinator.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
 test("fullscreen reservation releases preview before allocating its decoder", async () => { resetPlaybackSessionsForTests(); const previewGen = beginSession("preview"); let stopped = 0; registerSessionStop("preview", previewGen, () => { stopped += 1; }); await stopPreviewForFullscreen(); assert.equal(stopped, 1); assert.equal(isPreviewPlaybackAllowed(), false); const fullGen = beginSession("fullscreen"); assert.equal(isSessionCurrent("preview", previewGen), false); assert.equal(isSessionCurrent("fullscreen", fullGen), true); });
+
+function coordinatorFixture(overrides = {}) {
+  const events = [];
+  const native = {
+    owner: async () => "none",
+    stop: async (engine, role, release) => { events.push(`stop:${engine}:${role}:${release}`); },
+    pause: (engine) => { events.push(`pause:${engine}`); },
+    ...overrides,
+  };
+  return { events, native, coordinator: createPlaybackCoordinator(native) };
+}
+
+test("coordinator waits for release acknowledgement before the next decoder prepares", async () => {
+  const { events, native, coordinator } = coordinatorFixture();
+  await coordinator.activate("preview", "media3", () => true, () => events.push("prepare:media3"));
+  let finish;
+  native.stop = async () => { events.push("stop:start"); await new Promise(resolve => { finish = resolve; }); events.push("stop:done"); };
+  const handoff = coordinator.activate("fullscreen", "vlc", () => true, () => events.push("prepare:vlc"));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(events, ["prepare:media3", "stop:start"]);
+  finish();
+  await handoff;
+  assert.deepEqual(events, ["prepare:media3", "stop:start", "stop:done", "prepare:vlc"]);
+  await coordinator.release("preview");
+  assert.deepEqual(coordinator.current(), { role: "fullscreen", engine: "vlc" });
+});
+
+test("cancelled queued activation cannot stop the current decoder or prepare later", async () => {
+  const { coordinator, events } = coordinatorFixture();
+  await coordinator.activate("fullscreen", "media3", () => true, () => events.push("prepare:media3"));
+  await coordinator.activate("preview", "vlc", () => false, () => events.push("prepare:vlc"));
+  assert.deepEqual(events, ["prepare:media3"]);
+  assert.deepEqual(coordinator.current(), { role: "fullscreen", engine: "media3" });
+});
+
+test("cancellation during release prevents a stale prepare and the queue remains usable", async () => {
+  let current = true;
+  const { coordinator, events } = coordinatorFixture({ stop: async () => { current = false; } });
+  await coordinator.activate("preview", "media3", () => true, () => {});
+  await coordinator.activate("fullscreen", "vlc", () => current, () => events.push("stale"));
+  assert.deepEqual(events, []);
+  await coordinator.activate("fullscreen", "media3", () => true, () => events.push("fresh"));
+  assert.deepEqual(events, ["fresh"]);
+});
+
+test("release failure never authorizes another engine and keeps ownership for cleanup", async () => {
+  const { coordinator, native, events } = coordinatorFixture();
+  await coordinator.activate("fullscreen", "media3", () => true, () => {});
+  native.stop = async () => { throw new Error("release failed"); };
+  await assert.rejects(coordinator.activate("fullscreen", "vlc", () => true, () => events.push("unsafe")), /release failed/);
+  assert.deepEqual(events, []);
+  assert.deepEqual(coordinator.current(), { role: "fullscreen", engine: "media3" });
+});
+
+test("JS reload cleanup is role scoped and native owner lookup errors fail closed", async () => {
+  const { coordinator, native, events } = coordinatorFixture({ owner: async () => "fullscreen" });
+  await coordinator.release("preview");
+  assert.deepEqual(events, []);
+  native.owner = async () => { throw new Error("bridge unavailable"); };
+  await assert.rejects(coordinator.activate("preview", "vlc", () => true, () => events.push("unsafe")), /bridge unavailable/);
+  assert.deepEqual(events, []);
+});
+
+test("stale role, generation and engine commands cannot control another session", async () => {
+  const { coordinator, events } = coordinatorFixture();
+  await coordinator.activate("fullscreen", "media3", () => true, () => {});
+  await coordinator.command("preview", "media3", () => true, () => events.push("stale-role"));
+  await coordinator.command("fullscreen", "vlc", () => true, () => events.push("stale-engine"));
+  await coordinator.command("fullscreen", "media3", () => false, () => events.push("stale-generation"));
+  await coordinator.command("fullscreen", "media3", () => true, () => events.push("current"));
+  assert.deepEqual(events, ["current"]);
+});
+
+test("a delayed stop callback cannot release a newly started same-role session", async () => {
+  resetPlaybackSessionsForTests();
+  let finishCallback;
+  let nativeReleases = 0;
+  const generation = beginSession("fullscreen");
+  registerSessionStop("fullscreen", generation, () => new Promise(resolve => { finishCallback = resolve; }));
+  setNativePlaybackReleaseHandler(() => { nativeReleases += 1; });
+  const stopped = stopFullscreenSession();
+  const next = beginSession("fullscreen");
+  finishCallback();
+  await stopped;
+  assert.equal(nativeReleases, 0);
+  assert.equal(isSessionCurrent("fullscreen", next), true);
+  setNativePlaybackReleaseHandler(null);
+});
 test("stale session events are rejected after channel generation bump", () => { resetPlaybackSessionsForTests(); const gen1 = beginSession("fullscreen"); assert.equal(setSessionPhase("fullscreen", gen1, "playing"), true); const gen2 = beginSession("fullscreen"); assert.equal(setSessionPhase("fullscreen", gen1, "failed", "stream-error"), false); assert.equal(getSessionPhase("fullscreen"), "preparing"); assert.equal(setSessionPhase("fullscreen", gen2, "playing"), true); });
 test("pause preview callbacks do not invalidate generation", () => { resetPlaybackSessionsForTests(); const gen = beginSession("preview"); let stops = 0; registerSessionStop("preview", gen, () => { stops += 1; }); pauseSessionDecoders("preview"); assert.equal(stops, 1); assert.equal(isSessionCurrent("preview", gen), true); });
 test("new generation drains stale callbacks exactly once", () => { resetPlaybackSessionsForTests(); const gen = beginSession("fullscreen"); let stops = 0; registerSessionStop("fullscreen", gen, () => { stops += 1; }); beginSession("fullscreen"); assert.equal(stops, 1); stopFullscreenSession(); assert.equal(stops, 1); });
@@ -79,7 +168,7 @@ test("automatic routing starts all Media3-supported live types in Media3", () =>
 
 test("play entry points hand off through openFullscreenPlayer", async () => { const files = ["app/(tabs)/guide.tsx", "app/(tabs)/index.tsx", "app/(tabs)/favorites.tsx", "app/(tabs)/channels.tsx", "app/(tabs)/search.tsx", "src/components/ProgramModal.tsx", "src/components/PurpleChannelCollection.tsx", "app/_layout.tsx"]; for (const file of files) { const body = await source(file); assert.match(body, /openFullscreenPlayer/); assert.doesNotMatch(body, /pathname:\s*["']\/player["']/); } });
 
-test("StreamPlayer commands two native engines only through one serialized coordinator", async () => { const [adapter, native, coordinator, handoff] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("src/core/nativePlaybackCoordinator.ts"), source("src/utils/openFullscreenPlayer.ts")]); assert.match(adapter, /prepareNativeFullscreen/); assert.match(adapter, /prepareNativePreview/); assert.match(adapter, /prepareNativeVlcFullscreen/); assert.match(adapter, /activateNativePlaybackEngine/); assert.doesNotMatch(adapter, /stopNativePreview|stopNativeFullscreen|stopNativeVlcPreview|stopNativeVlcFullscreen/); assert.doesNotMatch(adapter, /VideoView|createVideoPlayer|VLCPlayer|react-native-vlc-media-player/); assert.match(coordinator, /let operation: Promise<void> = Promise\.resolve\(\)/); assert.match(coordinator, /if \(active\) return/); assert.match(coordinator, /await stopNativeOwner\("media3"\)[\s\S]*?await stopNativeOwner\("vlc"\)/); assert.doesNotMatch(coordinator, /Promise\.all|Promise\.allSettled/); assert.match(native, /private var player: ExoPlayer\? = null/); assert.match(native, /R\.layout\.charm_player_view/); assert.match(native, /onRenderedFirstFrame/); assert.match(handoff, /waitForFullscreenRelease\(\)[\s\S]*?stopPreviewForFullscreen\(\)/); assert.doesNotMatch(handoff, /FULLSCREEN_HANDOFF_SETTLE_MS|PREVIEW_RELEASE_TIMEOUT_MS|Promise\.race/); });
+test("StreamPlayer commands two native engines only through one serialized coordinator", async () => { const [adapter, native, coordinator, handoff] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("src/core/serializedPlaybackCoordinator.ts"), source("src/utils/openFullscreenPlayer.ts")]); assert.match(adapter, /prepareNativeFullscreen/); assert.match(adapter, /prepareNativePreview/); assert.match(adapter, /prepareNativeVlcFullscreen/); assert.match(adapter, /activateNativePlaybackEngine/); assert.doesNotMatch(adapter, /stopNativePreview|stopNativeFullscreen|stopNativeVlcPreview|stopNativeVlcFullscreen/); assert.doesNotMatch(adapter, /VideoView|createVideoPlayer|VLCPlayer|react-native-vlc-media-player/); assert.match(coordinator, /let operation: Promise<void> = Promise\.resolve\(\)/); assert.match(coordinator, /if \(active.role !== role\) return/); assert.match(coordinator, /await stopNativeOwner\("media3"\)[\s\S]*?await stopNativeOwner\("vlc"\)/); assert.doesNotMatch(coordinator, /Promise\.all|Promise\.allSettled/); assert.match(native, /private var player: ExoPlayer\? = null/); assert.match(native, /R\.layout\.charm_player_view/); assert.match(native, /onRenderedFirstFrame/); assert.match(handoff, /waitForFullscreenRelease\(\)[\s\S]*?stopPreviewForFullscreen\(\)/); assert.doesNotMatch(handoff, /FULLSCREEN_HANDOFF_SETTLE_MS|PREVIEW_RELEASE_TIMEOUT_MS|Promise\.race/); });
 
 test("fullscreen launched from Guide returns current tuned channel to the originating Guide group", async () => {
   const [guide, player] = await Promise.all([source("app/(tabs)/guide.tsx"), source("app/player.tsx")]);

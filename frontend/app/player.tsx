@@ -53,6 +53,7 @@ const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
   "start-timeout": "start timeout",
   "engine-swap": "playback reset",
   "stream-error": "stream error",
+  "request-headers-unsupported": "provider headers unsupported by this engine",
   "user-stop": "stopped",
   superseded: "replaced",
   crashed: "player crash",

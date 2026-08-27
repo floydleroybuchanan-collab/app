@@ -7,7 +7,7 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 import { StreamPlayer, type StreamStatus } from "@/src/components/StreamPlayer";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
-import { getLastAudioDiagnostics } from "@/src/core/audioDiagnostics";
+import { getLastAudioDiagnostics, matchesStreamFingerprint } from "@/src/core/audioDiagnostics";
 import { usePlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import {
   noteGuidePreviewFocus,
@@ -101,7 +101,7 @@ export function GuidePreviewRail({
     : null;
   const audio = getLastAudioDiagnostics();
   const codecChip =
-    audio && audio.streamKey && channel?.url
+    audio && channel?.url && matchesStreamFingerprint(channel.url, audio.streamKey)
       ? `${audio.mimeType?.replace(/^audio\//, "").toUpperCase() || "AUDIO"} · ${String(audio.engine).toUpperCase()}`
       : null;
   const about = current?.desc || "Focus a channel to preview it and read the current program.";
@@ -113,6 +113,7 @@ export function GuidePreviewRail({
           <View style={styles.preview}>
             {previewVisible && channel?.url ? (
               <ErrorBoundary
+                key={`preview-boundary-${channel.id}-${previewEpoch}`}
                 onError={() => onPreviewStatus("error")}
                 fallback={() => (
                   <View style={styles.fallback}>

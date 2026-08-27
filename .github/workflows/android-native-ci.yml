@@ -8,7 +8,8 @@ on:
     paths:
       - "frontend/android/**"
       - "frontend/src/components/StreamPlayer.tsx"
-      - "frontend/src/core/streamPolicy.ts"
+      - "frontend/src/core/**"
+      - "frontend/src/native*Playback.ts"
       - "frontend/tests/**"
       - "frontend/app/(tabs)/guide.tsx"
       - "ci/tivimate-whole-repo-player-interaction-scan.py"
@@ -23,10 +24,12 @@ on:
       - main
       - agent/media3-opaque-live-startup-hardening
       - agent/manual-vlc-engine
+      - fix/tivimate-m3u-epg-ci-align
     paths:
       - "frontend/android/**"
       - "frontend/src/components/StreamPlayer.tsx"
-      - "frontend/src/core/streamPolicy.ts"
+      - "frontend/src/core/**"
+      - "frontend/src/native*Playback.ts"
       - "frontend/tests/**"
       - "frontend/app/(tabs)/guide.tsx"
       - "ci/tivimate-whole-repo-player-interaction-scan.py"
@@ -40,7 +43,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: android-native-${{ github.workflow }}-${{ github.ref }}
@@ -114,32 +116,10 @@ jobs:
         working-directory: .
         run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
 
-      - name: Verify opaque startup and locked player budgets
+      - name: Verify Media3-first ownership and bounded recovery contract
         id: invariants
         continue-on-error: true
-        working-directory: .
-        run: |
-          PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
-          grep -q 'OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L' "$PLAYER"
-          grep -q 'startOpaqueCandidate(instance, source, cacheKey, firstType' "$PLAYER"
-          ! grep -q 'NativeOpaqueStreamProbe.start' "$PLAYER"
-          ! grep -q 'opaqueProbeHttpClient' "$PLAYER"
-          grep -q 'OPAQUE_TYPE_PREFS = "charm_media3_stream_types"' "$PLAYER"
-          grep -q 'main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)' "$PLAYER"
-          grep -q 'private val opaqueTypeConfirmation = Runnable' "$PLAYER"
-          grep -q 'confirmSuccessfulStreamType()' "$PLAYER"
-          grep -q 'tryNextOpaqueCandidate(created, error)' "$PLAYER"
-          grep -q 'forgetDetectedType(cacheKey)' "$PLAYER"
-          ! grep -q 'if (firstFrameRendered || !isContainerMismatch(error))' "$PLAYER"
-          grep -q 'fun tivimateBufferDurationsMs' "$PLAYER"
-          grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
-          grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
-          grep -q 'START_TIMEOUT_MS = 60_000L' "$PLAYER"
-          ! grep -q 'HUNG_BUFFER_REPREPARE_MS\|TRANSPORT_HUNG_BUFFER_REPREPARE_MS\|HARD_STALL_RECOVERY_MS\|STABLE_REARM_MS\|MIN_BUFFER_MS_LOW_RAM\|MIN_BUFFER_MS_NORMAL' "$PLAYER"
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
-          grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
-          grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/manualVlcEngine.test.mjs tests/opaqueStreamDetection.test.mjs tests/playerFirstFrameStability.test.mjs tests/playbackSession.test.mjs tests/playerLiveStability.test.mjs
 
       - name: Compile native Kotlin and Java only
         id: compile
@@ -153,6 +133,7 @@ jobs:
             :ffmpeg-audio:compileDebugJavaWithJavac \
             :app:compileDebugKotlin \
             :app:compileDebugJavaWithJavac \
+            :app:testDebugUnitTest \
             --no-daemon --max-workers=1 --stacktrace
 
       - name: Confirm compile gate produced no APK
@@ -160,35 +141,6 @@ jobs:
         if: always()
         continue-on-error: true
         run: test ! -d android/app/build/outputs/apk
-
-      - name: Post validation result to draft PR 31
-        if: always()
-        continue-on-error: true
-        working-directory: .
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "Android Native Compile — manual-VLC validation-only"
-            echo "commit=${GITHUB_SHA}"
-            echo "run=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "config=${{ steps.config.outcome }}"
-            echo "tests=${{ steps.tests.outcome }}"
-            echo "typecheck=${{ steps.typecheck.outcome }}"
-            echo "lint=${{ steps.lint.outcome }}"
-            echo "whole_repo_scan=${{ steps.scan.outcome }}"
-            echo "opaque_invariants=${{ steps.invariants.outcome }}"
-            echo "native_compile=${{ steps.compile.outcome }}"
-            echo "no_apk=${{ steps.noapk.outcome }}"
-            echo "apk_build=NOT_RUN"
-            if [ -f ci/tivimate-whole-repo-player-interaction-report.txt ]; then
-              echo
-              echo '```text'
-              cat ci/tivimate-whole-repo-player-interaction-report.txt
-              echo '```'
-            fi
-          } > /tmp/validation.md
-          gh api "repos/${GITHUB_REPOSITORY}/issues/31/comments" -f body="$(cat /tmp/validation.md)"
 
       - name: Enforce validation gate
         if: always()

@@ -74,11 +74,9 @@ export function detectStreamKind(uri: string, streamTypeHint?: string | null): S
 }
 
 function safeDecode(value: string): string {
-  // Android's URLEncoder emits application/x-www-form-urlencoded `+` for a
-  // space, while JS encodeURIComponent emits `%20`. Native and web playlist
-  // parsers both feed this path, so accept either representation.
-  const formEncoded = value.replace(/\+/g, "%20");
-  try { return decodeURIComponent(formEncoded); } catch { return value; }
+  // Pipe metadata is percent-encoded, not HTML form data. Literal plus signs
+  // occur in cookies, bearer tokens and user agents and must survive unchanged.
+  try { return decodeURIComponent(value); } catch { return value; }
 }
 
 // OkHttp rejects an entire request when even one supplied header has an
@@ -87,13 +85,14 @@ function safeDecode(value: string): string {
 const HTTP_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 function safeHeader(key: string, value: string): boolean {
-  return HTTP_HEADER_NAME.test(key) && !/[\0\r\n]/.test(value);
+  return HTTP_HEADER_NAME.test(key) && !/[^\t\x20-\x7e]/.test(value);
 }
 
 export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record<string, string> } {
+  const useHttpUserAgent = /^https?:\/\//i.test(rawUri.trim());
   const pipeIndex = rawUri.indexOf("|");
   if (pipeIndex < 0) {
-    return { uri: rawUri.trim(), headers: { "User-Agent": DEFAULT_STREAM_USER_AGENT } };
+    return { uri: rawUri.trim(), headers: useHttpUserAgent ? { "User-Agent": DEFAULT_STREAM_USER_AGENT } : {} };
   }
   const uri = rawUri.slice(0, pipeIndex).trim();
   // Preserve headers supplied by the stream/provider. When the playlist omits
@@ -104,10 +103,14 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
     const equals = pair.indexOf("=");
     if (equals <= 0) continue;
     const key = safeDecode(pair.slice(0, equals)).trim();
-    const value = safeDecode(pair.slice(equals + 1)).trim();
-    if (key && value && safeHeader(key, value)) headers[key] = value;
+    const value = safeDecode(pair.slice(equals + 1));
+    if (key && safeHeader(key, value)) {
+      const previous = Object.keys(headers).find((name) => name.toLowerCase() === key.toLowerCase());
+      if (previous) delete headers[previous];
+      Object.defineProperty(headers, key, { value, enumerable: true, configurable: true, writable: true });
+    }
   }
-  if (!Object.keys(headers).some((key) => key.toLowerCase() === "user-agent")) {
+  if (useHttpUserAgent && !Object.keys(headers).some((key) => key.toLowerCase() === "user-agent")) {
     headers["User-Agent"] = DEFAULT_STREAM_USER_AGENT;
   }
   return { uri, headers };

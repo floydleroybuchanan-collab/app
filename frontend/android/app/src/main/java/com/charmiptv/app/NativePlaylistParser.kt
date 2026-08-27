@@ -279,7 +279,9 @@ internal object NativePlaylistParser {
   private fun appendPipeHeaders(url: String, headers: Map<String, String>): String {
     if (headers.isEmpty()) return url
     val encoded = headers.entries.joinToString("&") { (key, value) ->
-      "${java.net.URLEncoder.encode(key, Charsets.UTF_8.name())}=${java.net.URLEncoder.encode(value, Charsets.UTF_8.name())}"
+      // Match encodeURIComponent on the JS parser: spaces are %20, literal
+      // plus signs are %2B. Pipe metadata must never use form decoding.
+      "${java.net.URLEncoder.encode(key, Charsets.UTF_8.name()).replace("+", "%20")}=${java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")}"
     }
     return if (url.contains('|')) "$url&$encoded" else "$url|$encoded"
   }

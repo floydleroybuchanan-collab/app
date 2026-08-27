@@ -104,7 +104,7 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
           mimeTypes.add(mime)
           if (mime.startsWith("video/")) {
             try {
-              val video = info.getCapabilitiesForType(type).videoCapabilities
+              val video = info.getCapabilitiesForType(type).videoCapabilities ?: continue
               val advertisedWidth = video.supportedWidths.upper
               val advertisedHeight = video.supportedHeights.upper
               // Some vendor codecs publish Integer.MAX_VALUE-like ranges.

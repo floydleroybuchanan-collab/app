@@ -7,6 +7,22 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
+test("track-list snapshots retain the current decoder but never borrow another stream's decoder", async () => {
+  const { recordAudioDiagnostics } = await import("../src/core/audioDiagnostics.ts");
+  const base = { engine: "media3", role: "fullscreen", streamKey: "unknown:1:abc", mimeType: "audio/ac3", trackCount: 1, supportedCount: 1, selectedBy: "current" };
+  recordAudioDiagnostics({ ...base, decoder: "ffmpeg-ac3" });
+  assert.equal(recordAudioDiagnostics(base).decoder, "ffmpeg-ac3");
+  assert.equal(recordAudioDiagnostics({ ...base, streamKey: "unknown:2:def" }).decoder, null);
+});
+
+test("native diagnostics omit provider URL leaves and parsers encode spaces without ambiguous plus signs", async () => {
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  const redact = native.slice(native.indexOf("private fun redactUriForDiagnostics"), native.indexOf("private fun safeThrowableSummary"));
+  assert.doesNotMatch(redact, /lastPathSegment|encodedPath|query|userInfo/);
+  const parser = await source("android/app/src/main/java/com/charmiptv/app/NativePlaylistParser.kt");
+  assert.match(parser, /\.replace\("\+", "%20"\)/);
+});
+
 test("native Media3 exposes selectable audio tracks and deterministic track selection", async () => {
   const [adapter, native, screen] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("app/player.tsx")]);
   assert.match(adapter, /addNativePlaybackTracksListener/); assert.match(adapter, /selectNativeAudio/); assert.match(adapter, /getRememberedChannelAudioTrack\(currentChannelKey\)/); assert.match(adapter, /getPreferredAudioLanguage\(\)/); assert.match(native, /fun selectAudio/); assert.match(native, /clearOverridesOfType\(C\.TRACK_TYPE_AUDIO\)/); assert.match(native, /TrackSelectionOverride/); assert.match(native, /EXTENSION_RENDERER_MODE_PREFER/); assert.match(native, /Video remains on MediaCodec hardware/); assert.match(screen, /setAudioTrackId\(undefined\)/);

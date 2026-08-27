@@ -189,6 +189,8 @@ dependencies {
     // Serialized compatibility fallback. Media3 remains the default and is
     // fully released before LibVLC receives the same provider URL.
     implementation("org.videolan.android:libvlc-all:3.7.5")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
     kapt("androidx.room:room-compiler:2.7.2")

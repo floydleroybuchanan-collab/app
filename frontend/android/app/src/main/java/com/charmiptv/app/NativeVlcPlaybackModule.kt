@@ -1,5 +1,7 @@
 package com.charmiptv.app
 
+import android.os.Handler
+import android.os.Looper
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
@@ -15,6 +17,7 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
   LifecycleEventListener {
 
   override fun getName(): String = "NativeVlcPlayback"
+  private val main = Handler(Looper.getMainLooper())
 
   init {
     NativeVlcPlaybackManager.setListener(this)
@@ -97,7 +100,10 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
   @ReactMethod fun subtitlesOff() { NativeVlcPlaybackManager.selectSubtitle(null) }
   @ReactMethod fun stopPreview(releasePlayer: Boolean, promise: Promise) { stopOwner(NativeVlcPlaybackManager.Owner.PREVIEW, releasePlayer, promise) }
   @ReactMethod fun stopFullscreen(releasePlayer: Boolean, promise: Promise) { stopOwner(NativeVlcPlaybackManager.Owner.FULLSCREEN, releasePlayer, promise) }
-  @ReactMethod fun getOwner(promise: Promise) { promise.resolve(NativeVlcPlaybackManager.currentOwner().name.lowercase()) }
+  @ReactMethod fun getOwner(promise: Promise) { main.post {
+    if (NativeVlcPlaybackManager.hasReleaseFailure()) promise.reject("E_PLAYBACK_RELEASE", "VLC ownership is uncertain after failed release")
+    else promise.resolve(NativeVlcPlaybackManager.currentOwner().name.lowercase())
+  } }
 
   override fun onState(identity: NativeVlcPlaybackManager.Identity, state: String, reason: String?) {
     emit("NativeVlcPlaybackState", Arguments.createMap().apply {
@@ -144,7 +150,7 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
   }
 
   override fun onHostResume() {
-    if (NativeVlcPlaybackManager.currentOwner() != NativeVlcPlaybackManager.Owner.NONE) {
+    if (NativeVlcPlaybackManager.currentOwner() == NativeVlcPlaybackManager.Owner.PREVIEW) {
       NativeVlcPlaybackManager.resume()
     }
   }
@@ -166,13 +172,9 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
   }
 
   private fun stopOwner(owner: NativeVlcPlaybackManager.Owner, releasePlayer: Boolean, promise: Promise) {
-    val activity = ctx.currentActivity
-    if (activity == null) {
-      NativeVlcPlaybackManager.stop(owner, releasePlayer) { promise.resolve(null) }
-      return
-    }
-    activity.runOnUiThread {
-      NativeVlcPlaybackManager.stop(owner, releasePlayer) { promise.resolve(null) }
+    NativeVlcPlaybackManager.stop(owner, releasePlayer) { failure ->
+      if (failure != null) promise.reject("E_PLAYBACK_RELEASE", "VLC decoder release failed", failure)
+      else promise.resolve(null)
     }
   }
 
@@ -190,7 +192,7 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
       val key = iterator.nextKey()
       try {
         val value = readable.getString(key)
-        if (!value.isNullOrBlank()) out[key] = value
+        if (value != null) out[key] = value
       } catch (_: Throwable) {}
     }
     return out

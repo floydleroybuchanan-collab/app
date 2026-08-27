@@ -36,6 +36,17 @@ test("opaque startup has no second-GET probe helper", async () => {
   );
 });
 
+test("pending native surface preparation has a deadline and participates in ownership cleanup", async () => {
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  const timeout = native.slice(native.indexOf("private val startupTimeout"), native.indexOf("private val delayedRecovery"));
+  assert.match(timeout, /pendingPrepare != null[\s\S]*?pendingPrepare = null[\s\S]*?finishWithError\("start-timeout"\)/);
+  assert.doesNotMatch(timeout, /armStartupTimeout\(\)/);
+  assert.match(native, /fun currentOwner\(\): Owner = pendingPrepare\?\.requestedOwner \?: owner/);
+  assert.match(native, /if \(owner == Owner.NONE && pendingPrepare == null\) return/);
+  const advance = native.slice(native.indexOf("private fun advanceOpaqueCandidate("), native.indexOf("private fun buildOpaqueAttempts"));
+  assert.doesNotMatch(advance, /recoveryAttempts = 0/);
+});
+
 test("opaque startup uses one Media3 connection, stable confirmation and bounded candidate routing", async () => {
   const [manager, module, urls] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),

@@ -107,7 +107,9 @@ object NativeVlcPlaybackManager {
 
   fun setListener(next: Listener?) = runOnMain { listener = next }
 
-  fun currentOwner(): Owner = owner
+  fun currentOwner(): Owner = pendingPrepare?.requestedOwner ?: owner
+  fun hasReleaseFailure(): Boolean = decoderReleaseFailure != null
+  private var decoderReleaseFailure: Throwable? = null
 
   fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
     when (surfaceOwner) {
@@ -180,6 +182,11 @@ object NativeVlcPlaybackManager {
 
     val host = surfaceFor(requestedOwner)
     if (host == null) {
+      stopInternal(releasePlayer = true)
+      if (decoderReleaseFailure != null) {
+        listener?.onState(Identity(requestedOwner, nextGeneration, nextChannelKey.trim()), "error", "release-failed")
+        return@runOnMain
+      }
       // Fabric often mounts the native surface one frame after prepare*. Queue
       // the tune instead of decoding into a missing / 0×0 TextureView.
       pendingPrepare = PendingPrepare(
@@ -205,7 +212,10 @@ object NativeVlcPlaybackManager {
 
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
-    releasePlayerOnly(removeLayout = false)
+    if (!releasePlayerOnly(removeLayout = false)) {
+      listener?.onState(Identity(requestedOwner, nextGeneration, nextChannelKey.trim()), "error", "release-failed")
+      return@runOnMain
+    }
 
     owner = requestedOwner
     // Fullscreen must never inherit Guide preview mute (mutedState volume 0).
@@ -229,6 +239,22 @@ object NativeVlcPlaybackManager {
   }
 
   private fun startMedia(identity: Identity, source: PlaybackSource, announceLoading: Boolean) {
+    if (!CharmStreamUrls.isHttpOrHttps(source.uri) && source.headers.isNotEmpty()) {
+      // HTTP options do not configure RTSP/UDP/RTMP transports. LibVLC 3's
+      // RTSP user agent is internal; do not silently ignore provider options.
+      finishWithError(identity, "request-headers-unsupported")
+      return
+    }
+    // LibVLC 3.7.5 has no arbitrary HTTP-header/cookie injection API. Passing
+    // invented options silently loses provider authentication. Fail explicitly
+    // before opening a connection instead of sending a different request.
+    if (CharmStreamUrls.isHttpOrHttps(source.uri) && (
+        source.headers.keys.any { it.lowercase() !in setOf("user-agent", "referer", "referrer") } ||
+          !CharmHttpClients.cookieHeaderFor(source.uri).isNullOrEmpty()
+      )) {
+      finishWithError(identity, "request-headers-unsupported")
+      return
+    }
     try {
       val core = ensureCore() ?: throw IllegalStateException("LibVLC unavailable")
       val player = MediaPlayer(core)
@@ -271,18 +297,10 @@ object NativeVlcPlaybackManager {
         when (key.lowercase()) {
           "user-agent" -> media.addOption(":http-user-agent=$value")
           "referer", "referrer" -> media.addOption(":http-referrer=$value")
-          "cookie" -> media.addOption(":http-cookie=$value")
-          else -> media.addOption(":http-header=$key: $value")
         }
       }
       if (source.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
         media.addOption(":http-user-agent=TiviMate/5.1.6 (Linux; Android TV)")
-      }
-      if (source.headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
-        media.addOption(":http-header=Accept: */*")
-      }
-      if (source.headers.keys.none { it.equals("Cookie", ignoreCase = true) }) {
-        CharmHttpClients.cookieHeaderFor(source.uri)?.let { media.addOption(":http-cookie=$it") }
       }
       player.media = media
       media.release()
@@ -334,13 +352,12 @@ object NativeVlcPlaybackManager {
   fun stop(
     requestedOwner: Owner,
     releasePlayer: Boolean,
-    onStopped: (() -> Unit)? = null,
+    onStopped: ((Throwable?) -> Unit)? = null,
   ) = runOnMain {
-    if (owner == requestedOwner || pendingPrepare?.requestedOwner == requestedOwner) {
-      pendingPrepare = null
-      if (owner == requestedOwner) stopInternal(releasePlayer)
+    if (owner == requestedOwner || pendingPrepare?.requestedOwner == requestedOwner || decoderReleaseFailure != null) {
+      stopInternal(releasePlayer)
     }
-    onStopped?.invoke()
+    onStopped?.invoke(decoderReleaseFailure)
   }
 
   fun releaseAll() = runOnMain {
@@ -394,7 +411,10 @@ object NativeVlcPlaybackManager {
 
   private fun performReconnect(identity: Identity, source: PlaybackSource) {
     if (activeIdentity != identity || owner == Owner.NONE) return
-    releasePlayerOnly(removeLayout = false)
+    if (!releasePlayerOnly(removeLayout = false)) {
+      finishWithError(identity, "release-failed")
+      return
+    }
     playing = false
     startMedia(identity, source, announceLoading = false)
   }
@@ -407,7 +427,7 @@ object NativeVlcPlaybackManager {
     CharmMemoryCoordinator.setPlaybackStarting(false)
     listener?.onState(identity, "error", reason)
     if (activeIdentity == identity) {
-      releasePlayerOnly(removeLayout = false)
+      if (!releasePlayerOnly(removeLayout = false)) return
       activeIdentity = null
       activeSource = null
       if (owner == identity.owner) owner = Owner.NONE
@@ -476,7 +496,7 @@ object NativeVlcPlaybackManager {
   }
 
   private fun applyResizeMode(player: MediaPlayer) {
-    val scale = when (resizeMode) {
+    val scale = when (if (owner == Owner.FULLSCREEN) resizeMode else "fit") {
       // FIT_SCREEN preserves aspect ratio and crops only the overflow.
       "fill", "zoom" -> MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
       // FILL uses the full host rectangle, intentionally changing aspect ratio.
@@ -504,35 +524,48 @@ object NativeVlcPlaybackManager {
   }
 
   private fun stopInternal(releasePlayer: Boolean) {
+    val previousOwner = currentOwner()
+    pendingPrepare = null
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
     playing = false
     recoveryAttempts = 0
-    activeIdentity = null
-    activeSource = null
-    owner = Owner.NONE
     CharmMemoryCoordinator.setPlaybackStarting(false)
     if (releasePlayer) {
-      releasePlayerOnly(removeLayout = true)
-      try { libVlc?.release() } catch (_: Throwable) {}
+      if (!releasePlayerOnly(removeLayout = true)) return
+      try { libVlc?.release() } catch (failure: Throwable) {
+        decoderReleaseFailure = failure
+        owner = previousOwner
+        return
+      }
       libVlc = null
     } else {
-      try { mediaPlayer?.stop() } catch (_: Throwable) {}
+      try { mediaPlayer?.stop() } catch (_: Throwable) {
+        if (!releasePlayerOnly(removeLayout = true)) return
+      }
       try { mediaPlayer?.detachViews() } catch (_: Throwable) {}
       videoLayout?.let { (it.parent as? ViewGroup)?.removeView(it) }
     }
+    activeIdentity = null
+    activeSource = null
+    owner = Owner.NONE
   }
 
-  private fun releasePlayerOnly(removeLayout: Boolean) {
+  private fun releasePlayerOnly(removeLayout: Boolean): Boolean {
     val player = mediaPlayer
-    mediaPlayer = null
     try { player?.stop() } catch (_: Throwable) {}
     try { player?.detachViews() } catch (_: Throwable) {}
-    try { player?.release() } catch (_: Throwable) {}
+    try { player?.release() } catch (failure: Throwable) {
+      decoderReleaseFailure = failure
+      return false
+    }
+    mediaPlayer = null
+    decoderReleaseFailure = null
     if (removeLayout) {
       videoLayout?.let { (it.parent as? ViewGroup)?.removeView(it) }
       videoLayout = null
     }
+    return true
   }
 
   private fun runOnMain(block: () -> Unit) {

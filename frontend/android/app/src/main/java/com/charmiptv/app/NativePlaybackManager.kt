@@ -34,6 +34,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.rtsp.RtspMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -133,6 +134,7 @@ object NativePlaybackManager {
   private var fullscreenPlayerView: PlayerView? = null
   private var player: ExoPlayer? = null
   private var mutedState = false
+  private var fullscreenResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
   private var listener: Listener? = null
   private var owner: Owner = Owner.NONE
   private var activeSource: PlaybackSource? = null
@@ -173,14 +175,19 @@ object NativePlaybackManager {
   private var videoDecoder: String? = null
   private var audioDecoder: String? = null
   private var codecError: String? = null
+  private var decoderReleaseFailure: Throwable? = null
 
   private val startupTimeout: Runnable = Runnable {
+    if (pendingPrepare != null) {
+      pendingPrepare = null
+      finishWithError("start-timeout")
+      return@Runnable
+    }
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
     if (ensureActiveSurfaceBound(instance, "startup-timeout")) {
       recordDiagnostic("startup-surface-rebound", lastPlaybackError, instance)
-      armStartupTimeout()
-      return@Runnable
+      // Rebinding is not playback success and must not extend the deadline.
     }
     recordDiagnostic("start-timeout", lastPlaybackError, instance)
     // Opaque live URLs can hang on the wrong factory without a parse error.
@@ -264,11 +271,12 @@ object NativePlaybackManager {
     }
   }
   fun setResizeMode(mode: String?) = runOnMain {
-    playerViewFor(owner)?.resizeMode = when (mode) {
+    fullscreenResizeMode = when (mode) {
       "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
       "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
       else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     }
+    fullscreenPlayerView?.resizeMode = fullscreenResizeMode
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?, bufferProfile: String? = null) = runOnMain {
@@ -277,11 +285,16 @@ object NativePlaybackManager {
       publishState("error", "owner-reserved")
       return@runOnMain
     }
-    applyBufferProfile(bufferProfile)
-    val instance = ensurePlayer()
     cancelRecoveryCallbacks()
     val video = playerViewFor(requestedOwner)
     if (video == null) {
+      // Retire the old source before waiting; this pending tune is cancellable
+      // even though it does not yet own a decoder or a Fabric surface.
+      stopInternal(releasePlayer = true)
+      if (decoderReleaseFailure != null) {
+        publishState("error", "release-failed")
+        return@runOnMain
+      }
       // Fabric often mounts the native surface one frame after prepare*. Queue
       // the tune instead of a definitive black+silent surface-unavailable error.
       pendingPrepare = PendingPrepare(
@@ -293,11 +306,18 @@ object NativePlaybackManager {
         bufferProfile,
       )
       publishState("loading", "awaiting-surface")
-      recordDiagnostic("awaiting-surface", lastPlaybackError, instance)
+      markPlaybackStarting("awaiting-surface")
+      recordDiagnostic("awaiting-surface", lastPlaybackError, player)
       armStartupTimeout()
       return@runOnMain
     }
     pendingPrepare = null
+    applyBufferProfile(bufferProfile)
+    val instance = try { ensurePlayer() } catch (failure: Exception) {
+      recordDiagnostic("player-init-failed:${failure.javaClass.simpleName}", null, null)
+      finishWithError("stream-error")
+      return@runOnMain
+    }
 
     // Bind the replacement video target before clearing the previous target.
     // Preview <-> fullscreen is a PlayerView handoff, not a stream failure;
@@ -310,6 +330,7 @@ object NativePlaybackManager {
     }
     applyAudioAttributes(instance, requestedOwner)
     video.player = instance
+    video.resizeMode = if (requestedOwner == Owner.FULLSCREEN) fullscreenResizeMode else AspectRatioFrameLayout.RESIZE_MODE_FIT
     video.visibility = View.VISIBLE
     // Bind the new target first so Media3 never observes a no-surface gap,
     // then detach every inactive target.  `owner` may already be NONE after a
@@ -326,7 +347,12 @@ object NativePlaybackManager {
     recoveryAttempts = 0
     markPlaybackStarting("channel-start")
     publishState("loading", null)
-    startOrRouteMediaSource(instance, baseSource, "channel-start")
+    try {
+      startOrRouteMediaSource(instance, baseSource, "channel-start")
+    } catch (failure: Exception) {
+      recordDiagnostic("source-init-failed:${failure.javaClass.simpleName}", null, instance)
+      finishWithError("stream-error", instance)
+    }
   }
 
   fun provideFreshSource(requestId: Long, uri: String?, headers: Map<String, String>, contentType: String?, failureReason: String?) = runOnMain {
@@ -383,9 +409,9 @@ object NativePlaybackManager {
     else builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(preferredLanguage)
     instance.trackSelectionParameters = builder.build()
   }
-  fun stop(requestedOwner: Owner, releasePlayer: Boolean = false, onStopped: (() -> Unit)? = null) = runOnMain {
-    if (owner != requestedOwner) { onStopped?.invoke(); return@runOnMain }
-    stopInternal(releasePlayer); onStopped?.invoke()
+  fun stop(requestedOwner: Owner, releasePlayer: Boolean = false, onStopped: ((Throwable?) -> Unit)? = null) = runOnMain {
+    if (currentOwner() != requestedOwner && decoderReleaseFailure == null) { onStopped?.invoke(null); return@runOnMain }
+    stopInternal(releasePlayer); onStopped?.invoke(decoderReleaseFailure)
   }
   fun suspendForBackground() = runOnMain { stopInternal(releasePlayer = true) }
   fun releaseAll() = runOnMain {
@@ -396,16 +422,21 @@ object NativePlaybackManager {
     listener = null; activity = null; previewSurface = null; fullscreenSurface = null
     previewPlayerView = null; fullscreenPlayerView = null
   }
-  fun currentOwner(): Owner = owner
+  fun currentOwner(): Owner = pendingPrepare?.requestedOwner ?: owner
+  fun hasReleaseFailure(): Boolean = decoderReleaseFailure != null
 
   private fun publishState(state: String, reason: String? = null) { listener?.onState(state, reason) }
   private fun stopInternal(releasePlayer: Boolean) {
+    val previousOwner = currentOwner()
     pendingPrepare = null
     cancelRecoveryCallbacks()
     val instance = player
-    try { instance?.stop() } catch (_: Throwable) {}
-    try { instance?.clearMediaItems() } catch (_: Throwable) {}
-    owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0
+    var stopFailed = false
+    try { instance?.stop() } catch (_: Throwable) { stopFailed = true }
+    try { instance?.clearMediaItems() } catch (_: Throwable) { stopFailed = true }
+    if (releasePlayer || stopFailed || decoderReleaseFailure != null) releaseDecoder(instance)
+    owner = if (decoderReleaseFailure == null) Owner.NONE else previousOwner
+    activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
     CharmMemoryCoordinator.setPlaybackStarting(false)
@@ -414,20 +445,29 @@ object NativePlaybackManager {
     // targets before returning so a retired preview cannot steal video output
     // or leave a healthy transport stream rendering into a retired host.
     clearAllPlayerViews()
-    if (releasePlayer) {
-      try { instance?.release() } catch (_: Throwable) {}
-      player = null
-    }
+  }
+
+  // Never acknowledge decoder release after a platform exception. Retain the
+  // reference so the coordinator can retry cleanup without starting VLC.
+  private fun releaseDecoder(instance: ExoPlayer?): Boolean = try {
+    instance?.release()
+    if (player === instance) player = null
+    decoderReleaseFailure = null
+    true
+  } catch (failure: Throwable) {
+    decoderReleaseFailure = failure
+    false
   }
 
   private fun ensurePlayer(): ExoPlayer {
+    check(decoderReleaseFailure == null) { "Previous decoder release failed" }
     player?.let { return it }
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
     val lowRam = CharmMemoryCoordinator.budgets().lowRam
     val durations = tivimateBufferDurationsMs(activeBufferProfile, lowRam)
     val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(
       durations[0], durations[1], durations[2], durations[3],
-    ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(true).build()
+    ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(false).build()
     val renderers = DefaultRenderersFactory(context)
       // Prefer the bundled LGPL FFmpeg audio renderer for AC3/E-AC3/DTS/
       // TrueHD rather than repeatedly selecting an OEM decoder that advertises
@@ -619,7 +659,7 @@ object NativePlaybackManager {
       setShutterBackgroundColor(Color.TRANSPARENT)
       setUseArtwork(false)
       setKeepContentOnPlayerReset(true)
-      resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+      resizeMode = if (surfaceOwner == Owner.FULLSCREEN) fullscreenResizeMode else AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.VISIBLE
       setLayerType(View.LAYER_TYPE_NONE, null)
       (videoSurfaceView as? TextureView)?.let { texture ->
@@ -688,8 +728,7 @@ object NativePlaybackManager {
     }
     val video = playerViewFor(owner) ?: throw IllegalStateException("Playback surface is unavailable")
     try { video.player = null } catch (_: Throwable) {}
-    try { instance.release() } catch (_: Throwable) {}
-    player = null
+    check(releaseDecoder(instance)) { "Previous decoder release failed" }
     firstFrameRendered = false
     val rebuilt = ensurePlayer()
     video.player = rebuilt
@@ -776,8 +815,7 @@ object NativePlaybackManager {
     detectedMimeType = knownMimeForSource(routed)
     resolvedUri = redactUriForDiagnostics(routed.uri)
     probeReason = "${probeReason ?: "opaque"};$reason-retry:${next.sourceType}:${redactUriForDiagnostics(next.uri)}"
-    // Fresh recovery budget for the new container/URI guess.
-    recoveryAttempts = 0
+    // Container classification shares the one recovery budget for this tune.
     lastPlaybackError = null
     recordDiagnostic("opaque-type-retry-${next.sourceType}", error, instance)
     return try {
@@ -817,6 +855,12 @@ object NativePlaybackManager {
     return builder.build()
   }
   private fun buildMediaSource(item: MediaItem, source: PlaybackSource): MediaSource {
+    if (Uri.parse(source.uri).scheme.equals("rtsp", ignoreCase = true)) {
+      // RTSP has its own transport and does not use the OkHttp factory.
+      require(source.headers.keys.all { it.equals("User-Agent", ignoreCase = true) }) { "RTSP custom headers are unsupported" }
+      val userAgent = source.headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value ?: DEFAULT_STREAM_USER_AGENT
+      return RtspMediaSource.Factory().setUserAgent(userAgent).createMediaSource(item)
+    }
     val dataSource = createDataSourceFactory(source.headers)
     val liveTsFlags =
       DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
@@ -861,19 +905,20 @@ object NativePlaybackManager {
       properties["Accept"] = "*/*"
     }
     properties.putAll(headers)
-    return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient).setDefaultRequestProperties(properties))
+    val client = CharmHttpClients.mediaClientForHeaders(httpClient, properties)
+    return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(client).setDefaultRequestProperties(properties))
   }
   private fun finishWithError(reason: String, instance: ExoPlayer? = player) {
+    pendingPrepare = null
     cancelRecoveryCallbacks()
     recordDiagnostic("definitive-$reason", lastPlaybackError, instance)
     CharmMemoryCoordinator.setPlaybackStarting(false)
     if (instance != null && player === instance) {
       try { playerViewFor(owner)?.player = null } catch (_: Throwable) {}
-      try { instance.release() } catch (_: Throwable) {}
-      player = null
+      releaseDecoder(instance)
     }
     publishState("error", reason)
-    owner = Owner.NONE
+    if (decoderReleaseFailure == null) owner = Owner.NONE
     activeSource = null
     firstFrameRendered = false
   }
@@ -1040,8 +1085,8 @@ object NativePlaybackManager {
       val parsed = Uri.parse(raw)
       val scheme = parsed.scheme ?: return "<opaque>"
       val host = parsed.host ?: return "$scheme://<opaque>"
-      val last = parsed.lastPathSegment?.take(48)?.takeIf { it.isNotBlank() }
-      if (last == null) "$scheme://$host/…" else "$scheme://$host/…/$last"
+      // Even a final path segment can be a provider password or signed token.
+      "$scheme://$host/…"
     } catch (_: Throwable) {
       "<opaque>"
     }
@@ -1110,8 +1155,7 @@ object NativePlaybackManager {
     val existing = player ?: return
     try { previewPlayerView?.player = null } catch (_: Throwable) {}
     try { fullscreenPlayerView?.player = null } catch (_: Throwable) {}
-    try { existing.release() } catch (_: Throwable) {}
-    player = null
+    releaseDecoder(existing)
   }
 
   /** Small / Medium / Large -> bounded live-TV LoadControl durations. */
@@ -1127,7 +1171,7 @@ object NativePlaybackManager {
 
   private fun armStartupTimeout() {
     main.removeCallbacks(startupTimeout)
-    if (owner == Owner.NONE) return
+    if (owner == Owner.NONE && pendingPrepare == null) return
     val opaqueFirst =
       opaqueRouteCacheKey != null &&
         opaqueRouteIndex == 0 &&

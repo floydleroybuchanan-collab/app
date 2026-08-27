@@ -6,15 +6,22 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFile(join(root, path), "utf8");
 
+test("VLC never silently drops provider cookies or unsupported HTTP headers", async () => {
+  const native = await read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt");
+  assert.match(native, /finishWithError\(identity, "request-headers-unsupported"\)/);
+  assert.ok(native.indexOf('finishWithError(identity, "request-headers-unsupported")') < native.indexOf("val media = Media(core"));
+  assert.doesNotMatch(native, /media\.addOption\(":http-header=|media\.addOption\(":http-cookie=/);
+});
+
 test("automatic mode starts Media3 and serializes one VLC fallback", async () => {
-  const [player, preference, policy, coordinator] = await Promise.all([read("src/components/StreamPlayer.tsx"), read("src/playerEnginePreference.ts"), read("src/core/streamPolicy.ts"), read("src/core/nativePlaybackCoordinator.ts")]);
+  const [player, preference, policy, coordinator] = await Promise.all([read("src/components/StreamPlayer.tsx"), read("src/playerEnginePreference.ts"), read("src/core/streamPolicy.ts"), read("src/core/serializedPlaybackCoordinator.ts")]);
   assert.match(preference, /"auto" \| "media3" \| "vlc"/); assert.match(preference, /cachedPreference: PlayerEnginePreference = "auto"/); assert.match(preference, /gs_player_engine_preference_v3/);
   assert.match(player, /initialEngine\(playerEngine, kind\)/); assert.match(player, /tryAutomaticVlcFallback/);
   assert.match(player, /activateNativePlaybackEngine/); assert.doesNotMatch(player, /stopNativeFullscreen|stopNativeVlcFullscreen|Promise\.allSettled/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
   assert.match(player, /state !== "background"/);
   assert.match(player, /Never stopFullscreenSession/);
   assert.match(player, /role === "fullscreen"/);
-  assert.match(player, /setNativeVlcMuted\(false\)/);
+  assert.match(player, /setNativeVlcMuted\(role === "preview" &&/);
   assert.match(policy, /isNativeMedia3SupportedStreamKind/); assert.match(policy, /isVlcSupportedStreamKind/); assert.match(policy, /return isNativeMedia3SupportedStreamKind\(kind\) \? "media3" : "vlc"/);
   assert.match(coordinator, /let operation: Promise<void> = Promise\.resolve\(\)/); assert.doesNotMatch(coordinator, /Promise\.all|Promise\.allSettled/);
 });

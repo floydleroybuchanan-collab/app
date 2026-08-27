@@ -13,22 +13,28 @@ android {
     }
 
     def ffmpegLibs = file('src/main/jni/ffmpeg/android-libs')
+    def requiredAbis = (findProperty('reactNativeArchitectures') ?: 'armeabi-v7a,arm64-v8a').toString().split(',')
+    def nativeLibsComplete = requiredAbis.every { abi ->
+        ['avcodec', 'avutil', 'swresample'].every { lib ->
+            def archive = new File(ffmpegLibs, "${abi.trim()}/lib${lib}.a")
+            archive.isFile() && archive.length() > 0
+        }
+    }
     def packagesApk = gradle.startParameter.taskNames.any {
         def task = it.toLowerCase()
-        (task.contains('assemble') || task.contains('bundle') || task.contains('package')) &&
-            (task.contains('release') || task.contains('sideload'))
+        task.contains('assemble') || task.contains('bundle') || task.contains('package')
     }
-    if (ffmpegLibs.exists()) {
+    if (nativeLibsComplete) {
         externalNativeBuild {
             cmake {
                 path file('src/main/jni/CMakeLists.txt')
                 version '3.22.1'
             }
         }
-    } else if (System.getenv('CI') == '1' && packagesApk) {
+    } else if (packagesApk) {
         throw new GradleException(
-            "FFmpeg android-libs missing under ffmpeg-audio. " +
-            "Run scripts/build-media3-ffmpeg-audio.sh before packaging an APK in CI."
+            "FFmpeg android-libs missing or incomplete under ffmpeg-audio. " +
+            "Run scripts/build-media3-ffmpeg-audio.sh before packaging an APK or bundle."
         )
     } else {
         logger.warn(

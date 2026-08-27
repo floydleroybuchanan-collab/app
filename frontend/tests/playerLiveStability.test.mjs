@@ -105,8 +105,8 @@ test("Guide preview cannot own playback while fullscreen owns native player", as
 
 test("stale fullscreen native cleanup cannot release a newer Guide preview", async () => {
   const [native, module] = await Promise.all([source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt")]);
-  assert.match(native, /if \(owner != requestedOwner\) \{ onStopped\?\.invoke\(\); return@runOnMain }/);
-  assert.match(module, /if \(NativePlaybackManager\.currentOwner\(\) != requestedOwner\)/);
+  assert.match(native, /if \(currentOwner\(\) != requestedOwner && decoderReleaseFailure == null\) \{ onStopped\?\.invoke\(null\); return@runOnMain }/);
+  assert.match(module, /NativePlaybackManager\.stop\(requestedOwner, releasePlayer\)/);
   assert.match(native, /val video = playerViewFor\(owner\)/);
 });
 

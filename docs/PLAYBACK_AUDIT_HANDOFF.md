@@ -1,5 +1,7 @@
 # CharmIPTV playback audit handoff
 
+> Continuation evidence and remaining limitations are recorded in [PLAYBACK_AUDIT_RESULTS.md](PLAYBACK_AUDIT_RESULTS.md). The original checkpoint history below is preserved; it is not a claim of device validation.
+
 ## Repository state
 
 - Repository: `https://github.com/floydleroybuchanan-collab/app.git`

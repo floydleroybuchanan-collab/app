@@ -10,14 +10,16 @@ on:
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
-  pull_request:
-    paths:
-      - ".github/workflows/build-media3-sideload-now.yml"
-      - "frontend/.media3-sideload-build-trigger"
+      - "frontend/src/**"
+      - "frontend/app/**"
+      - "frontend/android/**"
+      - "frontend/scripts/**"
+      - "frontend/tests/**"
+      - "frontend/package*.json"
+      - "ci/verify-android-apk.py"
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
 
 concurrency:
   group: media3-vlc-sideload-now-${{ github.ref }}
@@ -44,17 +46,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-
-      - name: Publish build run pointer
-        if: github.ref_name == 'agent/manual-vlc-engine'
-        working-directory: .
-        run: |
-          printf '%s\n' "${GITHUB_RUN_ID}" > .github/manual-vlc-sideload-current-run.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/manual-vlc-sideload-current-run.txt
-          git commit -m "ci: record Media3 VLC sideload run ${GITHUB_RUN_ID}" || true
-          git push origin HEAD:agent/manual-vlc-engine
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -110,7 +101,7 @@ jobs:
           set -euo pipefail
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           VLC=frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt
-          COORDINATOR=frontend/src/core/nativePlaybackCoordinator.ts
+          COORDINATOR=frontend/src/core/serializedPlaybackCoordinator.ts
           POLICY=frontend/src/core/streamPolicy.ts
           PREFERENCE=frontend/src/playerEnginePreference.ts
           SETTINGS='frontend/app/(tabs)/settings.tsx'
@@ -170,7 +161,7 @@ jobs:
       - name: Compile sideload Kotlin and Java
         run: |
           chmod +x android/gradlew
-          ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac --no-daemon --max-workers=1 --stacktrace
+          ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac :app:testSideloadUnitTest --no-daemon --max-workers=1 --stacktrace
 
       - name: Build universal sideload APK
         run: ./android/gradlew -p android :app:assembleSideload --no-daemon --max-workers=1 --stacktrace
@@ -189,6 +180,7 @@ jobs:
           grep -Eq 'lib/armeabi-v7a/libvlcjni[^/]*\.so' apk-contents.txt
           grep -Eq 'lib/arm64-v8a/libvlcjni[^/]*\.so' apk-contents.txt
           mkdir -p artifacts
+          python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
           cp "$APK" "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk"
           sha256sum "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
@@ -201,6 +193,7 @@ jobs:
             frontend/artifacts/CharmIPTV-Media3-VLC-Sideload-${{ github.run_number }}.apk
             frontend/artifacts/SHA256SUMS.txt
             frontend/artifacts/BUILD_INFO.txt
+            frontend/artifacts/APK_VERIFICATION*
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
