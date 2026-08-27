@@ -22,6 +22,12 @@ test("opaque HTTP IPTV URLs remain unknown until native Media3 routing", () => {
   assert.equal(media3ContentType(detectStreamKind("https://provider.example/movie.mp4?token=x", null)), "progressive");
 });
 
+test("StreamPlayer ignores progressive confirms on extensionless live URLs", async () => {
+  const player = await source("src/components/StreamPlayer.tsx");
+  assert.match(player, /confirmed === "progressive"/);
+  assert.match(player, /detectStreamKind\(uri, null\) === "unknown"/);
+});
+
 test("opaque sniff helper stays bounded even though live startup no longer opens a second GET", async () => {
   const probe = await source("android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt");
   assert.match(probe, /MAX_SNIFF_BYTES = 4 \* 1024/);
@@ -54,12 +60,18 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /tryNextOpaqueCandidate\(created, error\)/);
   assert.match(manager, /isContainerMismatch/);
   assert.match(manager, /forgetDetectedType\(cacheKey\)/);
+  assert.match(manager, /awaiting-surface/);
+  assert.match(manager, /pendingPrepare/);
+  assert.match(manager, /cachedType == "progressive" && isOpaqueHttpUri/);
+  assert.match(manager, /hint == "progressive" && !opaque/);
   assert.doesNotMatch(manager, /if \(firstFrameRendered \|\| !isContainerMismatch\(error\)\)/);
   const firstFrameStart = manager.indexOf("override fun onRenderedFirstFrame()");
   const firstFrameEnd = manager.indexOf("override fun onPlayerError", firstFrameStart);
   const firstFrameBody = manager.slice(firstFrameStart, firstFrameEnd);
   assert.doesNotMatch(firstFrameBody, /confirmSuccessfulStreamType\(\)/);
   assert.doesNotMatch(module, /OpaqueStreamProbe\.probe|NativeOpaqueStreamProbe\.start/);
+  assert.match(module, /onHostResume\(\)/);
+  assert.match(module, /NativePlaybackManager\.resume\(\)/);
 });
 
 test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback budgets", async () => {

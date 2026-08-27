@@ -154,7 +154,14 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
     })
   }
 
-  override fun onHostResume() = Unit
+  override fun onHostResume() {
+    // Activity pause always stops ExoPlayer. Without a matching resume, Guide
+    // preview and fullscreen stay black+silent until a JS effect happens to
+    // re-call resumeNativePlayback().
+    if (NativePlaybackManager.currentOwner() != NativePlaybackManager.Owner.NONE) {
+      NativePlaybackManager.resume()
+    }
+  }
   override fun onHostPause() { NativePlaybackManager.pause() }
   override fun onHostDestroy() {
     NativePlaybackManager.releaseAll()

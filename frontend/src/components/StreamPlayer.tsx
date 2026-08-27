@@ -150,7 +150,16 @@ export function StreamPlayer({
 
   const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri), [rawUri]);
   const declaredKind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
-  const learnedHint = profile?.confirmedType ?? streamTypeHint;
+  // A wrong Media3 "progressive" confirm on extensionless live IPTV URLs forces
+  // DefaultMediaSourceFactory without live-TS flags → black+silent. Prefer the
+  // playlist hint / URI markers until a non-progressive type is confirmed.
+  const learnedHint = useMemo(() => {
+    const confirmed = profile?.confirmedType;
+    if (confirmed === "progressive" && detectStreamKind(uri, null) === "unknown") {
+      return streamTypeHint;
+    }
+    return confirmed ?? streamTypeHint;
+  }, [profile?.confirmedType, streamTypeHint, uri]);
   const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
   const currentSourceRef = useRef({ uri, headers, contentType });

@@ -143,7 +143,11 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
     })
   }
 
-  override fun onHostResume() = Unit
+  override fun onHostResume() {
+    if (NativeVlcPlaybackManager.currentOwner() != NativeVlcPlaybackManager.Owner.NONE) {
+      NativeVlcPlaybackManager.resume()
+    }
+  }
   override fun onHostPause() { NativeVlcPlaybackManager.pause() }
   override fun onHostDestroy() { NativeVlcPlaybackManager.releaseAll() }
 

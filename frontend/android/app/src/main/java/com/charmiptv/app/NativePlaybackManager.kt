@@ -155,6 +155,16 @@ object NativePlaybackManager {
   private var opaqueRouteIndex = -1
   private var opaqueRouteCacheKey: String? = null
   private var opaqueRouteWasCached = false
+  private var pendingPrepare: PendingPrepare? = null
+
+  private data class PendingPrepare(
+    val requestedOwner: Owner,
+    val channelKey: String,
+    val uri: String,
+    val headers: Map<String, String>,
+    val contentType: String?,
+    val bufferProfile: String?,
+  )
 
   private var detectedMimeType: String? = null
   private var resolvedUri: String? = null
@@ -280,6 +290,13 @@ object NativePlaybackManager {
         recordDiagnostic("surface-attached", lastPlaybackError, instance)
       }
     }
+    // prepare() can race Fabric mount and hit surface-unavailable. Flush any
+    // queued tune now that this owner's PlayerView exists.
+    val pending = pendingPrepare
+    if (pending != null && pending.requestedOwner == surfaceOwner) {
+      pendingPrepare = null
+      prepare(pending.requestedOwner, pending.channelKey, pending.uri, pending.headers, pending.contentType, pending.bufferProfile)
+    }
   }
   fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
     val attached = when (surfaceOwner) {
@@ -315,6 +332,7 @@ object NativePlaybackManager {
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?, bufferProfile: String? = null) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
+      pendingPrepare = null
       publishState("error", "owner-reserved")
       return@runOnMain
     }
@@ -323,12 +341,32 @@ object NativePlaybackManager {
     val instance = ensurePlayer()
     cancelRecoveryCallbacks()
     val video = playerViewFor(requestedOwner)
-    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
+    if (video == null) {
+      // Fabric often mounts the native surface one frame after prepare*. Queue
+      // the tune instead of a definitive black+silent surface-unavailable error.
+      pendingPrepare = PendingPrepare(
+        requestedOwner,
+        channelKey.trim(),
+        uri,
+        LinkedHashMap(headers),
+        contentType,
+        bufferProfile,
+      )
+      publishState("loading", "awaiting-surface")
+      recordDiagnostic("awaiting-surface", lastPlaybackError, instance)
+      return@runOnMain
+    }
+    pendingPrepare = null
 
     // Bind the replacement video target before clearing the previous target.
     // Preview <-> fullscreen is a PlayerView handoff, not a stream failure;
     // this order avoids leaving the decoder with no output Surface.
     owner = requestedOwner
+    // Fullscreen must never inherit Guide preview mute (mutedState volume 0).
+    if (requestedOwner == Owner.FULLSCREEN) {
+      mutedState = false
+      instance.volume = 1f
+    }
     applyAudioAttributes(instance, requestedOwner)
     video.player = instance
     video.visibility = View.VISIBLE
@@ -379,7 +417,12 @@ object NativePlaybackManager {
   }
 
   fun pause() = runOnMain { player?.pause() }
-  fun resume() = runOnMain { if (owner != Owner.NONE) player?.play() }
+  fun resume() = runOnMain {
+    if (owner == Owner.NONE) return@runOnMain
+    val instance = player ?: return@runOnMain
+    instance.playWhenReady = true
+    instance.play()
+  }
   fun setMuted(muted: Boolean) = runOnMain { mutedState = muted; player?.volume = if (muted) 0f else 1f }
   fun selectAudio(groupIndex: Int?, trackIndex: Int?, preferredLanguage: String?) = runOnMain {
     val instance = player ?: return@runOnMain
@@ -407,6 +450,7 @@ object NativePlaybackManager {
   fun suspendForBackground() = runOnMain { stopInternal(releasePlayer = true) }
   fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
   fun releaseAll() = runOnMain {
+    pendingPrepare = null
     stopInternal(releasePlayer = true)
     try { previewPlayerView?.player = null } catch (_: Throwable) {}
     try { fullscreenPlayerView?.player = null } catch (_: Throwable) {}
@@ -417,6 +461,7 @@ object NativePlaybackManager {
 
   private fun publishState(state: String, reason: String? = null) { listener?.onState(state, reason) }
   private fun stopInternal(releasePlayer: Boolean) {
+    pendingPrepare = null
     cancelRecoveryCallbacks()
     val instance = player
     try { instance?.stop() } catch (_: Throwable) {}
@@ -748,10 +793,16 @@ object NativePlaybackManager {
 
     val cacheKey = detectedTypeCacheKey(source)
     readDetectedType(cacheKey)?.let { cachedType ->
-      probeReason = "cache:$cachedType"
-      recordDiagnostic("opaque-cache-hit", lastPlaybackError, instance)
-      startOpaqueCandidate(instance, source, cacheKey, cachedType, "$event-opaque-cache-$cachedType", fromCache = true)
-      return
+      // A wrong progressive confirm on opaque live URLs skips TS flags.
+      if (cachedType == "progressive" && isOpaqueHttpUri(source.uri)) {
+        forgetDetectedType(cacheKey)
+        recordDiagnostic("opaque-cache-invalidated", lastPlaybackError, instance)
+      } else {
+        probeReason = "cache:$cachedType"
+        recordDiagnostic("opaque-cache-hit", lastPlaybackError, instance)
+        startOpaqueCandidate(instance, source, cacheKey, cachedType, "$event-opaque-cache-$cachedType", fromCache = true)
+        return
+      }
     }
 
     probeReason = "direct:transport"
@@ -945,13 +996,18 @@ object NativePlaybackManager {
     val dashUri = Regex("\\.mpd(?:$|[?#])").containsMatchIn(lowerUri) || Regex("[?&](?:format|type|output)=(?:dash|mpd)(?:&|$)").containsMatchIn(lowerUri) || lowerUri.contains("/dash/")
     val transportUri = Regex("\\.(?:ts|m2ts)(?:$|[?#])").containsMatchIn(lowerUri) || lowerUri.contains("mpegts") || lowerUri.contains("mpeg-ts") || Regex("[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)").containsMatchIn(lowerUri)
     val progressiveUri = Regex("\\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)(?:$|[?#])").containsMatchIn(lowerUri)
+    val opaque = isOpaqueHttpUri(uri)
     return when {
       hint == "hls" || hint == "m3u8" || hint == MimeTypes.APPLICATION_M3U8 || hint == "application/x-mpegurl" || hint == "application/vnd.apple.mpegurl" || hlsUri -> "hls"
       hint == "dash" || hint == "mpd" || hint == MimeTypes.APPLICATION_MPD || hint == "application/dash+xml" || dashUri -> "dash"
       hint == "transport" || hint == "ts" || hint == MimeTypes.VIDEO_MP2T || transportUri -> "transport"
-      hint == "progressive" || progressiveUri -> "progressive"
+      // Extensionless live IPTV (Xtream-style) must stay unknown so the opaque
+      // transport→hls→dash→progressive router runs. A stale "progressive"
+      // confirm skips live-TS extractor flags and yields black+silent.
+      progressiveUri -> "progressive"
+      hint == "progressive" && !opaque -> "progressive"
       hint == "unknown" && isHttpOrHttps(uri) -> "unknown"
-      hint.isEmpty() && isOpaqueHttpUri(uri) -> "unknown"
+      opaque || (hint.isEmpty() && isHttpOrHttps(uri)) -> "unknown"
       else -> "progressive"
     }
   }
