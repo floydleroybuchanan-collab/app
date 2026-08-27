@@ -162,7 +162,14 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
       NativePlaybackManager.resume()
     }
   }
-  override fun onHostPause() { NativePlaybackManager.pause() }
+  override fun onHostPause() {
+    // Android TV fires HostPause for transient overlays without leaving the
+    // player. Pausing fullscreen here produced black+silent until an explicit
+    // JS pause. Preview may still pause; fullscreen pause is JS-owned.
+    if (NativePlaybackManager.currentOwner() == NativePlaybackManager.Owner.PREVIEW) {
+      NativePlaybackManager.pause()
+    }
+  }
   override fun onHostDestroy() {
     NativePlaybackManager.releaseAll()
     clearIdentity()

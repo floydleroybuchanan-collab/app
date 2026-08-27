@@ -137,11 +137,6 @@ object NativeVlcPlaybackManager {
       return@runOnMain
     }
     if (owner != surfaceOwner || mediaPlayer == null) return@runOnMain
-    if (!surfaceMeasured(surface)) {
-      // Host is still 0×0. Wait for onSizeChanged → attachSurface again.
-      activeIdentity?.let { listener?.onState(it, "loading", "awaiting-surface") }
-      return@runOnMain
-    }
     if (attachVideoLayout(surfaceOwner)) {
       try { mediaPlayer?.play() } catch (_: Throwable) {}
       if (!playing) {
@@ -260,7 +255,7 @@ object NativeVlcPlaybackManager {
       }
 
       val host = surfaceFor(identity.owner)
-      val attached = host != null && surfaceMeasured(host) && attachVideoLayout(identity.owner)
+      val attached = host != null && attachVideoLayout(identity.owner)
       if (announceLoading) {
         listener?.onState(identity, "loading", if (attached) null else "awaiting-surface")
       }
@@ -500,12 +495,10 @@ object NativeVlcPlaybackManager {
     Owner.NONE -> null
   }
 
-  private fun surfaceMeasured(surface: View): Boolean =
-    surface.isAttachedToWindow && surface.width > 0 && surface.height > 0
-
   private fun attachVideoLayout(surfaceOwner: Owner): Boolean {
     val surface = surfaceFor(surfaceOwner) ?: return false
-    if (!surfaceMeasured(surface)) return false
+    // Match Media3: attach when the host exists. Requiring width/height > 0
+    // blocked play forever on Onn hosts that stay 0×0 until after first frame.
     val context = activity ?: return false
     unclipVideoAncestors(surface)
     val layout = videoLayout ?: VLCVideoLayout(context).also {

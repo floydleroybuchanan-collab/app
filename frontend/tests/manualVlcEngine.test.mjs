@@ -9,8 +9,12 @@ const read = (path) => readFile(join(root, path), "utf8");
 test("TiViMate-class VLC is the default live engine with Media3 still selectable", async () => {
   const [player, preference, policy] = await Promise.all([read("src/components/StreamPlayer.tsx"), read("src/playerEnginePreference.ts"), read("src/core/streamPolicy.ts")]);
   assert.match(preference, /"media3" \| "vlc"/); assert.match(preference, /cachedPreference: PlayerEnginePreference = "vlc"/); assert.match(preference, /gs_player_engine_preference_v2/);
-  assert.match(player, /engine === "vlc"/); assert.match(player, /preferredEngine\(kind\)/);
+  assert.match(player, /playerEngine === "media3"/); assert.match(player, /playerEngine === "vlc"/);
   assert.match(player, /stopNativeFullscreen\(true\)/); assert.match(player, /stopNativeVlcFullscreen\(true\)/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
+  assert.match(player, /state !== "background"/);
+  assert.match(player, /Never stopFullscreenSession/);
+  assert.match(player, /role === "fullscreen"/);
+  assert.match(player, /setNativeVlcMuted\(false\)/);
   assert.match(policy, /isNativeMedia3SupportedStreamKind/); assert.match(policy, /isVlcSupportedStreamKind/);
   assert.match(policy, /return "vlc"/);
 });
@@ -35,8 +39,8 @@ test("LibVLC is native, single-owner, hardware-first, and fully releasable", asy
   assert.match(manager, /pendingPrepare/);
   assert.match(manager, /Fullscreen must never inherit Guide preview mute/);
   assert.match(manager, /mutedState = false/);
-  assert.match(manager, /surfaceMeasured/);
   assert.match(module, /LifecycleEventListener/); assert.match(module, /onHostDestroy\(\).*releaseAll/s);
+  assert.match(module, /HostPause for transient overlays/);
   const surface = await read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt");
   assert.match(surface, /clipChildren = false/);
   assert.match(surface, /Do not call detachSurface\(\) here/);

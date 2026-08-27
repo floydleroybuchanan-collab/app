@@ -103,9 +103,15 @@ jobs:
           # FFmpeg Media3 extension must ship for AC-3/E-AC-3/DTS software decode.
           unzip -l "$APK" | grep -E 'lib/arm64-v8a/libffmpegJNI\.so' >/dev/null
           unzip -l "$APK" | grep -E 'lib/armeabi-v7a/libffmpegJNI\.so' >/dev/null
+          # Default engine is VLC — fail closed if LibVLC natives are missing.
+          unzip -l "$APK" | grep -q 'lib/armeabi-v7a/libvlc.so'
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libvlc.so'
+          unzip -l "$APK" | grep -Eq 'lib/armeabi-v7a/libvlcjni[^/]*\.so'
+          unzip -l "$APK" | grep -Eq 'lib/arm64-v8a/libvlcjni[^/]*\.so'
           mkdir -p android/app/build/outputs/apk/tester
           cp "$APK" "android/app/build/outputs/apk/tester/CharmIPTV-Purple-TV-Universal.apk"
           sha256sum "android/app/build/outputs/apk/tester/CharmIPTV-Purple-TV-Universal.apk" > "android/app/build/outputs/apk/tester/SHA256SUMS.txt"
+          printf 'source_commit=%s\nworkflow=purple-tv-ui\n' "${GITHUB_SHA}" > "android/app/build/outputs/apk/tester/BUILD_INFO.txt"
           cp "$NOTES" "android/app/build/outputs/apk/tester/TESTER_RELEASE_NOTES.md"
 
       - name: Upload purple TV APK

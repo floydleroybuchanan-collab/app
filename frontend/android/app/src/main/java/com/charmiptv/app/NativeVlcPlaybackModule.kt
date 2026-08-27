@@ -148,7 +148,14 @@ class NativeVlcPlaybackModule(private val ctx: ReactApplicationContext) :
       NativeVlcPlaybackManager.resume()
     }
   }
-  override fun onHostPause() { NativeVlcPlaybackManager.pause() }
+  override fun onHostPause() {
+    // Android TV fires HostPause for transient overlays without leaving the
+    // player. Pausing fullscreen here produced black+silent until an explicit
+    // JS pause. Preview may still pause; fullscreen pause is JS-owned.
+    if (NativeVlcPlaybackManager.currentOwner() == NativeVlcPlaybackManager.Owner.PREVIEW) {
+      NativeVlcPlaybackManager.pause()
+    }
+  }
   override fun onHostDestroy() { NativeVlcPlaybackManager.releaseAll() }
 
   override fun invalidate() {

@@ -17,7 +17,6 @@ import {
   setNativePlaybackPauseHandler,
   setNativePlaybackReleaseHandler,
   setSessionPhase,
-  stopFullscreenSession,
   stopPreviewSession,
   subscribePlaybackOwnership,
   type SessionFailReason,
@@ -140,8 +139,18 @@ export function StreamPlayer({
   const profile = useChannelPlaybackProfile(currentChannelKey);
   useSyncExternalStore(subscribePlaybackOwnership, getPlaybackOwnershipRevision, getPlaybackOwnershipRevision);
   const previewAllowed = role !== "preview" || isPreviewPlaybackAllowed();
-  const [appActive, setAppActive] = useState(() => AppState.currentState !== "background" && AppState.currentState !== "inactive");
-  const playbackFocused = isFocused && appActive && previewAllowed;
+  // Android TV fires AppState "inactive" for overlays / focus blips without
+  // leaving the player. Treating inactive as dead tore down both Media3 and
+  // VLC (unmount surface + stopFullscreen) → permanent black+silent.
+  const [appActive, setAppActive] = useState(() => AppState.currentState !== "background");
+  const appInForeground = appActive;
+  // Preview still requires Guide focus. Fullscreen must keep the decoder host
+  // mounted while the player route owns the channel — do not destroy on
+  // transient isFocused=false flickers once a session has started.
+  const playbackFocused =
+    role === "fullscreen"
+      ? appInForeground && previewAllowed
+      : isFocused && appInForeground && previewAllowed;
   const generationRef = useRef(0);
   const tracksRef = useRef<{ audio: NativePlaybackTrack[]; text: NativePlaybackTrack[] }>({ audio: [], text: [] });
   const onStatusRef = useRef(onStatus);
@@ -167,11 +176,11 @@ export function StreamPlayer({
     return profile?.confirmedType ?? streamTypeHint;
   }, [profile?.confirmedType, streamTypeHint, uri]);
   const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);
-  // Settings force wins. Default preference is VLC (TiViMate-class live). When
-  // preference is Media3, still route opaque/live kinds through preferredEngine
-  // so Xtream `/live/.../id` does not stay on the Media3 black path.
+  // Settings is an explicit force. "preferredEngine(kind)" is only the auto
+  // path when we add a third preference later — today Media3/VLC both force.
   const activeEngine = useMemo(() => {
     if (playerEngine === "vlc") return "vlc";
+    if (playerEngine === "media3") return "media3";
     return preferredEngine(kind);
   }, [kind, playerEngine]);
   const engine = activeEngine;
@@ -184,7 +193,7 @@ export function StreamPlayer({
   }, [currentChannelKey, declaredKind]);
 
   useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => setAppActive(state !== "background" && state !== "inactive"));
+    const sub = AppState.addEventListener("change", (state) => setAppActive(state !== "background"));
     return () => sub.remove();
   }, []);
 
@@ -342,7 +351,12 @@ export function StreamPlayer({
     if (!playbackFocused || !uri || !engineAvailable) {
       generationRef.current = 0;
       if (role === "preview") void stopPreviewSession("superseded");
-      else if (!appActive) void stopFullscreenSession();
+      // Fullscreen: background → pause only. Never stopFullscreenSession() from
+      // AppState here — that destroyed the only decoder host on Onn inactive blips.
+      else if (!appInForeground) {
+        pauseNativePlayback();
+        pauseNativeVlcPlayback();
+      }
       if (playbackFocused && uri && !engineAvailable) onStatusRef.current("error", "stream-error");
       return;
     }
@@ -382,22 +396,32 @@ export function StreamPlayer({
       if (generationRef.current === generation) generationRef.current = 0;
     };
   }, [
-    appActive,
+    appInForeground,
     bufferProfile,
     contentType,
     currentChannelKey,
     headers,
     kind,
     playbackFocused,
-    engine,    role,
+    engine,
+    role,
     uri,
     vlcPrefs.audioOutput,
     vlcPrefs.hardwareDecode,
   ]);
 
   useEffect(() => {
-    if (engine === "vlc") setNativeVlcMuted(muted); else setNativePlaybackMuted(muted);
-  }, [muted, engine]);
+    // Preview mute is process-global on the native managers. Never let a
+    // background Guide preview remute an active fullscreen session.
+    if (role === "fullscreen") {
+      if (engine === "vlc") setNativeVlcMuted(false);
+      else setNativePlaybackMuted(false);
+      return;
+    }
+    if (!playbackFocused) return;
+    if (engine === "vlc") setNativeVlcMuted(muted);
+    else setNativePlaybackMuted(muted);
+  }, [muted, engine, role, playbackFocused]);
 
   useEffect(() => {
     if (engine === "vlc") {
@@ -425,7 +449,11 @@ export function StreamPlayer({
     else selectNativeSubtitle(selected, null);
   }, [engine, textTrack]);
 
-  if (!playbackFocused || !uri) return null;
+  // Fullscreen must keep the native surface mounted whenever a URI exists.
+  // Returning null here previously destroyed TextureView mid-tune on focus
+  // flickers → black+silent with no error UI on both engines.
+  if (!uri) return null;
+  if (role === "preview" && !playbackFocused) return null;
   if (Platform.OS !== "android") return <View pointerEvents="none" collapsable={false} style={style} />;
   if (engine === "vlc") {
     return nativeVlcPlaybackAvailable()
