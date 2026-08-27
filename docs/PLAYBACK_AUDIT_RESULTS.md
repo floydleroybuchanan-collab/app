@@ -81,9 +81,41 @@ The scanner is a structural check, not exhaustive runtime verification; backend/
 - Whole-repository scan: 0 candidate-critical findings; both main notes manually reviewed above.
 - `git diff --check`: passed. All 158 workflow YAML files parsed successfully.
 - Local Java 17 / SDK-build-tools 36 / NDK 27.1.12297006: Kotlin + Java compilation and `:app:testSideloadUnitTest` passed; the two MockWebServer tests passed. Gradle still reports upstream deprecations/annotation-processor warnings; no compiler errors were suppressed.
-- Windows Git Bash could not fork, so the FFmpeg build and final APK are assigned to the repository's Linux CI rather than pretending missing local native libraries are sufficient.
-- The new `ci/verify-android-apk.py` was smoke-tested on the checkpoint APK: package/version, nondebuggable TV manifest, signing, 16 KiB ZIP alignment, both ARM ABI libraries, required Media3/RTSP/FFmpeg/VLC classes and checksum passed. **This is not yet verification of the revised candidate artifact.**
-- **Revised candidate Linux FFmpeg/APK build and final artifact verification: pending in this source commit.** The final evidence section will be updated after the build completes.
+- Negative packaging check: local `:app:assembleSideload --dry-run` with absent FFmpeg archives failed at configuration with the required missing-library error. This expected failure confirms the packaging guard; it is not counted as a successful APK build.
+- Windows Git Bash could not fork, so the pinned FFmpeg build and final APK were built successfully in the repository's Linux CI. No generated dependencies were patched to bypass that local limitation.
+- Linux Kotlin/Java/JVM compilation passed in 4m 39s; the actual `:app:assembleSideload` passed in 9m 27s. The pinned FFmpeg source commit appears in the successful build log, and both resulting ARM JNI libraries are present in the APK.
+- `ci/verify-android-apk.py` passed on the revised APK in CI and again after authenticated local decryption. Both reports agree on package/version, nondebuggable TV manifest, signing, 16 KiB ZIP alignment, both ARM ABI library sets, required Media3/RTSP/FFmpeg/VLC classes, byte count and checksum.
+- An additional local ELF inspection found no ARM64 load segment below 16 KiB alignment. FFmpeg JNI exports and AAC/AC-3/E-AC-3/DTS (`dca`)/TrueHD/MLP/MP3/Opus/Vorbis/FLAC/ALAC codec names are present in both libraries. Presence is packaging evidence, not a device decoding test.
+
+## Verified build and artifact evidence
+
+The APK was built from **`881ce7f48ce67375c23c540a9b500ce6a8c67268`**. The final follow-up commit changes audit documentation only; it does not change the APK's source. All five workflows for this APK source completed successfully:
+
+| Check | Successful run |
+| --- | --- |
+| Pinned FFmpeg, native compilation/JVM tests, sideload assembly, APK verification and encrypted upload | [33126127406](https://github.com/floydleroybuchanan-collab/app/actions/runs/33126127406) |
+| Native Compile — push | [33126127424](https://github.com/floydleroybuchanan-collab/app/actions/runs/33126127424) |
+| Native Compile — PR | [33126128962](https://github.com/floydleroybuchanan-collab/app/actions/runs/33126128962) |
+| Frontend CI | [33126128958](https://github.com/floydleroybuchanan-collab/app/actions/runs/33126128958) |
+| RAM/EPG validation | [33126128960](https://github.com/floydleroybuchanan-collab/app/actions/runs/33126128960) |
+
+| APK property | Verified result |
+| --- | --- |
+| File | `CharmIPTV-Media3-VLC-Sideload-125.apk` |
+| Bytes | `146283455` |
+| SHA-256 | `8fe6ba50a21358e3d8c1b8bc4705a5ef0e6a30d22df56f92c9e14d313f101b14` |
+| Application ID | `com.charmiptv.app.purple.next.sideload` |
+| Version | `2.1.0-rc.5-sideload`, code `8` |
+| Android levels | Minimum `26`, target/compile `36` |
+| Architectures | `armeabi-v7a`, `arm64-v8a`; 25 native libraries per ABI |
+| Manifest | TV launcher, Internet permission, nondebuggable application, embedded JS/Hermes bundle |
+| Signature | APK Signature Scheme v2, one RSA-2048 Android Debug signer; same certificate as the checkpoint sideload APK |
+| Signer certificate SHA-256 | `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` |
+| Installation / provider playback | **Not tested on a device** |
+
+GitHub artifact `9668813695`, `CharmIPTV-Media3-VLC-Sideload-Encrypted-125`, contains only ciphertext and its envelope JSON. Its downloaded archive SHA-256 matches GitHub's digest: `5a26141868572bd65587fa51661c45d6f589386c24ca816cd54405c1c12afe7f`. Decryption authenticated successfully. The embedded `BUILD_INFO.txt` matches source `881ce7f` and run `33126127406`; the APK checksum matches both the embedded checksum file and the independent local verification.
+
+The decrypted APK and both verification reports are saved on the owner's machine under `C:\Users\floyd\charm-audit-artifacts\release-881ce7f\verified\`. CI logs are retained separately beside that directory. This is a test candidate pending confirmation of the hidden provider source values and target-device playback, not a production-signed or device-validated release.
 
 ## Remaining limitations and device checklist
 
@@ -100,7 +132,7 @@ Primary API references consulted: [Media3 formats](https://developer.android.com
 
 The repository Secrets API reports `M3U_URL` and `EPG_URL`, both last updated August 19, 2026. No Actions variables exist. These names match the README and native Android source wiring. Cloudflare credentials were updated August 25 but are used for metadata deployments/refreshes, not direct Android media playback. The audited sideload workflow now reads only the two source secrets, fails if missing and disables dotenv loading; it cannot silently select an old `EXPO_PUBLIC_*_URL` variable or local dotenv source.
 
-GitHub does not return stored secret values through its Secrets UI/API. Their correctness against the owner's intended current playlist/EPG remains **unconfirmed pending the owner's reply**; existence and names alone do not prove the stored feeds are current. No secrets were changed or printed by this audit.
+GitHub does not return stored secret values through its Secrets UI/API. Their correctness against the owner's intended current playlist/EPG remains **unconfirmed pending the owner's reply**; existence and names alone do not prove the stored feeds are current. The metadata was checked again after the APK completed and the two August 19 timestamps were unchanged. No secrets were changed or printed by this audit. If the owner replaces either value, rebuild the APK because these source settings are embedded at build time.
 
 ## Encrypted artifact retrieval
 
@@ -112,7 +144,7 @@ The corresponding private key is stored only at `C:\Users\floyd\charm-audit-arti
 node ci/protect-sideload-artifact.mjs decrypt <private-key.pem> <sideload.zip.enc> <sideload-private.zip>
 ```
 
-Extract the decrypted ZIP to obtain the APK, checksum, build provenance and verification reports. The agent will supply the decrypted local APK after the final build is verified.
+Extract the decrypted ZIP to obtain the APK, checksum, build provenance and verification reports. The verified local APK is `C:\Users\floyd\charm-audit-artifacts\release-881ce7f\verified\CharmIPTV-Media3-VLC-Sideload-125.apk`. Keep the decrypted files private.
 
 ## Complete changed-path inventory
 
@@ -124,7 +156,11 @@ Extract the decrypted ZIP to obtain the APK, checksum, build provenance and veri
 | `.github/workflows/android-native-ci.yml` | — | M |
 | `.github/workflows/build-media3-sideload-now.yml` | M | M |
 | `.github/workflows/ram-epg-test.yml` | — | M |
+| `.gitignore` | — | M |
+| `ci/protect-sideload-artifact.mjs` | — | A |
+| `ci/sideload-artifact-public.pem` | — | A |
 | `ci/verify-android-apk.py` | — | A |
+| `docs/GITHUB_ACTIONS.md` | — | M |
 | `docs/PLAYBACK_AUDIT_HANDOFF.md` | A | M |
 | `docs/PLAYBACK_AUDIT_RESULTS.md` | — | A |
 | `docs/PLAYBACK_WORKFLOW_AUDIT.md` | — | A |
@@ -170,3 +206,4 @@ Extract the decrypted ZIP to obtain the APK, checksum, build provenance and veri
 | `frontend/tests/playerLiveStability.test.mjs` | M | M |
 | `frontend/tests/playerSettingsHotApply.test.mjs` | M | M |
 | `frontend/tests/quickActionsEpgOwnership.test.mjs` | M | — |
+| `frontend/tests/sideloadArtifact.test.mjs` | — | A |
