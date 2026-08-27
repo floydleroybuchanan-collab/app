@@ -100,7 +100,7 @@ jobs:
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
-          grep -q 'probeReason = "direct:transport"' "$PLAYER"
+          grep -q 'OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L' "$PLAYER"
           ! grep -q 'NativeOpaqueStreamProbe.start' "$PLAYER"
           grep -q 'OPAQUE_TYPE_PREFS = "charm_media3_stream_types"' "$PLAYER"
           grep -q 'main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)' "$PLAYER"

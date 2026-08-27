@@ -150,15 +150,20 @@ export function StreamPlayer({
 
   const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri), [rawUri]);
   const declaredKind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
-  // A wrong Media3 "progressive" confirm on extensionless live IPTV URLs forces
-  // DefaultMediaSourceFactory without live-TS flags → black+silent. Prefer the
-  // playlist hint / URI markers until a non-progressive type is confirmed.
+  // Extensionless live IPTV must not lock Media3 to a prior confirm. A wrong
+  // progressive/hls/dash/transport confirm skips or stalls the opaque router →
+  // black+silent. Prefer playlist hint only; native owns classification.
   const learnedHint = useMemo(() => {
-    const confirmed = profile?.confirmedType;
-    if (confirmed === "progressive" && detectStreamKind(uri, null) === "unknown") {
-      return streamTypeHint;
+    const uriKind = detectStreamKind(uri, null);
+    if (uriKind === "unknown") {
+      const hint = String(streamTypeHint || "").trim().toLowerCase();
+      // Ignore progressive confirms on extensionless live URLs (no live-TS flags).
+      if (!hint || hint === "unknown" || hint === "progressive" || profile?.confirmedType === "progressive") {
+        return "unknown";
+      }
+      return hint;
     }
-    return confirmed ?? streamTypeHint;
+    return profile?.confirmedType ?? streamTypeHint;
   }, [profile?.confirmedType, streamTypeHint, uri]);
   const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
@@ -205,6 +210,8 @@ export function StreamPlayer({
             : "stream-error";
       setSessionPhase(role, generation, "failed", reason);
       if (role === "fullscreen") setNativePlaybackStarting(false);
+      // Drop a wrong Media3 confirm so the next tune re-enters opaque routing.
+      invalidateConfirmedStreamType(currentChannelKey);
       onStatusRef.current("error", reason);
     }
   }), [currentChannelKey, owner, playerEngine, role]);

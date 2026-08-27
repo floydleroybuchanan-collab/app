@@ -109,6 +109,10 @@ object NativePlaybackManager {
   private const val RECONNECT_STALL_MS = 50_000L
   private const val WATCHDOG_POLL_MS = 3_000L
   private const val START_TIMEOUT_MS = 60_000L
+  // First opaque container guess often hangs without a parse error on Xtream
+  // /live/.../id URLs. Rotate sooner than the full start budget so HLS/DASH
+  // candidates still get airtime inside one tune.
+  private const val OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L
   private const val SOURCE_REFRESH_TIMEOUT_MS = 15_000L
   private const val OPAQUE_CONFIRM_MS = 5_000L
   private const val SILENT_AUDIO_CHECK_MS = 4_000L
@@ -824,7 +828,11 @@ object NativePlaybackManager {
   }
 
   private fun startOrRouteMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
-    if (source.sourceType != "unknown" || !isHttpOrHttps(source.uri)) {
+    val opaqueUri = isOpaqueHttpUri(source.uri)
+    // Extensionless live IPTV must always stay on the opaque candidate ladder.
+    // A wrong locked hls/dash/transport hint used to skip rotation and hang
+    // black for the full start timeout (TiViMate-class panels still deliver).
+    if (!opaqueUri && (source.sourceType != "unknown" || !isHttpOrHttps(source.uri))) {
       resetOpaqueRoutingState()
       val routed = if (source.sourceType == "unknown") source.copy(sourceType = "progressive") else source
       activeSource = routed
@@ -832,25 +840,35 @@ object NativePlaybackManager {
       rebuildMediaSource(instance, routed, event)
       return
     }
-
-    val cacheKey = detectedTypeCacheKey(source)
-    readDetectedType(cacheKey)?.let { cachedType ->
-      // A wrong progressive confirm on opaque live URLs skips TS flags.
-      if (cachedType == "progressive" && isOpaqueHttpUri(source.uri)) {
-        forgetDetectedType(cacheKey)
-        recordDiagnostic("opaque-cache-invalidated", lastPlaybackError, instance)
-      } else {
-        probeReason = "cache:$cachedType"
-        recordDiagnostic("opaque-cache-hit", lastPlaybackError, instance)
-        startOpaqueCandidate(instance, source, cacheKey, cachedType, "$event-opaque-cache-$cachedType", fromCache = true)
-        return
-      }
+    if (!isHttpOrHttps(source.uri)) {
+      resetOpaqueRoutingState()
+      val routed = source.copy(sourceType = if (source.sourceType == "unknown") "progressive" else source.sourceType)
+      activeSource = routed
+      seedKnownContainerMime(routed)
+      rebuildMediaSource(instance, routed, event)
+      return
     }
 
-    probeReason = "direct:transport"
+    val cacheKey = detectedTypeCacheKey(source)
+    var cachedType = readDetectedType(cacheKey)
+    // Any wrong confirm on opaque live URLs can skip the ladder; progressive is
+    // the worst (no live-TS flags), but stale hls/dash/transport also hang.
+    if (opaqueUri && cachedType != null && cachedType == "progressive") {
+      forgetDetectedType(cacheKey)
+      cachedType = null
+      recordDiagnostic("opaque-cache-invalidated", lastPlaybackError, instance)
+    }
+
+    val firstType = when {
+      cachedType != null && isPersistableDetectedType(cachedType) -> cachedType
+      isPersistableDetectedType(source.sourceType) -> source.sourceType
+      else -> "transport"
+    }
+    val fromCache = cachedType != null && firstType == cachedType
+    probeReason = if (fromCache) "cache:$firstType" else "direct:$firstType"
     resolvedUri = redactUriForDiagnostics(source.uri)
-    recordDiagnostic("opaque-direct-start", lastPlaybackError, instance)
-    startOpaqueCandidate(instance, source, cacheKey, "transport", "$event-opaque-transport", fromCache = false)
+    recordDiagnostic(if (fromCache) "opaque-cache-hit" else "opaque-direct-start", lastPlaybackError, instance)
+    startOpaqueCandidate(instance, source, cacheKey, firstType, "$event-opaque-$firstType", fromCache = fromCache)
   }
 
   private fun startOpaqueCandidate(instance: ExoPlayer, source: PlaybackSource, cacheKey: String, firstType: String, event: String, fromCache: Boolean) {
@@ -1256,7 +1274,13 @@ object NativePlaybackManager {
 
   private fun armStartupTimeout() {
     main.removeCallbacks(startupTimeout)
-    if (owner != Owner.NONE) main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+    if (owner == Owner.NONE) return
+    val opaqueFirst =
+      opaqueRouteCacheKey != null &&
+        opaqueRouteIndex == 0 &&
+        opaqueRouteCandidates.size > 1
+    val delayMs = if (opaqueFirst) OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS else START_TIMEOUT_MS
+    main.postDelayed(startupTimeout, delayMs)
   }
   private fun publishTracks(tracks: Tracks) {
     val audio = ArrayList<AudioTrackInfo>()

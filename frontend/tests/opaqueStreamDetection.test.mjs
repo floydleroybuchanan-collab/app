@@ -24,8 +24,9 @@ test("opaque HTTP IPTV URLs remain unknown until native Media3 routing", () => {
 
 test("StreamPlayer ignores progressive confirms on extensionless live URLs", async () => {
   const player = await source("src/components/StreamPlayer.tsx");
-  assert.match(player, /confirmed === "progressive"/);
-  assert.match(player, /detectStreamKind\(uri, null\) === "unknown"/);
+  assert.match(player, /confirmedType === "progressive"/);
+  assert.match(player, /detectStreamKind\(uri, null\)/);
+  assert.match(player, /uriKind === "unknown"/);
 });
 
 test("opaque sniff helper stays bounded even though live startup no longer opens a second GET", async () => {
@@ -49,8 +50,9 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /OPAQUE_PROBE_CACHE_SIZE = 256/);
   assert.match(manager, /OPAQUE_TYPE_PREFS = "charm_media3_stream_types"/);
   assert.match(manager, /OPAQUE_LIVE_CANDIDATES = listOf\("transport", "hls", "dash", "progressive"\)/);
-  assert.match(manager, /probeReason = "direct:transport"/);
-  assert.match(manager, /startOpaqueCandidate\(instance, source, cacheKey, "transport"/);
+  assert.match(manager, /OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L/);
+  assert.match(manager, /probeReason = if \(fromCache\) "cache:\$firstType" else "direct:\$firstType"/);
+  assert.match(manager, /startOpaqueCandidate\(instance, source, cacheKey, firstType/);
   assert.match(manager, /detectedTypeCacheKey\(source\)/);
   assert.match(manager, /"channel:\$it"/);
   assert.match(manager, /getSharedPreferences\(OPAQUE_TYPE_PREFS/);
@@ -68,7 +70,8 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /silentAudioCheck/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);
-  assert.match(manager, /cachedType == "progressive" && isOpaqueHttpUri/);
+  assert.match(manager, /opaqueUri && cachedType != null && cachedType == "progressive"/);
+  assert.match(manager, /isOpaqueHttpUri\(source\.uri\)/);
   assert.match(manager, /hint == "progressive" && !opaque/);
   assert.match(manager, /"progressive" -> \{/);
   assert.match(manager, /opaqueRouteCacheKey != null \|\| isOpaqueHttpUri\(source\.uri\)/);
@@ -87,7 +90,7 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"),
   ]);
-  assert.match(manager, /if \(source\.sourceType != "unknown" \|\| !isHttpOrHttps\(source\.uri\)\)/);
+  assert.match(manager, /if \(!opaqueUri && \(source\.sourceType != "unknown" \|\| !isHttpOrHttps\(source\.uri\)\)\)/);
   assert.match(manager, /HlsMediaSource\.Factory/);
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(clients, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
@@ -97,6 +100,7 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
   assert.match(clients, /readTimeout\(0, TimeUnit.SECONDS\)/);
   assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
+  assert.match(manager, /OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L/);
 });
 
 test("playback diagnostics capture container, codecs, resolution and decoders without changing recovery budgets", async () => {
