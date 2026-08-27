@@ -31,8 +31,10 @@ jobs:
           grep -q 'fun tivimateBufferDurationsMs' "$mgr"
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$mgr"
           grep -q 'START_TIMEOUT_MS = 60_000L' "$mgr"
-          grep -q 'connectTimeout(20, TimeUnit.SECONDS)' "$mgr"
+          grep -q 'connectTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'writeTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'CharmHttpClients.mediaClient()' "$mgr"
           ! grep -q 'HARD_STALL_RECOVERY_MS\|HUNG_BUFFER_REPREPARE_MS\|STABLE_REARM_MS\|stableSinceMs\|MIN_BUFFER_MS_LOW_RAM' "$mgr"
           python3 - <<'PY'
           from pathlib import Path

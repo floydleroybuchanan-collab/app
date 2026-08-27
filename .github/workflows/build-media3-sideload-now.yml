@@ -127,9 +127,10 @@ jobs:
           grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
-          grep -q 'connectTimeout(20, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'connectTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
-          grep -q 'writeTimeout(0, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'writeTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'CharmHttpClients.mediaClient()' "$PLAYER"
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
           grep -q 'START_TIMEOUT_MS = 60_000L' "$PLAYER"
           grep -q 'OPAQUE_CONFIRM_MS = 5_000L' "$PLAYER"

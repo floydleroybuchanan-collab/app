@@ -10,10 +10,14 @@ from pathlib import Path
 import sys
 
 mgr = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")
+clients = Path("frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt")
 if not mgr.exists():
     raise SystemExit(f"Missing playback manager: {mgr}")
+if not clients.exists():
+    raise SystemExit(f"Missing shared HTTP clients: {clients}")
 
 text = mgr.read_text(encoding="utf-8")
+client_text = clients.read_text(encoding="utf-8")
 
 required = [
     "fun prepare(requestedOwner: Owner",
@@ -21,12 +25,20 @@ required = [
     "RECONNECT_STALL_MS = 50_000L",
     "START_TIMEOUT_MS = 60_000L",
     "fun tivimateBufferDurationsMs",
-    "readTimeout(0, TimeUnit.SECONDS)",
-    "connectTimeout(20, TimeUnit.SECONDS)",
+    "CharmHttpClients.mediaClient()",
 ]
 missing = [token for token in required if token not in text]
 if missing:
     raise SystemExit(f"TiViMate Media3 surface/handoff contract incomplete; missing: {missing}")
+
+http_required = [
+    "readTimeout(0, TimeUnit.SECONDS)",
+    "connectTimeout(20, TimeUnit.SECONDS)",
+    "writeTimeout(0, TimeUnit.SECONDS)",
+]
+http_missing = [token for token in http_required if token not in client_text]
+if http_missing:
+    raise SystemExit(f"CharmHttpClients media contract incomplete; missing: {http_missing}")
 
 removed = [
     "HUNG_BUFFER_REPREPARE_MS",
