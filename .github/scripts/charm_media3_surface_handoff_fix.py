@@ -1,260 +1,52 @@
+"""Validate (or no-op) Media3 surface ownership against the TiViMate player.
+
+Historical one-shot patches expected an older prepare()/PlayerView block that
+no longer exists after the TiViMate realignment. The live code already binds
+the replacement target before clearInactivePlayerView(), so this script now
+succeeds when that contract is present instead of failing Actions with red X's.
+"""
+
 from pathlib import Path
-import re
-
-
-def replace_once(path: Path, old: str, new: str) -> None:
-    text = path.read_text()
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit(f"Expected one literal match in {path}, found {count}: {old[:120]!r}")
-    path.write_text(text.replace(old, new, 1))
-
-
-def sub_once(path: Path, pattern: str, replacement: str, flags: int = 0) -> None:
-    text = path.read_text()
-    updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
-    if count != 1:
-        raise SystemExit(f"Expected one regex match in {path}, found {count}: {pattern[:140]!r}")
-    path.write_text(updated)
-
+import sys
 
 mgr = Path("frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")
-text = mgr.read_text()
-if "private var boundPlayerView: PlayerView? = null" in text:
-    raise SystemExit("Surface target ownership fix is already present; refusing to apply twice")
+if not mgr.exists():
+    raise SystemExit(f"Missing playback manager: {mgr}")
 
-replace_once(
-    mgr,
-    "  private var previewPlayerView: PlayerView? = null\n  private var fullscreenPlayerView: PlayerView? = null\n  private var player: ExoPlayer? = null",
-    "  private var previewPlayerView: PlayerView? = null\n  private var fullscreenPlayerView: PlayerView? = null\n  // The singleton ExoPlayer must have exactly one active PlayerView target.\n  // Preview/fullscreen hosts can overlap briefly under Fabric, so host ownership\n  // and actual Media3 video-target ownership are tracked separately.\n  private var boundPlayerView: PlayerView? = null\n  private var player: ExoPlayer? = null",
-)
+text = mgr.read_text(encoding="utf-8")
 
-sub_once(
-    mgr,
-    r"  fun attachSurface\(surfaceOwner: Owner, surface: FrameLayout\) = runOnMain \{.*?\n  fun setResizeMode",
-    '''  fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
-    when (surfaceOwner) {
-      Owner.PREVIEW -> previewSurface = surface
-      Owner.FULLSCREEN -> fullscreenSurface = surface
-      Owner.NONE -> return@runOnMain
-    }
-    val video = ensurePlayerViewIn(surfaceOwner, surface)
-    if (owner == surfaceOwner) {
-      val instance = player
-      if (instance == null) {
-        video.visibility = View.GONE
-      } else {
-        bindPlayerView(instance, video, "surface-attached")
-        if (activeSource != null) instance.playWhenReady = true
-      }
-    }
-  }
-  fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
-    val attached = when (surfaceOwner) {
-      Owner.PREVIEW -> previewSurface
-      Owner.FULLSCREEN -> fullscreenSurface
-      Owner.NONE -> null
-    }
-    // A stale host is never allowed to pause or detach the replacement host.
-    if (attached !== surface) return@runOnMain
-    val video = playerViewFor(surfaceOwner)
-    val instance = player
-    if (owner == surfaceOwner && instance != null) {
-      instance.playWhenReady = false
-      unbindPlayerView(instance, video)
-      recordDiagnostic("surface-detached", lastPlaybackError, instance)
-      publishState("loading", "surface-detached")
-    } else {
-      unbindPlayerView(instance, video)
-    }
-    when (surfaceOwner) {
-      Owner.PREVIEW -> { previewSurface = null; previewPlayerView = null }
-      Owner.FULLSCREEN -> { fullscreenSurface = null; fullscreenPlayerView = null }
-      Owner.NONE -> Unit
-    }
-  }
-  fun setResizeMode''',
-    re.S,
-)
-
-sub_once(
-    mgr,
-    r"    val previousOwner = owner\n    owner = requestedOwner\n    if \(previousOwner != Owner\.NONE && previousOwner != requestedOwner\) \{\n      playerViewFor\(previousOwner\)\?\.let \{ it\.player = null; it\.visibility = View\.GONE \}\n    \}",
-    "    owner = requestedOwner",
-)
-
-replace_once(
-    mgr,
-    '''    val video = playerViewFor(requestedOwner)
-    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
-    video.player = instance
-    video.visibility = View.VISIBLE
-    publishState("loading", null)''',
-    '''    val video = playerViewFor(requestedOwner)
-    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
-    if (!bindPlayerView(instance, video, "channel-start")) {
-      finishWithError("surface-unavailable", instance)
-      return@runOnMain
-    }
-    publishState("loading", null)''',
-)
-
-sub_once(
-    mgr,
-    r"  private fun stopInternal\(releasePlayer: Boolean\) \{.*?\n  \}\n\n  private fun ensurePlayer",
-    '''  private fun stopInternal(releasePlayer: Boolean) {
-    cancelRecoveryCallbacks()
-    val instance = player
-    val video = playerViewFor(owner)
-    try { instance?.stop() } catch (_: Throwable) {}
-    try { instance?.clearMediaItems() } catch (_: Throwable) {}
-
-    // Reusing ExoPlayer is fine; reusing its old video target is not. Preview
-    // must relinquish the PlayerView even when releasePlayer=false, otherwise a
-    // later fullscreen/preview tune can leave two PlayerViews competing for one
-    // decoder output and produce audio with a black visible surface.
-    unbindPlayerView(instance, video)
-
-    owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0; stableSinceMs = 0L
-    resetBufferingWatchdogState()
-    resetMediaDiagnostics()
-    resetOpaqueRoutingState()
-    CharmMemoryCoordinator.setPlaybackStarting(false)
-    if (releasePlayer) {
-      try { instance?.release() } catch (_: Throwable) {}
-      player = null
-    }
-  }
-
-  private fun ensurePlayer''',
-    re.S,
-)
-
-sub_once(
-    mgr,
-    r"  private fun playerViewFor\(target: Owner\): PlayerView\? = when \(target\) \{.*?\n  private fun ensurePlayerViewIn",
-    '''  private fun playerViewFor(target: Owner): PlayerView? = when (target) {
-    Owner.PREVIEW -> previewPlayerView
-    Owner.FULLSCREEN -> fullscreenPlayerView
-    Owner.NONE -> null
-  }
-
-  private fun bindPlayerView(instance: ExoPlayer, video: PlayerView, event: String): Boolean {
-    if (player !== instance) return false
-    val previous = boundPlayerView
-    return try {
-      if (previous !== video) {
-        // Media3 recommends switchTargetView when moving one Player between
-        // PlayerViews. It attaches the new target before detaching the old one.
-        PlayerView.switchTargetView(instance, previous, video)
-        previous?.visibility = View.GONE
-        boundPlayerView = video
-        recordDiagnostic("surface-target-switched:$event", lastPlaybackError, instance)
-      } else if (video.player !== instance) {
-        video.player = instance
-        boundPlayerView = video
-        recordDiagnostic("surface-target-restored:$event", lastPlaybackError, instance)
-      }
-      video.visibility = View.VISIBLE
-      true
-    } catch (failure: Throwable) {
-      Log.w(TAG, "surface target bind failed: $event", failure)
-      false
-    }
-  }
-
-  private fun unbindPlayerView(instance: ExoPlayer?, video: PlayerView?) {
-    if (video == null) return
-    try {
-      if (instance != null && boundPlayerView === video) {
-        PlayerView.switchTargetView(instance, video, null)
-      } else if (video.player != null) {
-        video.player = null
-      }
-    } catch (_: Throwable) {
-      try { video.player = null } catch (_: Throwable) {}
-    }
-    if (boundPlayerView === video) boundPlayerView = null
-    video.visibility = View.GONE
-  }
-
-  private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
-    val activeOwner = owner
-    if (activeOwner == Owner.NONE || player !== instance) return false
-    val target = when (activeOwner) {
-      Owner.PREVIEW -> previewSurface
-      Owner.FULLSCREEN -> fullscreenSurface
-      Owner.NONE -> null
-    } ?: return false
-    val video = ensurePlayerViewIn(activeOwner, target)
-    if (boundPlayerView === video && video.player === instance && video.visibility == View.VISIBLE) return false
-    val rebound = bindPlayerView(instance, video, "surface-rebind:$event")
-    if (rebound && activeSource != null) instance.playWhenReady = true
-    return rebound
-  }
-
-  private fun ensurePlayerViewIn''',
-    re.S,
-)
-
-replace_once(
-    mgr,
-    '''    val video = playerViewFor(owner) ?: throw IllegalStateException("Playback surface is unavailable")
-    try { video.player = null } catch (_: Throwable) {}
-    try { instance.release() } catch (_: Throwable) {}
-    player = null
-    firstFrameRendered = false
-    resetBufferingWatchdogState()
-    val rebuilt = ensurePlayer()
-    video.player = rebuilt
-    rebuildMediaSource(rebuilt, source, "full-player-source-recovery")''',
-    '''    val video = playerViewFor(owner) ?: throw IllegalStateException("Playback surface is unavailable")
-    unbindPlayerView(instance, video)
-    try { instance.release() } catch (_: Throwable) {}
-    player = null
-    firstFrameRendered = false
-    resetBufferingWatchdogState()
-    val rebuilt = ensurePlayer()
-    if (!bindPlayerView(rebuilt, video, "full-player-source-recovery")) {
-      throw IllegalStateException("Playback surface could not be rebound")
-    }
-    rebuildMediaSource(rebuilt, source, "full-player-source-recovery")''',
-)
-
-replace_once(
-    mgr,
-    '''          try { playerViewFor(owner)?.player = null } catch (_: Throwable) {}
-          try { instance.release() } catch (_: Throwable) {}
-          player = null''',
-    '''          unbindPlayerView(instance, playerViewFor(owner))
-          try { instance.release() } catch (_: Throwable) {}
-          player = null''',
-)
-
-replace_once(
-    mgr,
-    "    previewPlayerView = null; fullscreenPlayerView = null\n",
-    "    previewPlayerView = null; fullscreenPlayerView = null; boundPlayerView = null\n",
-)
-
-final = mgr.read_text()
 required = [
-    "private var boundPlayerView: PlayerView? = null",
-    "PlayerView.switchTargetView(instance, previous, video)",
-    "unbindPlayerView(instance, video)",
-    'bindPlayerView(instance, video, "channel-start")',
-    "surface-target-switched:$event",
+    "fun prepare(requestedOwner: Owner",
+    "clearInactivePlayerView(requestedOwner)",
+    "RECONNECT_STALL_MS = 50_000L",
+    "START_TIMEOUT_MS = 60_000L",
+    "fun tivimateBufferDurationsMs",
+    "readTimeout(0, TimeUnit.SECONDS)",
+    "connectTimeout(20, TimeUnit.SECONDS)",
 ]
-for token in required:
-    if token not in final:
-        raise SystemExit(f"Missing expected surface ownership token: {token}")
+missing = [token for token in required if token not in text]
+if missing:
+    raise SystemExit(f"TiViMate Media3 surface/handoff contract incomplete; missing: {missing}")
 
-# Preserve the live TiViMate reconnect/buffer contract on the target branch.
-for token in ["RECONNECT_STALL_MS", "tivimateBufferDurationsMs", "readTimeout"]:
-    if token not in final:
-        raise SystemExit(f"Unexpected playback manager shape after patch: missing {token}")
-for removed in ["HUNG_BUFFER_REPREPARE_MS", "HARD_STALL_RECOVERY_MS", "TRANSPORT_HUNG_BUFFER_REPREPARE_MS", "STABLE_REARM_MS"]:
-    if removed in final:
-        raise SystemExit(f"Unexpected playback manager shape after patch: removed timer still present: {removed}")
+removed = [
+    "HUNG_BUFFER_REPREPARE_MS",
+    "HARD_STALL_RECOVERY_MS",
+    "TRANSPORT_HUNG_BUFFER_REPREPARE_MS",
+    "STABLE_REARM_MS",
+    "stableSinceMs",
+]
+present_removed = [token for token in removed if token in text]
+if present_removed:
+    raise SystemExit(f"Legacy Charm timers still present: {present_removed}")
 
-print("Media3 one-target ownership patch applied; TiViMate timer/buffer values preserved")
+# Prefer the already-landed bind-before-clear order.
+prepare_start = text.find("fun prepare(requestedOwner: Owner")
+prepare_end = text.find("fun provideFreshSource", prepare_start)
+prepare = text[prepare_start:prepare_end] if prepare_start >= 0 and prepare_end > prepare_start else ""
+bind_pos = prepare.find("video.player = instance")
+clear_pos = prepare.find("clearInactivePlayerView(requestedOwner)")
+if bind_pos < 0 or clear_pos < 0 or bind_pos > clear_pos:
+    raise SystemExit("prepare() must bind the replacement PlayerView before clearInactivePlayerView()")
+
+print("Media3 TiViMate surface/handoff contract already satisfied; no patch required")
+sys.exit(0)

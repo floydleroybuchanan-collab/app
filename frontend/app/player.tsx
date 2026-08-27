@@ -31,6 +31,7 @@ import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/cor
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
+import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
@@ -51,7 +52,6 @@ type PlayerViewMode = "fit" | "fill" | "zoom" | "stretch";
 const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
   "start-timeout": "start timeout",
   "engine-swap": "playback reset",
-  "circuit-open": "temporarily paused",
   "stream-error": "stream error",
   "silent-audio": "no supported audio track",
   "user-stop": "stopped",
@@ -363,7 +363,13 @@ export default function PlayerScreen() {
   const handleStreamStatus = useCallback((nextStatus: StreamStatus, reason?: SessionFailReason | null) => {
     setStatus(nextStatus);
     if (reason !== undefined) setFailReason(reason);
-    if (nextStatus === "playing") setFailReason(null);
+    const channelKey = channelIdRef.current;
+    if (nextStatus === "playing") {
+      setFailReason(null);
+      if (channelKey) clearStreamFailure(channelKey);
+    } else if (nextStatus === "error" && channelKey) {
+      noteStreamFailure(channelKey);
+    }
   }, []);
 
   const saveAudioReport = useCallback(async () => {

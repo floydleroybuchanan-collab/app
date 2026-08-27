@@ -8,7 +8,6 @@ export type SessionPhase = "idle" | "preparing" | "playing" | "recovering" | "fa
 export type SessionFailReason =
   | "start-timeout"
   | "engine-swap"
-  | "circuit-open"
   | "stream-error"
   | "silent-audio"
   | "user-stop"

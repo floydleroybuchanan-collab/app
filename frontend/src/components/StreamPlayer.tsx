@@ -183,6 +183,10 @@ export function StreamPlayer({
     } else if (event.state === "loading") {
       setSessionPhase(role, generation, event.reason === "native-reprepare" ? "recovering" : "preparing", null);
       onStatusRef.current("loading", null);
+    } else if (event.reason === "owner-reserved") {
+      // Preview lost the single Media3 owner to fullscreen — not a stream failure.
+      // Avoid Guide previewEpoch remount storms while fullscreen owns the decoder.
+      onStatusRef.current("loading", null);
     } else {
       const reason: SessionFailReason = event.reason === "start-timeout" ? "start-timeout" : "stream-error";
       setSessionPhase(role, generation, "failed", reason);

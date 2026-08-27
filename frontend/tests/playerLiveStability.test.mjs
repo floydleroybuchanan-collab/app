@@ -99,6 +99,7 @@ test("audio and subtitles hot-apply through TrackSelectionParameters", async () 
 test("Guide preview cannot own playback while fullscreen owns native player", async () => {
   const [stream, native, guide] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"), source("app/(tabs)/guide.tsx")]);
   assert.match(stream, /isPreviewPlaybackAllowed\(\)/); assert.match(native, /requestedOwner == Owner\.PREVIEW && owner == Owner\.FULLSCREEN/); assert.doesNotMatch(guide, /noteStreamFailure|clearStreamFailure/);
+  assert.match(stream, /event\.reason === "owner-reserved"/);
 });
 
 test("stale fullscreen native cleanup cannot release a newer Guide preview", async () => {

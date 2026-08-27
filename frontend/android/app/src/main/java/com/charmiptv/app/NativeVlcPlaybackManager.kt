@@ -291,11 +291,11 @@ object NativeVlcPlaybackManager {
   }
 
   // TiViMate buffer size mapping: Small / Medium / Large (ms).
-  // Stable matches the Large class that kept live IPTV playable on Amlogic.
+  // Large mirrors Media3's Onn-proven min-buffer class (20s).
   private fun networkCachingMs(profile: String): Int = when (profile) {
     "low_latency" -> 2_000
     "balanced" -> 5_000
-    else -> 12_000
+    else -> 20_000
   }
 
   private fun attachVideoLayout(surfaceOwner: Owner): Boolean {

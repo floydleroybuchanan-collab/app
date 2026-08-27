@@ -279,12 +279,18 @@ internal object NativePlaylistParser {
         clean.contains("/hls/") ||
         paddedQuery.contains("&format=m3u8&") ||
         paddedQuery.contains("&type=hls&") ||
-        paddedQuery.contains("&output=hls&") -> "hls"
+        paddedQuery.contains("&output=hls&") ||
+        paddedQuery.contains("&format=hls&") ||
+        paddedQuery.contains("&type=m3u8&") ||
+        paddedQuery.contains("&output=m3u8&") -> "hls"
       path.endsWith(".mpd") ||
         clean.contains("/dash/") ||
         paddedQuery.contains("&format=mpd&") ||
         paddedQuery.contains("&type=dash&") ||
-        paddedQuery.contains("&output=dash&") -> "dash"
+        paddedQuery.contains("&output=dash&") ||
+        paddedQuery.contains("&format=dash&") ||
+        paddedQuery.contains("&type=mpd&") ||
+        paddedQuery.contains("&output=mpd&") -> "dash"
       path.endsWith(".ts") || path.endsWith(".m2ts") ||
         clean.contains("mpegts") || clean.contains("mpeg-ts") ||
         paddedQuery.contains("&format=ts&") ||

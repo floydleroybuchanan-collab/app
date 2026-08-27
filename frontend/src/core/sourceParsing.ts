@@ -24,10 +24,59 @@ export type ParseM3UStats = {
   truncated: boolean;
 };
 
+/**
+ * Compact transport/container hint for the TiViMate-style Media3 path.
+ * Keep this in lockstep with NativePlaylistParser.streamType so M3U ingest
+ * (JS web + native Android) feeds the same contentType into detectStreamKind.
+ */
 export function streamType(url: string): string {
-  const clean = url.toLowerCase().split("?")[0].split("|")[0];
-  if (clean.endsWith(".m3u8")) return "hls";
-  if (clean.endsWith(".ts")) return "ts";
+  const clean = streamIdentityUrl(url);
+  const path = clean.split("?")[0];
+  const query = clean.includes("?") ? clean.slice(clean.indexOf("?") + 1) : "";
+  const paddedQuery = query ? `&${query}&` : "";
+  if (
+    path.endsWith(".m3u8") ||
+    clean.includes("/hls/") ||
+    paddedQuery.includes("&format=m3u8&") ||
+    paddedQuery.includes("&type=hls&") ||
+    paddedQuery.includes("&output=hls&") ||
+    paddedQuery.includes("&format=hls&") ||
+    paddedQuery.includes("&type=m3u8&") ||
+    paddedQuery.includes("&output=m3u8&")
+  ) {
+    return "hls";
+  }
+  if (
+    path.endsWith(".mpd") ||
+    clean.includes("/dash/") ||
+    paddedQuery.includes("&format=mpd&") ||
+    paddedQuery.includes("&type=dash&") ||
+    paddedQuery.includes("&output=dash&") ||
+    paddedQuery.includes("&format=dash&") ||
+    paddedQuery.includes("&type=mpd&") ||
+    paddedQuery.includes("&output=mpd&")
+  ) {
+    return "dash";
+  }
+  if (
+    path.endsWith(".ts") ||
+    path.endsWith(".m2ts") ||
+    clean.includes("mpegts") ||
+    clean.includes("mpeg-ts") ||
+    paddedQuery.includes("&format=ts&") ||
+    paddedQuery.includes("&type=ts&") ||
+    paddedQuery.includes("&output=ts&") ||
+    paddedQuery.includes("&format=mpegts&") ||
+    paddedQuery.includes("&type=mpegts&") ||
+    paddedQuery.includes("&output=mpegts&")
+  ) {
+    return "ts";
+  }
+  if (
+    /\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)$/.test(path)
+  ) {
+    return "progressive";
+  }
   return "unknown";
 }
 

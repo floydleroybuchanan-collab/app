@@ -14,6 +14,7 @@ import {
   parseXmltvTime,
   resolveXmltvStop,
   streamIdentityUrl,
+  streamType,
 } from "../src/core/sourceParsing.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +68,19 @@ test("M3U parser rejects disallowed protocols and reports stats", async () => {
 
 test("playlist text limit refuses oversized payloads", () => {
   assert.throws(() => enforcePlaylistTextLimit("x".repeat(MAX_PLAYLIST_BYTES + 1)), /size limit/);
+});
+
+test("M3U streamType matches native TiViMate Media3 hints for provider URLs", () => {
+  assert.equal(streamType("https://cdn.example/live/news.m3u8"), "hls");
+  assert.equal(streamType("https://cdn.example/hls/channel?token=1"), "hls");
+  assert.equal(streamType("https://provider.example/live/1?format=hls"), "hls");
+  assert.equal(streamType("https://cdn.example/dash/manifest.mpd"), "dash");
+  assert.equal(streamType("https://provider.example/live/2?output=mpd"), "dash");
+  assert.equal(streamType("https://cdn.example/live/sports.ts?token=x"), "ts");
+  assert.equal(streamType("https://cdn.example/live/sports.m2ts"), "ts");
+  assert.equal(streamType("https://provider.example/live/3?type=mpegts"), "ts");
+  assert.equal(streamType("https://vod.example/movie.mp4"), "progressive");
+  assert.equal(streamType("https://provider.example/live/opaque|User-Agent=Charm"), "unknown");
 });
 
 test("allocateChannelId stays deterministic for the same URL", () => {
