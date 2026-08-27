@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 import { StreamPlayer, type StreamStatus } from "@/src/components/StreamPlayer";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { getLastAudioDiagnostics } from "@/src/core/audioDiagnostics";
+import { usePlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import {
   noteGuidePreviewFocus,
   registerGuidePreviewNode,
@@ -80,6 +81,7 @@ export function GuidePreviewRail({
   focusRequestToken,
   guideFocusTag,
 }: Props) {
+  const [playbackBufferProfile] = usePlaybackBufferProfile();
   const playFocus = usePreviewFocusNode("play", true);
   const favoriteFocus = usePreviewFocusNode("favorite");
   const remindersFocus = usePreviewFocusNode("reminders");
@@ -129,6 +131,7 @@ export function GuidePreviewRail({
                   onStatus={onPreviewStatus}
                   mode="preview"
                   sessionRole="preview"
+                  bufferProfile={playbackBufferProfile}
                   muted={muted}
                   style={StyleSheet.absoluteFill}
                 />

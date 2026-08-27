@@ -33,7 +33,9 @@ test("native recovery escalates through a real playlist-only source refresh and 
   assert.match(native, /skipBarePrepare && recoveryAttempts < 1/);
   assert.match(native, /isAuthenticationFailure\(error\)/);
   assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(created, skipBarePrepare = true\)/);
-  assert.match(native, /HlsMediaSource\.Factory\(dataSource\)\.createMediaSource\(item\)/);
+  assert.match(native, /HlsMediaSource\.Factory\(dataSource\)[\s\S]*?DefaultHlsExtractorFactory\(liveTsFlags, true\)[\s\S]*?createMediaSource\(item\)/);
+  assert.match(native, /DashMediaSource\.Factory\(dataSource\)\.createMediaSource\(item\)/);
+  assert.match(native, /setWakeMode\(C\.WAKE_MODE_NETWORK\)/);
   assert.match(native, /trimNonEssentialForPlaybackRecovery\(\)/);
   assert.match(memory, /fun trimNonEssentialForPlaybackRecovery/);
   assert.match(bridge, /NativePlaybackSourceRefreshRequested/);

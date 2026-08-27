@@ -19,8 +19,8 @@ test("Media3 publishes stable playback only after native onRenderedFirstFrame", 
 
 test("Media3 keeps bounded native startup and four-attempt post-playback recovery", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /START_TIMEOUT_MS = 30_000L/);
-  assert.match(native, /RECONNECT_STALL_MS = 15_000L/);
+  assert.match(native, /START_TIMEOUT_MS = 60_000L/);
+  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
   assert.match(native, /OPAQUE_CONFIRM_MS = 5_000L/);
   assert.doesNotMatch(native, /FULLSCREEN_START_TIMEOUT_MS|PREVIEW_START_TIMEOUT_MS|TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);

@@ -116,8 +116,8 @@ jobs:
           PY
 
           grep -q 'fun tivimateBufferDurationsMs' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'RECONNECT_STALL_MS = 15_000L' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
-          grep -q 'START_TIMEOUT_MS = 30_000L' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'RECONNECT_STALL_MS = 50_000L' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q 'START_TIMEOUT_MS = 60_000L' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           ! grep -q 'HARD_STALL_RECOVERY_MS\|HUNG_BUFFER_REPREPARE_MS\|STABLE_REARM_MS\|MIN_BUFFER_MS_LOW_RAM' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'connectTimeout(20, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt

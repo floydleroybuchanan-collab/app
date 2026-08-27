@@ -31,6 +31,8 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
@@ -94,18 +96,18 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
-  // TiViMate Playback → Buffer size (Small / Medium / Large). Applied to
-  // Media3 LoadControl from Settings; VLC uses the same profile for network-caching.
-  // low_latency=Small, balanced=Medium, stable=Large (~10s, community default).
+  // TiViMate Buffer size mapped onto the Onn-proven Media3 budgets.
+  // Small/Medium/Large keep the Settings names; Stable = last known-good
+  // Amlogic profile (20/90/5/12 + 48MB) that painted video with audio.
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
-  private const val TARGET_BUFFER_BYTES_NORMAL = 32 * 1024 * 1024
+  private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
 
-  // TiViMate Playback → Reconnect on Error: one stall window, then reconnect.
-  // Charm previously had separate transport / hard-stall / stable-rearm timers
-  // that TiViMate does not expose; those are removed.
-  private const val RECONNECT_STALL_MS = 15_000L
+  // Single reconnect-on-error window (TiViMate does not expose separate
+  // transport/hard-stall timers). Keep it patient: Amlogic reports BUFFERING
+  // while frames still present; a short stall budget blacked the player.
+  private const val RECONNECT_STALL_MS = 50_000L
   private const val WATCHDOG_POLL_MS = 3_000L
-  private const val START_TIMEOUT_MS = 30_000L
+  private const val START_TIMEOUT_MS = 60_000L
   private const val SOURCE_REFRESH_TIMEOUT_MS = 15_000L
   private const val OPAQUE_CONFIRM_MS = 5_000L
   private const val MAX_AUTO_RECOVERIES = 4
@@ -145,7 +147,6 @@ object NativePlaybackManager {
   private var lastPlaybackError: PlaybackException? = null
   private var firstFrameRendered = false
   private var recoveryAttempts = 0
-  private var stableSinceMs = 0L
   private var bufferingSinceMs = 0L
   private var bufferingLastBufferedPositionMs = 0L
   private var bufferingLastPositionMs = 0L
@@ -183,10 +184,19 @@ object NativePlaybackManager {
   private val bufferingWatchdog: Runnable = Runnable {
     val instance = player ?: return@Runnable
     if (!firstFrameRendered) return@Runnable
+    val bufferedPosition = instance.bufferedPosition
+    val position = instance.currentPosition
+    val bufferedDuration = instance.totalBufferedDuration
+    val hasForwardBuffer = bufferedDuration != C.TIME_UNSET && bufferedDuration > 0L
     // Live MPEG-TS/HLS on Amlogic often reports BUFFERING while frames are
-    // still presenting, and currentPosition is TIME_UNSET. That used to look
-    // like a hung decoder and called recoverOnce every minute.
-    if (instance.isPlaying || (instance.playWhenReady && instance.playbackState == Player.STATE_READY)) {
+    // still presenting and currentPosition is TIME_UNSET. Treat playWhenReady
+    // + any forward buffer / decoder as healthy — same class of gate TiViMate
+    // uses so reconnect-on-error does not kill a living stream.
+    if (
+      instance.isPlaying ||
+      (instance.playWhenReady && instance.playbackState == Player.STATE_READY) ||
+      (instance.playWhenReady && instance.playbackState == Player.STATE_BUFFERING && (hasForwardBuffer || videoDecoder != null || audioDecoder != null))
+    ) {
       bufferingSinceMs = System.currentTimeMillis()
       if (instance.playbackState == Player.STATE_BUFFERING) {
         main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
@@ -196,13 +206,10 @@ object NativePlaybackManager {
     if (instance.playbackState != Player.STATE_BUFFERING) return@Runnable
 
     val nowMs = System.currentTimeMillis()
-    val bufferedPosition = instance.bufferedPosition
-    val position = instance.currentPosition
-    val bufferedDuration = instance.totalBufferedDuration
     val madeProgress = instance.isPlaying ||
       (position != C.TIME_UNSET && position > bufferingLastPositionMs) ||
       (bufferedPosition != C.TIME_UNSET && bufferedPosition > bufferingLastBufferedPositionMs) ||
-      (bufferedDuration != C.TIME_UNSET && bufferedDuration > 0L)
+      hasForwardBuffer
     if (position != C.TIME_UNSET) bufferingLastPositionMs = position
     if (bufferedPosition != C.TIME_UNSET) bufferingLastBufferedPositionMs = bufferedPosition
 
@@ -338,7 +345,6 @@ object NativePlaybackManager {
     lastPlaybackError = null
     firstFrameRendered = false
     recoveryAttempts = 0
-    stableSinceMs = 0L
     resetBufferingWatchdogState()
     markPlaybackStarting("channel-start")
     publishState("loading", null)
@@ -415,7 +421,7 @@ object NativePlaybackManager {
     val instance = player
     try { instance?.stop() } catch (_: Throwable) {}
     try { instance?.clearMediaItems() } catch (_: Throwable) {}
-    owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0; stableSinceMs = 0L
+    owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0
     resetBufferingWatchdogState()
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
@@ -449,10 +455,12 @@ object NativePlaybackManager {
     return ExoPlayer.Builder(context, renderers)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
+      .setWakeMode(C.WAKE_MODE_NETWORK)
       .build().also { created ->
         player = created
         applyAudioAttributes(created, owner)
         created.volume = if (mutedState) 0f else 1f
+        created.playWhenReady = true
         created.addListener(object : Player.Listener {
           override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
@@ -473,7 +481,6 @@ object NativePlaybackManager {
                 if (firstFrameRendered) {
                   // TiViMate: successful play clears reconnect budget.
                   recoveryAttempts = 0
-                  if (stableSinceMs == 0L) stableSinceMs = System.currentTimeMillis()
                 }
                 publishTracks(created.currentTracks)
               }
@@ -486,7 +493,6 @@ object NativePlaybackManager {
           }
           override fun onRenderedFirstFrame() {
             firstFrameRendered = true
-            stableSinceMs = System.currentTimeMillis()
             recoveryAttempts = 0
             main.removeCallbacks(startupTimeout)
             main.removeCallbacks(bufferingWatchdog)
@@ -761,7 +767,6 @@ object NativePlaybackManager {
     opaqueRouteWasCached = fromCache
     opaqueRouteCandidates = orderedOpaqueCandidates(firstType)
     opaqueRouteIndex = 0
-    stableSinceMs = 0L
     val routed = source.copy(sourceType = opaqueRouteCandidates.first())
     activeSource = routed
     detectedMimeType = detectedMimeType ?: knownMimeForSource(routed)
@@ -782,7 +787,6 @@ object NativePlaybackManager {
     val nextIndex = opaqueRouteIndex + 1
     if (nextIndex >= opaqueRouteCandidates.size) return false
     opaqueRouteIndex = nextIndex
-    stableSinceMs = 0L
     val nextType = opaqueRouteCandidates[nextIndex]
     val routed = original.copy(sourceType = nextType)
     activeSource = routed
@@ -825,8 +829,17 @@ object NativePlaybackManager {
   }
   private fun buildMediaSource(item: MediaItem, source: PlaybackSource): MediaSource {
     val dataSource = createDataSourceFactory(source.headers)
+    val liveTsFlags =
+      DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
+        DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
     return when (source.sourceType) {
-      "hls" -> HlsMediaSource.Factory(dataSource).createMediaSource(item)
+      // IPTV HLS almost always carries MPEG-TS segments. Without these demuxer
+      // flags Media3 can decode audio and never emit video (black + silent or
+      // audio-only), which matches the TiViMate-class live extractor contract.
+      "hls" -> HlsMediaSource.Factory(dataSource)
+        .setExtractorFactory(DefaultHlsExtractorFactory(liveTsFlags, true))
+        .createMediaSource(item)
+      "dash" -> DashMediaSource.Factory(dataSource).createMediaSource(item)
       "transport" -> ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
       else -> DefaultMediaSourceFactory(dataSource).createMediaSource(item)
     }
@@ -1090,21 +1103,24 @@ object NativePlaybackManager {
     }
     if (next == activeBufferProfile) return
     activeBufferProfile = next
-    // LoadControl is construction-only on ExoPlayer; rebuild so Settings
-    // buffer changes match TiViMate's Buffer size apply-on-next-tune-in.
+    // LoadControl is construction-only. Unbind PlayerViews before releasing so
+    // MediaCodec is never left attached to a dead ExoPlayer (black + silent).
     val existing = player ?: return
+    try { previewPlayerView?.player = null } catch (_: Throwable) {}
+    try { fullscreenPlayerView?.player = null } catch (_: Throwable) {}
     try { existing.release() } catch (_: Throwable) {}
     player = null
   }
 
-  /** TiViMate Small / Medium / Large → ExoPlayer LoadControl durations. */
+  /** TiViMate Small / Medium / Large → Onn-safe ExoPlayer LoadControl durations. */
   private fun tivimateBufferDurationsMs(profile: String, lowRam: Boolean): IntArray {
     val durations = when (profile) {
-      "low_latency" -> intArrayOf(3_000, 10_000, 500, 1_000)
-      "balanced" -> intArrayOf(5_000, 20_000, 1_000, 2_000)
-      else -> intArrayOf(10_000, 30_000, 2_500, 5_000)
+      "low_latency" -> intArrayOf(8_000, 30_000, 2_000, 5_000)
+      "balanced" -> intArrayOf(15_000, 60_000, 3_000, 8_000)
+      // Stable = last known-good Onn profile that painted video with audio.
+      else -> intArrayOf(20_000, 90_000, 5_000, 12_000)
     }
-    if (lowRam) durations[1] = minOf(durations[1], 20_000)
+    if (lowRam) durations[1] = minOf(durations[1], if (profile == "stable") 60_000 else 30_000)
     return durations
   }
 

@@ -28,7 +28,7 @@ CharmIPTV Phoenix — Expo/React Native Android TV guide + IPTV player (`fronten
 - The native Guide's painted-row cache (`NativeGuideView.programs`, filled by `scheduleQueryDrain`) is capped at `PAINT_CACHE_CHANNELS` (128, or `LOW_RAM_PAINT_CACHE_CHANNELS` 64 under memory pressure) — this replaced the old JS-side TimelineGrid `previousPreparedByKeyRef` prune rule when the retired JS grid was replaced by the native Canvas renderer. Keep it bounded the same way if this cache is ever restructured.
 - Pending EPG Pressable may stay mounted for focus stability, but once real cells exist it must use `pendingProgramCellHidden` (1×1 / opacity 0) so it cannot paint over programme cells.
 - Blur / critical memory pressure must `retainGuidePrograms(keep, { force: true })` / critical trim so subscribed off-keep rows empty to `EMPTY_PROGRAMS`.
-- Stable Media3 fullscreen buffer is capped at **32MB** (TiViMate Large class; not 72MB) to reduce Fire TV OOM with guide preview + player.
+- Stable Media3 fullscreen buffer is capped at **48MB** (TiViMate Large / Onn-proven; not 72MB) to reduce Fire TV OOM with guide preview + player.
 - Guide preview freezes Media3/VLC compat remount keys while the Guide route is unfocused (Tabs keep-alive) so Settings toggles do not remount a background decoder.
 - Auto-retry must not remount while `circuit-open` / `isFullscreenCircuitOpen`; call `clearStreamFailure` on successful `playing`.
 - More-groups and PIN overlays need `FocusGuide` traps (same as ProgramModal). Guide title block stays `pointerEvents="none"`.

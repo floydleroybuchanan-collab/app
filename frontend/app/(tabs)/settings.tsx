@@ -540,15 +540,16 @@ function SettingsScreenContent() {
                   <ChoiceRow<"auto" | "stereo" | "passthrough"> label="VLC audio output" value={vlcPlayback.audioOutput} options={[{ label: "Auto", value: "auto" }, { label: "Stereo", value: "stereo" }, { label: "Passthrough", value: "passthrough" }]} onChange={vlcPlayback.setAudioOutput} />
                 </>) : null}
                 <ChoiceRow<PlaybackBufferProfile>
-                  label="Playback buffer"
+                  label="Buffer size"
                   value={playbackBufferProfile}
                   options={[
-                    { label: "Low latency", value: "low_latency" },
-                    { label: "Balanced", value: "balanced" },
-                    { label: "Stable", value: "stable" },
+                    { label: "Small", value: "low_latency" },
+                    { label: "Medium", value: "balanced" },
+                    { label: "Large", value: "stable" },
                   ]}
                   onChange={setPlaybackBufferProfile}
                 />
+                <Text style={styles.help}>TiViMate-style buffer size: Small starts sooner, Large absorbs provider jitter. Large is the Onn-proven default.</Text>
                 <ChoiceRow<SleepTimerMinutes>
                   label="Sleep timer"
                   value={sleepTimerMinutes}

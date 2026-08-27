@@ -36,7 +36,7 @@ import {
 } from "@/src/nativeEpg";
 import { invalidateGuideOwnershipCaches } from "@/src/source";
 import { fingerprintStreamUri, getLastAudioDiagnostics } from "@/src/core/audioDiagnostics";
-import { usePlaybackBufferProfile, type PlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
+import { usePlaybackBufferProfile, playbackBufferProfileLabel, type PlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import type { Program } from "@/src/api";
 import { reminderKey } from "@/src/utils/time";
 
@@ -408,7 +408,7 @@ export function TvQuickActionsOverlay() {
                 <Action icon="calendar-outline" label="Open TV Guide" onPress={goGuide} />
                 <Action icon="resize-outline" label="Aspect ratio" value="Fit / Zoom / Stretch" onPress={() => runPlayerCommand("CYCLE_ASPECT")} />
                 <Action icon="musical-notes-outline" label="Audio / subtitles" value="Live tracks" onPress={() => runPlayerCommand("OPEN_TRACKS")} />
-                <Action icon="speedometer-outline" label="Playback buffer" value={bufferProfile.replace("_", " ")} onPress={() => { const next = nextValue(BUFFER_ORDER, bufferProfile); close(); requestAnimationFrame(() => setBufferProfile(next)); }} />
+                <Action icon="speedometer-outline" label="Buffer size" value={playbackBufferProfileLabel(bufferProfile)} onPress={() => { const next = nextValue(BUFFER_ORDER, bufferProfile); close(); requestAnimationFrame(() => setBufferProfile(next)); }} />
                 <Action icon="moon-outline" label="Sleep timer" value={sleepTimerMinutes ? `${sleepTimerMinutes}m` : "Off"} onPress={() => setSleepTimerMinutes(sleepTimerMinutes === 0 ? 15 : sleepTimerMinutes === 15 ? 30 : sleepTimerMinutes === 30 ? 60 : sleepTimerMinutes === 60 ? 90 : 0)} />
                 <Action icon="bug-outline" label="Diagnostics" value="Save player report" onPress={() => runPlayerCommand("SAVE_DIAGNOSTICS")} />
                 <Action icon="options-outline" label="Playback settings" value="Media3 controls" onPress={openSettings} />

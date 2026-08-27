@@ -69,8 +69,8 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(manager, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
   assert.match(manager, /fun tivimateBufferDurationsMs/);
-  assert.match(manager, /else -> intArrayOf\(10_000, 30_000, 2_500, 5_000\)/);
-  assert.match(manager, /RECONNECT_STALL_MS = 15_000L/);
+  assert.match(manager, /else -> intArrayOf\(20_000, 90_000, 5_000, 12_000\)/);
+  assert.match(manager, /RECONNECT_STALL_MS = 50_000L/);
   assert.match(manager, /readTimeout\(0, TimeUnit.SECONDS\)/);
   assert.match(manager, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
 });

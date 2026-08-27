@@ -40,6 +40,7 @@ import {
 } from "@/src/core/audioDiagnostics";
 import { pickDefaultSubtitleTrack, useSubtitlePreferences } from "@/src/core/subtitlePreferences";
 import { pickPreferredAudioTrack, useAudioTrackPreferences } from "@/src/core/audioTrackPreferences";
+import { usePlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import * as FileSystem from "expo-file-system/legacy";
 import type { Channel } from "@/src/api";
 
@@ -113,6 +114,7 @@ export default function PlayerScreen() {
   const setTracksOpen = useCallback((next: React.SetStateAction<boolean>) => setOverlayOpen("tracks", next), [setOverlayOpen]);
   const { defaultLanguage: subtitleDefaultLanguage } = useSubtitlePreferences();
   const audioPreferences = useAudioTrackPreferences();
+  const [playbackBufferProfile] = usePlaybackBufferProfile();
   const remoteShortcuts = useRemoteShortcutPreferences();
 
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -469,6 +471,7 @@ export default function PlayerScreen() {
             streamTypeHint={channel?.stream_type}
             mode="full"
             sessionRole="fullscreen"
+            bufferProfile={playbackBufferProfile}
             audioTrack={audioTrackId}
             textTrack={textTrackId}
             paused={playbackPaused}

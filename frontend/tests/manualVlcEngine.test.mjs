@@ -38,11 +38,11 @@ test("locked Media3 safety budgets remain unchanged", async () => {
   const manager = await read("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   for (const marker of [
     'fun tivimateBufferDurationsMs',
-    '"low_latency" -> intArrayOf(3_000, 10_000, 500, 1_000)',
-    '"balanced" -> intArrayOf(5_000, 20_000, 1_000, 2_000)',
-    'else -> intArrayOf(10_000, 30_000, 2_500, 5_000)',
-    'RECONNECT_STALL_MS = 15_000L',
-    'START_TIMEOUT_MS = 30_000L',
+    '"low_latency" -> intArrayOf(8_000, 30_000, 2_000, 5_000)',
+    '"balanced" -> intArrayOf(15_000, 60_000, 3_000, 8_000)',
+    'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)',
+    'RECONNECT_STALL_MS = 50_000L',
+    'START_TIMEOUT_MS = 60_000L',
     'MAX_AUTO_RECOVERIES = 4',
     'longArrayOf(0L, 1_000L, 3_000L, 6_000L)',
   ]) assert.match(manager, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));

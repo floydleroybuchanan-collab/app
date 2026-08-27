@@ -2,6 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
 
 export type PlaybackBufferProfile = "low_latency" | "balanced" | "stable";
+
+/** TiViMate Buffer size labels (Small / Medium / Large). */
+export function playbackBufferProfileLabel(profile: PlaybackBufferProfile): string {
+  switch (profile) {
+    case "low_latency":
+      return "Small";
+    case "balanced":
+      return "Medium";
+    default:
+      return "Large";
+  }
+}
 const KEY = "gs_playback_buffer_profile";
 let value: PlaybackBufferProfile = "stable";
 let loaded = false;

@@ -83,7 +83,7 @@ test("fullscreen launched from Guide returns current tuned channel to the origin
 
 test("single native watchdog requires true no-progress before reconnect", async () => {
   const [adapter, native] = await Promise.all([source("src/components/StreamPlayer.tsx"), source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt")]);
-  assert.match(native, /RECONNECT_STALL_MS = 15_000L/);
+  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
   assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS/);
   assert.match(native, /if \(!firstFrameRendered\) return@Runnable/);
   assert.match(native, /instance\.playbackState != Player\.STATE_BUFFERING/);
