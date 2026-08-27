@@ -69,6 +69,22 @@ def shipped_source(rel: str) -> bool:
     return rel.startswith(SHIPPED_PREFIXES)
 
 
+def audited_epg_fix_text(rel: str) -> str | None:
+    blob = AUDITED_EPG_FIX_BLOBS.get(rel)
+    if not blob:
+        return None
+    try:
+        return subprocess.check_output(
+            ["git", "cat-file", "-p", blob],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return None
+
+
 def is_exact_audited_epg_fix(rel: str) -> bool:
     expected = AUDITED_EPG_FIX_BLOBS.get(rel)
     if not expected:
@@ -87,6 +103,12 @@ def is_exact_audited_epg_fix(rel: str) -> bool:
         errors="replace",
     ).strip()
     return actual == expected
+
+
+def is_audited_epg_fix_with_panel_ua(rel: str, normalized_current: str) -> bool:
+    """Allow the audited EPG ownership blob when only the panel User-Agent differs."""
+    audited = audited_epg_fix_text(rel)
+    return audited is not None and normalized_current == audited
 
 
 current_files: list[Path] = []
@@ -296,7 +318,11 @@ for rel in (
         "TiviMate/5.1.6 (Linux; Android TV)",
         "CharmIPTV/Experimental-v3",
     )
-    if current != baseline and not is_exact_audited_epg_fix(rel):
+    if (
+        current != baseline
+        and not is_exact_audited_epg_fix(rel)
+        and not is_audited_epg_fix_with_panel_ua(rel, current)
+    ):
         critical.append(f"repair changed M3U/EPG transport: {rel}")
 
 # Background workers are optional architecture. If present, they may only set
