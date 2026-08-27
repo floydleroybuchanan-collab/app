@@ -143,7 +143,7 @@ jobs:
         run: test ! -d android/app/build/outputs/apk
 
       - name: Enforce validation gate
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           test "${{ steps.config.outcome }}" = "success"
           test "${{ steps.tests.outcome }}" = "success"

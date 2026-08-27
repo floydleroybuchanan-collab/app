@@ -36,6 +36,10 @@ The Android decoder-capability query also now handles nullable `videoCapabilitie
 
 A final recovery-path review also found that failure after constructing a replacement Media3 player passed the already-released old instance to fatal cleanup. Cleanup now releases the current replacement, preventing an unowned decoder after source construction fails.
 
+The repository is **public**, so Actions uploads are not private. The existing workflow embeds provider sources in its APK. The unencrypted candidate build was canceled before upload; the revised workflow encrypts the complete artifact ZIP with AES-256-GCM and wraps the random key with RSA-OAEP-SHA256. Only the public key is committed. The private key remains on the owner's Windows machine outside the repository, with an account-only ACL. Authentication is verified before a decrypted file is published locally. Round-trip and tamper tests cover the helper. Older existing artifacts were not deleted and may still contain provider settings.
+
+Canceled native CI runs also produced a misleading final-gate failure because the gate ran after cancellation and saw skipped prerequisites. The gate now runs whenever the job is not canceled; it still fails for actual failed/skipped required checks on an uncanceled run. The three queried `6000fba` runs (`33125410220`, `33125407941`, `33125407915`) were canceled during setup by newer runs, not rejected by the compiler/tests.
+
 ## Caller and ownership trace
 
 - Guide selection/preview epoch -> `GuidePreviewRail` -> one `StreamPlayer` native surface. Guide owns layout/focus; it does not own recovery timers. Current-channel diagnostics and keyed error-boundary resets do not remount healthy playback.
@@ -71,7 +75,7 @@ The scanner is a structural check, not exhaustive runtime verification; backend/
 ## Validation status
 
 - `npm ci`: passed (1,006 installed packages).
-- `npm test`: **265/265 passed**, including real dependency-injected coordinator races and generation tests plus existing wiring/focus/guide regressions.
+- `npm test`: **268/268 passed**, including real dependency-injected coordinator races and generation tests, artifact encryption/tamper tests and existing wiring/focus/guide regressions.
 - `npm run typecheck`, `npm run lint`, `npm run verify:native-config`, `npm run verify:native-guide`: passed.
 - `node --test cloudflare-backend/worker/test/index.test.mjs cloudflare-backend/scripts/build-and-upload.test.mjs`: **16/16 passed**.
 - Whole-repository scan: 0 candidate-critical findings; both main notes manually reviewed above.
@@ -87,7 +91,64 @@ The scanner is a structural check, not exhaustive runtime verification; backend/
 2. Stock LibVLC 3.7.5 cannot preserve arbitrary HTTP headers/cookies through its public media-option API. Those fallback cases deliberately report `request-headers-unsupported`; Media3 is the HTTP path that retains them. RTSP custom-header support is also limited. RTSPS, DRM, SRT/RIST and device-specific codec capabilities are not claimed as tested simply because a scheme is recognized.
 3. Previously cached native playlist pipe metadata may contain old form-encoded spaces. Refresh the playlist once after installing this build; literal provider `+` must not be guessed into spaces. No destructive cache migration was added.
 4. `npm audit --omit=dev` reports nine high-severity dependency entries (including transitive Expo/Metro/image-size and nanoid findings). No broad Expo major upgrade or dependency patch was made to force this playback build. Review and update that graph separately; this is not a clean security-audit claim.
-5. The private tester APK embeds repository-configured provider source settings. Treat it as credential-bearing; do not publish it in a public release. It uses the existing sideload application ID/signing configuration, not a production-store release key.
+5. The tester APK embeds repository-configured provider source settings. Treat it as credential-bearing; do not publish the decrypted APK in a public release. New CI artifacts are encrypted; earlier unencrypted artifacts may expose these settings and were left untouched. Review older downloads and rotate provider credentials if needed. The APK uses the existing sideload application ID/signing configuration, not a production-store release key.
 6. On the target TV: refresh playlist, test opaque/TS/HLS channels and AC-3/E-AC-3/DTS audio; run more than two minutes; exercise preview/fullscreen/back and rapid channel switches; test manual pause across overlays, Fit/Fill/Zoom/Stretch, audio/subtitles, Retry after bounded failure, and unsupported-header fallback. Capture logcat/Health diagnostics without provider credentials. Check decoder/process memory during these transitions.
 
 Primary API references consulted: [Media3 formats](https://developer.android.com/media/media3/exoplayer/supported-formats), [Media3 1.8 RTSP factory](https://github.com/androidx/media/blob/1.8.0/libraries/exoplayer_rtsp/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource.java), [VLC 3 HTTP access](https://github.com/videolan/vlc/blob/3.0.x/modules/access/http.c), and [VLC 3 RTSP access](https://github.com/videolan/vlc/blob/3.0.x/modules/access/live555.cpp). The installed LibVLC 3.7.5 AAR's public API/options were also inspected; no decompiled application code was used.
+
+## Complete changed-path inventory
+
+`A` = added, `M` = modified, `D` = removed. Checkpoint is the supplied baseline-to-ddabea8 diff; continuation is ddabea8 through the current audited source. Unrelated/generated build files are excluded.
+
+| Path | Checkpoint | Continuation |
+| --- | --- | --- |
+| `.gitattributes` | — | M |
+| `.github/workflows/android-native-ci.yml` | — | M |
+| `.github/workflows/build-media3-sideload-now.yml` | M | M |
+| `.github/workflows/ram-epg-test.yml` | — | M |
+| `ci/verify-android-apk.py` | — | A |
+| `docs/PLAYBACK_AUDIT_HANDOFF.md` | A | M |
+| `docs/PLAYBACK_AUDIT_RESULTS.md` | — | A |
+| `docs/PLAYBACK_WORKFLOW_AUDIT.md` | — | A |
+| `frontend/android/app/build.gradle` | M | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt` | M | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/CharmStreamUrls.kt` | M | — |
+| `frontend/android/app/src/main/java/com/charmiptv/app/NativeOpaqueStreamProbe.kt` | D | — |
+| `frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt` | M | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt` | M | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/NativePlaylistParser.kt` | M | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt` | M | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackModule.kt` | — | M |
+| `frontend/android/app/src/main/java/com/charmiptv/app/TvRemoteModule.kt` | — | M |
+| `frontend/android/app/src/test/java/com/charmiptv/app/CharmHttpClientsTest.kt` | — | A |
+| `frontend/android/ffmpeg-audio/build.gradle` | — | M |
+| `frontend/app/(tabs)/guide.tsx` | M | — |
+| `frontend/app/(tabs)/settings.tsx` | M | M |
+| `frontend/app/player.tsx` | M | M |
+| `frontend/package.json` | M | — |
+| `frontend/scripts/build-media3-ffmpeg-audio.sh` | — | M |
+| `frontend/src/components/GuidePreviewRail.tsx` | M | M |
+| `frontend/src/components/StreamPlayer.tsx` | M | M |
+| `frontend/src/components/TvQuickActionsOverlay.tsx` | M | — |
+| `frontend/src/core/audioDiagnostics.ts` | M | M |
+| `frontend/src/core/nativePlaybackCoordinator.ts` | A | M |
+| `frontend/src/core/playbackSession.ts` | M | M |
+| `frontend/src/core/serializedPlaybackCoordinator.ts` | — | A |
+| `frontend/src/core/sourceParsing.ts` | M | — |
+| `frontend/src/core/streamPolicy.ts` | M | M |
+| `frontend/src/core/vlcPlaybackPreferences.ts` | M | — |
+| `frontend/src/nativePlayback.ts` | M | — |
+| `frontend/src/nativeVlcPlayback.ts` | M | — |
+| `frontend/src/playerEnginePreference.ts` | M | — |
+| `frontend/tests/groupTabsScreenFit.test.mjs` | M | M |
+| `frontend/tests/manualVlcEngine.test.mjs` | M | M |
+| `frontend/tests/media3Audio.test.mjs` | M | M |
+| `frontend/tests/nativePlatformHardening.test.mjs` | M | — |
+| `frontend/tests/opaqueStreamDetection.test.mjs` | M | M |
+| `frontend/tests/playbackReliabilityRecovery.test.mjs` | M | M |
+| `frontend/tests/playbackSession.test.mjs` | M | M |
+| `frontend/tests/playerAndFocus.test.mjs` | M | M |
+| `frontend/tests/playerFirstFrameStability.test.mjs` | M | — |
+| `frontend/tests/playerLiveStability.test.mjs` | M | M |
+| `frontend/tests/playerSettingsHotApply.test.mjs` | M | M |
+| `frontend/tests/quickActionsEpgOwnership.test.mjs` | M | — |

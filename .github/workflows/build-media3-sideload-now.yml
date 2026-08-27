@@ -17,6 +17,8 @@ on:
       - "frontend/tests/**"
       - "frontend/package*.json"
       - "ci/verify-android-apk.py"
+      - "ci/protect-sideload-artifact.mjs"
+      - "ci/sideload-artifact-public.pem"
 
 permissions:
   contents: read
@@ -185,15 +187,19 @@ jobs:
           sha256sum "artifacts/CharmIPTV-Media3-VLC-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
-      - name: Upload sideload APK
+      - name: Protect provider-bearing artifact for the owner
+        run: |
+          mkdir -p protected-artifacts
+          python3 -m zipfile -c sideload-private.zip artifacts/*
+          node ../ci/protect-sideload-artifact.mjs encrypt ../ci/sideload-artifact-public.pem sideload-private.zip protected-artifacts/sideload.zip.enc
+
+      - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: CharmIPTV-Media3-VLC-Sideload-${{ github.run_number }}
+          name: CharmIPTV-Media3-VLC-Sideload-Encrypted-${{ github.run_number }}
           path: |
-            frontend/artifacts/CharmIPTV-Media3-VLC-Sideload-${{ github.run_number }}.apk
-            frontend/artifacts/SHA256SUMS.txt
-            frontend/artifacts/BUILD_INFO.txt
-            frontend/artifacts/APK_VERIFICATION*
+            frontend/protected-artifacts/sideload.zip.enc
+            frontend/protected-artifacts/sideload.zip.enc.json
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

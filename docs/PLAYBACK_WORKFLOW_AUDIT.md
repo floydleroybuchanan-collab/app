@@ -4,7 +4,7 @@ All 158 checked-in YAML workflows were parsed and inventoried, including event/b
 
 ## Workflows relevant to this candidate
 
-- `build-media3-sideload-now.yml`: exact feature SHA; tests, Kotlin/Java/JVM tests, pinned FFmpeg, ARM APK, build-tools verification and private artifact. Removed its branch-writing run pointer and duplicate PR build trigger; contents permission is read-only.
+- `build-media3-sideload-now.yml`: exact feature SHA; tests, Kotlin/Java/JVM tests, pinned FFmpeg, ARM APK, build-tools verification and encrypted artifact. Removed its branch-writing run pointer and duplicate PR build trigger; contents permission is read-only.
 - `android-native-ci.yml`: exact event checkout; replaced obsolete 50-second/four-retry/oversized-buffer requirements with the current ownership and bounded-recovery test contract. Added the feature branch and JVM tests; removed unrelated hard-coded PR 31 comments. Its final gate still fails if any collected check fails.
 - `frontend-ci.yml`: PR check including Expo doctor, tests, typecheck and lint.
 - `ram-epg-test.yml`: PR compile plus FFmpeg; APK assembly only on its experiment-branch push. Removed an obsolete Jest-only argument from the Node test runner.
@@ -28,7 +28,7 @@ Many legacy manual workflows check out or push a fixed branch and can overwrite 
 | apply-phase9-overlay-focus.yml | push [agent/phase9-tivimate-scan-repair] (1 path filters) | agent/phase9-tivimate-scan-repair | repository mutation |
 | apply-ram-final-crosscheck.yml | push [experiment/full-ram-epg-engine] (1 path filters) | experiment/full-ram-epg-engine | repository mutation |
 | apply-tivimate-overhaul.yml | push [agent/tivimate-architecture-overhaul] (1 path filters) | agent/tivimate-architecture-overhaul | repository mutation |
-| build-media3-sideload-now.yml | workflow_dispatch; push [agent/media3-player-core-rebuild, agent/manual-vlc-engine, fix/tivimate-m3u-epg-ci-align] (9 path filters) | ${{ github.event.pull_request.head.sha &#124;&#124; github.sha }} | APK/build, FFmpeg, validation |
+| build-media3-sideload-now.yml | workflow_dispatch; push [agent/media3-player-core-rebuild, agent/manual-vlc-engine, fix/tivimate-m3u-epg-ci-align] (11 path filters) | ${{ github.event.pull_request.head.sha &#124;&#124; github.sha }} | APK/build, FFmpeg, validation |
 | build-phoenix-apk.yml | workflow_dispatch; push [perf/opt-fix, agent/tivimate-deep-player-quickactions-repair, agent/media3-player-core-rebuild] (2 path filters) | event ref | APK/build, FFmpeg, validation |
 | build8-final-sideload.yml | push [fix/purple-next-build8-tester-pass] (2 path filters) | event ref | APK/build, FFmpeg, validation |
 | build8-fix-validation.yml | push [fix/purple-next-build8-tester-pass] (2 path filters) | event ref | repository mutation, native compile, validation |
