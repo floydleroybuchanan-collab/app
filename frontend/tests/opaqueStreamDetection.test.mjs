@@ -70,7 +70,8 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /pendingPrepare/);
   assert.match(manager, /cachedType == "progressive" && isOpaqueHttpUri/);
   assert.match(manager, /hint == "progressive" && !opaque/);
-  assert.match(manager, /"progressive" if \(opaqueRouteCacheKey != null \|\| isOpaqueHttpUri\(source\.uri\)\)/);
+  assert.match(manager, /"progressive" -> \{/);
+  assert.match(manager, /opaqueRouteCacheKey != null \|\| isOpaqueHttpUri\(source\.uri\)/);
   assert.doesNotMatch(manager, /if \(firstFrameRendered \|\| !isContainerMismatch\(error\)\)/);
   const firstFrameStart = manager.indexOf("override fun onRenderedFirstFrame()");
   const firstFrameEnd = manager.indexOf("override fun onPlayerError", firstFrameStart);

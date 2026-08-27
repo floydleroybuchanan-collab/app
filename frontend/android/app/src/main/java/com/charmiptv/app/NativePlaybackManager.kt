@@ -213,6 +213,8 @@ object NativePlaybackManager {
     recordDiagnostic("silent-audio", lastPlaybackError, instance)
     finishWithError("silent-audio", instance)
   }
+
+  private val startupTimeout = Runnable {
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
     if (ensureActiveSurfaceBound(instance, "startup-timeout")) {
@@ -945,8 +947,13 @@ object NativePlaybackManager {
       // Opaque last-resort "progressive" is often still live MPEG-TS without a
       // file extension. Keep the live-TS flags so this candidate is not a
       // guaranteed black/silent dead end.
-      "progressive" if (opaqueRouteCacheKey != null || isOpaqueHttpUri(source.uri)) ->
-        ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
+      "progressive" -> {
+        if (opaqueRouteCacheKey != null || isOpaqueHttpUri(source.uri)) {
+          ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
+        } else {
+          DefaultMediaSourceFactory(dataSource).createMediaSource(item)
+        }
+      }
       else -> DefaultMediaSourceFactory(dataSource).createMediaSource(item)
     }
   }

@@ -75,7 +75,7 @@ test("native provider connections close when connect or response acquisition fai
   for (const native of [primary, custom]) {
     assert.match(native, /val status = try \{[\s\S]{0,180}connection\.connect\(\)[\s\S]{0,120}connection\.responseCode[\s\S]{0,180}catch \(t: Throwable\) \{[\s\S]{0,100}connection\.disconnect\(\)/);
   }
-  assert.match(playlist, /OkHttpClientProvider\.getOkHttpClient\(\)\.newBuilder\(\)/);
+  assert.match(playlist, /CharmHttpClients\.playlistClient\(OkHttpClientProvider\.getOkHttpClient\(\)\)/);
   assert.match(playlist, /callTimeout\(CALL_TIMEOUT_SECONDS, TimeUnit\.SECONDS\)/);
   assert.match(playlist, /if \(!response\.isSuccessful\)[\s\S]{0,180}response\.close\(\)/);
   assert.match(playlist, /if \(body == null\)[\s\S]{0,120}response\.close\(\)/);
