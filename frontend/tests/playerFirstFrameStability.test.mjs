@@ -40,8 +40,12 @@ test("Media3 reconnect watchdog requires no progress before recovery", async () 
 });
 
 test("Media3 recovers bounded terminal live reads before exposing Retry", async () => {
-  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /readTimeout\(0, TimeUnit.SECONDS\)/);
+  const [native, clients] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"),
+  ]);
+  assert.match(clients, /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(native, /CharmHttpClients\.mediaClient\(\)/);
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.doesNotMatch(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /recordDiagnostic\("player-error", error, created\)/);

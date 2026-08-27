@@ -38,7 +38,8 @@ test("Media3 uses TiViMate buffer profiles and reconnect-on-error policy", async
   assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS|HUNG_BUFFER_REPREPARE_MS/);
   assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
   assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(await source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"), /readTimeout\(0, TimeUnit.SECONDS\)/);
+  assert.match(native, /CharmHttpClients\.mediaClient\(\)/);
   assert.match(native, /recoveryAttempts >= MAX_AUTO_RECOVERIES/);
   assert.match(native, /instance\.prepare\(\)/);
 });

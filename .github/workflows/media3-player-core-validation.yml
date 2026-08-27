@@ -69,7 +69,7 @@ jobs:
           grep -q 'PlayerView' "$PLAYER"
           grep -q 'CharmMemoryCoordinator.budgets().lowRam' "$PLAYER"
           grep -q 'onRenderedFirstFrame' "$PLAYER"
-          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' "$PLAYER"
+          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
           grep -q 'START_TIMEOUT_MS = 60_000L' "$PLAYER"
           grep -q 'OPAQUE_CONFIRM_MS = 5_000L' "$PLAYER"
@@ -79,7 +79,8 @@ jobs:
           grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'readTimeout(0, TimeUnit.SECONDS)' android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'CharmHttpClients.mediaClient()' "$PLAYER"
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
           grep -q 'DefaultHlsExtractorFactory(liveTsFlags, true)' "$PLAYER"
@@ -161,7 +162,8 @@ jobs:
           grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'readTimeout(0, TimeUnit.SECONDS)' android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'CharmHttpClients.mediaClient()' "$PLAYER"
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
