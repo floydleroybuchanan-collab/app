@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import org.videolan.libvlc.LibVLC
@@ -19,6 +20,9 @@ import org.videolan.libvlc.util.VLCVideoLayout
  * (Settings can still force Media3). One MediaPlayer exists at a time and Media3
  * is fully released before a VLC tune starts. Opaque `/live/.../id` URLs rotate
  * `.ts` / `.m3u8` / `.mp4` suffixes on start-timeout like TiViMate-class clients.
+ *
+ * Onn / Amlogic: never play without a measured host surface, and never inherit
+ * Guide preview mute into fullscreen (same contract as NativePlaybackManager).
  */
 object NativeVlcPlaybackManager {
   enum class Owner { NONE, PREVIEW, FULLSCREEN }
@@ -32,6 +36,17 @@ object NativeVlcPlaybackManager {
   data class TrackInfo(val id: Int, val label: String)
 
   private data class PlaybackSource(
+    val uri: String,
+    val headers: Map<String, String>,
+    val hardwareDecode: Boolean,
+    val audioOutput: String,
+    val bufferProfile: String,
+  )
+
+  private data class PendingPrepare(
+    val requestedOwner: Owner,
+    val generation: Long,
+    val channelKey: String,
     val uri: String,
     val headers: Map<String, String>,
     val hardwareDecode: Boolean,
@@ -60,6 +75,7 @@ object NativeVlcPlaybackManager {
   private var owner = Owner.NONE
   private var activeIdentity: Identity? = null
   private var activeSource: PlaybackSource? = null
+  private var pendingPrepare: PendingPrepare? = null
   private var listener: Listener? = null
   private var playing = false
   private var mutedState = false
@@ -68,6 +84,16 @@ object NativeVlcPlaybackManager {
   private var uriLadderIndex = 0
 
   private val startupTimeout: Runnable = Runnable {
+    val pending = pendingPrepare
+    if (pending != null) {
+      pendingPrepare = null
+      listener?.onState(
+        Identity(pending.requestedOwner, pending.generation, pending.channelKey),
+        "error",
+        "start-timeout",
+      )
+      return@Runnable
+    }
     val identity = activeIdentity ?: return@Runnable
     if (playing || owner == Owner.NONE) return@Runnable
     if (advanceUriLadder(identity, "start-timeout")) return@Runnable
@@ -93,7 +119,29 @@ object NativeVlcPlaybackManager {
       Owner.FULLSCREEN -> fullscreenSurface = surface
       Owner.NONE -> return@runOnMain
     }
+    unclipVideoAncestors(surface)
+    // prepare() can race Fabric mount. Flush any queued tune once the host exists.
+    val pending = pendingPrepare
+    if (pending != null && pending.requestedOwner == surfaceOwner) {
+      pendingPrepare = null
+      prepare(
+        pending.requestedOwner,
+        pending.generation,
+        pending.channelKey,
+        pending.uri,
+        pending.headers,
+        pending.hardwareDecode,
+        pending.audioOutput,
+        pending.bufferProfile,
+      )
+      return@runOnMain
+    }
     if (owner != surfaceOwner || mediaPlayer == null) return@runOnMain
+    if (!surfaceMeasured(surface)) {
+      // Host is still 0×0. Wait for onSizeChanged → attachSurface again.
+      activeIdentity?.let { listener?.onState(it, "loading", "awaiting-surface") }
+      return@runOnMain
+    }
     if (attachVideoLayout(surfaceOwner)) {
       try { mediaPlayer?.play() } catch (_: Throwable) {}
       if (!playing) {
@@ -134,9 +182,35 @@ object NativeVlcPlaybackManager {
     bufferProfile: String,
   ) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
+      pendingPrepare = null
       listener?.onState(Identity(requestedOwner, nextGeneration, nextChannelKey.trim()), "error", "owner-reserved")
       return@runOnMain
     }
+
+    val host = surfaceFor(requestedOwner)
+    if (host == null) {
+      // Fabric often mounts the native surface one frame after prepare*. Queue
+      // the tune instead of decoding into a missing / 0×0 TextureView.
+      pendingPrepare = PendingPrepare(
+        requestedOwner,
+        nextGeneration,
+        nextChannelKey.trim(),
+        uri,
+        LinkedHashMap(headers),
+        hardwareDecode,
+        audioOutput,
+        bufferProfile,
+      )
+      listener?.onState(
+        Identity(requestedOwner, nextGeneration, nextChannelKey.trim()),
+        "loading",
+        "awaiting-surface",
+      )
+      main.removeCallbacks(startupTimeout)
+      main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+      return@runOnMain
+    }
+    pendingPrepare = null
 
     NativePlaybackManager.stopForEngineSwitch()
     main.removeCallbacks(startupTimeout)
@@ -144,6 +218,10 @@ object NativeVlcPlaybackManager {
     releasePlayerOnly(removeLayout = false)
 
     owner = requestedOwner
+    // Fullscreen must never inherit Guide preview mute (mutedState volume 0).
+    if (requestedOwner == Owner.FULLSCREEN) {
+      mutedState = false
+    }
     playing = false
     recoveryAttempts = 0
     uriLadder = CharmStreamUrls.opaqueUriVariants(uri)
@@ -181,12 +259,24 @@ object NativeVlcPlaybackManager {
         }
       }
 
-      attachVideoLayout(identity.owner)
-      if (announceLoading) listener?.onState(identity, "loading", null)
+      val host = surfaceFor(identity.owner)
+      val attached = host != null && surfaceMeasured(host) && attachVideoLayout(identity.owner)
+      if (announceLoading) {
+        listener?.onState(identity, "loading", if (attached) null else "awaiting-surface")
+      }
       val media = Media(core, Uri.parse(source.uri))
       media.setHWDecoderEnabled(source.hardwareDecode, false)
-      media.addOption(":network-caching=${networkCachingMs(source.bufferProfile)}")
+      val cachingMs = networkCachingMs(source.bufferProfile)
+      media.addOption(":network-caching=$cachingMs")
+      // TiViMate-class live HTTP: keep cache/clock aligned so MPEG-TS does not
+      // open as "playing" with a dead video clock on Amlogic.
+      media.addOption(":live-caching=$cachingMs")
+      media.addOption(":clock-jitter=0")
+      media.addOption(":clock-synchro=0")
       media.addOption(":http-reconnect")
+      if (source.uri.startsWith("rtsp", ignoreCase = true)) {
+        media.addOption(":rtsp-tcp")
+      }
       source.headers.forEach { (key, value) ->
         when (key.lowercase()) {
           "user-agent" -> media.addOption(":http-user-agent=$value")
@@ -206,6 +296,13 @@ object NativeVlcPlaybackManager {
       }
       player.media = media
       media.release()
+      if (!attached) {
+        // Decode without a measured TextureView = Onn black (+ often silent).
+        // Wait for attachSurface / onSizeChanged to rebind and play.
+        main.removeCallbacks(startupTimeout)
+        main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+        return
+      }
       player.play()
       main.removeCallbacks(startupTimeout)
       val firstOpaque = uriLadder.size > 1 && uriLadderIndex == 0
@@ -249,13 +346,20 @@ object NativeVlcPlaybackManager {
     releasePlayer: Boolean,
     onStopped: (() -> Unit)? = null,
   ) = runOnMain {
-    if (owner == requestedOwner) stopInternal(releasePlayer)
+    if (owner == requestedOwner || pendingPrepare?.requestedOwner == requestedOwner) {
+      pendingPrepare = null
+      if (owner == requestedOwner) stopInternal(releasePlayer)
+    }
     onStopped?.invoke()
   }
 
-  fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
+  fun stopForEngineSwitch() = runOnMain {
+    pendingPrepare = null
+    stopInternal(releasePlayer = true)
+  }
 
   fun releaseAll() = runOnMain {
+    pendingPrepare = null
     stopInternal(releasePlayer = true)
     previewSurface = null
     fullscreenSurface = null
@@ -274,6 +378,10 @@ object NativeVlcPlaybackManager {
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
     CharmMemoryCoordinator.setPlaybackStarting(false)
+    // Re-assert unmuted fullscreen volume in case a late preview mute raced in.
+    if (identity.owner == Owner.FULLSCREEN && !mutedState) {
+      try { player.volume = 100 } catch (_: Throwable) {}
+    }
     listener?.onState(identity, "playing", null)
     publishTracks(player, identity)
   }
@@ -335,6 +443,7 @@ object NativeVlcPlaybackManager {
 
   private fun finishWithError(identity: Identity, reason: String) {
     playing = false
+    pendingPrepare = null
     main.removeCallbacks(startupTimeout)
     main.removeCallbacks(delayedRecovery)
     CharmMemoryCoordinator.setPlaybackStarting(false)
@@ -347,18 +456,17 @@ object NativeVlcPlaybackManager {
     }
   }
 
-  private fun publishFailure(player: MediaPlayer, identity: Identity, reason: String) {
-    if (mediaPlayer !== player || activeIdentity != identity) return
-    finishWithError(identity, reason)
-  }
-
   private fun ensureCore(): LibVLC? {
     libVlc?.let { return it }
     val context = activity ?: return null
     return try {
       LibVLC(
         context.applicationContext,
-        arrayListOf("--audio-time-stretch"),
+        arrayListOf(
+          "--audio-time-stretch",
+          "--network-caching=5000",
+          "--live-caching=5000",
+        ),
       ).also { libVlc = it }
     } catch (failure: Throwable) {
       Log.e(TAG, "LibVLC init failed", failure)
@@ -386,21 +494,30 @@ object NativeVlcPlaybackManager {
     else -> 20_000
   }
 
+  private fun surfaceFor(surfaceOwner: Owner): FrameLayout? = when (surfaceOwner) {
+    Owner.PREVIEW -> previewSurface
+    Owner.FULLSCREEN -> fullscreenSurface
+    Owner.NONE -> null
+  }
+
+  private fun surfaceMeasured(surface: View): Boolean =
+    surface.isAttachedToWindow && surface.width > 0 && surface.height > 0
+
   private fun attachVideoLayout(surfaceOwner: Owner): Boolean {
-    val surface = when (surfaceOwner) {
-      Owner.PREVIEW -> previewSurface
-      Owner.FULLSCREEN -> fullscreenSurface
-      Owner.NONE -> null
-    } ?: return false
+    val surface = surfaceFor(surfaceOwner) ?: return false
+    if (!surfaceMeasured(surface)) return false
     val context = activity ?: return false
+    unclipVideoAncestors(surface)
     val layout = videoLayout ?: VLCVideoLayout(context).also {
       it.clipChildren = false
       it.clipToPadding = false
       videoLayout = it
     }
+    unclipVideoAncestors(layout)
     (layout.parent as? ViewGroup)?.removeView(layout)
     surface.removeAllViews()
     surface.addView(layout, FrameLayout.LayoutParams(-1, -1))
+    layout.visibility = View.VISIBLE
     val player = mediaPlayer ?: return false
     try { player.detachViews() } catch (_: Throwable) {}
     return try {

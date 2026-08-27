@@ -27,12 +27,21 @@ test("LibVLC is native, single-owner, hardware-first, and fully releasable", asy
   assert.match(manager, /onPlaybackProblem/);
   assert.match(manager, /advanceUriLadder/);
   assert.match(manager, /:http-reconnect/);
+  assert.match(manager, /:live-caching=/);
+  assert.match(manager, /:clock-jitter=0/);
   assert.match(manager, /CharmHttpClients\.cookieHeaderFor/);
   assert.match(manager, /CharmStreamUrls\.opaqueUriVariants/);
+  assert.match(manager, /awaiting-surface/);
+  assert.match(manager, /pendingPrepare/);
+  assert.match(manager, /Fullscreen must never inherit Guide preview mute/);
+  assert.match(manager, /mutedState = false/);
+  assert.match(manager, /surfaceMeasured/);
   assert.match(module, /LifecycleEventListener/); assert.match(module, /onHostDestroy\(\).*releaseAll/s);
   const surface = await read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt");
   assert.match(surface, /clipChildren = false/);
   assert.match(surface, /Do not call detachSurface\(\) here/);
+  assert.match(surface, /onSizeChanged/);
+  assert.match(surface, /oldw <= 0 \|\| oldh <= 0/);
 });
 
 test("channel playback profile index is stable-keyed and bounded", async () => {

@@ -1,6 +1,7 @@
 package com.charmiptv.app
 
 import android.content.Context
+import android.view.View
 import android.widget.FrameLayout
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
@@ -13,6 +14,9 @@ import com.facebook.react.uimanager.annotations.ReactProp
  * even before onAttachedToWindow. Fabric may detach/reattach this view during
  * an engine switch; that must not be treated as destruction or LibVLC is left
  * with no layout (black + silent) or is torn down mid-decode (native crash).
+ *
+ * Onn / Amlogic: rebind on the first non-zero layout so LibVLC is not left
+ * attached to a 0×0 TextureView (black + silent while status stays loading/playing).
  */
 class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativeVlcPlaybackManager.Owner.NONE
@@ -20,12 +24,25 @@ class NativeVlcPlaybackSurface(context: Context) : FrameLayout(context) {
   init {
     clipChildren = false
     clipToPadding = false
+    // Keep VISIBLE so Fabric measures a non-zero TextureView host.
+    visibility = View.VISIBLE
   }
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     unclipVideoAncestors(this)
     if (owner != NativeVlcPlaybackManager.Owner.NONE) {
+      NativeVlcPlaybackManager.attachSurface(owner, this)
+    }
+  }
+
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    if (w <= 0 || h <= 0 || owner == NativeVlcPlaybackManager.Owner.NONE) return
+    // First real layout after a 0×0 unmeasured host. Rebind so LibVLC is not
+    // left outputting to a dead TextureView while audio stays muted/silent.
+    if (oldw <= 0 || oldh <= 0) {
+      unclipVideoAncestors(this)
       NativeVlcPlaybackManager.attachSurface(owner, this)
     }
   }
