@@ -83,6 +83,20 @@ test("M3U streamType matches native TiViMate Media3 hints for provider URLs", ()
   assert.equal(streamType("https://provider.example/live/opaque|User-Agent=Charm"), "unknown");
 });
 
+test("M3U EXTVLCOPT lines become pipe headers for Media3/VLC", () => {
+  const text = `#EXTM3U
+#EXTINF:-1 tvg-id="ua.1" group-title="News",UA Channel
+#EXTVLCOPT:http-user-agent=ProviderBox/1.0
+#EXTVLCOPT:http-referrer=https://provider.example/
+https://provider.example/live/1
+`;
+  const channels = parseM3U(text);
+  assert.equal(channels.length, 1);
+  assert.match(channels[0].url, /\|/);
+  assert.match(channels[0].url, /User-Agent=ProviderBox%2F1\.0/);
+  assert.match(channels[0].url, /Referer=https%3A%2F%2Fprovider\.example%2F/);
+});
+
 test("allocateChannelId stays deterministic for the same URL", () => {
   const used = new Set();
   const a = allocateChannelId({

@@ -11,7 +11,7 @@ const source = (path) => readFile(join(root, path), "utf8");
 test("stream requests default to Charm playlist UA when the M3U omits User-Agent", () => {
   assert.deepEqual(parsePipeHeaders("https://provider.example/live"), {
     uri: "https://provider.example/live",
-    headers: { "User-Agent": "CharmIPTV/Experimental-v3" },
+    headers: { "User-Agent": "TiviMate/5.1.6 (Linux; Android TV)" },
   });
   const parsed = parsePipeHeaders("https://provider.example/live|User-Agent=Provider%20Box&Referer=https%3A%2F%2Fprovider.example&Authorization=Bearer%20abc");
   assert.equal(parsed.headers["User-Agent"], "Provider Box");

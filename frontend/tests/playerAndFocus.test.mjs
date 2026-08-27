@@ -27,7 +27,7 @@ test("pipe headers decode valid values and never throw on malformed percent enco
   assert.equal(parsed.uri, "https://x/live");
   assert.equal(parsed.headers.Referer, "https://example.com");
   assert.equal(parsed.headers["X-Bad"], "%E0%A4%A");
-  assert.equal(parsed.headers["User-Agent"], "CharmIPTV/Experimental-v3");
+  assert.equal(parsed.headers["User-Agent"], "TiviMate/5.1.6 (Linux; Android TV)");
 });
 
 test("drawer edge is a typed remote owner and stale blur cleanup cannot clobber main drawer", async () => {

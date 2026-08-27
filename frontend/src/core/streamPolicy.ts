@@ -31,7 +31,7 @@ function kindFromHint(raw: string | null | undefined): StreamKind | null {
  * direct MPEG-TS on the explicit TS extractor/watchdog path instead of silently
  * downgrading it to generic progressive playback.
  */
-export const DEFAULT_STREAM_USER_AGENT = "CharmIPTV/Experimental-v3";
+export const DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)";
 
 export function detectStreamKind(uri: string, streamTypeHint?: string | null): StreamKind {
   const lower = uri.toLowerCase();
@@ -77,8 +77,8 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
   }
   const uri = rawUri.slice(0, pipeIndex);
   // Preserve headers supplied by the stream/provider. When the playlist omits
-  // User-Agent, use the same Charm UA as playlist/EPG fetches so IPTV panels
-  // that block OkHttp's default UA still deliver bytes.
+  // User-Agent, use the same TiViMate-style Android TV UA the cloud builder
+  // already retries with so IPTV panels that gate on that identity still deliver bytes.
   const headers: Record<string, string> = {};
   for (const pair of rawUri.slice(pipeIndex + 1).split("&")) {
     const equals = pair.indexOf("=");

@@ -177,10 +177,11 @@ object NativeVlcPlaybackManager {
         when (key.lowercase()) {
           "user-agent" -> media.addOption(":http-user-agent=$value")
           "referer", "referrer" -> media.addOption(":http-referrer=$value")
+          else -> media.addOption(":http-header=$key: $value")
         }
       }
       if (source.headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
-        media.addOption(":http-user-agent=CharmIPTV/Experimental-v3")
+        media.addOption(":http-user-agent=TiviMate/5.1.6 (Linux; Android TV)")
       }
       player.media = media
       media.release()

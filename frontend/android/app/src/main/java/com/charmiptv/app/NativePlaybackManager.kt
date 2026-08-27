@@ -101,9 +101,10 @@ object NativePlaybackManager {
   // Amlogic profile (20/90/5/12 + 48MB) that painted video with audio.
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
-  // Match playlist/EPG fetch UA. OkHttp's default "okhttp/x.x" is blocked by many
-  // IPTV panels, which leaves every tune black+silent while the guide still loads.
-  private const val DEFAULT_STREAM_USER_AGENT = "CharmIPTV/Experimental-v3"
+  // Match the builder's TiViMate-style panel UA. OkHttp's default "okhttp/x.x"
+  // (and unknown Charm-only strings) are blocked by many IPTV panels, which
+  // leaves every tune black+silent while the guide still loads.
+  private const val DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)"
 
   // Single reconnect-on-error window (TiViMate does not expose separate
   // transport/hard-stall timers). Keep it patient: Amlogic reports BUFFERING

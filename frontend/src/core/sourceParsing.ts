@@ -181,13 +181,54 @@ export function parseM3UWithStats(
   const source = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const total = Math.max(1, source.length);
   let offset = 0;
-  let pending: { line: string; attrs: Record<string, string>; name: string } | null = null;
+  let pending: {
+    line: string;
+    attrs: Record<string, string>;
+    name: string;
+    headers: Record<string, string>;
+  } | null = null;
   let scanned = 0;
 
   const flushProgress = () => {
     if (!onProgress) return;
     scanned += 1;
     if (scanned % 400 === 0) onProgress(Math.min(0.95, offset / total));
+  };
+
+  const applyExtHttpOption = (headers: Record<string, string>, line: string) => {
+    const payload = line.slice(line.indexOf(":") + 1).trim();
+    if (!payload) return;
+    const lower = payload.toLowerCase();
+    if (lower.startsWith("http-user-agent=")) headers["User-Agent"] = payload.slice(payload.indexOf("=") + 1).trim();
+    else if (lower.startsWith("http-referrer=") || lower.startsWith("http-referer=")) {
+      headers.Referer = payload.slice(payload.indexOf("=") + 1).trim();
+    } else if (lower.startsWith("http-cookie=")) {
+      headers.Cookie = payload.slice(payload.indexOf("=") + 1).trim();
+    } else if (lower.startsWith("http-header=")) {
+      const header = payload.slice(payload.indexOf("=") + 1).trim();
+      const colon = header.indexOf(":");
+      if (colon > 0) {
+        const key = header.slice(0, colon).trim();
+        const value = header.slice(colon + 1).trim();
+        if (key && value) headers[key] = value;
+      }
+    } else {
+      const equals = payload.indexOf("=");
+      if (equals > 0) {
+        const key = payload.slice(0, equals).trim();
+        const value = payload.slice(equals + 1).trim();
+        if (key && value) headers[key] = value;
+      }
+    }
+  };
+
+  const appendPipeHeaders = (url: string, headers: Record<string, string>) => {
+    const entries = Object.entries(headers);
+    if (!entries.length) return url;
+    const encoded = entries
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+      .join("&");
+    return url.includes("|") ? `${url}&${encoded}` : `${url}|${encoded}`;
   };
 
   while (offset <= source.length) {
@@ -208,14 +249,18 @@ export function parseM3UWithStats(
       const name = line.includes(",")
         ? line.slice(line.lastIndexOf(",") + 1).trim()
         : attrs["tvg-name"] || "Channel";
-      pending = { line, attrs, name };
+      pending = { line, attrs, name, headers: {} };
       continue;
     }
 
     if (!pending) continue;
+    if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:")) {
+      applyExtHttpOption(pending.headers, line);
+      continue;
+    }
     if (!line || line.startsWith("#")) continue;
 
-    const url = line;
+    const url = appendPipeHeaders(line, pending.headers);
     const attrs = pending.attrs;
     const name = pending.name;
     pending = null;

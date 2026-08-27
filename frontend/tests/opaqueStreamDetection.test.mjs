@@ -60,7 +60,7 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /tryNextOpaqueCandidate\(created, error\)/);
   assert.match(manager, /isContainerMismatch/);
   assert.match(manager, /forgetDetectedType\(cacheKey\)/);
-  assert.match(manager, /DEFAULT_STREAM_USER_AGENT = "CharmIPTV\/Experimental-v3"/);
+  assert.match(manager, /DEFAULT_STREAM_USER_AGENT = "TiviMate\/5\.1\.6 \(Linux; Android TV\)"/);
   assert.match(manager, /properties\["User-Agent"\] = DEFAULT_STREAM_USER_AGENT/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);

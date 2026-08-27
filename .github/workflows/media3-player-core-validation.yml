@@ -177,7 +177,12 @@ jobs:
           grep -q 'NativePlaybackSourceRefreshRequested' android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt
           grep -q 'refreshPlaybackChannel(event.channelKey)' src/components/StreamPlayer.tsx
           grep -q 'streamTypeHint' src/components/StreamPlayer.tsx
-          ! grep -q 'DEFAULT_STREAM_USER_AGENT\|VLC/3.0.20' src/core/streamPolicy.ts
+          grep -q 'DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)"' src/core/streamPolicy.ts
+          ! grep -q 'VLC/3.0.20' src/core/streamPolicy.ts
+          grep -q 'TiviMate/5.1.6 (Linux; Android TV)' android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
+          grep -q '#EXTVLCOPT' src/core/sourceParsing.ts
+          grep -q 'applyExtHttpOption' android/app/src/main/java/com/charmiptv/app/NativePlaylistParser.kt
+          grep -q ':http-header=' android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackManager.kt
       - name: Compile native Kotlin and Java
         run: |
           chmod +x android/gradlew

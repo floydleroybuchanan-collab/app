@@ -53,6 +53,7 @@ internal object NativePlaylistParser {
     val name: String,
     val group: String,
     val logo: String,
+    val headers: LinkedHashMap<String, String> = LinkedHashMap(),
   )
 
   fun fetch(urlString: String): NativePlaylistResult {
@@ -100,9 +101,14 @@ internal object NativePlaylistParser {
           }
 
           val meta = pending ?: continue
+          if (line.startsWith("#EXTVLCOPT:", ignoreCase = true) || line.startsWith("#EXTHTTP:", ignoreCase = true)) {
+            applyExtHttpOption(meta.headers, line)
+            continue
+          }
           if (line.isEmpty() || line.startsWith('#')) continue
           pending = null
-          if (!isAllowedStreamUrl(line)) {
+          val streamUrl = appendPipeHeaders(line, meta.headers)
+          if (!isAllowedStreamUrl(streamUrl)) {
             rejected += 1
             continue
           }
@@ -111,7 +117,7 @@ internal object NativePlaylistParser {
             tvgCounts[meta.tvgId] = (tvgCounts[meta.tvgId] ?: 0) + 1
           }
           if (rawEntries.size < MAX_CHANNELS) {
-            rawEntries.add(RawEntry(meta.tvgId, meta.name, meta.group, meta.logo, line))
+            rawEntries.add(RawEntry(meta.tvgId, meta.name, meta.group, meta.logo, streamUrl))
           } else {
             truncated = true
           }
@@ -175,7 +181,8 @@ internal object NativePlaylistParser {
       .build()
     val request = Request.Builder()
       .url(cleanUrl)
-      .header("User-Agent", "CharmIPTV/Experimental-v3")
+      .header("User-Agent", "TiviMate/5.1.6 (Linux; Android TV)")
+      .header("Accept", "application/x-mpegURL,application/vnd.apple.mpegurl,audio/mpegurl,application/xml,text/xml,*/*")
       .header("Accept", "*/*")
       .build()
     val response = client.newCall(request).execute()
@@ -248,6 +255,43 @@ internal object NativePlaylistParser {
       }
       from = index + key.length
     }
+  }
+
+  private fun applyExtHttpOption(headers: LinkedHashMap<String, String>, line: String) {
+    val payload = line.substringAfter(':', "").trim()
+    if (payload.isEmpty()) return
+    val lower = payload.lowercase(Locale.US)
+    when {
+      lower.startsWith("http-user-agent=") -> headers["User-Agent"] = payload.substringAfter('=').trim()
+      lower.startsWith("http-referrer=") || lower.startsWith("http-referer=") ->
+        headers["Referer"] = payload.substringAfter('=').trim()
+      lower.startsWith("http-cookie=") -> headers["Cookie"] = payload.substringAfter('=').trim()
+      lower.startsWith("http-header=") -> {
+        val header = payload.substringAfter('=').trim()
+        val colon = header.indexOf(':')
+        if (colon > 0) {
+          val key = header.substring(0, colon).trim()
+          val value = header.substring(colon + 1).trim()
+          if (key.isNotEmpty() && value.isNotEmpty()) headers[key] = value
+        }
+      }
+      else -> {
+        val equals = payload.indexOf('=')
+        if (equals > 0) {
+          val key = payload.substring(0, equals).trim()
+          val value = payload.substring(equals + 1).trim()
+          if (key.isNotEmpty() && value.isNotEmpty()) headers[key] = value
+        }
+      }
+    }
+  }
+
+  private fun appendPipeHeaders(url: String, headers: Map<String, String>): String {
+    if (headers.isEmpty()) return url
+    val encoded = headers.entries.joinToString("&") { (key, value) ->
+      "${java.net.URLEncoder.encode(key, Charsets.UTF_8.name())}=${java.net.URLEncoder.encode(value, Charsets.UTF_8.name())}"
+    }
+    return if (url.contains('|')) "$url&$encoded" else "$url|$encoded"
   }
 
   private fun isAllowedStreamUrl(raw: String): Boolean {
