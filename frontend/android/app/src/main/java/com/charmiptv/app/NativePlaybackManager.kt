@@ -176,7 +176,7 @@ object NativePlaybackManager {
   private var codecError: String? = null
   private var silentAudioRecoveryUsed = false
 
-  private val silentAudioCheck = Runnable {
+  private val silentAudioCheck: Runnable = Runnable {
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || !firstFrameRendered) return@Runnable
     if (audioDecoder != null) return@Runnable
@@ -214,7 +214,7 @@ object NativePlaybackManager {
     finishWithError("silent-audio", instance)
   }
 
-  private val startupTimeout = Runnable {
+  private val startupTimeout: Runnable = Runnable {
     val instance = player ?: return@Runnable
     if (owner == Owner.NONE || firstFrameRendered) return@Runnable
     if (ensureActiveSurfaceBound(instance, "startup-timeout")) {
