@@ -66,7 +66,7 @@ object NativeVlcPlaybackManager {
   private var mutedState = false
   private var recoveryAttempts = 0
 
-  private val startupTimeout = Runnable {
+  private val startupTimeout: Runnable = Runnable {
     val identity = activeIdentity ?: return@Runnable
     if (playing || owner == Owner.NONE) return@Runnable
     if (recoverOnce(identity, "start-timeout")) return@Runnable
