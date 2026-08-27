@@ -511,7 +511,7 @@ function SettingsScreenContent() {
               <SettingsCard title="Playback" icon="play-circle-outline">
                 <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
-                  Media3 is recommended. VLC is a manual compatibility option for streams or devices that need it. Only the selected engine owns the decoder; CharmIPTV never auto-starts the other engine as a fallback.
+                  Live IPTV (Xtream-style) defaults to VLC — the TiViMate-class path. Media3 stays available for clear HLS/DASH. Only the selected engine owns the decoder.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"
@@ -532,7 +532,7 @@ function SettingsScreenContent() {
                 <Text style={styles.help}>Long OK/Select is reserved for contextual Quick Actions. Directional D-pad keys remain deterministic; Long Down is the only remappable D-pad hold.</Text>
                 <ChoiceRow<"media3" | "vlc">
                   label="Player engine" value={playerEngine}
-                  options={[{ label: "Media3 (recommended)", value: "media3" }, { label: "VLC compatibility", value: "vlc" }]}
+                  options={[{ label: "VLC (recommended for live)", value: "vlc" }, { label: "Media3", value: "media3" }]}
                   onChange={setPlayerEngine}
                 />
                 {playerEngine === "vlc" ? (<>

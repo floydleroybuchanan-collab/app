@@ -7,6 +7,7 @@ import {
   isVlcSupportedStreamKind,
   media3ContentType,
   parsePipeHeaders,
+  preferredEngine,
 } from "@/src/core/streamPolicy";
 import {
   beginSession,
@@ -166,6 +167,14 @@ export function StreamPlayer({
     return profile?.confirmedType ?? streamTypeHint;
   }, [profile?.confirmedType, streamTypeHint, uri]);
   const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);
+  // Settings force wins. Default preference is VLC (TiViMate-class live). When
+  // preference is Media3, still route opaque/live kinds through preferredEngine
+  // so Xtream `/live/.../id` does not stay on the Media3 black path.
+  const activeEngine = useMemo(() => {
+    if (playerEngine === "vlc") return "vlc";
+    return preferredEngine(kind);
+  }, [kind, playerEngine]);
+  const engine = activeEngine;
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
   const currentSourceRef = useRef({ uri, headers, contentType });
   currentSourceRef.current = { uri, headers, contentType };
@@ -180,7 +189,7 @@ export function StreamPlayer({
   }, []);
 
   useEffect(() => addNativePlaybackStateListener((event) => {
-    if (playerEngine !== "media3") return;
+    if (engine !== "media3") return;
     const generation = generationRef.current;
     if (
       !generation ||
@@ -214,10 +223,10 @@ export function StreamPlayer({
       invalidateConfirmedStreamType(currentChannelKey);
       onStatusRef.current("error", reason);
     }
-  }), [currentChannelKey, owner, playerEngine, role]);
+  }), [currentChannelKey, owner, engine, role]);
 
   useEffect(() => addNativeVlcStateListener((event) => {
-    if (playerEngine !== "vlc") return;
+    if (engine !== "vlc") return;
     const generation = generationRef.current;
     if (
       !generation ||
@@ -239,20 +248,20 @@ export function StreamPlayer({
       if (role === "fullscreen") setNativePlaybackStarting(false);
       onStatusRef.current("error", "stream-error");
     }
-  }), [currentChannelKey, owner, playerEngine, role]);
+  }), [currentChannelKey, owner, engine, role]);
 
   useEffect(() => addNativePlaybackDiagnosticListener((event) => {
-    if (playerEngine !== "media3") return;
+    if (engine !== "media3") return;
     const generation = generationRef.current;
     if (!generation || event.owner !== owner || event.generation !== generation || event.channelKey !== currentChannelKey) return;
     if (event.event === "opaque-cache-invalidated") invalidateConfirmedStreamType(currentChannelKey);
     if (event.event === "opaque-type-stable" && event.sourceType) {
       rememberConfirmedStreamType(currentChannelKey, event.sourceType, "media3");
     }
-  }), [currentChannelKey, owner, playerEngine]);
+  }), [currentChannelKey, owner, engine]);
 
   useEffect(() => addNativePlaybackSourceRefreshListener((event) => {
-    if (playerEngine !== "media3") return;
+    if (engine !== "media3") return;
     const generation = generationRef.current;
     if (
       event.owner !== owner ||
@@ -287,10 +296,10 @@ export function StreamPlayer({
         const message = error instanceof Error ? error.name : "source-refresh-failed";
         resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, `${message}-reused-current`);
       });
-  }), [currentChannelKey, owner, playerEngine, role]);
+  }), [currentChannelKey, owner, engine, role]);
 
   useEffect(() => addNativePlaybackTracksListener((event) => {
-    if (playerEngine !== "media3") return;
+    if (engine !== "media3") return;
     const generation = generationRef.current;
     if (!generation || event.owner !== owner || event.generation !== generation || event.channelKey !== currentChannelKey) return;
     tracksRef.current = { audio: event.audio, text: event.text };
@@ -303,10 +312,10 @@ export function StreamPlayer({
     selectNativeAudio(selectedAudio, selectedAudio ? null : getPreferredAudioLanguage());
     if (textTrack == null) selectNativeSubtitle(null, null);
     else selectNativeSubtitle(event.text.find((track) => String(track.id) === String(textTrack)) ?? null, null);
-  }), [audioTrack, currentChannelKey, owner, playerEngine, textTrack]);
+  }), [audioTrack, currentChannelKey, owner, engine, textTrack]);
 
   useEffect(() => addNativeVlcTracksListener((event) => {
-    if (playerEngine !== "vlc") return;
+    if (engine !== "vlc") return;
     const generation = generationRef.current;
     if (!generation || event.owner !== owner || event.generation !== generation || event.channelKey !== currentChannelKey) return;
     tracksRef.current = { audio: event.audio, text: event.text };
@@ -318,7 +327,7 @@ export function StreamPlayer({
     if (remembered != null) selectNativeVlcAudio(event.audio.find((track) => String(track.id) === String(remembered)) ?? null);
     if (textTrack == null) selectNativeVlcSubtitle(null);
     else selectNativeVlcSubtitle(event.text.find((track) => String(track.id) === String(textTrack)) ?? null);
-  }), [audioTrack, currentChannelKey, owner, playerEngine, textTrack]);
+  }), [audioTrack, currentChannelKey, owner, engine, textTrack]);
 
   useEffect(() => () => {
     if (role === "preview") void stopPreviewSession("superseded");
@@ -327,8 +336,8 @@ export function StreamPlayer({
   useEffect(() => {
     const media3Available = Platform.OS === "android" && nativePlaybackAvailable();
     const vlcAvailable = Platform.OS === "android" && nativeVlcPlaybackAvailable();
-    const engineAvailable = playerEngine === "vlc" ? vlcAvailable : media3Available;
-    const kindSupported = playerEngine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);
+    const engineAvailable = engine === "vlc" ? vlcAvailable : media3Available;
+    const kindSupported = engine === "media3" ? isNativeMedia3SupportedStreamKind(kind) : isVlcSupportedStreamKind(kind);
 
     if (!playbackFocused || !uri || !engineAvailable) {
       generationRef.current = 0;
@@ -352,7 +361,7 @@ export function StreamPlayer({
     onStatusRef.current("loading", null);
 
     void (async () => {
-      if (playerEngine === "vlc") {
+      if (engine === "vlc") {
         if (role === "preview") await stopNativePreview(); else await stopNativeFullscreen(true);
         if (cancelled || !isSessionCurrent(role, generation)) return;
         if (role === "preview") {
@@ -380,46 +389,45 @@ export function StreamPlayer({
     headers,
     kind,
     playbackFocused,
-    playerEngine,
-    role,
+    engine,    role,
     uri,
     vlcPrefs.audioOutput,
     vlcPrefs.hardwareDecode,
   ]);
 
   useEffect(() => {
-    if (playerEngine === "vlc") setNativeVlcMuted(muted); else setNativePlaybackMuted(muted);
-  }, [muted, playerEngine]);
+    if (engine === "vlc") setNativeVlcMuted(muted); else setNativePlaybackMuted(muted);
+  }, [muted, engine]);
 
   useEffect(() => {
-    if (playerEngine === "vlc") {
+    if (engine === "vlc") {
       if (paused) pauseNativeVlcPlayback(); else if (playbackFocused) resumeNativeVlcPlayback();
     } else {
       if (paused) pauseNativePlayback(); else if (playbackFocused) resumeNativePlayback();
     }
-  }, [paused, playbackFocused, playerEngine]);
+  }, [paused, playbackFocused, engine]);
 
   useEffect(() => {
     if (role !== "fullscreen") return;
-    if (playerEngine === "vlc") setNativeVlcResizeMode(scaleMode); else setNativePlaybackResizeMode(scaleMode);
-  }, [playerEngine, role, scaleMode]);
+    if (engine === "vlc") setNativeVlcResizeMode(scaleMode); else setNativePlaybackResizeMode(scaleMode);
+  }, [engine, role, scaleMode]);
 
   useEffect(() => {
     if (audioTrack == null) return;
     const selected = tracksRef.current.audio.find((track) => String(track.id) === String(audioTrack)) ?? null;
-    if (playerEngine === "vlc") selectNativeVlcAudio(selected); else selectNativeAudio(selected, null);
-  }, [audioTrack, playerEngine]);
+    if (engine === "vlc") selectNativeVlcAudio(selected); else selectNativeAudio(selected, null);
+  }, [audioTrack, engine]);
 
   useEffect(() => {
     const selected = textTrack == null ? null : tracksRef.current.text.find((track) => String(track.id) === String(textTrack)) ?? null;
-    if (playerEngine === "vlc") selectNativeVlcSubtitle(selected);
+    if (engine === "vlc") selectNativeVlcSubtitle(selected);
     else if (textTrack == null) selectNativeSubtitle(null, null);
     else selectNativeSubtitle(selected, null);
-  }, [playerEngine, textTrack]);
+  }, [engine, textTrack]);
 
   if (!playbackFocused || !uri) return null;
   if (Platform.OS !== "android") return <View pointerEvents="none" collapsable={false} style={style} />;
-  if (playerEngine === "vlc") {
+  if (engine === "vlc") {
     return nativeVlcPlaybackAvailable()
       ? <NativeVlcPlaybackSurface owner={owner} pointerEvents="none" collapsable={false} renderToHardwareTextureAndroid={false} style={style} />
       : <View pointerEvents="none" collapsable={false} style={style} />;

@@ -63,11 +63,16 @@ test("MPEG-TS routing preserves a transport hint into native Media3", () => {
     const kind = detectStreamKind(uri);
     assert.equal(kind, "transport");
     assert.equal(media3ContentType(kind), "transport");
-    assert.equal(preferredEngine(kind), "media3");
+    assert.equal(preferredEngine(kind), "vlc");
   }
 });
 
-test("all automatic stream routing is Media3-only", () => { for (const uri of ["https://x/live.m3u8", "https://x/live.ts", "http://provider/live/u/p/1", "rtsp://x/live"]) assert.equal(preferredEngine(detectStreamKind(uri)), "media3"); });
+test("TiViMate-class routing sends opaque/live to VLC and clear HLS to Media3", () => {
+  assert.equal(preferredEngine(detectStreamKind("https://x/live.m3u8")), "media3");
+  assert.equal(preferredEngine(detectStreamKind("https://x/live.ts")), "vlc");
+  assert.equal(preferredEngine(detectStreamKind("http://provider/live/u/p/1")), "vlc");
+  assert.equal(preferredEngine(detectStreamKind("rtsp://x/live")), "vlc");
+});
 
 test("play entry points hand off through openFullscreenPlayer", async () => { const files = ["app/(tabs)/guide.tsx", "app/(tabs)/index.tsx", "app/(tabs)/favorites.tsx", "app/(tabs)/channels.tsx", "app/(tabs)/search.tsx", "src/components/ProgramModal.tsx", "src/components/PurpleChannelCollection.tsx", "app/_layout.tsx"]; for (const file of files) { const body = await source(file); assert.match(body, /openFullscreenPlayer/); assert.doesNotMatch(body, /pathname:\s*["']\/player["']/); } });
 

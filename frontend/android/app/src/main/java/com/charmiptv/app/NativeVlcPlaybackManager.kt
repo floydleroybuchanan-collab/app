@@ -13,14 +13,12 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 
 /**
- * Manual LibVLC compatibility engine.
+ * TiViMate-class LibVLC live engine.
  *
- * This manager never chooses itself automatically. StreamPlayer selects it only
- * when the user has explicitly selected VLC in Settings. One MediaPlayer exists
- * at a time and Media3 is fully released before a VLC tune starts. A temporary
- * React/Fabric surface loss pauses and detaches only the video target; it never
- * leaves audio running against a missing layout and never creates a second
- * decoder to recover the display.
+ * Default routing for opaque / MPEG-TS / RTSP-class streams selects VLC
+ * (Settings can still force Media3). One MediaPlayer exists at a time and Media3
+ * is fully released before a VLC tune starts. Opaque `/live/.../id` URLs rotate
+ * `.ts` / `.m3u8` / `.mp4` suffixes on start-timeout like TiViMate-class clients.
  */
 object NativeVlcPlaybackManager {
   enum class Owner { NONE, PREVIEW, FULLSCREEN }
@@ -47,6 +45,7 @@ object NativeVlcPlaybackManager {
   }
 
   private const val START_TIMEOUT_MS = 60_000L
+  private const val OPAQUE_FIRST_URI_TIMEOUT_MS = 12_000L
   private const val MAX_AUTO_RECOVERIES = 4
   private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
   private const val TAG = "CharmVlc"
@@ -65,10 +64,13 @@ object NativeVlcPlaybackManager {
   private var playing = false
   private var mutedState = false
   private var recoveryAttempts = 0
+  private var uriLadder: List<String> = emptyList()
+  private var uriLadderIndex = 0
 
   private val startupTimeout: Runnable = Runnable {
     val identity = activeIdentity ?: return@Runnable
     if (playing || owner == Owner.NONE) return@Runnable
+    if (advanceUriLadder(identity, "start-timeout")) return@Runnable
     if (recoverOnce(identity, "start-timeout")) return@Runnable
     finishWithError(identity, "start-timeout")
   }
@@ -144,11 +146,13 @@ object NativeVlcPlaybackManager {
     owner = requestedOwner
     playing = false
     recoveryAttempts = 0
+    uriLadder = CharmStreamUrls.opaqueUriVariants(uri)
+    uriLadderIndex = 0
     CharmMemoryCoordinator.setPlaybackStarting(true)
     val identity = Identity(requestedOwner, nextGeneration, nextChannelKey.trim())
     activeIdentity = identity
     val source = PlaybackSource(
-      uri = uri,
+      uri = uriLadder.first(),
       headers = LinkedHashMap(headers),
       hardwareDecode = hardwareDecode,
       audioOutput = audioOutput.trim().lowercase(),
@@ -182,10 +186,12 @@ object NativeVlcPlaybackManager {
       val media = Media(core, Uri.parse(source.uri))
       media.setHWDecoderEnabled(source.hardwareDecode, false)
       media.addOption(":network-caching=${networkCachingMs(source.bufferProfile)}")
+      media.addOption(":http-reconnect")
       source.headers.forEach { (key, value) ->
         when (key.lowercase()) {
           "user-agent" -> media.addOption(":http-user-agent=$value")
           "referer", "referrer" -> media.addOption(":http-referrer=$value")
+          "cookie" -> media.addOption(":http-cookie=$value")
           else -> media.addOption(":http-header=$key: $value")
         }
       }
@@ -195,13 +201,18 @@ object NativeVlcPlaybackManager {
       if (source.headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
         media.addOption(":http-header=Accept: */*")
       }
+      if (source.headers.keys.none { it.equals("Cookie", ignoreCase = true) }) {
+        CharmHttpClients.cookieHeaderFor(source.uri)?.let { media.addOption(":http-cookie=$it") }
+      }
       player.media = media
       media.release()
       player.play()
       main.removeCallbacks(startupTimeout)
-      main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+      val firstOpaque = uriLadder.size > 1 && uriLadderIndex == 0
+      main.postDelayed(startupTimeout, if (firstOpaque) OPAQUE_FIRST_URI_TIMEOUT_MS else START_TIMEOUT_MS)
     } catch (failure: Throwable) {
       Log.e(TAG, "VLC prepare failed", failure)
+      if (advanceUriLadder(identity, "vlc-init-failed")) return
       if (recoverOnce(identity, "vlc-init-failed")) return
       finishWithError(identity, "vlc-init-failed")
     }
@@ -271,8 +282,29 @@ object NativeVlcPlaybackManager {
     if (mediaPlayer !== player || activeIdentity != identity) return
     playing = false
     main.removeCallbacks(startupTimeout)
+    if (advanceUriLadder(identity, reason)) return
     if (recoverOnce(identity, reason)) return
     finishWithError(identity, reason)
+  }
+
+  private fun advanceUriLadder(identity: Identity, reason: String): Boolean {
+    if (activeIdentity != identity || owner == Owner.NONE) return false
+    val source = activeSource ?: return false
+    if (uriLadderIndex + 1 >= uriLadder.size) return false
+    uriLadderIndex += 1
+    val nextUri = uriLadder[uriLadderIndex]
+    val next = source.copy(uri = nextUri)
+    activeSource = next
+    recoveryAttempts = 0
+    main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
+    releasePlayerOnly(removeLayout = false)
+    playing = false
+    CharmMemoryCoordinator.setPlaybackStarting(true)
+    Log.i(TAG, "VLC URI ladder $uriLadderIndex/${uriLadder.size} after $reason → $nextUri")
+    listener?.onState(identity, "loading", "native-reprepare")
+    startMedia(identity, next, announceLoading = false)
+    return true
   }
 
   private fun recoverOnce(identity: Identity, reason: String): Boolean {

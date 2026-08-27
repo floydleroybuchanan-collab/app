@@ -120,7 +120,7 @@ jobs:
           grep -q 'activeGeneration' "$MODULE"
           grep -q 'indexDeclaredStreamTypes(channels)' "$SOURCE"
           grep -q 'mutationRevision' "$PROFILE"
-          grep -q 'VLC compatibility' "$SETTINGS"
+          grep -q 'VLC (recommended for live)' "$SETTINGS"
           grep -q 'fun tivimateBufferDurationsMs' "$PLAYER"
           grep -q '"low_latency" -> intArrayOf(8_000, 30_000, 2_000, 5_000)' "$PLAYER"
           grep -q '"balanced" -> intArrayOf(15_000, 60_000, 3_000, 8_000)' "$PLAYER"

@@ -10,16 +10,21 @@ import { evaluateDrawerBack } from "../src/core/drawerNavigationPolicy.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("stream classification preserves probing while automatic playback remains Media3-only", () => {
+test("stream classification preserves probing while live defaults to TiViMate-class VLC", () => {
   assert.equal(detectStreamKind("https://x/live.m3u8?token=1"), "hls");
   assert.equal(detectStreamKind("https://x/manifest.mpd"), "dash");
   assert.equal(detectStreamKind("https://cdn/hls/playlist.m3u8"), "hls");
   assert.equal(detectStreamKind("srt://contribute:9000"), "srt");
   assert.equal(detectStreamKind("rtsp://x/live"), "rtsp");
   assert.equal(detectStreamKind("http://provider.example/live/user/pass/1234"), "unknown");
-  for (const kind of ["hls", "dash", "progressive", "transport", "unknown", "srt", "rtmp", "webrtc", "rtsp"]) {
-    assert.equal(preferredEngine(kind), "media3");
-  }
+  assert.equal(preferredEngine("hls"), "media3");
+  assert.equal(preferredEngine("dash"), "media3");
+  assert.equal(preferredEngine("progressive"), "media3");
+  assert.equal(preferredEngine("transport"), "vlc");
+  assert.equal(preferredEngine("unknown"), "vlc");
+  assert.equal(preferredEngine("srt"), "vlc");
+  assert.equal(preferredEngine("rtmp"), "vlc");
+  assert.equal(preferredEngine("rtsp"), "vlc");
 });
 
 test("pipe headers decode valid values and never throw on malformed percent encoding", () => {

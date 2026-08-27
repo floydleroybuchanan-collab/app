@@ -7,13 +7,16 @@ import java.net.CookiePolicy
 import java.util.concurrent.TimeUnit
 
 /**
- * Shared HTTP identity for playlist fetch and Media3 stream bytes.
+ * Shared HTTP identity for playlist fetch, Media3 stream bytes, and VLC header
+ * injection.
  *
  * One CookieManager so Set-Cookie from M3U/panel redirects is available on the
  * later media GETs (TiViMate-class panels that gate segments on session cookies).
  */
 object CharmHttpClients {
-  private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER)
+  // ACCEPT_ALL matches IPTV panel behavior better than ACCEPT_ORIGINAL_SERVER,
+  // which drops many Domain=/cross-host cookies TiViMate-class clients keep.
+  private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
   private val cookieJar = JavaNetCookieJar(cookieManager)
 
   /** Playlist / XMLTV-class: bounded read. */
@@ -38,4 +41,15 @@ object CharmHttpClients {
       .followRedirects(true)
       .followSslRedirects(true)
       .build()
+
+  /** Cookie header for LibVLC (no OkHttp stack) from the shared jar. */
+  fun cookieHeaderFor(uri: String): String? {
+    return try {
+      val cookies = cookieManager.cookieStore.get(java.net.URI(uri))
+      if (cookies.isNullOrEmpty()) null
+      else cookies.joinToString("; ") { "${it.name}=${it.value}" }
+    } catch (_: Throwable) {
+      null
+    }
+  }
 }

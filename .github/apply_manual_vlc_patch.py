@@ -213,7 +213,7 @@ if 'playlist stream types are batch-indexed without probing' not in test_text:
     test_path.write_text(test_text)
 
 required = {
-    "frontend/app/(tabs)/settings.tsx": ['label="Player engine"', 'VLC compatibility', 'Only the selected engine owns the decoder'],
+    "frontend/app/(tabs)/settings.tsx": ['label="Player engine"', 'VLC (recommended for live)', 'Only the selected engine owns the decoder'],
     "frontend/src/components/StreamPlayer.tsx": ['playerEngine === "vlc"', 'stopNativeVlcFullscreen(true)'],
     "frontend/android/app/build.gradle": ['org.videolan.android:libvlc-all:3.7.5', 'libc++_shared.so'],
 }

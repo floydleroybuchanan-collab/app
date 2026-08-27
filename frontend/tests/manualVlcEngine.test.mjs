@@ -6,11 +6,13 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFile(join(root, path), "utf8");
 
-test("manual VLC engine is explicit and never auto-fallbacks", async () => {
+test("TiViMate-class VLC is the default live engine with Media3 still selectable", async () => {
   const [player, preference, policy] = await Promise.all([read("src/components/StreamPlayer.tsx"), read("src/playerEnginePreference.ts"), read("src/core/streamPolicy.ts")]);
-  assert.match(preference, /"media3" \| "vlc"/); assert.match(preference, /cachedPreference: PlayerEnginePreference = "media3"/); assert.match(player, /playerEngine === "vlc"/);
+  assert.match(preference, /"media3" \| "vlc"/); assert.match(preference, /cachedPreference: PlayerEnginePreference = "vlc"/); assert.match(preference, /gs_player_engine_preference_v2/);
+  assert.match(player, /engine === "vlc"/); assert.match(player, /preferredEngine\(kind\)/);
   assert.match(player, /stopNativeFullscreen\(true\)/); assert.match(player, /stopNativeVlcFullscreen\(true\)/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
   assert.match(policy, /isNativeMedia3SupportedStreamKind/); assert.match(policy, /isVlcSupportedStreamKind/);
+  assert.match(policy, /return "vlc"/);
 });
 
 test("LibVLC is native, single-owner, hardware-first, and fully releasable", async () => {
@@ -23,6 +25,10 @@ test("LibVLC is native, single-owner, hardware-first, and fully releasable", asy
   assert.match(manager, /recoverOnce\(identity/);
   assert.match(manager, /performReconnect\(identity, source\)/);
   assert.match(manager, /onPlaybackProblem/);
+  assert.match(manager, /advanceUriLadder/);
+  assert.match(manager, /:http-reconnect/);
+  assert.match(manager, /CharmHttpClients\.cookieHeaderFor/);
+  assert.match(manager, /CharmStreamUrls\.opaqueUriVariants/);
   assert.match(module, /LifecycleEventListener/); assert.match(module, /onHostDestroy\(\).*releaseAll/s);
   const surface = await read("android/app/src/main/java/com/charmiptv/app/NativeVlcPlaybackSurface.kt");
   assert.match(surface, /clipChildren = false/);

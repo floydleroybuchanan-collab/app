@@ -40,9 +40,10 @@ test("opaque sniff helper stays bounded even though live startup no longer opens
 });
 
 test("opaque startup uses one Media3 connection, stable confirmation and bounded candidate routing", async () => {
-  const [manager, module] = await Promise.all([
+  const [manager, module, urls] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmStreamUrls.kt"),
   ]);
   assert.match(manager, /source\.sourceType != "unknown"/);
   assert.doesNotMatch(manager, /NativeOpaqueStreamProbe\.start/);
@@ -51,7 +52,7 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /OPAQUE_TYPE_PREFS = "charm_media3_stream_types"/);
   assert.match(manager, /OPAQUE_LIVE_CANDIDATES = listOf\("transport", "hls", "dash", "progressive"\)/);
   assert.match(manager, /OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L/);
-  assert.match(manager, /probeReason = if \(fromCache\) "cache:\$firstType" else "direct:\$firstType"/);
+  assert.match(manager, /probeReason = "direct:\$firstType"/);
   assert.match(manager, /startOpaqueCandidate\(instance, source, cacheKey, firstType/);
   assert.match(manager, /detectedTypeCacheKey\(source\)/);
   assert.match(manager, /"channel:\$it"/);
@@ -70,8 +71,12 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /silentAudioCheck/);
   assert.match(manager, /awaiting-surface/);
   assert.match(manager, /pendingPrepare/);
-  assert.match(manager, /opaqueUri && cachedType != null && cachedType == "progressive"/);
+  assert.match(manager, /opaqueUri && cachedType != null/);
   assert.match(manager, /isOpaqueHttpUri\(source\.uri\)/);
+  assert.match(manager, /buildOpaqueAttempts/);
+  assert.match(manager, /opaqueUriVariants/);
+  assert.match(manager, /CharmStreamUrls\.opaqueUriVariants/);
+  assert.match(urls, /\.ts", "\.m3u8", "\.mp4"/);
   assert.match(manager, /hint == "progressive" && !opaque/);
   assert.match(manager, /"progressive" -> \{/);
   assert.match(manager, /opaqueRouteCacheKey != null \|\| isOpaqueHttpUri\(source\.uri\)/);

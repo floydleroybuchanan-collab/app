@@ -150,11 +150,13 @@ object NativePlaybackManager {
   private var bufferingLastBufferedPositionMs = 0L
   private var bufferingLastPositionMs = 0L
   private var opaqueRouteSource: PlaybackSource? = null
-  private var opaqueRouteCandidates: List<String> = emptyList()
+  private var opaqueRouteCandidates: List<OpaqueAttempt> = emptyList()
   private var opaqueRouteIndex = -1
   private var opaqueRouteCacheKey: String? = null
   private var opaqueRouteWasCached = false
   private var pendingPrepare: PendingPrepare? = null
+
+  private data class OpaqueAttempt(val uri: String, val sourceType: String)
 
   private data class PendingPrepare(
     val requestedOwner: Owner,
@@ -851,9 +853,10 @@ object NativePlaybackManager {
 
     val cacheKey = detectedTypeCacheKey(source)
     var cachedType = readDetectedType(cacheKey)
-    // Any wrong confirm on opaque live URLs can skip the ladder; progressive is
-    // the worst (no live-TS flags), but stale hls/dash/transport also hang.
-    if (opaqueUri && cachedType != null && cachedType == "progressive") {
+    // Opaque live: never trust a prior confirm — wrong hls/dash/transport/progressive
+    // all hang black, and TiViMate-class panels often need a .ts/.m3u8 URI rewrite
+    // that the type-only ladder cannot discover.
+    if (opaqueUri && cachedType != null) {
       forgetDetectedType(cacheKey)
       cachedType = null
       recordDiagnostic("opaque-cache-invalidated", lastPlaybackError, instance)
@@ -864,10 +867,10 @@ object NativePlaybackManager {
       isPersistableDetectedType(source.sourceType) -> source.sourceType
       else -> "transport"
     }
-    val fromCache = cachedType != null && firstType == cachedType
-    probeReason = if (fromCache) "cache:$firstType" else "direct:$firstType"
+    val fromCache = false
+    probeReason = "direct:$firstType"
     resolvedUri = redactUriForDiagnostics(source.uri)
-    recordDiagnostic(if (fromCache) "opaque-cache-hit" else "opaque-direct-start", lastPlaybackError, instance)
+    recordDiagnostic("opaque-direct-start", lastPlaybackError, instance)
     startOpaqueCandidate(instance, source, cacheKey, firstType, "$event-opaque-$firstType", fromCache = fromCache)
   }
 
@@ -876,11 +879,13 @@ object NativePlaybackManager {
     opaqueRouteSource = source
     opaqueRouteCacheKey = cacheKey
     opaqueRouteWasCached = fromCache
-    opaqueRouteCandidates = orderedOpaqueCandidates(firstType)
+    opaqueRouteCandidates = buildOpaqueAttempts(source, firstType)
     opaqueRouteIndex = 0
-    val routed = source.copy(sourceType = opaqueRouteCandidates.first())
+    val first = opaqueRouteCandidates.first()
+    val routed = source.copy(uri = first.uri, sourceType = first.sourceType)
     activeSource = routed
-    detectedMimeType = detectedMimeType ?: knownMimeForSource(routed)
+    detectedMimeType = knownMimeForSource(routed)
+    resolvedUri = redactUriForDiagnostics(routed.uri)
     rebuildMediaSource(instance, routed, event)
   }
 
@@ -889,7 +894,7 @@ object NativePlaybackManager {
     return advanceOpaqueCandidate(instance, "parser", error)
   }
 
-  /** Advance opaque type on hang/timeout without requiring a container ParserException. */
+  /** Advance opaque type/URI on hang/timeout without requiring a container ParserException. */
   private fun advanceOpaqueCandidateOnStall(instance: ExoPlayer, reason: String): Boolean =
     advanceOpaqueCandidate(instance, "stall:$reason", lastPlaybackError)
 
@@ -906,23 +911,51 @@ object NativePlaybackManager {
     val nextIndex = opaqueRouteIndex + 1
     if (nextIndex >= opaqueRouteCandidates.size) return false
     opaqueRouteIndex = nextIndex
-    val nextType = opaqueRouteCandidates[nextIndex]
-    val routed = original.copy(sourceType = nextType)
+    val next = opaqueRouteCandidates[nextIndex]
+    val routed = original.copy(uri = next.uri, sourceType = next.sourceType)
     activeSource = routed
     detectedMimeType = knownMimeForSource(routed)
-    probeReason = "${probeReason ?: "opaque"};$reason-retry:$nextType"
-    // Fresh recovery budget for the new container guess.
+    resolvedUri = redactUriForDiagnostics(routed.uri)
+    probeReason = "${probeReason ?: "opaque"};$reason-retry:${next.sourceType}:${redactUriForDiagnostics(next.uri)}"
+    // Fresh recovery budget for the new container/URI guess.
     recoveryAttempts = 0
     lastPlaybackError = null
-    recordDiagnostic("opaque-type-retry-$nextType", error, instance)
+    recordDiagnostic("opaque-type-retry-${next.sourceType}", error, instance)
     return try {
-      rebuildMediaSource(instance, routed, "opaque-type-retry-$nextType")
+      rebuildMediaSource(instance, routed, "opaque-type-retry-${next.sourceType}")
       true
     } catch (failure: Throwable) {
       recordDiagnostic("opaque-type-retry-failed:${failure.javaClass.simpleName}", error, instance)
       false
     }
   }
+
+  /**
+   * TiViMate-class panels often require a file suffix on otherwise opaque
+   * `/live/user/pass/id` URLs. Try MediaSource types on the as-is URI first,
+   * then rewrite `.ts` / `.m3u8` / `.mp4` with the matching factory.
+   */
+  private fun buildOpaqueAttempts(source: PlaybackSource, firstType: String): List<OpaqueAttempt> {
+    val types = orderedOpaqueCandidates(firstType)
+    val uris = opaqueUriVariants(source.uri)
+    val out = ArrayList<OpaqueAttempt>(types.size + uris.size)
+    val baseUri = uris.first()
+    for (type in types) out.add(OpaqueAttempt(baseUri, type))
+    for (index in 1 until uris.size) {
+      val uri = uris[index]
+      val path = uri.substringBefore('?').lowercase(Locale.US)
+      val preferred = when {
+        path.endsWith(".ts") || path.endsWith(".m2ts") -> "transport"
+        path.endsWith(".m3u8") -> "hls"
+        path.endsWith(".mp4") -> "progressive"
+        else -> "transport"
+      }
+      out.add(OpaqueAttempt(uri, preferred))
+    }
+    return out.distinctBy { "${it.uri}\u0000${it.sourceType}" }
+  }
+
+  private fun opaqueUriVariants(uri: String): List<String> = CharmStreamUrls.opaqueUriVariants(uri)
 
   private fun rebuildMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
     markPlaybackStarting(event)
@@ -1103,16 +1136,8 @@ object NativePlaybackManager {
       else -> "progressive"
     }
   }
-  private fun isHttpOrHttps(uri: String): Boolean {
-    val scheme = try { Uri.parse(uri).scheme?.lowercase(Locale.US) } catch (_: Throwable) { null }
-    return scheme == "http" || scheme == "https"
-  }
-  private fun isOpaqueHttpUri(uri: String): Boolean {
-    if (!isHttpOrHttps(uri)) return false
-    val lower = uri.lowercase(Locale.US)
-    if (lower.contains("format=") || lower.contains("type=") || lower.contains("output=") || lower.contains("/hls/") || lower.contains("/dash/")) return false
-    return !Regex("\\.[a-z0-9]{2,5}(?:$|[?#])").containsMatchIn(lower)
-  }
+  private fun isHttpOrHttps(uri: String): Boolean = CharmStreamUrls.isHttpOrHttps(uri)
+  private fun isOpaqueHttpUri(uri: String): Boolean = CharmStreamUrls.isOpaqueHttpUri(uri)
   private fun detectedTypeCacheKey(source: PlaybackSource): String =
     source.channelKey.takeIf { it.isNotBlank() }?.let { "channel:$it" } ?: "url:${source.uri.substringBefore('?').substringBefore('#')}"
   private fun orderedOpaqueCandidates(firstType: String): List<String> =

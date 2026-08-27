@@ -103,9 +103,10 @@ export function isVlcSupportedStreamKind(kind: StreamKind): boolean {
   return kind !== "webrtc";
 }
 
-/** Manual selection happens in StreamPlayer; there is no automatic cross-engine fallback. */
-export function preferredEngine(_kind: StreamKind): Engine {
-  return "media3";
+/** TiViMate-class routing: LibVLC for live/opaque IPTV; Media3 for clear HLS/DASH/files. */
+export function preferredEngine(kind: StreamKind): Engine {
+  if (kind === "hls" || kind === "dash" || kind === "progressive") return "media3";
+  return "vlc";
 }
 
 /**
