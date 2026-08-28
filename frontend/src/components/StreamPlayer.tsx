@@ -46,10 +46,10 @@ import {
 import { getPlayerEnginePreference } from "@/src/playerEnginePreference";
 import {
   invalidateConfirmedStreamType,
+  getChannelPlaybackProfile,
   rememberConfirmedStreamType,
   rememberDeclaredStreamType,
   rememberPlaybackEngine,
-  useChannelPlaybackProfile,
 } from "@/src/core/playbackProfileIndex";
 import { getPreferredAudioLanguage, getRememberedChannelAudioTrack } from "@/src/core/audioTrackPreferences";
 import type { PlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
@@ -111,7 +111,6 @@ export function StreamPlayer({
   const currentChannelKey = String(channelKey || "").trim();
   const isFocused = useIsFocused();
   const engine = getPlayerEnginePreference();
-  const profile = useChannelPlaybackProfile(currentChannelKey);
   useSyncExternalStore(subscribePlaybackOwnership, getPlaybackOwnershipRevision, getPlaybackOwnershipRevision);
   const previewAllowed = role !== "preview" || isPreviewPlaybackAllowed();
   // Android TV fires AppState "inactive" for overlays / focus blips without
@@ -138,18 +137,22 @@ export function StreamPlayer({
   // Extensionless live IPTV must not lock Media3 to a prior confirm. A wrong
   // progressive/hls/dash/transport confirm skips or stalls the opaque router →
   // black+silent. Prefer playlist hint only; native owns classification.
+  // Snapshot learned metadata for this source identity. Subscribing to profile
+  // confirmations here can change kind/contentType after a successful frame
+  // and rerun the prepare effect on the channel that is already playing.
   const learnedHint = useMemo(() => {
+    const confirmedType = getChannelPlaybackProfile(currentChannelKey)?.confirmedType;
     const uriKind = detectStreamKind(uri, null);
     if (uriKind === "unknown") {
       const hint = String(streamTypeHint || "").trim().toLowerCase();
       // Ignore progressive confirms on extensionless live URLs (no live-TS flags).
-      if (!hint || hint === "unknown" || hint === "progressive" || profile?.confirmedType === "progressive") {
+      if (!hint || hint === "unknown" || hint === "progressive" || confirmedType === "progressive") {
         return "unknown";
       }
       return hint;
     }
-    return profile?.confirmedType ?? streamTypeHint;
-  }, [profile?.confirmedType, streamTypeHint, uri]);
+    return confirmedType ?? streamTypeHint;
+  }, [currentChannelKey, streamTypeHint, uri]);
   const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
   const playbackKey = useMemo(

@@ -61,6 +61,10 @@ downgraded to plaintext.
    A damaged segment cannot rotate the known source to another container
    factory. Unproven sources, finite media and unsupported formats still
    report persistent parsing failures instead of looping indefinitely.
+10. **Learned-metadata feedback:** subscribing to detected-container changes
+    could change React prepare-effect inputs after a successful frame. Routing
+    now snapshots learned metadata for the selected source identity. Saving a
+    confirmation cannot restart an active tune; later explicit tunes can use it.
 
 The source-refresh repair initially tripped the exact-transport gate. It now
 recognizes only the exact reviewed helper replacement. Tests ensure changed
@@ -115,7 +119,7 @@ constant are not claimed to be measured TiviMate settings.
 
 ## Verification
 
-- Frontend: **287 tests passed**, no failures or skipped tests.
+- Frontend: **288 tests passed**, no failures or skipped tests.
 - TypeScript, Expo lint, native configuration and native Guide checks: **passed**.
 - Android debug Kotlin compilation/JVM tests: **passed**; **10** recovery-policy
   tests and **5** real local HTTP/cookie tests.

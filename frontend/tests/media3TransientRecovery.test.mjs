@@ -75,3 +75,13 @@ test("an established source cannot rotate containers after a damaged segment or 
   assert.ok(route.indexOf("return false") < route.indexOf("opaqueRouteIndex = nextIndex"));
   assert.match(native, /isEstablishedLive = hasPlayedThisTune && lastKnownLive/);
 });
+
+test("learning a container cannot reprepare the active stream through a profile subscription", async () => {
+  const player = await readFile(new URL("../src/components/StreamPlayer.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(player, /useChannelPlaybackProfile/);
+  const hint = player.slice(player.indexOf("const learnedHint = useMemo("), player.indexOf("const kind = useMemo("));
+  assert.match(hint, /getChannelPlaybackProfile\(currentChannelKey\)\?\.confirmedType/);
+  assert.match(hint, /\}, \[currentChannelKey, streamTypeHint, uri\]\);/);
+  // Learned information remains available to the next explicit tune.
+  assert.match(player, /rememberConfirmedStreamType\(currentChannelKey, event.sourceType, "media3"\)/);
+});
