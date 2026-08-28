@@ -56,6 +56,11 @@ downgraded to plaintext.
 8. **Automation:** 28 obsolete player workflows are disabled at every job and
    17 old scripts stop before executable patch code. APK gates reject VLC
    libraries, DEX classes and JS bridges.
+9. **Malformed live segments:** after live playback has been established, a
+   malformed container or manifest is eligible for paced source recovery.
+   A damaged segment cannot rotate the known source to another container
+   factory. Unproven sources, finite media and unsupported formats still
+   report persistent parsing failures instead of looping indefinitely.
 
 The source-refresh repair initially tripped the exact-transport gate. It now
 recognizes only the exact reviewed helper replacement. Tests ensure changed
@@ -68,6 +73,7 @@ There is no broad exemption for EPG acquisition, parsing, ownership or secrets.
 | --- | --- |
 | Ordinary BUFFERING | Status only; no failure count, player switch, source rebuild or stall timer. |
 | Network/read errors; HTTP 408/429/5xx | Reopen source on the same ExoPlayer. App delays 1/2/3/4/5 seconds, capped at 5 seconds, with no lifetime cutoff. |
+| Malformed container/manifest after established live playback | Reprepare the known source using the same paced recovery. Do not change container factories. Unsupported-format errors remain terminal. |
 | Behind live window / unexpected live EOF | Reprepare live source; known finite-media EOF does not auto-loop. |
 | Healthy reset | 10 seconds uninterrupted playback, evaluated on the next event; no polling task. |
 | HTTP 401/403 | One source refresh per outage, then explicit failure if authorization remains invalid. |
@@ -109,14 +115,14 @@ constant are not claimed to be measured TiviMate settings.
 
 ## Verification
 
-- Frontend: **286 tests passed**, no failures or skipped tests.
+- Frontend: **287 tests passed**, no failures or skipped tests.
 - TypeScript, Expo lint, native configuration and native Guide checks: **passed**.
-- Android debug Kotlin compilation/JVM tests: **passed**; **9** recovery-policy
+- Android debug Kotlin compilation/JVM tests: **passed**; **10** recovery-policy
   tests and **5** real local HTTP/cookie tests.
 - Release-gate/transport-contract tests: **16 passed**. Synthetic APK fixtures
   test gate decisions; they are not installable-build evidence.
 - Cloudflare builder/Worker: **17 tests passed**.
-- Second whole-repository scan: **221 files**, **1,262 function declarations**,
+- Second whole-repository scan: **221 files**, **1,265 function declarations**,
   **72 timer sites**, **36 listener sites**, **18 fetch sites**, **zero candidate
   critical findings**. Counts are a source census, not all possible executions.
 - The two origin/main reference findings remain outside this feature branch.
@@ -128,6 +134,22 @@ Not performed: connected-TV installation, actual provider-stall injection,
 hardware decoder/layer observation, or the legacy remote FastAPI integration
 suite (which issues refresh mutations). The exact visible freeze still needs
 the device matrix in the numeric audit.
+
+## Remaining security and infrastructure findings
+
+A fresh production-dependency audit reports **9 high-severity entries** in
+the existing Expo/Metro dependency graph and no critical entries. This change
+does not upgrade that graph; a compatible framework/dependency upgrade and
+its own regression run remain necessary. The app is not declared security-clean.
+
+GitHub secret names and update metadata were checked: sideload builds consume
+only M3U_URL and EPG_URL with dotenv disabled. GitHub does not expose the stored
+values, so metadata and workflow wiring cannot prove that their contents are
+the owner's intended current URLs. No secret was printed, replaced or uploaded.
+
+GitHub reports deprecation notices for pinned Node 20-era actions (forced to
+Node 24 by the runner) and setup-java v4. These were warnings on the successful
+Build 126, not playback failures; action-version maintenance remains separate.
 
 ## APK verification
 

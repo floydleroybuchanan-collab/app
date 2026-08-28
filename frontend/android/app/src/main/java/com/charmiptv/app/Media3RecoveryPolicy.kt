@@ -48,7 +48,7 @@ internal class Media3RecoveryPolicy {
   companion object {
     const val HEALTHY_PLAYBACK_RESET_MS = 10_000L
 
-    fun classify(errorCode: Int, httpCode: Int?, hasIoCause: Boolean, hasTlsFailure: Boolean): Failure {
+    fun classify(errorCode: Int, httpCode: Int?, hasIoCause: Boolean, hasTlsFailure: Boolean, isEstablishedLive: Boolean = false): Failure {
       if (hasTlsFailure) return Failure.FATAL
       if (httpCode == 401 || httpCode == 403) return Failure.AUTHENTICATION
       if (httpCode != null) {
@@ -58,6 +58,9 @@ internal class Media3RecoveryPolicy {
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> Failure.NETWORK
         PlaybackException.ERROR_CODE_IO_UNSPECIFIED -> if (hasIoCause) Failure.NETWORK else Failure.FATAL
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
+          if (isEstablishedLive) Failure.NETWORK else Failure.FATAL
         PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> Failure.LIVE_WINDOW
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
         PlaybackException.ERROR_CODE_DECODING_FAILED,

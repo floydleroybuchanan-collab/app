@@ -83,4 +83,17 @@ class Media3RecoveryPolicyTest {
     assertFalse(Media3RecoveryPolicy.reconnectOnEnd(true, true))
     assertTrue(Media3RecoveryPolicy.reconnectOnEnd(true, false))
   }
+
+  @Test fun damagedLiveSegmentsRecoverButUnsupportedFormatsAndUnprovenSourcesDoNotLoop() {
+    for (code in listOf(
+      PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+      PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+    )) {
+      assertEquals(Failure.NETWORK, Media3RecoveryPolicy.classify(code, null, true, false, true))
+      assertEquals(Failure.FATAL, Media3RecoveryPolicy.classify(code, null, true, false, false))
+    }
+    assertEquals(Failure.FATAL, Media3RecoveryPolicy.classify(
+      PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, null, true, false, true,
+    ))
+  }
 }

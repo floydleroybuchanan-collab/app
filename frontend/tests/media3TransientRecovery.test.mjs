@@ -68,3 +68,10 @@ test("the active JavaScript downloader bridges cookies before React Native start
   assert.ok(setup.indexOf("OkHttpClientProvider.setOkHttpClientFactory") < setup.indexOf("loadReactNative(this)"));
   assert.match(setup, /CharmHttpClients.bridgeReactNativeCookies\(OkHttpClientProvider.createClientBuilder\(\).build\(\)\)/);
 });
+
+test("an established source cannot rotate containers after a damaged segment or recovery stall", () => {
+  const route = native.slice(native.indexOf("private fun advanceOpaqueCandidate("), native.indexOf("private fun buildOpaqueAttempts("));
+  assert.match(route, /if \(hasPlayedThisTune && \(firstFrameRendered \|\| recoveringNetwork\)\) return false/);
+  assert.ok(route.indexOf("return false") < route.indexOf("opaqueRouteIndex = nextIndex"));
+  assert.match(native, /isEstablishedLive = hasPlayedThisTune && lastKnownLive/);
+});

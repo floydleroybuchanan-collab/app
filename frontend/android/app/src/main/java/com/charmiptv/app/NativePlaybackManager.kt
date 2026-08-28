@@ -841,7 +841,10 @@ object NativePlaybackManager {
       hasTlsFailure = hasTlsFailure || current is SSLHandshakeException || current is SSLPeerUnverifiedException || current is CertificateException
       current = current?.cause
     }
-    return Media3RecoveryPolicy.classify(error.errorCode, findHttpResponseCode(error), hasIoCause, hasTlsFailure)
+    return Media3RecoveryPolicy.classify(
+      error.errorCode, findHttpResponseCode(error), hasIoCause, hasTlsFailure,
+      isEstablishedLive = hasPlayedThisTune && lastKnownLive,
+    )
   }
 
   private fun isLivePlayback(instance: ExoPlayer): Boolean {
@@ -941,6 +944,11 @@ object NativePlaybackManager {
     advanceOpaqueCandidate(instance, "stall:$reason", lastPlaybackError)
 
   private fun advanceOpaqueCandidate(instance: ExoPlayer, reason: String, error: PlaybackException?): Boolean {
+    // Once this live source has played, a damaged packet/segment is not evidence
+    // that its container changed. Retry the known source, not another factory.
+    // A fresh authentication URL still starts with no frame/network-retry flag
+    // and may need its own initial container routing.
+    if (hasPlayedThisTune && (firstFrameRendered || recoveringNetwork)) return false
     val original = opaqueRouteSource ?: return false
     if (opaqueRouteIndex < 0 || opaqueRouteCandidates.isEmpty()) return false
     main.removeCallbacks(opaqueTypeConfirmation)
