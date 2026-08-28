@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: manual-vlc-final-native-${{ github.ref }}
@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     name: Full JS scan and native compile no APK
     runs-on: ubuntu-latest
     timeout-minutes: 70

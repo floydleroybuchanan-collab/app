@@ -8,11 +8,13 @@ on:
       - ".github/workflows/charm-one-shot-fix-build-v2.yml"
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 jobs:
   fix-refresh-auth-handling:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -62,6 +64,8 @@ jobs:
         run: gh workflow run charm-refresh.yml --ref main
 
   fix-build-apk:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:

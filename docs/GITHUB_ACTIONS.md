@@ -1,6 +1,6 @@
 # Phoenix cloud APK builds
 
-> For the current playback audit, use **Build CharmIPTV Media3 + VLC Sideload APK** on `fix/tivimate-m3u-epg-ci-align` only. That workflow requires repository secrets `M3U_URL` and `EPG_URL`, disables dotenv loading, and does not use the legacy source-variable fallbacks described below. It uploads an encrypted artifact because this repository is public. See [PLAYBACK_AUDIT_RESULTS.md](PLAYBACK_AUDIT_RESULTS.md). The historical Phoenix/main instructions below are not the audit release procedure.
+> For the current playback change, use **Build CharmIPTV Media3 Sideload APK** on `fix/tivimate-m3u-epg-ci-align` only. That workflow requires repository secrets `M3U_URL` and `EPG_URL`, disables dotenv loading, and does not use the legacy source-variable fallbacks described below. It uploads an encrypted artifact because this repository is public. The APK gate now requires Media3/FFmpeg and rejects VLC. Historical player repair workflows and the old Purple TV builder are disabled; see [MEDIA3_ONLY_CI_BACKEND_AUDIT.md](MEDIA3_ONLY_CI_BACKEND_AUDIT.md). The historical Phoenix/main instructions below are not the current release procedure.
 
 The `Build Phoenix APK` workflow produces one standalone release APK containing
 both `armeabi-v7a` (32-bit TV devices) and `arm64-v8a` (64-bit TV devices).

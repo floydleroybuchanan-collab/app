@@ -17,7 +17,9 @@ CharmIPTV is an Expo/React Native television guide and IPTV player designed for 
 4. Run `npm run android:prebuild` to generate the Android Studio project.
 5. Open `frontend/android` in Android Studio.
 
-The native VLC player is unavailable in Expo Go and the browser preview.
+Android playback uses Media3/ExoPlayer only, with the FFmpeg audio extension.
+VLC is removed from the app and the APK. Expo Go and browser previews cannot
+validate the custom Android player; use a native build for playback testing.
 
 ## Release safety
 

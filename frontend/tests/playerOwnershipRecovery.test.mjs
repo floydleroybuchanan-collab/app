@@ -37,3 +37,28 @@ test("fullscreen exit serializes decoder teardown before Guide remount", async (
   assert.match(player, /if \(exitInFlightRef\.current\) return/);
   assert.match(player, /void stopFullscreenSession\(\)\.then\(\(\) => \{[\s\S]*?router\.replace\("\/guide" as any\)/);
 });
+
+test("unsupported protocol errors explain the Media3 limitation without offering another identical retry", async () => {
+  const player = await source("app/player.tsx");
+  assert.match(player, /"unsupported-protocol": "This stream protocol is not supported by this build/);
+  assert.match(player, /Ask your provider for an HTTP\(S\) HLS, DASH, or MPEG-TS URL for Media3/);
+  assert.match(player, /if \(!hasStream \|\| exitInFlightRef\.current \|\| failReason === "unsupported-protocol"\) return/);
+  assert.match(player, /hasStream && failReason !== "unsupported-protocol" \? \(/);
+  assert.match(player, /"Unsupported stream protocol"/);
+  assert.match(player, /onPress=\{stopAndExit\}/);
+});
+
+test("Guide rejects unsupported transports before mounting a native preview or scheduling a retry", async () => {
+  const guide = await source("app/(tabs)/guide.tsx");
+  assert.match(guide, /isNativeMedia3SupportedStreamKind\(detectStreamKind\(parsePipeHeaders\(channel\.url\)\.uri, channel\.stream_type\)\)/);
+  assert.match(guide, /const previewVisible =[\s\S]*?!unsupportedPreviewProtocol/);
+  assert.match(guide, /testID="guide-preview-unsupported-protocol"/);
+  assert.match(guide, /pointerEvents="none" style=\{styles\.unsupportedPreview\}/);
+  const schedule = guide.slice(guide.indexOf("const schedulePreview ="), guide.indexOf("const guideTopPanelWidth ="));
+  const guard = schedule.indexOf("!isPreviewProtocolSupported(channelById(requestedId))");
+  const timer = schedule.indexOf("previewTimer.current = setTimeout");
+  assert.ok(guard >= 0 && guard < timer, "reject the current unsupported provider URL before creating a mount timer");
+  assert.match(schedule, /!isPreviewProtocolSupported\(channelById\(requestedId\)\)[\s\S]*?setPreviewId\(null\)[\s\S]*?return/);
+  const focus = guide.slice(guide.indexOf("const armPreviewForChannel ="), guide.indexOf("const onFocusChannel ="));
+  assert.match(focus, /!isPreviewProtocolSupported\(channel\)[\s\S]*?setPreviewId\(null\)[\s\S]*?return/);
+});

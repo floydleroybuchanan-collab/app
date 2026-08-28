@@ -44,8 +44,6 @@ import {
   usePlaybackBufferProfile,
   type PlaybackBufferProfile,
 } from "@/src/core/playbackBufferProfile";
-import { usePlayerEnginePreference, type PlayerEnginePreference } from "@/src/playerEnginePreference";
-import { useVlcPlaybackPreferences } from "@/src/core/vlcPlaybackPreferences";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { useParentalPin } from "@/src/core/parentalPin";
@@ -151,8 +149,6 @@ function SettingsScreenContent() {
   } = useStore();
   const remoteShortcuts = useRemoteShortcutPreferences();
   const [playbackBufferProfile, setPlaybackBufferProfile] = usePlaybackBufferProfile();
-  const [playerEngine, setPlayerEngine] = usePlayerEnginePreference();
-  const vlcPlayback = useVlcPlaybackPreferences();
   const channelCustomize = useChannelCustomize();
   const guideUi = useGuideUiPreferences();
   const parental = useParentalPin();
@@ -511,7 +507,7 @@ function SettingsScreenContent() {
               <SettingsCard title="Playback" icon="play-circle-outline">
                 <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
-                  Automatic starts every supported stream in Media3/ExoPlayer. If Media3 reaches a final playback failure, it releases completely before VLC takes over.
+                  All supported streams play in Media3/ExoPlayer. Brief source buffering keeps the current player; recoverable network errors retry within Media3. No alternate player is installed.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"
@@ -530,20 +526,6 @@ function SettingsScreenContent() {
                   onChange={remoteShortcuts.setLongDown}
                 />
                 <Text style={styles.help}>Long OK/Select is reserved for contextual Quick Actions. Directional D-pad keys remain deterministic; Long Down is the only remappable D-pad hold.</Text>
-                <ChoiceRow<PlayerEnginePreference>
-                  label="Player engine" value={playerEngine}
-                  options={[
-                    { label: "Automatic (Media3 → VLC)", value: "auto" },
-                    { label: "Media3 only", value: "media3" },
-                    { label: "VLC only", value: "vlc" },
-                  ]}
-                  onChange={setPlayerEngine}
-                />
-                {playerEngine !== "media3" ? (<>
-                  <ToggleRow label="VLC hardware decoding" value={vlcPlayback.hardwareDecode} onChange={vlcPlayback.setHardwareDecode} />
-                  <Text style={styles.help}>VLC 3 supports user agent and referrer, but streams requiring custom HTTP headers or cookies must use Media3.</Text>
-                  <ChoiceRow<"auto" | "stereo" | "passthrough"> label="VLC audio output" value={vlcPlayback.audioOutput} options={[{ label: "Auto", value: "auto" }, { label: "Stereo", value: "stereo" }, { label: "Passthrough", value: "passthrough" }]} onChange={vlcPlayback.setAudioOutput} />
-                </>) : null}
                 <ChoiceRow<PlaybackBufferProfile>
                   label="Buffer size"
                   value={playbackBufferProfile}

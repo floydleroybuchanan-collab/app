@@ -58,9 +58,9 @@ test("channel customization writes only the state blob that changed", async () =
   );
 });
 
-test("playlist-only refresh reuses native parser rows instead of cloning the full playlist", async () => {
+test("playlist-only refresh reuses parser rows instead of cloning the full playlist", async () => {
   const source = (await readFile(join(root, "src/source.native.ts"), "utf8")).replace(/\r\n/g, "\n");
-  const refreshOnly = source.match(/export async function refreshPlaylistOnly[\s\S]*?\n}\n\n\/\*\* Check persisted/)?.[0] || "";
+  const refreshOnly = source.match(/export async function refreshPlaylistOnly[\s\S]*?\n}\n/)?.[0] || "";
   assert.match(refreshOnly, /const oldById = new Map<string, Channel>\(\)/);
   assert.match(refreshOnly, /for \(const channel of fresh\)/);
   assert.match(refreshOnly, /channel\.tvg_id = previous\.tvg_id \|\| channel\.tvg_id/);
@@ -69,7 +69,7 @@ test("playlist-only refresh reuses native parser rows instead of cloning the ful
   assert.doesNotMatch(refreshOnly, /const channels = fresh\.map/);
 });
 
-test("all source refresh modes share one provider/cache/SQLite owner", async () => {
+test("catalog and EPG refresh modes share one cache/SQLite owner", async () => {
   const native = await readFile(join(root, "src/source.native.ts"), "utf8");
   assert.match(native, /async function refreshInternal[\s\S]{0,520}if \(playlistOnlyRefreshPromise\) await playlistOnlyRefreshPromise;[\s\S]{0,120}if \(refreshPromise\) return refreshPromise/);
   assert.match(native, /export async function refreshEpgOnly[\s\S]{0,720}if \(playlistOnlyRefreshPromise\) await playlistOnlyRefreshPromise;[\s\S]{0,180}if \(refreshPromise\)/);

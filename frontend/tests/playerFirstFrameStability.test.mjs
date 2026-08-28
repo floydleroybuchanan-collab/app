@@ -17,28 +17,28 @@ test("Media3 publishes stable playback only after native onRenderedFirstFrame", 
   assert.doesNotMatch(adapter, /onFirstFrameRender|readyToPlay|player\.currentTime/);
 });
 
-test("Media3 keeps bounded startup and exactly one event-driven recovery", async () => {
+test("Media3 keeps bounded startup and event-driven recovery without a lifetime network cap", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.match(native, /START_TIMEOUT_MS = 30_000L/);
   assert.match(native, /OPAQUE_CONFIRM_MS = 5_000L/);
   assert.doesNotMatch(native, /FULLSCREEN_START_TIMEOUT_MS|PREVIEW_START_TIMEOUT_MS|TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS/);
-  assert.match(native, /MAX_ERROR_RECOVERIES = 1/);
-  assert.match(native, /ERROR_RECOVERY_DELAY_MS = 1_000L/);
-  assert.match(native, /recoveryAttempts >= MAX_ERROR_RECOVERIES/);
-  assert.match(native, /recoveryAttempts \+= 1/);
-  assert.match(native, /main\.postDelayed\(delayedRecovery, ERROR_RECOVERY_DELAY_MS\)/);
-  assert.match(native, /fullPlayerAndSourceRecovery\(instance, source\)/);
+  assert.match(native, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
+  assert.match(native, /decision\.action == Action\.STOP/);
+  assert.match(native, /pendingRecovery = PendingRecovery\(instance, playbackRevision, decision, resumePosition\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
+  assert.match(native, /fullPlayerAndSourceRecovery\(instance, source, pending\.resumePositionMs\)/);
   assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|silentAudioCheck/);
 });
 
 test("Media3 never polls healthy playback to decide on recovery", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
   assert.doesNotMatch(native, /bufferingLastPositionMs|hungForMs|RECONNECT_STALL_MS|WATCHDOG_POLL_MS|bufferingWatchdog/);
-  assert.match(native, /override fun onPlayerError[\s\S]*?recoverOnce\(/);
-  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(/);
+  assert.match(native, /override fun onPlayerError[\s\S]*?scheduleRecovery\(/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?scheduleRecovery\(/);
 });
 
-test("Media3 recovers bounded terminal live reads before exposing Retry", async () => {
+test("Media3 recovers transient live reads without a terminal attempt limit", async () => {
   const [native, clients] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"),
@@ -48,13 +48,13 @@ test("Media3 recovers bounded terminal live reads before exposing Retry", async 
   const playerError = native.match(/override fun onPlayerError\(error: PlaybackException\)[\s\S]*?\n\s*}/)?.[0] || "";
   assert.doesNotMatch(playerError, /rearmRecoveryAfterStablePlayback\(\)/);
   assert.match(playerError, /recordDiagnostic\("player-error", error, created\)/);
-  assert.match(playerError, /forceFreshSource = isAuthenticationFailure\(error\)/);
+  assert.match(playerError, /scheduleRecovery\(created, classifyFailure\(error\)\)/);
   assert.doesNotMatch(playerError, /publishState\("error"/);
   assert.doesNotMatch(native, /Toast\.makeText|showDiagnostic\(/);
-  assert.match(native, /private fun recoverOnce\(instance: ExoPlayer, forceFreshSource: Boolean = false\): Boolean/);
-  assert.match(native, /private fun performRecovery\(instance: ExoPlayer\)/);
+  assert.match(native, /private fun scheduleRecovery\(instance: ExoPlayer, failure: Failure\): Boolean/);
+  assert.match(native, /private fun performRecovery\(pending: PendingRecovery\)/);
   assert.doesNotMatch(native, /private fun rearmRecoveryAfterStablePlayback\(\)/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_ERROR_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
+  assert.match(native, /if \(decision\.action == Action\.STOP\)[\s\S]*?finishWithError\("stream-error", instance\)/);
   assert.match(native, /publishState\("loading", "native-reprepare"\)/);
   assert.match(native, /removeCallbacks\(delayedRecovery\)/);
   const firstFrame = native.match(/override fun onRenderedFirstFrame\(\)[\s\S]*?\n\s*}/)?.[0] || "";

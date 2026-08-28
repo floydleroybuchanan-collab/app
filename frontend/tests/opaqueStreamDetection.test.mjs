@@ -107,11 +107,11 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /HlsMediaSource\.Factory/);
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(clients, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
-  assert.match(manager, /fun tivimateBufferDurationsMs/);
+  assert.match(manager, /fun media3BufferDurationsMs/);
   assert.match(manager, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
   assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
   assert.match(clients, /readTimeout\(20, TimeUnit.SECONDS\)/);
-  assert.match(manager, /MAX_ERROR_RECOVERIES = 1/);
+  assert.match(manager, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
   assert.doesNotMatch(manager, /RECONNECT_STALL_MS|RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES/);
   assert.match(manager, /OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L/);
 });
@@ -134,8 +134,8 @@ test("playback diagnostics capture container, codecs, resolution and decoders wi
   assert.match(manager, /audioDecoder/);
   assert.match(manager, /codecError/);
   assert.doesNotMatch(manager, /silentAudioCheck|bufferingWatchdog/);
-  assert.match(manager, /fun tivimateBufferDurationsMs/);
+  assert.match(manager, /fun media3BufferDurationsMs/);
   assert.match(clients, /readTimeout\(20, TimeUnit.SECONDS\)/);
-  assert.match(manager, /MAX_ERROR_RECOVERIES = 1/);
+  assert.match(manager, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
   assert.doesNotMatch(manager, /RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES|RECONNECT_STALL_MS/);
 });

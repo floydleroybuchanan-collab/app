@@ -89,3 +89,6 @@ android-sdk/cloudflare-backend/worker/node_modules/@cloudflare/workerd-linux-arm
 !.env.example
 work/
 !ci/sideload-artifact-public.pem
+
+# Local validation dependency cache
+/frontend/.npm-cache/

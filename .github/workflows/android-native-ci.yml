@@ -13,6 +13,10 @@ on:
       - "frontend/tests/**"
       - "frontend/app/(tabs)/guide.tsx"
       - "ci/tivimate-whole-repo-player-interaction-scan.py"
+      - "ci/verify-media3-only.py"
+      - "ci/media3_source_contract.py"
+      - "ci/test_*.py"
+      - "ci/retired-player-automation.json"
       - "frontend/plugins/**"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -23,7 +27,6 @@ on:
     branches:
       - main
       - agent/media3-opaque-live-startup-hardening
-      - agent/manual-vlc-engine
       - fix/tivimate-m3u-epg-ci-align
     paths:
       - "frontend/android/**"
@@ -33,6 +36,10 @@ on:
       - "frontend/tests/**"
       - "frontend/app/(tabs)/guide.tsx"
       - "ci/tivimate-whole-repo-player-interaction-scan.py"
+      - "ci/verify-media3-only.py"
+      - "ci/media3_source_contract.py"
+      - "ci/test_*.py"
+      - "ci/retired-player-automation.json"
       - "frontend/plugins/**"
       - "frontend/package.json"
       - "frontend/package-lock.json"
@@ -116,10 +123,13 @@ jobs:
         working-directory: .
         run: python3 ci/tivimate-whole-repo-player-interaction-scan.py
 
-      - name: Verify Media3-first ownership and bounded recovery contract
+      - name: Verify Media3-only source and retired automation
         id: invariants
         continue-on-error: true
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/manualVlcEngine.test.mjs tests/opaqueStreamDetection.test.mjs tests/playerFirstFrameStability.test.mjs tests/playbackSession.test.mjs tests/playerLiveStability.test.mjs
+        working-directory: .
+        run: |
+          python3 ci/verify-media3-only.py
+          python3 -m unittest discover -s ci -p 'test_*.py'
 
       - name: Compile native Kotlin and Java only
         id: compile

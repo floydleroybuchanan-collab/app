@@ -1,11 +1,12 @@
-export type Engine = "media3" | "vlc";
-export type EnginePreference = "auto" | Engine;
+export type Engine = "media3";
+export type EnginePreference = Engine;
 /** CMAF is packaging (fMP4) carried inside HLS or DASH — not a separate engine path. */
 export type StreamKind =
   | "hls"
   | "dash"
   | "progressive"
   | "rtsp"
+  | "rtsps"
   | "rtmp"
   | "rtp"
   | "udp"
@@ -20,7 +21,8 @@ function kindFromHint(raw: string | null | undefined): StreamKind | null {
   if (hint === "hls" || hint === "m3u8" || hint.includes("application/x-mpegurl") || hint.includes("application/vnd.apple.mpegurl")) return "hls";
   if (hint === "dash" || hint === "mpd" || hint.includes("application/dash+xml")) return "dash";
   if (hint === "ts" || hint === "m2ts" || hint === "transport" || hint === "mpegts" || hint === "mpeg-ts" || hint.includes("video/mp2t")) return "transport";
-  if (hint === "rtsp" || hint === "rtsps") return "rtsp";
+  if (hint === "rtsp") return "rtsp";
+  if (hint === "rtsps") return "rtsps";
   if (hint === "rtmp" || hint === "rtmps") return "rtmp";
   if (hint === "rtp") return "rtp";
   if (hint === "udp") return "udp";
@@ -41,7 +43,10 @@ export const DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)";
 export function detectStreamKind(uri: string, streamTypeHint?: string | null): StreamKind {
   const lower = uri.toLowerCase();
   const protocol = lower.split(":", 1)[0];
-  if (protocol === "rtsp" || protocol === "rtsps") return "rtsp";
+  if (protocol === "rtsp") return "rtsp";
+  // This build has no TLS socket factory for RTSP. Never downgrade rtsps to
+  // plaintext RTSP or route it through a progressive HTTP source.
+  if (protocol === "rtsps") return "rtsps";
   if (protocol === "rtmp" || protocol === "rtmps") return "rtmp";
   if (protocol === "rtp") return "rtp";
   if (protocol === "udp") return "udp";
@@ -120,26 +125,9 @@ export function isNativeMedia3SupportedStreamKind(kind: StreamKind): boolean {
   return kind === "hls" || kind === "dash" || kind === "progressive" || kind === "transport" || kind === "rtsp" || kind === "unknown";
 }
 
-export function isVlcSupportedStreamKind(kind: StreamKind): boolean {
-  // This build has no WebRTC signaling/session stack. LibVLC is the explicit
-  // compatibility choice for the remaining ordinary/live protocols.
-  return kind !== "webrtc";
-}
-
-/** Automatic routing always gives Media3 the first attempt when it supports the protocol. */
-export function preferredEngine(kind: StreamKind): Engine {
-  return isNativeMedia3SupportedStreamKind(kind) ? "media3" : "vlc";
-}
-
-export function initialEngine(preference: EnginePreference, kind: StreamKind): Engine {
-  if (preference === "media3" || preference === "vlc") return preference;
-  return preferredEngine(kind);
-}
-
-/** Automatic mode has exactly one cross-engine fallback: Media3 -> VLC. */
-export function fallbackEngine(preference: EnginePreference, current: Engine, kind: StreamKind): Engine | null {
-  if (preference !== "auto" || current !== "media3" || !isVlcSupportedStreamKind(kind)) return null;
-  return "vlc";
+/** No alternate engine is packaged. Unsupported transports fail explicitly. */
+export function preferredEngine(kind: StreamKind): Engine | null {
+  return isNativeMedia3SupportedStreamKind(kind) ? "media3" : null;
 }
 
 /**

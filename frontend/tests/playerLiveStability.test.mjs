@@ -21,9 +21,9 @@ test("channel changes build a fresh Media3 source on the same native ExoPlayer",
   assert.doesNotMatch(player, /decoderArmed|pauseSessionDecoders|CHANNEL_ZAP_SETTLE_MS|armDecoderAfterSettle/);
 });
 
-test("Media3 uses bounded TV buffers and one event-driven reconnect", async () => {
+test("Media3 uses bounded TV buffers and paced event-driven reconnects", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
-  assert.match(native, /fun tivimateBufferDurationsMs/);
+  assert.match(native, /fun media3BufferDurationsMs/);
   assert.match(native, /"low_latency" -> intArrayOf\(1_000, 5_000, 500, 1_000\)/);
   assert.match(native, /"balanced" -> intArrayOf\(3_000, 15_000, 1_000, 2_000\)/);
   assert.match(native, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
@@ -35,12 +35,12 @@ test("Media3 uses bounded TV buffers and one event-driven reconnect", async () =
   assert.match(native, /DashMediaSource\.Factory/);
   assert.match(native, /setWakeMode\(C\.WAKE_MODE_NETWORK\)/);
   assert.doesNotMatch(native, /TRANSPORT_HUNG_BUFFER_REPREPARE_MS|HARD_STALL_RECOVERY_MS|STABLE_REARM_MS|HUNG_BUFFER_REPREPARE_MS/);
-  assert.match(native, /MAX_ERROR_RECOVERIES = 1/);
-  assert.match(native, /ERROR_RECOVERY_DELAY_MS = 1_000L/);
+  assert.match(native, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
   assert.match(await source("android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt"), /readTimeout\(20, TimeUnit.SECONDS\)/);
   assert.match(native, /CharmHttpClients\.mediaClient\(\)/);
-  assert.match(native, /recoveryAttempts >= MAX_ERROR_RECOVERIES/);
-  assert.match(native, /fullPlayerAndSourceRecovery\(instance, source\)/);
+  assert.match(native, /decision\.action == Action\.STOP/);
+  assert.match(native, /fullPlayerAndSourceRecovery\(instance, source, pending\.resumePositionMs\)/);
   assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES|silentAudioCheck/);
 });
 

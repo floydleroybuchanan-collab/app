@@ -214,7 +214,8 @@ function applyExtHttpOption(headers, line) {
       if (key && value) headers[key] = value;
     }
   }
-  // Ignore non-HTTP VLC options (network-caching, …).
+  // EXTVLCOPT is provider metadata, not an engine choice. Keep its HTTP headers
+  // for Media3, but never apply VLC-only player options such as network-caching.
 }
 
 function appendPipeHeaders(url, headers) {

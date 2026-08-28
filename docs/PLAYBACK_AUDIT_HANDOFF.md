@@ -1,5 +1,7 @@
 # CharmIPTV playback audit handoff
 
+> Current owner direction (2026-08-27): VLC is removed; Media3 performs continuous, paced recovery for transient network errors. See [MEDIA3_ONLY_PLAYBACK_AUDIT.md](MEDIA3_ONLY_PLAYBACK_AUDIT.md) and [MEDIA3_ONLY_CI_BACKEND_AUDIT.md](MEDIA3_ONLY_CI_BACKEND_AUDIT.md). The historical fallback requirements below are superseded.
+
 > Continuation evidence and remaining limitations are recorded in [PLAYBACK_AUDIT_RESULTS.md](PLAYBACK_AUDIT_RESULTS.md). The original checkpoint history below is preserved; it is not a claim of device validation.
 
 ## Repository state

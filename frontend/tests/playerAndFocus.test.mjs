@@ -10,7 +10,7 @@ import { evaluateDrawerBack } from "../src/core/drawerNavigationPolicy.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("stream classification keeps Media3 first and reserves VLC for unsupported protocols", () => {
+test("stream classification uses Media3 and rejects unsupported protocols", () => {
   assert.equal(detectStreamKind("https://x/live.m3u8?token=1"), "hls");
   assert.equal(detectStreamKind("https://x/manifest.mpd"), "dash");
   assert.equal(detectStreamKind("https://cdn/hls/playlist.m3u8"), "hls");
@@ -22,8 +22,8 @@ test("stream classification keeps Media3 first and reserves VLC for unsupported 
   assert.equal(preferredEngine("progressive"), "media3");
   assert.equal(preferredEngine("transport"), "media3");
   assert.equal(preferredEngine("unknown"), "media3");
-  assert.equal(preferredEngine("srt"), "vlc");
-  assert.equal(preferredEngine("rtmp"), "vlc");
+  assert.equal(preferredEngine("srt"), null);
+  assert.equal(preferredEngine("rtmp"), null);
   assert.equal(preferredEngine("rtsp"), "media3");
 });
 
@@ -194,19 +194,19 @@ test("player delegates More to the single global Quick Actions owner", async () 
   assert.doesNotMatch(player, /playerOverlay.*"more"/);
 });
 
-test("Media3 recovery is event-driven, single-attempt, and has no healthy-playback watchdog", async () => {
+test("Media3 recovery is event-driven, paced, and has no healthy-playback watchdog", async () => {
   const [adapter, native] = await Promise.all([
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
   ]);
-  assert.match(native, /MAX_ERROR_RECOVERIES = 1/);
-  assert.match(native, /ERROR_RECOVERY_DELAY_MS = 1_000L/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_ERROR_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
-  assert.match(native, /override fun onPlayerError[\s\S]*?recoverOnce\(/);
-  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(/);
+  assert.match(native, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
+  assert.match(native, /if \(decision\.action == Action\.STOP\)[\s\S]*?finishWithError\("stream-error", instance\)/);
+  assert.match(native, /override fun onPlayerError[\s\S]*?scheduleRecovery\(/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?scheduleRecovery\(/);
   assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|WATCHDOG_POLL_MS|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|silentAudioCheck/);
   assert.match(native, /override fun onRenderedFirstFrame\(\)[\s\S]*?firstFrameRendered = true[\s\S]*?removeCallbacks\(delayedRecovery\)[\s\S]*?publishState\("playing", null\)/);
-  assert.match(adapter, /tryAutomaticVlcFallback/);
+  assert.doesNotMatch(adapter, /tryAutomaticVlcFallback|NativeVlcPlayback/);
   assert.match(adapter, /activateNativePlaybackEngine/);
   assert.doesNotMatch(adapter, /player\.currentTime|setInterval|MEDIA3_FROZEN_CLOCK_MS|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
 });

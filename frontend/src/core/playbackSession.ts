@@ -7,9 +7,8 @@ export type SessionRole = "preview" | "fullscreen";
 export type SessionPhase = "idle" | "preparing" | "playing" | "recovering" | "failed";
 export type SessionFailReason =
   | "start-timeout"
-  | "engine-swap"
   | "stream-error"
-  | "request-headers-unsupported"
+  | "unsupported-protocol"
   | "user-stop"
   | "superseded"
   | "crashed";
@@ -201,7 +200,7 @@ export function stopSession(
   // Keep teardown ordered. A legacy session callback may still release view
   // state, so let it settle before the single native coordinator performs the
   // decoder release. Starting both operations together reintroduced the exact
-  // Media3/VLC ownership race this registry exists to prevent.
+  // Preview/fullscreen ownership race this registry exists to prevent.
   stopPromise = callbacks
     .catch(() => undefined)
     .then(() => state.generation === stoppedGeneration ? invokeNative(nativeReleaseHandler, role) : undefined)

@@ -5,26 +5,13 @@ import {
   stopNativeFullscreen,
   stopNativePreview,
 } from "@/src/nativePlayback";
-import {
-  getNativeVlcOwner,
-  pauseNativeVlcPlayback,
-  stopNativeVlcFullscreen,
-  stopNativeVlcPreview,
-} from "@/src/nativeVlcPlayback";
-
 const coordinator = createPlaybackCoordinator({
-  owner: (engine) => engine === "media3" ? getNativePlaybackOwner() : getNativeVlcOwner(),
-  stop: async (engine, role, releasePlayer) => {
-    if (engine === "media3") {
-      if (role === "preview") await stopNativePreview(releasePlayer);
-      else await stopNativeFullscreen(releasePlayer);
-    } else if (role === "preview") await stopNativeVlcPreview(releasePlayer);
-    else await stopNativeVlcFullscreen(releasePlayer);
+  owner: () => getNativePlaybackOwner(),
+  stop: async (_engine, role, releasePlayer) => {
+    if (role === "preview") await stopNativePreview(releasePlayer);
+    else await stopNativeFullscreen(releasePlayer);
   },
-  pause: (engine) => {
-    if (engine === "media3") pauseNativePlayback();
-    else pauseNativeVlcPlayback();
-  },
+  pause: () => pauseNativePlayback(),
 });
 
 export const activateNativePlaybackEngine = coordinator.activate;

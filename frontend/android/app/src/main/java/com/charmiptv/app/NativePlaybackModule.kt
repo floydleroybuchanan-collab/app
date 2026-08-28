@@ -41,15 +41,19 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   @ReactMethod
   fun preparePreview(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?, bufferProfile: String?) {
     val requestHeaders = readableMapToStringMap(headers)
-    // Do NOT bail out here without calling setIdentity() first: that used to
-    // leave activeOwner/activeGeneration/activeChannelKey pointing at whatever
-    // session was active before (often a stale fullscreen identity), so no
-    // event this attempt's generation could ever match was published to JS --
-    // the preview stayed stuck on its initial "loading" state forever. Always
-    // register this attempt's identity and let NativePlaybackManager.prepare()
-    // itself publish a properly-identified error when the owner really is
-    // still reserved by fullscreen.
+    // Reject a late preview without replacing the active fullscreen identity.
+    // Otherwise subsequent fullscreen events are stamped as preview events.
     onMain {
+      if (NativePlaybackManager.currentOwner() == NativePlaybackManager.Owner.FULLSCREEN) {
+        emit("NativePlaybackState", Arguments.createMap().apply {
+          putString("owner", "preview")
+          putDouble("generation", generation)
+          putString("channelKey", channelKey.orEmpty().trim())
+          putString("state", "error")
+          putString("reason", "owner-reserved")
+        })
+        return@onMain
+      }
       attachActivity()
       setIdentity(NativePlaybackManager.Owner.PREVIEW, generation.toLong(), channelKey.orEmpty())
       NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, activeChannelKey, uri, requestHeaders, contentType, bufferProfile)

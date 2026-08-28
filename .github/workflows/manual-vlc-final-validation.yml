@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
+  issues: read
 
 concurrency:
   group: manual-vlc-final-${{ github.ref }}
@@ -20,6 +20,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     name: Tests scan native compile no APK
     runs-on: ubuntu-latest
     timeout-minutes: 75

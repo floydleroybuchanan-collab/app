@@ -6,6 +6,10 @@ the replacement target before clearInactivePlayerView(), so this script now
 succeeds when that contract is present instead of failing Actions with red X's.
 """
 
+# Historical code is preserved below but must never modify current playback.
+raise SystemExit("Retired player repair: Media3-only playback supersedes this historical mutation/validator.")
+
+
 from pathlib import Path
 import sys
 

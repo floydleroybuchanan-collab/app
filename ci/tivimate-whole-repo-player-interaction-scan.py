@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from media3_source_contract import normalize_audited_playback_refresh
 from pathlib import Path
 import re
 import subprocess
@@ -197,6 +198,10 @@ for rel in (
         "TiviMate/5.1.6 (Linux; Android TV)",
         "CharmIPTV/Experimental-v3",
     )
+    # Auth recovery now reads a fresh M3U without joining EPG/cache writes.
+    # Normalize only that exact reviewed helper; other transport edits still fail.
+    if rel == "frontend/src/source.native.ts":
+        current = normalize_audited_playback_refresh(current)
     if is_exact_audited_epg_fix(rel) or is_audited_epg_fix_with_panel_ua(rel, current):
         continue
     # The player may add narrowly bounded non-transport bookkeeping without

@@ -29,6 +29,9 @@ export function createPlaybackCoordinator(native: Dependencies) {
 
   function activate(role: SessionRole, engine: Engine, isCurrent: () => boolean, prepare: () => void): Promise<void> {
     return enqueue(async () => {
+      // Also validate at runtime: restored or stale JS state must not activate
+      // an engine that is no longer present in the native application.
+      if (engine !== "media3") throw new Error("Unsupported playback engine");
       // Cancelled work must not retire a newer fullscreen/preview decoder.
       if (!isCurrent()) return;
       if (active?.engine !== engine || active.role !== role) {
@@ -39,7 +42,6 @@ export function createPlaybackCoordinator(native: Dependencies) {
           // Recover native ownership after JS reload. A failed release is fatal
           // to this activation: never start another decoder on an unknown owner.
           await stopNativeOwner("media3");
-          await stopNativeOwner("vlc");
         }
       }
       if (!isCurrent()) return;
@@ -58,7 +60,6 @@ export function createPlaybackCoordinator(native: Dependencies) {
       }
       // A preview cleanup after JS reload must not stop native fullscreen.
       await stopNativeOwner("media3", role);
-      await stopNativeOwner("vlc", role);
     });
   }
 

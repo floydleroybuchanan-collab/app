@@ -1,3 +1,7 @@
+
+# Historical code is preserved below but must never modify current playback.
+raise SystemExit("Retired player repair: Media3-only playback supersedes this historical mutation/validator.")
+
 #!/usr/bin/env python3
 from pathlib import Path
 import re

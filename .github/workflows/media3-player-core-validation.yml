@@ -27,6 +27,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -110,7 +112,8 @@ jobs:
             --no-daemon --max-workers=1 --stacktrace
 
   sideload:
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_sideload) }}
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:

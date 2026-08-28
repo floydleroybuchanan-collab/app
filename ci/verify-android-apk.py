@@ -13,6 +13,44 @@ import subprocess
 import zipfile
 
 
+def verify_archive(archive: zipfile.ZipFile) -> tuple[dict[str, list[str]], list[str]]:
+    """Validate packaged engines, including every ABI, without executing the APK."""
+    names = archive.namelist()
+    if len(names) != len(set(names)):
+        raise ValueError("Duplicate APK ZIP entries")
+    if "assets/index.android.bundle" not in names:
+        raise ValueError("Standalone JS/Hermes bundle missing")
+    forbidden = [name for name in names if re.search(r"(?:libvlc|videolan|nativevlc)", name, re.I)]
+    if forbidden:
+        raise ValueError(f"Removed VLC engine is packaged: {', '.join(forbidden)}")
+    libraries = {}
+    for abi, elf_class, machine in [("armeabi-v7a", 1, 40), ("arm64-v8a", 2, 183)]:
+        required = ["libffmpegJNI.so", "libhermes.so", "libreactnative.so", "libc++_shared.so"]
+        for name in required:
+            data = archive.read(f"lib/{abi}/{name}")
+            if len(data) < 20 or data[:4] != b"\x7fELF" or data[4] != elf_class or struct.unpack_from("<H", data, 18)[0] != machine:
+                raise ValueError(f"Invalid ABI library: {abi}/{name}")
+            if name == "libffmpegJNI.so" and b"ffmpegGetVersion" not in data:
+                raise ValueError(f"FFmpeg JNI exports missing for {abi}")
+        libraries[abi] = sorted(n.rsplit("/", 1)[1] for n in names if n.startswith(f"lib/{abi}/") and n.endswith(".so"))
+    dex = b"".join(archive.read(n) for n in names if re.fullmatch(r"classes\d*\.dex", n))
+    for marker in (b"Lorg/videolan/", b"Lcom/charmiptv/app/NativeVlc", b"RCTVLCPlayer"):
+        if marker in dex:
+            raise ValueError("Removed VLC Java/native bridge is packaged in DEX")
+    bundle = archive.read("assets/index.android.bundle")
+    if any(marker in bundle for marker in (b"NativeVlcPlayback", b"RCTVLCPlayer", b"react-native-vlc-media-player")):
+        raise ValueError("Removed VLC bridge remains in the JS/Hermes bundle")
+    classes = [
+        "Landroidx/media3/exoplayer/ExoPlayer;",
+        "Landroidx/media3/exoplayer/rtsp/RtspMediaSource;",
+        "Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;",
+    ]
+    for name in classes:
+        if name.encode() not in dex:
+            raise ValueError(f"Required player class missing: {name}")
+    return libraries, classes
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("apk", type=Path)
@@ -46,32 +84,8 @@ def main() -> None:
     if "application-debuggable" in badging:
         raise ValueError("Sideload must embed the production bundle without a debuggable application")
 
-    libraries = {}
     with zipfile.ZipFile(args.apk) as archive:
-        names = archive.namelist()
-        if len(names) != len(set(names)):
-            raise ValueError("Duplicate APK ZIP entries")
-        if "assets/index.android.bundle" not in names:
-            raise ValueError("Standalone JS/Hermes bundle missing")
-        for abi, elf_class, machine in [("armeabi-v7a", 1, 40), ("arm64-v8a", 2, 183)]:
-            required = ["libffmpegJNI.so", "libvlc.so", "libvlcjni.so", "libhermes.so", "libreactnative.so", "libc++_shared.so"]
-            for name in required:
-                data = archive.read(f"lib/{abi}/{name}")
-                if data[:4] != b"\x7fELF" or data[4] != elf_class or struct.unpack_from("<H", data, 18)[0] != machine:
-                    raise ValueError(f"Invalid ABI library: {abi}/{name}")
-                if name == "libffmpegJNI.so" and b"ffmpegGetVersion" not in data:
-                    raise ValueError(f"FFmpeg JNI exports missing for {abi}")
-            libraries[abi] = sorted(n.rsplit("/", 1)[1] for n in names if n.startswith(f"lib/{abi}/") and n.endswith(".so"))
-        dex = b"".join(archive.read(n) for n in names if re.fullmatch(r"classes\d*\.dex", n))
-        classes = [
-            "Landroidx/media3/exoplayer/ExoPlayer;",
-            "Landroidx/media3/exoplayer/rtsp/RtspMediaSource;",
-            "Landroidx/media3/decoder/ffmpeg/FfmpegAudioRenderer;",
-            "Lorg/videolan/libvlc/MediaPlayer;",
-        ]
-        for name in classes:
-            if name.encode() not in dex:
-                raise ValueError(f"Required player class missing: {name}")
+        libraries, classes = verify_archive(archive)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     for label, contents in [("signature", signature), ("alignment", alignment), ("badging", badging), ("manifest", manifest)]:
@@ -82,6 +96,7 @@ def main() -> None:
         "apk": args.apk.name, "bytes": args.apk.stat().st_size, "sha256": checksum,
         "package": package.group(1), "versionCode": int(package.group(2)), "versionName": package.group(3),
         "signatureVerified": True, "zipAlignment16KiBVerified": True,
+        "playbackEngine": "Media3", "vlcAbsent": True,
         "requiredClasses": classes, "nativeLibraries": libraries,
         "deviceInstallTested": False, "providerPlaybackTested": False,
     }
