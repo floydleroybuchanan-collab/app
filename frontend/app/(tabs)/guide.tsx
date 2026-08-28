@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
+import { useAppForeground } from "@/src/hooks/useAppForeground";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import {
@@ -217,22 +218,27 @@ function GuideSelectionPreview({
 function PurpleGuideScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const appForeground = useAppForeground();
+  const guideForeground = isFocused && appForeground;
+  const guideForegroundRef = useRef(guideForeground);
+  guideForegroundRef.current = guideForeground;
   const { drawerOpen, openDrawer, closeDrawer } = usePurpleTvDrawer();
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  useFocusEffect(
-    useCallback(() => {
-      setGuideScreenActive(true);
-      setRemoteContext("guide");
-      setGuideNavigationActive(true);
-      return () => {
-        setGuideScreenActive(false);
-        setGuideNavigationActive(false);
-        resetRemoteContextIfOwned("guide", "default");
-      };
-    }, []),
-  );
+  useEffect(() => {
+    if (!guideForeground) return;
+    guideForegroundRef.current = true;
+    setGuideScreenActive(true);
+    // The overlay-aware ownership effect below chooses Guide, drawers or PIN.
+    // An unconditional claim here would steal an open drawer on app resume.
+    return () => {
+      guideForegroundRef.current = false;
+      setGuideScreenActive(false);
+      setGuideNavigationActive(false);
+      resetRemoteContextIfOwned("guide", "default");
+    };
+  }, [guideForeground]);
   const {
     channels,
     windowStart,
@@ -315,6 +321,7 @@ function PurpleGuideScreenContent() {
   const surfReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memoryLogoRestoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const runwayPatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewFocusFrame = useRef<number | null>(null);
   const pendingRunwayPatchRef = useRef<{ ids: string[]; priorityIds: string[] } | null>(null);
   const groupChangedAt = useRef(0);
   const bootRetryRef = useRef(0);
@@ -335,6 +342,8 @@ function PurpleGuideScreenContent() {
   const startPreferenceAppliedRef = useRef(false);
 
   const cancelGuideTransientTimers = useCallback(() => {
+    if (previewFocusFrame.current != null) cancelAnimationFrame(previewFocusFrame.current);
+    previewFocusFrame.current = null;
     if (previewTimer.current) clearTimeout(previewTimer.current);
     if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
     if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
@@ -345,14 +354,16 @@ function PurpleGuideScreenContent() {
     rapidSurfUntilRef.current = 0;
   }, []);
 
-  const quiesceGuideForTransition = useCallback((releaseCache: boolean) => {
+  const quiesceGuideForTransition = useCallback((releaseCache: boolean, preserveRunway = false) => {
     cancelGuideTransientTimers();
+    if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
+    memoryLogoRestoreTimer.current = null;
     setPreviewId(null);
     setPreviewStatus("loading");
     setPreviewActionsFocused(false);
     setViewportGuideChannelIds(null);
     setPriorityMatchChannelIds([]);
-    lastRunwayRef.current = { ids: [], priority: [], pageSize: 8 };
+    if (!preserveRunway) lastRunwayRef.current = { ids: [], priority: [], pageSize: 8 };
     void stopPreviewSession("superseded");
     if (releaseCache) releaseGuideSlidingCache();
   }, [cancelGuideTransientTimers, releaseGuideSlidingCache]);
@@ -367,6 +378,7 @@ function PurpleGuideScreenContent() {
       setPreviewId(null);
       void stopPreviewSession("superseded");
       setSurfLogosSuppressed(true);
+      if (!guideForegroundRef.current) return;
       memoryLogoRestoreTimer.current = setTimeout(
         () => setSurfLogosSuppressed(false),
         pressure === "critical" ? 12_000 : 4_000,
@@ -412,7 +424,7 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (!isFocused) {
+    if (!guideForeground) {
       setQuickActionsOpen(false);
       return;
     }
@@ -423,10 +435,10 @@ function PurpleGuideScreenContent() {
       sub.remove();
       setQuickActionsOpen(false);
     };
-  }, [isFocused]);
+  }, [guideForeground]);
 
   useEffect(() => {
-    if (!isFocused) {
+    if (!guideForeground) {
       setGuideNavigationActive(false);
       if (pinModalOwnedRef.current) {
         pinModalOwnedRef.current = false;
@@ -450,16 +462,16 @@ function PurpleGuideScreenContent() {
       setRemoteContext("guide");
       setGuideNavigationActive(true);
     }
-  }, [activeProgram, drawerOpen, groupDrawerOpen, isFocused, pinPromptGroup, quickActionsOpen]);
+  }, [activeProgram, drawerOpen, groupDrawerOpen, guideForeground, pinPromptGroup, quickActionsOpen]);
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!guideForeground) return;
     const sub = DeviceEventEmitter.addListener("CharmGuideGroupsRequestOpen", () => {
-      closeDrawer();
+      closeDrawer({ force: true });
       setGroupDrawerOpen(true);
     });
     return () => sub.remove();
-  }, [closeDrawer, isFocused]);
+  }, [closeDrawer, guideForeground]);
 
   useFocusEffect(
     useCallback(() => {
@@ -468,19 +480,19 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (loading || refreshing || channels.length > 0) return;
+    if (!guideForeground || loading || refreshing || channels.length > 0) return;
     if (bootRetryRef.current >= 1) return;
     bootRetryRef.current += 1;
     const timer = setTimeout(() => void hardRefresh(), 5000);
     return () => clearTimeout(timer);
-  }, [loading, refreshing, channels.length, hardRefresh]);
+  }, [guideForeground, loading, refreshing, channels.length, hardRefresh]);
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!guideForeground) return;
     setNow(new Date().toISOString());
     const timer = setInterval(() => setNow(new Date().toISOString()), 30_000);
     return () => clearInterval(timer);
-  }, [isFocused]);
+  }, [guideForeground]);
 
   useEffect(
     () => () => {
@@ -494,32 +506,31 @@ function PurpleGuideScreenContent() {
     [cancelGuideTransientTimers],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      const last = lastRunwayRef.current;
-      if (!peekGuideJump() && last.ids.length) {
-        setViewportGuideChannelIds(last.ids);
-        setPriorityMatchChannelIds(
-          channels.length >= 400
-            ? Array.from(new Set([...last.priority, ...last.ids])).slice(0, 400)
-            : [],
-        );
-        retainGuideSlidingCache(
-          expandRunwayKeepSet(
-            orderedFilteredIdsRef.current,
-            last.ids,
-            last.pageSize,
-            1,
-            filteredIdIndexRef.current,
-          ),
-        );
-        void patchProgramsForChannelIds(last.ids, last.priority);
-      }
-      return () => {
-        quiesceGuideForTransition(true);
-      };
-    }, [channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache]),
-  );
+  const runwayLifecycleRef = useRef({ channelsCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache });
+  runwayLifecycleRef.current = { channelsCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache };
+  useEffect(() => {
+    if (!guideForeground) return;
+    const lifecycle = runwayLifecycleRef.current;
+    setSurfLogosSuppressed(false);
+    const last = lastRunwayRef.current;
+    if (!peekGuideJump() && last.ids.length) {
+      setViewportGuideChannelIds(last.ids);
+      setPriorityMatchChannelIds(
+        lifecycle.channelsCount >= 400
+          ? Array.from(new Set([...last.priority, ...last.ids])).slice(0, 400)
+          : [],
+      );
+      lifecycle.retainGuideSlidingCache(
+        expandRunwayKeepSet(orderedFilteredIdsRef.current, last.ids, last.pageSize, 1, filteredIdIndexRef.current),
+      );
+      void lifecycle.patchProgramsForChannelIds(last.ids, last.priority);
+    }
+    return () => {
+      // Preserve the runway for a background/foreground round trip. A group or
+      // channel transition still deliberately clears it through the same helper.
+      runwayLifecycleRef.current.quiesceGuideForTransition(true, true);
+    };
+  }, [guideForeground]);
 
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const recentIdSet = useMemo(() => new Set(recentIds), [recentIds]);
@@ -561,7 +572,7 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (startPreferenceAppliedRef.current || !isFocused || !channels.length) return;
+    if (startPreferenceAppliedRef.current || !guideForeground || !channels.length) return;
     if (peekGuideJump()) return;
     startPreferenceAppliedRef.current = true;
     // A remembered channel/group means this is a session restore (for example,
@@ -580,7 +591,7 @@ function PurpleGuideScreenContent() {
     resetGuideSelection(guideSessionChannelId);
     setRestoreTimeMs(null);
     setResetToken((value) => value + 1);
-  }, [channels.length, group, groups, isFocused, overflowGroups, startGroup]);
+  }, [channels.length, group, groups, guideForeground, overflowGroups, startGroup]);
 
   const filteredMeta = useMemo(() => {
     let list = filterChannelsByGroup(channels, group, {
@@ -622,6 +633,7 @@ function PurpleGuideScreenContent() {
   filteredIdIndexRef.current = filteredIdIndex;
 
   const onViewportChannelIds = useCallback((ids: string[], priorityIds: string[] = [], pageSize = 8, velocity = 0) => {
+    if (!guideForegroundRef.current) return;
     const focusIndex = Math.max(0, ids.indexOf(priorityIds[0] || ""));
     const rapid = velocity > 0 || isGuideSurfing();
     const dataIds = rapid
@@ -650,7 +662,7 @@ function PurpleGuideScreenContent() {
       runwayPatchTimer.current = null;
       const pending = pendingRunwayPatchRef.current;
       pendingRunwayPatchRef.current = null;
-      if (!pending) return;
+      if (!pending || !guideForegroundRef.current) return;
       void patchProgramsForChannelIds(pending.ids, pending.priorityIds);
     }, delay);
   }, [
@@ -663,7 +675,7 @@ function PurpleGuideScreenContent() {
 
   const viewportSeedKeyRef = useRef("");
   useEffect(() => {
-    if (!isFocused || !filtered.length) return;
+    if (!guideForeground || !filtered.length) return;
     const key = `${group}:${resetToken}:${powerProfile}`;
     if (viewportSeedKeyRef.current === key) return;
     viewportSeedKeyRef.current = key;
@@ -709,7 +721,7 @@ function PurpleGuideScreenContent() {
     filteredIdIndex,
     group,
     guideDensity,
-    isFocused,
+    guideForeground,
     orderedFilteredIds,
     patchProgramsForChannelIds,
     powerProfile,
@@ -762,7 +774,7 @@ function PurpleGuideScreenContent() {
       clearTimeout(previewTimer.current);
       previewTimer.current = null;
     }
-    if (safePreviewMode === "off" || !hasUrl) {
+    if (!guideForegroundRef.current || safePreviewMode === "off" || !hasUrl) {
       setPreviewId(null);
       return;
     }
@@ -775,6 +787,7 @@ function PurpleGuideScreenContent() {
     }
     previewTimer.current = setTimeout(() => {
       previewTimer.current = null;
+      if (!guideForegroundRef.current) return;
       setPreviewStatus("loading");
       setPreviewEpoch((value) => value + 1);
       setPreviewId(requestedId);
@@ -971,9 +984,12 @@ function PurpleGuideScreenContent() {
   }, [activeProgram, drawerOpen, groupDrawerOpen]);
 
   const onGuideUpBoundary = useCallback(() => {
+    if (!guideForegroundRef.current) return;
     setPreviewFocusRequestToken((value) => value + 1);
-    requestAnimationFrame(() => {
-      focusGuidePreviewSurface();
+    if (previewFocusFrame.current != null) cancelAnimationFrame(previewFocusFrame.current);
+    previewFocusFrame.current = requestAnimationFrame(() => {
+      previewFocusFrame.current = null;
+      if (guideForegroundRef.current) focusGuidePreviewSurface();
     });
   }, []);
 
@@ -1034,7 +1050,7 @@ function PurpleGuideScreenContent() {
     >
       <View style={styles.page}>
         <PurpleGuideGroupDrawer
-          open={groupDrawerOpen}
+          open={groupDrawerOpen && guideForeground}
           groups={drawerGroups}
           onCloseToGuide={() => setGroupDrawerOpen(false)}
           onOpenMainDrawer={() => {
@@ -1079,12 +1095,12 @@ function PurpleGuideScreenContent() {
               now={now}
               channelNumberById={channelNumberById}
               showChannelNumbers={channelNumbers}
-              showLogos={isFocused && channelLogos && !surfLogosSuppressed}
+              showLogos={guideForeground && channelLogos && !surfLogosSuppressed}
               favoriteSet={favoriteSet}
               hidePreview={hidePreview}
               muted={mutePreview}
               onToggleMute={() => setMutePreview(!mutePreview)}
-              previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
+              previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !guideForeground ? null : previewId}
               previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
@@ -1106,7 +1122,7 @@ function PurpleGuideScreenContent() {
                 channels={filtered}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
-                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
+                active={guideForeground && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
                 restoreChannelId={guideSessionChannelId}
                 restoreTimeMs={restoreTimeMs}
                 reloadGeneration={resetToken}

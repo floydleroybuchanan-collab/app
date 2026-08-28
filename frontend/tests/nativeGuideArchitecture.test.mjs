@@ -30,7 +30,8 @@ test("Guide is a single native logical canvas with predictive prefetch", async (
   assert.match(manager, /view\.dispose\(\)/);
   assert.match(view, /fun dispose\(\)/);
   assert.doesNotMatch(view, /onDetachedFromWindow\(\)[\s\S]{0,180}(shutdownNow|database\.close)/);
-  assert.match(view, /pendingQuery = GuideQuery/);
+  assert.match(view, /pendingQuery\.getAndSet\(GuideQuery/);
+  assert.match(view, /val request = pendingQuery\.getAndSet\(null\)/);
   assert.match(view, /queryDrainScheduled = AtomicBoolean\(false\)/);
   assert.match(view, /Keep at most one active read plus the newest requested runway/);
   assert.match(app, /add\(NativeGuidePackage\(\)\)/);
@@ -48,7 +49,9 @@ test("Guide logical resets force a bounded native reload without remounting", as
   assert.match(bridge, /reloadGeneration=\{reloadGeneration\}/);
   assert.match(manager, /@ReactProp\(name = "reloadGeneration", defaultInt = 0\)/);
   assert.match(view, /fun setReloadGeneration\(value: Int\)/);
-  assert.match(view, /pendingQuery = null[\s\S]{0,260}loadPrograms\(\)/);
+  const reload = view.slice(view.indexOf("fun setReloadGeneration("), view.indexOf("fun restoreTime("));
+  assert.match(reload, /cancelPendingQueries\(\)[\s\S]*loadPrograms\(\)/);
+  assert.match(view, /pendingQuery\.getAndSet\(null\)\?\.cancellation\?\.cancel\(\)/);
   assert.doesNotMatch(guide, /key=\{resetToken\}/);
 });
 

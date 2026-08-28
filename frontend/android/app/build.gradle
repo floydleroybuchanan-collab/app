@@ -184,7 +184,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
     implementation("androidx.media3:media3-exoplayer-dash:1.8.0")
     implementation("androidx.media3:media3-exoplayer-rtsp:1.8.0")
-    // Shared CookieJar for playlist + Media3 (JavaNetCookieJar lives here).
+    // Retain the React Native URLConnection bridge; media uses BoundedCookieJar.
     implementation("com.squareup.okhttp3:okhttp-urlconnection:4.12.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

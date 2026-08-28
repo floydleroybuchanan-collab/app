@@ -9,12 +9,31 @@ import { useStore } from "@/src/store";
 import { reminderKey } from "@/src/utils/time";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
+import { useAppForeground } from "@/src/hooks/useAppForeground";
+import { overlayRestoreContext } from "@/src/core/screenActivity";
 import { resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 
 export function ProgramModal() {
   const { activeProgram, closeProgram, toggleReminder, reminders } = useStore();
   const router = useRouter();
   const pathname = usePathname();
+  const appForeground = useAppForeground();
+  const pathnameRef = React.useRef(pathname);
+  const foregroundRef = React.useRef(appForeground);
+  const programSessionRef = React.useRef(activeProgram);
+  const openPathRef = React.useRef(pathname);
+  const reminderBusyRef = React.useRef(false);
+  pathnameRef.current = pathname;
+  foregroundRef.current = appForeground;
+  if (programSessionRef.current !== activeProgram) {
+    programSessionRef.current = activeProgram;
+    openPathRef.current = pathname;
+    reminderBusyRef.current = false;
+  }
+  const visible = !!activeProgram && appForeground && openPathRef.current === pathname;
+  React.useEffect(() => {
+    if (activeProgram && !visible) closeProgram();
+  }, [activeProgram, closeProgram, visible]);
   const [msg, setMsg] = React.useState<string | null>(null);
   // Optimistic override so the label flips the instant the user presses Remind/Cancel.
   const [optimisticReminded, setOptimisticReminded] = React.useState<boolean | null>(null);
@@ -32,41 +51,37 @@ export function ProgramModal() {
   React.useEffect(() => {
     setMsg(null);
     setOptimisticReminded(null);
-    if (!activeProgram) {
+    if (!visible) {
       setFocusClaim(false);
       return;
     }
     setFocusClaim(false);
     const frame = requestAnimationFrame(() => setFocusClaim(true));
     return () => cancelAnimationFrame(frame);
-  }, [activeProgram]);
+  }, [activeProgram, visible]);
 
   React.useEffect(() => {
-    if (!activeProgram) return;
+    if (!visible) return;
     if (pathname?.startsWith("/guide")) setGuideNavigationActive(false);
     setRemoteContext("modal");
     return () => {
-      const restore = pathname?.startsWith("/player")
-        ? "player"
-        : pathname?.startsWith("/guide")
-          ? "guide"
-          : "default";
+      const restore = overlayRestoreContext(pathnameRef.current, foregroundRef.current);
       const restored = resetRemoteContextIfOwned("modal", restore);
       if (restored && restore === "guide") setGuideNavigationActive(true);
     };
-  }, [activeProgram, pathname]);
+  }, [pathname, visible]);
 
   // Close on the hardware / remote BACK button while the sheet is open.
   React.useEffect(() => {
-    if (!activeProgram) return;
+    if (!visible) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       closeProgram();
       return true;
     });
     return () => sub.remove();
-  }, [activeProgram, closeProgram]);
+  }, [closeProgram, visible]);
 
-  if (!activeProgram) return null;
+  if (!activeProgram || !visible) return null;
   const { program, channel } = activeProgram;
   const key = reminderKey(channel.id, program.start);
   // Derive from reactive reminders (not a stale ref) so Cancel/Remind updates immediately.
@@ -83,6 +98,9 @@ export function ProgramModal() {
   };
 
   const onReminder = () => {
+    if (reminderBusyRef.current) return;
+    reminderBusyRef.current = true;
+    const selectedProgram = activeProgram;
     const targetReminded = !reminded;
     setOptimisticReminded(targetReminded);
     setMsg(targetReminded ? "Setting reminder…" : "Removing reminder…");
@@ -90,7 +108,7 @@ export function ProgramModal() {
     void (async () => {
       try {
         const result = await toggleReminder(program, channel);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || programSessionRef.current !== selectedProgram) return;
         if (result === "added") {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           setOptimisticReminded(null);
@@ -104,9 +122,11 @@ export function ProgramModal() {
           setMsg("Enable notifications to set reminders");
         }
       } catch {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || programSessionRef.current !== selectedProgram) return;
         setOptimisticReminded(null);
         setMsg("Could not update reminder — try again");
+      } finally {
+        if (programSessionRef.current === selectedProgram) reminderBusyRef.current = false;
       }
     })();
   };

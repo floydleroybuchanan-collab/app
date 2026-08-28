@@ -81,7 +81,8 @@ test("learning a container cannot reprepare the active stream through a profile 
   assert.doesNotMatch(player, /useChannelPlaybackProfile/);
   const hint = player.slice(player.indexOf("const learnedHint = useMemo("), player.indexOf("const kind = useMemo("));
   assert.match(hint, /getChannelPlaybackProfile\(currentChannelKey\)\?\.confirmedType/);
-  assert.match(hint, /\}, \[currentChannelKey, streamTypeHint, uri\]\);/);
+  assert.match(hint, /\}, \[currentChannelKey, sourceTypeHint, uri\]\);/);
+  assert.match(player, /sourceTypeHintRef.current.key !== playbackKey/);
   // Learned information remains available to the next explicit tune.
   assert.match(player, /rememberConfirmedStreamType\(currentChannelKey, event.sourceType, "media3"\)/);
 });

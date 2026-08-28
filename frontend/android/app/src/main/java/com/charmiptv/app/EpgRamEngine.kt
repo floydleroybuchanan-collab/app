@@ -1,7 +1,8 @@
 package com.charmiptv.app
 
 /** Channel-scoped hot cache. SQLite remains authoritative and complete. */
-internal class EpgRamEngine(private val database: EpgDatabase) {
+internal class EpgRamEngine(private val readWindow: (Long, Long, Collection<String>) -> List<NativeEpgProgram>) {
+  constructor(database: EpgDatabase) : this({ startMs, endMs, missing -> database.queryWindow(startMs, endMs, missing) })
   private data class Entry(
     val programmes: Array<NativeEpgProgram>,
     val startMs: Long,
@@ -14,16 +15,18 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
   private val entries = LinkedHashMap<String, Entry>(64, 0.75f, true)
   private var playlistToXmltv: Map<String, String> = emptyMap()
   private var estimatedBytes = 0L
+  private var cacheGeneration = 0L
   private val unregisterMemoryListener = CharmMemoryCoordinator.register { level, _ ->
     when (level) {
-      CharmTrimLevel.BACKGROUND -> synchronized(lock) { trimFraction(0.75) }
-      CharmTrimLevel.MODERATE -> synchronized(lock) { trimFraction(0.4) }
+      CharmTrimLevel.BACKGROUND -> synchronized(lock) { cacheGeneration += 1; trimFraction(0.75) }
+      CharmTrimLevel.MODERATE -> synchronized(lock) { cacheGeneration += 1; trimFraction(0.4) }
       CharmTrimLevel.CRITICAL -> clear()
     }
   }
   private val unregisterDiagnostics = CharmEpgRamDiagnostics.register(::stats)
 
   fun clear(cooldownMs: Long = 0L) = synchronized(lock) {
+    cacheGeneration += 1
     entries.clear()
     estimatedBytes = 0L
   }
@@ -37,26 +40,29 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
   fun isWarm(): Boolean = synchronized(lock) { entries.isNotEmpty() }
   fun hasMatches(): Boolean = synchronized(lock) { playlistToXmltv.isNotEmpty() }
 
-  fun replaceMatches(rows: Collection<PlaylistEpgMatchRow>) = synchronized(lock) {
+  fun replaceMatches(rows: Collection<PlaylistEpgMatchRow>) {
     val next = HashMap<String, String>(rows.size * 2)
     for (row in rows) {
       if (row.playlistId.isNotBlank() && row.xmltvId.isNotBlank()) next[row.playlistId] = row.xmltvId
     }
-    playlistToXmltv = next
     val active = HashSet<String>(next.size * 2)
     active.addAll(next.values)
-    val iterator = entries.entries.iterator()
-    while (iterator.hasNext()) {
-      val entry = iterator.next()
-      if (entry.key !in active) {
-        estimatedBytes -= entry.value.estimatedBytes
-        iterator.remove()
+    synchronized(lock) {
+      cacheGeneration += 1
+      playlistToXmltv = next
+      val iterator = entries.entries.iterator()
+      while (iterator.hasNext()) {
+        val entry = iterator.next()
+        if (entry.key !in active) {
+          estimatedBytes -= entry.value.estimatedBytes
+          iterator.remove()
+        }
       }
     }
   }
 
   fun queryGuideWindow(startMs: Long, endMs: Long, playlistIds: Collection<String>): List<NativeEpgProgram>? {
-    val mapping = synchronized(lock) { playlistToXmltv }
+    val (mapping, generationBeforeRead) = synchronized(lock) { playlistToXmltv to cacheGeneration }
     if (mapping.isEmpty()) return null
     // Build one insertion-ordered set instead of mapNotNull().distinct(), which
     // creates multiple short-lived lists on every native Guide runway query.
@@ -65,44 +71,62 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
       val xmltvId = mapping[playlistId]
       if (!xmltvId.isNullOrBlank()) xmltvIds.add(xmltvId)
     }
-    if (xmltvIds.isEmpty()) return emptyList()
-    ensureChannels(xmltvIds, startMs, endMs)
-    val result = ArrayList<NativeEpgProgram>()
-    synchronized(lock) {
+    if (!ensureChannels(xmltvIds, startMs, endMs, generationBeforeRead)) return null
+    val windows = synchronized(lock) {
+      if (generationBeforeRead != cacheGeneration) return null
+      val snapshot = ArrayList<Pair<String, Array<NativeEpgProgram>>>()
       for (playlistId in playlistIds) {
         val xmltvId = mapping[playlistId] ?: continue
-        appendWindow(entries[xmltvId]?.programmes ?: continue, playlistId, startMs, endMs, result)
+        val programmes = entries[xmltvId]?.programmes ?: continue
+        snapshot.add(playlistId to programmes)
       }
+      snapshot
     }
-    return result
+    // Arrays are immutable after publication. Copy programmes outside the cache
+    // lock so Android memory callbacks and playback diagnostics never wait for
+    // a full Guide result to be allocated.
+    val result = ArrayList<NativeEpgProgram>()
+    for ((playlistId, programmes) in windows) appendWindow(programmes, playlistId, startMs, endMs, result)
+    return if (synchronized(lock) { generationBeforeRead == cacheGeneration }) result else null
   }
 
   fun queryWindow(startMs: Long, endMs: Long, xmltvIds: Collection<String>): List<NativeEpgProgram>? {
+    val generationBeforeRead = synchronized(lock) { cacheGeneration }
     val unique = LinkedHashSet<String>()
     for (id in xmltvIds) if (id.isNotBlank()) unique.add(id)
     if (unique.isEmpty()) return emptyList()
-    ensureChannels(unique, startMs, endMs)
-    val result = ArrayList<NativeEpgProgram>()
-    synchronized(lock) {
-      for (id in unique) appendWindow(entries[id]?.programmes ?: continue, id, startMs, endMs, result)
+    if (!ensureChannels(unique, startMs, endMs, generationBeforeRead)) return null
+    val windows = synchronized(lock) {
+      if (generationBeforeRead != cacheGeneration) return null
+      val snapshot = ArrayList<Pair<String, Array<NativeEpgProgram>>>()
+      for (id in unique) {
+        val programmes = entries[id]?.programmes ?: continue
+        snapshot.add(id to programmes)
+      }
+      snapshot
     }
-    return result
+    val result = ArrayList<NativeEpgProgram>()
+    for ((id, programmes) in windows) appendWindow(programmes, id, startMs, endMs, result)
+    return if (synchronized(lock) { generationBeforeRead == cacheGeneration }) result else null
   }
 
-  private fun ensureChannels(ids: Collection<String>, startMs: Long, endMs: Long) {
-    if (endMs <= startMs) return
+  private fun ensureChannels(ids: Collection<String>, startMs: Long, endMs: Long, generationBeforeRead: Long): Boolean {
+    if (endMs <= startMs) return true
     val now = System.currentTimeMillis()
     val missing = ArrayList<String>()
     synchronized(lock) {
+      // The Guide mapping and this generation belong to the same snapshot.
+      // Never load old XMLTV ids under a replacement binding's generation.
+      if (generationBeforeRead != cacheGeneration) return false
       evictExpired(now)
       for (id in ids) {
         val entry = entries[id]
         if (entry == null || startMs < entry.startMs || endMs > entry.endMs) missing.add(id)
       }
     }
-    if (missing.isEmpty()) return
+    if (missing.isEmpty()) return true
 
-    val rows = database.queryWindow(startMs, endMs, missing)
+    val rows = readWindow(startMs, endMs, missing)
     // Avoid Kotlin groupBy(): it allocates a Map + List wrapper graph over every
     // programme while the original SQLite result list is still live. Fill only
     // the requested per-channel arrays through mutable buckets, then release the
@@ -110,18 +134,26 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
     val grouped = HashMap<String, ArrayList<NativeEpgProgram>>(missing.size * 2)
     for (row in rows) grouped.getOrPut(row.channelId) { ArrayList() }.add(row)
 
+    val replacements = LinkedHashMap<String, Entry>()
+    for (id in missing) {
+      val list = grouped[id]
+      val programmes = if (list.isNullOrEmpty()) emptyArray() else list.toTypedArray()
+      var bytes = 0L
+      for (programme in programmes) bytes += estimateProgramBytes(programme)
+      replacements[id] = Entry(programmes, startMs, endMs, now, bytes)
+    }
     synchronized(lock) {
-      for (id in missing) {
+      // A read that began before memory trim, epoch clear or binding replacement
+      // cannot immediately refill the data that the new owner just released.
+      if (generationBeforeRead != cacheGeneration) return false
+      for ((id, entry) in replacements) {
         entries.remove(id)?.let { estimatedBytes -= it.estimatedBytes }
-        val list = grouped[id]
-        val programmes = if (list.isNullOrEmpty()) emptyArray() else list.toTypedArray()
-        var bytes = 0L
-        for (programme in programmes) bytes += estimateProgramBytes(programme)
-        entries[id] = Entry(programmes, startMs, endMs, now, bytes)
-        estimatedBytes += bytes
+        entries[id] = entry
+        estimatedBytes += entry.estimatedBytes
       }
       trimToBudget()
     }
+    return true
   }
 
   private fun evictExpired(now: Long) {

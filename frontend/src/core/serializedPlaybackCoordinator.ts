@@ -20,9 +20,10 @@ export function createPlaybackCoordinator(native: Dependencies) {
     return next;
   }
 
-  async function stopNativeOwner(engine: Engine, role?: SessionRole): Promise<void> {
+  async function stopNativeOwner(engine: Engine, role?: SessionRole, isCurrent: () => boolean = () => true): Promise<void> {
+    if (!isCurrent()) return;
     const owner = await native.owner(engine);
-    if (owner !== "none" && (!role || owner === role)) {
+    if (isCurrent() && owner !== "none" && (!role || owner === role)) {
       await native.stop(engine, owner, true);
     }
   }
@@ -41,7 +42,7 @@ export function createPlaybackCoordinator(native: Dependencies) {
         } else {
           // Recover native ownership after JS reload. A failed release is fatal
           // to this activation: never start another decoder on an unknown owner.
-          await stopNativeOwner("media3");
+          await stopNativeOwner("media3", undefined, isCurrent);
         }
       }
       if (!isCurrent()) return;
@@ -50,8 +51,11 @@ export function createPlaybackCoordinator(native: Dependencies) {
     });
   }
 
-  function release(role: SessionRole): Promise<void> {
+  function release(role: SessionRole, isCurrent: () => boolean = () => true): Promise<void> {
     return enqueue(async () => {
+      // A cleanup can wait behind native work. Its generation must still own
+      // this role when the queue reaches it, not just when it was enqueued.
+      if (!isCurrent()) return;
       if (active) {
         if (active.role !== role) return;
         await native.stop(active.engine, active.role, true);
@@ -59,7 +63,7 @@ export function createPlaybackCoordinator(native: Dependencies) {
         return;
       }
       // A preview cleanup after JS reload must not stop native fullscreen.
-      await stopNativeOwner("media3", role);
+      await stopNativeOwner("media3", role, isCurrent);
     });
   }
 
@@ -69,9 +73,9 @@ export function createPlaybackCoordinator(native: Dependencies) {
     });
   }
 
-  function pause(role: SessionRole): Promise<void> {
+  function pause(role: SessionRole, isCurrent: () => boolean = () => true): Promise<void> {
     return enqueue(async () => {
-      if (active?.role === role) native.pause(active.engine);
+      if (active?.role === role && isCurrent()) native.pause(active.engine);
     });
   }
 

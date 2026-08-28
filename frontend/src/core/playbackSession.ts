@@ -14,7 +14,7 @@ export type SessionFailReason =
   | "crashed";
 
 type StopFn = () => void | Promise<void>;
-type NativeRoleFn = (role: SessionRole) => void | Promise<void>;
+type NativeRoleFn = (role: SessionRole, isCurrent?: () => boolean) => void | Promise<void>;
 type RoleState = {
   generation: number;
   stops: Set<StopFn>;
@@ -66,9 +66,9 @@ function invokeStops(role: SessionRole): Promise<void> {
   return Promise.allSettled(pending).then(() => undefined);
 }
 
-async function invokeNative(handler: NativeRoleFn | null, role: SessionRole): Promise<void> {
-  if (!handler) return;
-  try { await handler(role); } catch {}
+async function invokeNative(handler: NativeRoleFn | null, role: SessionRole, isCurrent: () => boolean = () => true): Promise<void> {
+  if (!handler || !isCurrent()) return;
+  try { await handler(role, isCurrent); } catch {}
 }
 
 export function setNativePlaybackReleaseHandler(handler: NativeRoleFn | null): void {
@@ -160,6 +160,7 @@ export function setSessionPhase(
 ): boolean {
   const state = roles[role];
   if (generation !== state.generation) return false;
+  if (state.phase === phase && state.reason === reason) return true;
   state.phase = phase;
   state.reason = reason;
   publishOwnership();
@@ -203,7 +204,7 @@ export function stopSession(
   // Preview/fullscreen ownership race this registry exists to prevent.
   stopPromise = callbacks
     .catch(() => undefined)
-    .then(() => state.generation === stoppedGeneration ? invokeNative(nativeReleaseHandler, role) : undefined)
+    .then(() => invokeNative(nativeReleaseHandler, role, () => state.generation === stoppedGeneration))
     .catch(() => undefined)
     .then(() => {
       if (roleStopPromises[role] === stopPromise) roleStopPromises[role] = null;
@@ -224,7 +225,10 @@ export function stopSession(
 }
 
 export function pauseSessionDecoders(role: SessionRole): Promise<void> {
-  if (role === "fullscreen") return invokeNative(nativePauseHandler, role);
+  if (role === "fullscreen") {
+    const generation = roles[role].generation;
+    return invokeNative(nativePauseHandler, role, () => isSessionCurrent(role, generation));
+  }
   return invokeStops(role);
 }
 

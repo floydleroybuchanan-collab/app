@@ -2,6 +2,7 @@ package com.charmiptv.app
 
 import android.app.ActivityManager
 import android.content.Context
+import android.os.SystemClock
 
 internal enum class CharmTrimLevel { BACKGROUND, MODERATE, CRITICAL }
 
@@ -37,7 +38,7 @@ internal object CharmMemoryCoordinator {
   fun budgets(): CharmMemoryBudgets = budgets
 
   fun setPlaybackStarting(starting: Boolean) {
-    playbackStartingUntilMs = if (starting) System.currentTimeMillis() + 15_000L else 0L
+    playbackStartingUntilMs = if (starting) SystemClock.elapsedRealtime() + 15_000L else 0L
   }
 
   fun register(listener: (CharmTrimLevel, CharmMemoryBudgets) -> Unit): () -> Unit = synchronized(listeners) {
@@ -48,7 +49,7 @@ internal object CharmMemoryCoordinator {
   fun trim(level: CharmTrimLevel) {
     // Delay background/moderate cleanup during decoder startup. Critical
     // pressure always wins so Android does not kill the process outright.
-    if (level != CharmTrimLevel.CRITICAL && System.currentTimeMillis() < playbackStartingUntilMs) return
+    if (level != CharmTrimLevel.CRITICAL && SystemClock.elapsedRealtime() < playbackStartingUntilMs) return
     dispatchTrim(level)
   }
 

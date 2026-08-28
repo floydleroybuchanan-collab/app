@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
+import { useAppForeground } from "@/src/hooks/useAppForeground";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -65,6 +66,7 @@ export function PurpleChannelCollection({
 }) {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const appForeground = useAppForeground();
   const { width } = useWindowDimensions();
   const { channels, addRecent, channelLogos, hardRefresh, loading, refreshing, error } = useStore();
   const columns = width >= 1500 ? 6 : width >= 1050 ? 5 : 4;
@@ -72,11 +74,11 @@ export function PurpleChannelCollection({
   const [preferInitialFocus, setPreferInitialFocus] = useState(true);
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || !appForeground) return;
     setNow(new Date());
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
-  }, [isFocused]);
+  }, [appForeground, isFocused]);
 
   // Tabs can stay mounted after navigation. Re-arm preferred focus on every
   // route entry so Android TV never returns to a collection with no focus owner.

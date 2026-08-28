@@ -12,18 +12,28 @@ import java.io.File
 
 class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx) {
   override fun getName(): String = "TvRemote"
+  private val maintenance = BoundedMaintenanceQueue("CharmMaintenance")
+
+  override fun invalidate() {
+    maintenance.close()
+    super.invalidate()
+  }
 
   companion object {
     // Use @JvmField (a plain static field, no accessors) so Kotlin does NOT
     // generate a static setPointerActive(...) setter that would clash at the
     // JVM level with the @ReactMethod fun setPointerActive(...) below.
     @JvmField
+    @Volatile
     var pointerActive: Boolean = false
     @JvmField
+    @Volatile
     var guideNavigationActive: Boolean = false
     @JvmField
+    @Volatile
     var guideRepeatIntervalMs: Long = 72L
     @JvmField
+    @Volatile
     var remoteContext: String = "default"
     private const val MAX_SANE_CODEC_DIMENSION = 16_384
   }
@@ -92,12 +102,15 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
 
   /** One-shot diagnostic report; never probe codecs while changing channels. */
   @ReactMethod
-  fun getCodecCapabilities(promise: Promise) {
+  fun getCodecCapabilities(promise: Promise) = maintenance.submit(
+    { failure -> promise.reject("CODEC_REPORT_FAILED", "Codec report unavailable", failure) },
+  ) {
     try {
       val mimeTypes = LinkedHashSet<String>()
       var maxWidth = 0
       var maxHeight = 0
       for (info in MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos) {
+        checkMaintenanceActive()
         if (info.isEncoder) continue
         for (type in info.supportedTypes) {
           val mime = type.lowercase()
@@ -153,7 +166,9 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
   }
 
   @ReactMethod
-  fun getCacheStorageReport(promise: Promise) {
+  fun getCacheStorageReport(promise: Promise) = maintenance.submit(
+    { failure -> promise.reject("CACHE_REPORT_FAILED", "Cache report unavailable", failure) },
+  ) {
     try {
       val logo = File(ctx.cacheDir, "charm-channel-logos")
       val databases = ctx.databaseList().map(ctx::getDatabasePath)
@@ -172,13 +187,16 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
   }
 
   @ReactMethod
-  fun pruneDiskCaches(maxAgeDays: Double, promise: Promise) {
+  fun pruneDiskCaches(maxAgeDays: Double, promise: Promise) = maintenance.submit(
+    { failure -> promise.reject("CACHE_PRUNE_FAILED", "Cache maintenance unavailable", failure) },
+  ) {
     try {
       val cutoff = System.currentTimeMillis() - maxAgeDays.toLong().coerceIn(1L, 90L) * 86_400_000L
       val protectedCutoff = System.currentTimeMillis() - 120_000L
       var removedFiles = 0L
       var removedBytes = 0L
       ctx.cacheDir.walkBottomUp().forEach { file ->
+        checkMaintenanceActive()
         if (!file.isFile || file.lastModified() >= cutoff || file.lastModified() >= protectedCutoff) return@forEach
         val bytes = file.length()
         if (file.delete()) {
@@ -196,7 +214,11 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
   }
 
   private fun directoryBytes(root: File): Long =
-    if (!root.exists()) 0L else root.walkTopDown().filter(File::isFile).sumOf(File::length)
+    if (!root.exists()) 0L else root.walkTopDown().onEach { checkMaintenanceActive() }.filter(File::isFile).sumOf(File::length)
+
+  private fun checkMaintenanceActive() {
+    if (Thread.currentThread().isInterrupted) throw java.util.concurrent.CancellationException("Maintenance cancelled")
+  }
 
   private fun fileFamilyBytes(file: File): Long = listOf(
     file,

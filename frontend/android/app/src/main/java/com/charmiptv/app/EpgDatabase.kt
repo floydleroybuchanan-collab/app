@@ -3,6 +3,7 @@ package com.charmiptv.app
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.os.CancellationSignal
 import android.os.StatFs
 import java.security.MessageDigest
 import kotlin.math.max
@@ -416,15 +417,16 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
   }
 
-  fun queryGuideWindow(startMs: Long, endMs: Long, playlistChannelIds: Collection<String>): List<NativeEpgProgram> {
+  fun queryGuideWindow(startMs: Long, endMs: Long, playlistChannelIds: Collection<String>, cancellationSignal: CancellationSignal? = null): List<NativeEpgProgram> {
     if (playlistChannelIds.isEmpty()) return emptyList()
     val result = ArrayList<NativeEpgProgram>()
     for (chunk in playlistChannelIds.chunked(IN_CLAUSE_CHUNK)) {
+      cancellationSignal?.throwIfCanceled()
       if (chunk.isEmpty()) continue
       val placeholders = chunk.joinToString(",") { "?" }
       val args = ArrayList<String>(chunk.size + 2)
       args.addAll(chunk); args.add(toEpochSeconds(startMs).toString()); args.add(toEpochSeconds(endMs).toString())
-      readableDatabase.rawQuery("SELECT m.playlist_id AS channel_id,p.title,p.description,p.category,p.start_time,p.end_time FROM $MATCH_TABLE m INNER JOIN $LIVE_TABLE p ON p.channel_id=m.xmltv_id WHERE m.playlist_id IN ($placeholders) AND m.xmltv_id!='' AND p.end_time>? AND p.start_time<? ORDER BY m.playlist_id ASC,p.start_time ASC", args.toTypedArray()).use { cursor -> appendPrograms(cursor, result) }
+      readableDatabase.rawQuery("SELECT m.playlist_id AS channel_id,p.title,p.description,p.category,p.start_time,p.end_time FROM $MATCH_TABLE m INNER JOIN $LIVE_TABLE p ON p.channel_id=m.xmltv_id WHERE m.playlist_id IN ($placeholders) AND m.xmltv_id!='' AND p.end_time>? AND p.start_time<? ORDER BY m.playlist_id ASC,p.start_time ASC", args.toTypedArray(), cancellationSignal).use { cursor -> appendPrograms(cursor, result) }
     }
     return result
   }

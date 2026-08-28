@@ -1,7 +1,6 @@
 package com.charmiptv.app
 
 import android.app.Application
-import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 
 import com.facebook.react.PackageList
@@ -73,13 +72,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onTrimMemory(level: Int) {
     super.onTrimMemory(level)
-    val trimLevel = when {
-      level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
-        level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> CharmTrimLevel.CRITICAL
-      level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> CharmTrimLevel.MODERATE
-      level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> CharmTrimLevel.BACKGROUND
-      else -> null
-    } ?: return
+    val trimLevel = charmMemoryTrimLevel(level) ?: return
     CharmMemoryCoordinator.trim(trimLevel)
     val pressure = trimLevel.name.lowercase()
     try {

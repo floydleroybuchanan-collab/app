@@ -136,10 +136,12 @@ test("drawer route changes release drawer focus ownership before mounting the ne
   const navigate = shell.match(/const navigate = useCallback\([\s\S]*?\n  \);/)?.[0] || "";
   assert.match(navigate, /closeDrawer\(\{ force: true \}\)/);
   assert.match(navigate, /if \(route === active\) \{[\s\S]*CharmGuideGroupsRequestOpen[\s\S]*return;[\s\S]*\}/);
-  assert.match(navigate, /requestAnimationFrame\(\(\) => \{/);
+  assert.match(navigate, /afterDrawerClose\(\(\) => \{/);
+  assert.match(shell, /navigationFrameRef.current = requestAnimationFrame/);
+  assert.match(shell, /cancelAnimationFrame\(navigationFrameRef.current\)/);
   assert.match(navigate, /router\.replace\(route as any\)/);
   assert.ok(
-    navigate.indexOf('closeDrawer({ force: true })') < navigate.indexOf('requestAnimationFrame'),
+    navigate.indexOf('closeDrawer({ force: true })') < navigate.indexOf('afterDrawerClose'),
     "drawer must close before route handoff",
   );
   assert.doesNotMatch(navigate, /closeDrawer\(\);[\s\S]*router\.replace/);
@@ -240,7 +242,7 @@ test("EPG and playlist controls live only on the dedicated EPG settings page", a
 test("native guide preserves last-good paint across transient query failures", async () => {
   const nativeGuide = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(nativeGuide, /catch \(_: Throwable\) \{ null \}/);
-  assert.match(nativeGuide, /if \(loaded == null\) continue/);
+  assert.match(nativeGuide, /if \(loaded == null \|\| !queriesEnabled\(\) \|\| request\.token != generation \|\| request\.cancellation\.isCanceled\) continue/);
   assert.match(nativeGuide, /programs = programs\.filterKeys/);
 });
 
@@ -406,7 +408,11 @@ test("rapid Guide runway movement debounces duplicate JS programme patching", as
 test("native Guide cancels delayed settled selection when focus ownership moves", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(native, /settleSelectionRunnable = Runnable/);
-  assert.match(native, /if \(!value\) \{[\s\S]{0,180}removeCallbacks\(settleSelectionRunnable\)[\s\S]{0,120}navigationKeyDown = false[\s\S]{0,120}moveVelocity = 0/);
+  const inactive = native.slice(native.indexOf("if (!value) {"), native.indexOf("scheduleLiveClock()\n    applyPendingRestoreChannel()"));
+  assert.match(inactive, /removeCallbacks\(settleSelectionRunnable\)/);
+  assert.match(inactive, /cancelPendingQueries\(\)/);
+  assert.match(inactive, /navigationKeyDown = false/);
+  assert.match(inactive, /moveVelocity = 0/);
   assert.match(native, /removeCallbacks\(settleSelectionRunnable\)[\s\S]{0,120}reloadGeneration = value/);
   assert.match(native, /if \(enabled\) postDelayed\(settleSelectionRunnable, 80L\)/);
   assert.doesNotMatch(native, /postDelayed\(\{ emitSelection\(true\) \}, 80L\)/);

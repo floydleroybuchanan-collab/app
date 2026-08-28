@@ -11,7 +11,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,7 +31,8 @@ import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
-import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
+import { stopFullscreenSession, stopAllPlaybackSessions, waitForFullscreenRelease, type SessionFailReason } from "@/src/core/playbackSession";
+import { requestPlayerExit } from "@/src/core/playerExit";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
@@ -69,6 +71,8 @@ function AutoScrollProgramDescription({ text }: { text: string; activeKey: strin
 
 export default function PlayerScreen() {
   const router = useRouter();
+  const pathname = usePathname();
+  const routeFocused = useIsFocused();
   const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -123,6 +127,11 @@ export default function PlayerScreen() {
   const channelsOpenRef = useRef(false);
   const generationRef = useRef(0);
   const exitInFlightRef = useRef(false);
+  const mountedRef = useRef(false);
+  const exitRouteRef = useRef({ pathname, focused: routeFocused, channelId: params.channelId, revision: 0 });
+  const previousRoute = exitRouteRef.current;
+  const routeIdentityChanged = previousRoute.pathname !== pathname || previousRoute.channelId !== params.channelId;
+  exitRouteRef.current = { pathname, focused: routeFocused, channelId: params.channelId, revision: previousRoute.revision + (routeIdentityChanged ? 1 : 0) };
   const channelsButtonRef = useRef<any>(null);
   const overlayOpenerRef = useRef<any>(null);
   const saveAudioReportRef = useRef<() => void>(() => undefined);
@@ -137,6 +146,23 @@ export default function PlayerScreen() {
   const subtitleDefaultLanguageRef = useRef(subtitleDefaultLanguage);
   const subtitleAutoAppliedRef = useRef<string | null>(null);
   const audioAutoAppliedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; generationRef.current += 1; };
+  }, []);
+
+  const exitPlayer = useCallback((navigate: () => void) => {
+    const routeRevision = exitRouteRef.current.revision;
+    void requestPlayerExit({
+      inFlight: exitInFlightRef,
+      generation: generationRef,
+      isCurrentRoute: () => mountedRef.current && exitRouteRef.current.revision === routeRevision &&
+        exitRouteRef.current.focused && exitRouteRef.current.pathname === "/player",
+      stop: stopFullscreenSession,
+      navigate,
+    }).catch(() => undefined);
+  }, []);
 
   const isTV = Platform.OS !== "web" && Platform.isTV;
   useEffect(() => {
@@ -181,13 +207,11 @@ export default function PlayerScreen() {
     const endsAt = Date.now() + sleepTimerMinutes * 60_000;
     const timer = setInterval(() => {
       if (Date.now() < endsAt || exitInFlightRef.current) return;
-      exitInFlightRef.current = true;
       setSleepTimerMinutes(0);
-      generationRef.current += 1;
-      void stopFullscreenSession().then(() => router.replace("/" as any));
+      exitPlayer(() => router.replace("/" as any));
     }, 15_000);
     return () => clearInterval(timer);
-  }, [router, setSleepTimerMinutes, sleepTimerMinutes]);
+  }, [exitPlayer, router, setSleepTimerMinutes, sleepTimerMinutes]);
 
   useEffect(() => { textTrackIdRef.current = textTrackId; }, [textTrackId]);
   useEffect(() => { subtitleDefaultLanguageRef.current = subtitleDefaultLanguage; }, [subtitleDefaultLanguage]);
@@ -267,18 +291,6 @@ export default function PlayerScreen() {
     revealControls({ claimChannelsFocus: false });
   }, [revealControls, showNotice]);
 
-  useEffect(() => {
-    if (!isTV) return;
-    return addPlayerQuickCommandListener((command) => {
-      if (command === "CYCLE_ASPECT") return cycleScaleMode();
-      if (command === "OPEN_TRACKS") {
-        controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
-      }
-      if (command === "PREVIOUS_CHANNEL") return returnToPreviousChannel();
-      if (command === "SAVE_DIAGNOSTICS") saveAudioReportRef.current();
-    });
-  }, [cycleScaleMode, isTV, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
-
   const restartStream = useCallback(() => {
     if (!hasStream || exitInFlightRef.current || failReason === "unsupported-protocol") return;
     generationRef.current += 1; setStatus("loading"); setFailReason(null); showNotice(`Reconnecting ${channel?.name || "stream"}`); setRetryToken((value) => value + 1);
@@ -303,7 +315,11 @@ export default function PlayerScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryToken]);
 
-  useEffect(() => () => { void stopFullscreenSession(); }, [setTracksOpen]);
+  useEffect(() => () => {
+    // Explicit Back/Guide/Settings/sleep exit already awaits the release before
+    // navigating. Do not enqueue a second owner lookup/release on unmount.
+    if (!exitInFlightRef.current) void stopFullscreenSession();
+  }, []);
 
   useEffect(() => {
     if (!controls) return;
@@ -344,20 +360,18 @@ export default function PlayerScreen() {
 
   const stopAndExit = useCallback(() => {
     if (exitInFlightRef.current) return;
-    exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
     const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
-    generationRef.current += 1;
     const returnToGuide = params.returnToGuide === "1" && !!currentChannelId;
     const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
-    if (returnToGuide && currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
     // Do not mount the Guide/home tree while MediaCodec/ExoPlayer is still
     // releasing. That overlap was a reproducible peak-RAM/lifecycle crash path.
-    void stopFullscreenSession().then(() => {
+    exitPlayer(() => {
+      if (returnToGuide && currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
       if (returnToGuide) router.replace("/guide" as any);
       else router.back();
     });
-  }, [params.returnGuideGroup, params.returnToGuide, router]);
+  }, [exitPlayer, params.returnGuideGroup, params.returnToGuide, router]);
 
   const handleStreamStatus = useCallback((nextStatus: StreamStatus, reason?: SessionFailReason | null) => {
     setStatus(nextStatus);
@@ -391,14 +405,32 @@ export default function PlayerScreen() {
 
   const goGuide = useCallback(() => {
     if (exitInFlightRef.current) return;
-    exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
     const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
     const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
-    if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
-    generationRef.current += 1;
-    void stopFullscreenSession().then(() => router.replace("/guide" as any));
-  }, [params.returnGuideGroup, router]);
+    exitPlayer(() => {
+      if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
+      router.replace("/guide" as any);
+    });
+  }, [exitPlayer, params.returnGuideGroup, router]);
+
+  const openSettings = useCallback(() => {
+    exitPlayer(() => router.replace("/settings" as any));
+  }, [exitPlayer, router]);
+
+  useEffect(() => {
+    return addPlayerQuickCommandListener((command) => {
+      if (exitInFlightRef.current || !mountedRef.current || !exitRouteRef.current.focused || exitRouteRef.current.pathname !== "/player") return;
+      if (command === "GO_GUIDE") return goGuide();
+      if (command === "OPEN_SETTINGS") return openSettings();
+      if (command === "CYCLE_ASPECT") return cycleScaleMode();
+      if (command === "OPEN_TRACKS") {
+        controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
+      }
+      if (command === "PREVIOUS_CHANNEL") return returnToPreviousChannel();
+      if (command === "SAVE_DIAGNOSTICS") saveAudioReportRef.current();
+    });
+  }, [cycleScaleMode, goGuide, openSettings, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
 
   const runRemoteAction = useCallback((action: PlayerRemoteAction) => {
     if (exitInFlightRef.current) return;
@@ -432,10 +464,21 @@ export default function PlayerScreen() {
   useEffect(() => {
     const routeChannelId = String(params.channelId || "").trim();
     if (!routeChannelId || routeChannelId === lastRouteChannelIdRef.current) return;
-    lastRouteChannelIdRef.current = routeChannelId;
-    if (routeChannelId === channelIdRef.current) return;
-    changeChannel(routeChannelId);
-  }, [changeChannel, params.channelId]);
+    let canceled = false;
+    const applyRouteChannel = () => {
+      if (canceled || !mountedRef.current || exitInFlightRef.current || !exitRouteRef.current.focused ||
+        exitRouteRef.current.pathname !== "/player" || String(exitRouteRef.current.channelId || "").trim() !== routeChannelId) return;
+      lastRouteChannelIdRef.current = routeChannelId;
+      if (routeChannelId === channelIdRef.current) return;
+      changeChannel(routeChannelId);
+    };
+    // A replacement player route can arrive while its predecessor is stopping.
+    // The old exit first cancels and releases its flag; only then apply the new
+    // route's channel instead of dropping it behind exitInFlightRef.
+    if (exitInFlightRef.current) void waitForFullscreenRelease().then(applyRouteChannel);
+    else applyRouteChannel();
+    return () => { canceled = true; };
+  }, [changeChannel, params.channelId, pathname, routeFocused]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {

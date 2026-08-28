@@ -118,12 +118,14 @@ export function StreamPlayer({
   // and stopped fullscreen playback, leaving permanent black and silent video.
   const [appActive, setAppActive] = useState(() => AppState.currentState !== "background");
   const appInForeground = appActive;
+  const hasBeenForegroundRef = useRef(appInForeground);
+  if (appInForeground) hasBeenForegroundRef.current = true;
   // Preview still requires Guide focus. Fullscreen must keep the decoder host
   // mounted while the player route owns the channel — do not destroy on
   // transient isFocused=false flickers once a session has started.
   const playbackFocused =
     role === "fullscreen"
-      ? appInForeground && previewAllowed
+      ? hasBeenForegroundRef.current
       : isFocused && appInForeground && previewAllowed;
   const generationRef = useRef(0);
   const tracksRef = useRef<{ audio: NativePlaybackTrack[]; text: NativePlaybackTrack[] }>({ audio: [], text: [] });
@@ -133,6 +135,17 @@ export function StreamPlayer({
   onTracksRef.current = onTracksAvailable;
 
   const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri), [rawUri]);
+  const playbackKey = useMemo(
+    () => `${currentChannelKey}\u0000${rawUri}`,
+    [currentChannelKey, rawUri],
+  );
+  // Metadata refresh can refine a stream hint after playback is established.
+  // Apply it to the next source identity, never retune the current healthy URL.
+  const sourceTypeHintRef = useRef({ key: playbackKey, value: streamTypeHint });
+  if (sourceTypeHintRef.current.key !== playbackKey) {
+    sourceTypeHintRef.current = { key: playbackKey, value: streamTypeHint };
+  }
+  const sourceTypeHint = sourceTypeHintRef.current.value;
   const declaredKind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
   // Extensionless live IPTV must not lock Media3 to a prior confirm. A wrong
   // progressive/hls/dash/transport confirm skips or stalls the opaque router →
@@ -144,23 +157,19 @@ export function StreamPlayer({
     const confirmedType = getChannelPlaybackProfile(currentChannelKey)?.confirmedType;
     const uriKind = detectStreamKind(uri, null);
     if (uriKind === "unknown") {
-      const hint = String(streamTypeHint || "").trim().toLowerCase();
+      const hint = String(sourceTypeHint || "").trim().toLowerCase();
       // Ignore progressive confirms on extensionless live URLs (no live-TS flags).
       if (!hint || hint === "unknown" || hint === "progressive" || confirmedType === "progressive") {
         return "unknown";
       }
       return hint;
     }
-    return confirmedType ?? streamTypeHint;
-  }, [currentChannelKey, streamTypeHint, uri]);
+    return confirmedType ?? sourceTypeHint;
+  }, [currentChannelKey, sourceTypeHint, uri]);
   const kind = useMemo(() => detectStreamKind(uri, learnedHint), [learnedHint, uri]);
   const contentType = useMemo(() => media3ContentType(kind), [kind]);
-  const playbackKey = useMemo(
-    () => `${currentChannelKey}\u0000${rawUri}`,
-    [currentChannelKey, rawUri],
-  );
-  const controlRef = useRef({ muted, paused, scaleMode });
-  controlRef.current = { muted, paused, scaleMode };
+  const controlRef = useRef({ muted, paused, scaleMode, appInForeground });
+  controlRef.current = { muted, paused, scaleMode, appInForeground };
   const currentSourceRef = useRef({ key: playbackKey, uri, headers, contentType });
   // A native authentication refresh must survive renders and native recovery.
   // Only an explicit source/tune change may replace the refreshed provider URL.
@@ -327,9 +336,8 @@ export function StreamPlayer({
     if (!playbackFocused || !uri || !engineAvailable) {
       generationRef.current = 0;
       if (role === "preview") void stopPreviewSession("superseded");
-      // Fullscreen: background → pause only. Never stopFullscreenSession() from
-      // AppState here — that destroyed the only decoder host on Onn inactive blips.
-      else if (!appInForeground) void pauseActiveNativePlayback(role).catch(() => undefined);
+      // Never stopFullscreenSession or invalidate its generation for AppState.
+      // Fullscreen background is handled by the pause effect below.
       if (playbackFocused && uri && !engineAvailable) onStatusRef.current("error", "stream-error");
       return;
     }
@@ -360,7 +368,7 @@ export function StreamPlayer({
       else prepareNativeFullscreen(generation, currentChannelKey, source.uri, source.headers, source.contentType, bufferProfile);
       setNativePlaybackMuted(role === "preview" && controlRef.current.muted);
       setNativePlaybackResizeMode(role === "fullscreen" ? controlRef.current.scaleMode : "fit");
-      if (controlRef.current.paused) pauseNativePlayback();
+      if (controlRef.current.paused || !controlRef.current.appInForeground) pauseNativePlayback();
     }).catch(() => {
       if (!isCurrent()) return;
       setSessionPhase(role, generation, "failed", "stream-error");
@@ -373,7 +381,6 @@ export function StreamPlayer({
       if (generationRef.current === generation) generationRef.current = 0;
     };
   }, [
-    appInForeground,
     bufferProfile,
     contentType,
     currentChannelKey,
@@ -389,12 +396,24 @@ export function StreamPlayer({
   useEffect(() => {
     const generation = generationRef.current;
     if (!playbackFocused || !generation) return;
-    void runNativePlaybackCommand(role, engine, () => isSessionCurrent(role, generation), () => {
+    void runNativePlaybackCommand(role, engine, () => generationRef.current === generation && isSessionCurrent(role, generation), () => {
+      const { muted, scaleMode } = controlRef.current;
       setNativePlaybackMuted(role === "preview" && muted);
       setNativePlaybackResizeMode(role === "fullscreen" ? scaleMode : "fit");
-      if (paused) pauseNativePlayback(); else resumeNativePlayback();
     }).catch(() => undefined);
-  }, [muted, paused, scaleMode, engine, role, playbackFocused]);
+  }, [muted, scaleMode, engine, role, playbackFocused]);
+
+  useEffect(() => {
+    const generation = generationRef.current;
+    if (!playbackFocused || !generation) return;
+    // Keep a paused/background session's generation, source and decoder. A
+    // foreground transition resumes that session instead of preparing it again.
+    // Aspect/mute changes must not accidentally resume a native recovery delay.
+    void runNativePlaybackCommand(role, engine, () => generationRef.current === generation && isSessionCurrent(role, generation), () => {
+      if (controlRef.current.paused || !controlRef.current.appInForeground) pauseNativePlayback();
+      else resumeNativePlayback();
+    }).catch(() => undefined);
+  }, [appInForeground, paused, engine, role, playbackFocused]);
 
   useEffect(() => {
     const generation = generationRef.current;

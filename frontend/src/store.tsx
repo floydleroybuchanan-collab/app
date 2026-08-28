@@ -243,6 +243,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const pendingSilentRefreshRef = useRef(false);
   const patchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const patchInFlightRef = useRef(false);
+  const patchGenerationRef = useRef(0);
   const pendingPatchIdsRef = useRef(new Set<string>());
   const pendingPatchPriorityIdsRef = useRef<string[]>([]);
   const lastPatchRunwayIdsRef = useRef<string[]>([]);
@@ -753,10 +754,13 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     const start = windowStartRef.current;
     const end = windowEndRef.current;
     const guideEpoch = guideEpochRef.current;
+    const patchGeneration = patchGenerationRef.current;
     try {
       const applyTier = async (tierIds: string[]) => {
+        if (patchGeneration !== patchGenerationRef.current) return false;
         if (!tierIds.length) return true;
         const delta = await loadGuideProgramsForChannelIds(tierIds, start, guideWindowHoursRef.current);
+        if (patchGeneration !== patchGenerationRef.current) return false;
         if (start !== windowStartRef.current || end !== windowEndRef.current) return false;
         if (guideEpoch !== guideEpochRef.current) {
           pendingPatchIdsRef.current.clear();
@@ -817,6 +821,9 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     retainProgrammeWindowCache(keep);
   }, []);
   const releaseGuideSlidingCache = useCallback(() => {
+    // A queued native read may finish after blur. Invalidate its entire tier
+    // sequence so it cannot publish or warm the old runway behind fullscreen.
+    patchGenerationRef.current += 1;
     const keepLimit = powerProfile === "weak" ? 24 : powerProfile === "max_preview" ? 72 : 48;
     const source = lastKeepIdsRef.current.length ? lastKeepIdsRef.current : lastPatchRunwayIdsRef.current;
     const keep = pickKeepIdsAroundFocus(source, keepLimit, lastChannelId);

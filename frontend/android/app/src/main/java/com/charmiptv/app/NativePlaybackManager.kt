@@ -198,7 +198,8 @@ object NativePlaybackManager {
   private var videoDecoder: String? = null
   private var audioDecoder: String? = null
   private var codecError: String? = null
-  private var decoderReleaseFailure: Throwable? = null
+  private val decoderReleaseGuard = Media3ReleaseGuard()
+  private val decoderReleaseFailure: Throwable? get() = decoderReleaseGuard.failure
 
   private val startupTimeout: Runnable = Runnable {
     if (userPaused) return@Runnable
@@ -249,6 +250,7 @@ object NativePlaybackManager {
       Owner.FULLSCREEN -> fullscreenSurface = surface
       Owner.NONE -> return@runOnMain
     }
+    if (decoderReleaseFailure != null) return@runOnMain
     val video = ensurePlayerViewIn(surfaceOwner, surface)
     unclipVideoAncestors(surface)
     unclipVideoAncestors(video)
@@ -282,7 +284,7 @@ object NativePlaybackManager {
     if (attached !== surface) return@runOnMain
     val video = playerViewFor(surfaceOwner)
     val instance = player
-    if (owner == surfaceOwner && instance != null) {
+    if (decoderReleaseFailure == null && owner == surfaceOwner && instance != null) {
       // Unbind the view only. Pausing here is what turned a black-with-audio
       // TextureView into a black-and-silent player after the surface health
       // check rebuilt a 0-size target.
@@ -303,6 +305,7 @@ object NativePlaybackManager {
       "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
       else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     }
+    if (decoderReleaseFailure != null) return@runOnMain
     fullscreenPlayerView?.resizeMode = fullscreenResizeMode
   }
 
@@ -415,6 +418,7 @@ object NativePlaybackManager {
   }
 
   fun pause() = runOnMain {
+    if (decoderReleaseFailure != null) return@runOnMain
     userPaused = true
     recoveryPolicy.onInterrupted(SystemClock.elapsedRealtime())
     main.removeCallbacks(startupTimeout)
@@ -422,6 +426,7 @@ object NativePlaybackManager {
     player?.pause()
   }
   fun resume() = runOnMain {
+    if (decoderReleaseFailure != null) return@runOnMain
     if (owner == Owner.NONE) return@runOnMain
     val instance = player ?: return@runOnMain
     userPaused = false
@@ -440,8 +445,13 @@ object NativePlaybackManager {
     instance.play()
     if (!firstFrameRendered) armStartupTimeout()
   }
-  fun setMuted(muted: Boolean) = runOnMain { mutedState = muted; player?.volume = if (muted) 0f else 1f }
+  fun setMuted(muted: Boolean) = runOnMain {
+    mutedState = muted
+    if (decoderReleaseFailure != null) return@runOnMain
+    player?.volume = if (muted) 0f else 1f
+  }
   fun selectAudio(groupIndex: Int?, trackIndex: Int?, preferredLanguage: String?) = runOnMain {
+    if (decoderReleaseFailure != null) return@runOnMain
     val instance = player ?: return@runOnMain
     val builder = instance.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO)
     if (groupIndex != null && trackIndex != null) {
@@ -451,6 +461,7 @@ object NativePlaybackManager {
     instance.trackSelectionParameters = builder.build()
   }
   fun selectSubtitle(groupIndex: Int?, trackIndex: Int?, preferredLanguage: String?) = runOnMain {
+    if (decoderReleaseFailure != null) return@runOnMain
     val instance = player ?: return@runOnMain
     val builder = instance.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT)
     if (groupIndex != null && trackIndex != null) {
@@ -484,8 +495,10 @@ object NativePlaybackManager {
     cancelRecoveryCallbacks()
     val instance = player
     var stopFailed = false
-    try { instance?.stop() } catch (_: Throwable) { stopFailed = true }
-    try { instance?.clearMediaItems() } catch (_: Throwable) { stopFailed = true }
+    if (decoderReleaseFailure == null) {
+      try { instance?.stop() } catch (_: Throwable) { stopFailed = true }
+      try { instance?.clearMediaItems() } catch (_: Throwable) { stopFailed = true }
+    }
     if (releasePlayer || stopFailed || decoderReleaseFailure != null) releaseDecoder(instance)
     owner = if (decoderReleaseFailure == null) Owner.NONE else previousOwner
     activeSource = null; lastPlaybackError = null; firstFrameRendered = false
@@ -504,17 +517,14 @@ object NativePlaybackManager {
     clearAllPlayerViews()
   }
 
-  // Never acknowledge decoder release after a platform exception. Retain the
-  // reference so the coordinator cannot allocate a replacement decoder.
-  private fun releaseDecoder(instance: ExoPlayer?): Boolean = try {
+  // Media3 can return normally from release() after emitting a release-timeout
+  // error. Observe that event outside the retired playback revision, and retain
+  // both the reference and failure so a later no-op release cannot clear it.
+  private fun releaseDecoder(instance: ExoPlayer?): Boolean {
     playbackRevision += 1
-    instance?.release()
+    if (!decoderReleaseGuard.release(instance)) return false
     if (player === instance) player = null
-    decoderReleaseFailure = null
-    true
-  } catch (failure: Throwable) {
-    decoderReleaseFailure = failure
-    false
+    return true
   }
 
   private fun ensurePlayer(): ExoPlayer {
@@ -712,6 +722,7 @@ object NativePlaybackManager {
   }
 
   private fun ensureActiveSurfaceBound(instance: ExoPlayer, event: String): Boolean {
+    if (decoderReleaseFailure != null) return false
     val activeOwner = owner
     if (activeOwner == Owner.NONE || player !== instance) return false
     val target = when (activeOwner) {
@@ -738,6 +749,7 @@ object NativePlaybackManager {
   }
 
   private fun applyAudioAttributes(instance: ExoPlayer, surfaceOwner: Owner) {
+    if (decoderReleaseFailure != null) return
     // Match PR #23 expo-video: fullscreen takes AUDIOFOCUS_GAIN / doNotMix;
     // preview mixes so it cannot steal the TV's audio session.
     instance.setAudioAttributes(
@@ -1308,6 +1320,7 @@ object NativePlaybackManager {
     }
     if (next == activeBufferProfile) return
     activeBufferProfile = next
+    if (decoderReleaseFailure != null) return
     // LoadControl is construction-only. Unbind PlayerViews before releasing so
     // MediaCodec is never left attached to a dead ExoPlayer (black + silent).
     val existing = player ?: return

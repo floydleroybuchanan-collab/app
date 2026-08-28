@@ -3,6 +3,7 @@ import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
+import { useAppForeground } from "@/src/hooks/useAppForeground";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { PurpleTvShell } from "@/src/components/PurpleTvShell";
@@ -81,6 +82,7 @@ const FavoriteRow = memo(function FavoriteRow({
 function FavoritesScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const appForeground = useAppForeground();
   const {
     channels,
     favorites,
@@ -125,11 +127,11 @@ function FavoritesScreenContent() {
   const isTV = Platform.OS !== "web" && Platform.isTV;
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || !appForeground) return;
     setNow(new Date());
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
-  }, [isFocused]);
+  }, [appForeground, isFocused]);
 
   useFocusEffect(
     useCallback(() => {
@@ -156,13 +158,13 @@ function FavoritesScreenContent() {
   }, []);
 
   useEffect(() => {
-    if (!isTV || !isFocused) return;
+    if (!isTV || !isFocused || !appForeground) return;
     return addTvLongPressListener((key) => {
       if (key !== "SELECT") return;
       const id = focusedChannelIdRef.current;
       if (id) onLongPress(id);
     });
-  }, [isFocused, isTV, onLongPress]);
+  }, [appForeground, isFocused, isTV, onLongPress]);
 
   const onRenameSelectedFolder = useCallback(() => {
     if (!folderMode) return;
