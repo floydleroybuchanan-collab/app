@@ -7,6 +7,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoTimeoutException
 import java.lang.reflect.Proxy
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -123,6 +125,132 @@ class Media3ReleaseGuardTest {
     val guard = Media3ReleaseGuard()
     assertTrue(guard.release(null))
     assertNull(guard.failure)
+  }
+
+  @Test fun releaseTimeoutRecoversOnlyAfterTheCapturedPlaybackThreadTerminates() = withPlaybackThread { thread, finish ->
+    val guard = Media3ReleaseGuard()
+    val native = FakePlayer()
+    native.onRelease = { native.emitError(releaseTimeout()) }
+    assertFalse(guard.release(native.player, thread))
+    assertFalse(guard.acknowledgeCompletedRelease())
+    assertFalse(guard.release(null))
+    val next = FakePlayer()
+    assertFalse(guard.release(next.player))
+    assertTrue(next.calls.isEmpty())
+
+    finish()
+    assertEquals(Thread.State.TERMINATED, thread.state)
+    assertTrue(guard.acknowledgeCompletedRelease())
+    assertNull(guard.failure)
+    assertFalse(guard.acknowledgeCompletedRelease())
+    assertTrue(guard.release(next.player))
+    assertEquals(listOf("addListener", "release", "removeListener"), next.calls)
+  }
+
+  @Test fun arbitraryReleaseExceptionsCannotBeClearedByThreadTermination() = withPlaybackThread { thread, finish ->
+    val guard = Media3ReleaseGuard()
+    val native = FakePlayer()
+    val failure = IllegalStateException("release failed")
+    native.onRelease = { throw failure }
+    assertFalse(guard.release(native.player, thread))
+    finish()
+    assertFalse(guard.acknowledgeCompletedRelease())
+    assertSame(failure, guard.failure)
+  }
+
+  @Test fun cleanupFailureAfterATimeoutStillRequiresExplicitFaultHandling() = withPlaybackThread { thread, finish ->
+    val guard = Media3ReleaseGuard()
+    val native = FakePlayer()
+    val timeout = releaseTimeout()
+    native.onRelease = { native.emitError(timeout) }
+    native.onRemove = { throw IllegalStateException("listener cleanup failed") }
+    assertFalse(guard.release(native.player, thread))
+    finish()
+    assertFalse(guard.acknowledgeCompletedRelease())
+    assertSame(timeout, guard.failure)
+  }
+
+  @Test fun acknowledgementCannotReenterBeforeReleaseAndListenerCleanupFinish() = withPlaybackThread { thread, finish ->
+    val guard = Media3ReleaseGuard()
+    val native = FakePlayer()
+    var duringRelease: Boolean? = null
+    var duringCleanup: Boolean? = null
+    native.onRelease = {
+      native.emitError(releaseTimeout())
+      finish()
+      duringRelease = guard.acknowledgeCompletedRelease()
+    }
+    native.onRemove = { duringCleanup = guard.acknowledgeCompletedRelease() }
+
+    assertFalse(guard.release(native.player, thread))
+    assertFalse(requireNotNull(duringRelease))
+    assertFalse(requireNotNull(duringCleanup))
+    assertTrue(guard.acknowledgeCompletedRelease())
+    assertNull(guard.failure)
+  }
+
+  @Test fun aLateTimeoutCallbackCannotRequalifyAnArbitraryReleaseException() = withPlaybackThread { thread, finish ->
+    val guard = Media3ReleaseGuard()
+    val native = FakePlayer()
+    val failure = IllegalStateException("release failed before timeout callback")
+    var capturedListener: Player.Listener? = null
+    native.onRelease = {
+      capturedListener = native.listeners.single()
+      throw failure
+    }
+    native.onRemove = { requireNotNull(capturedListener).onPlayerError(releaseTimeout()) }
+
+    assertFalse(guard.release(native.player, thread))
+    finish()
+    assertFalse(guard.acknowledgeCompletedRelease())
+    assertSame(failure, guard.failure)
+  }
+
+  @Test fun unstartedAlreadyDeadAndCallingThreadsAreNotCompletionEvidence() {
+    val alreadyDead = Thread {}.apply { isDaemon = true; start(); join(2_000) }
+    assertEquals(Thread.State.TERMINATED, alreadyDead.state)
+    for (thread in listOf(Thread {}, alreadyDead, Thread.currentThread())) {
+      val guard = Media3ReleaseGuard()
+      val native = FakePlayer()
+      native.onRelease = { native.emitError(releaseTimeout()) }
+      assertFalse(guard.release(native.player, thread))
+      assertFalse(guard.acknowledgeCompletedRelease())
+    }
+  }
+
+  @Test fun aLaterReleaseCannotSubstituteAnotherCompletedThread() = withPlaybackThread { original, finish ->
+    val guard = Media3ReleaseGuard()
+    val native = FakePlayer()
+    native.onRelease = { native.emitError(releaseTimeout()) }
+    assertFalse(guard.release(native.player, original))
+    val unrelated = Thread {}.apply { isDaemon = true; start(); join(2_000) }
+    val replacement = FakePlayer()
+    assertFalse(guard.release(replacement.player, unrelated))
+    assertTrue(replacement.calls.isEmpty())
+    assertFalse(guard.acknowledgeCompletedRelease())
+
+    finish()
+    assertTrue(guard.acknowledgeCompletedRelease())
+  }
+
+  private fun withPlaybackThread(test: (Thread, () -> Unit) -> Unit) {
+    val started = CountDownLatch(1)
+    val complete = CountDownLatch(1)
+    val thread = Thread({ started.countDown(); complete.await() }, "test-owned-playback").apply {
+      isDaemon = true
+      start()
+    }
+    val finish = {
+      complete.countDown()
+      thread.join(2_000)
+      assertFalse("owned thread did not terminate", thread.isAlive)
+    }
+    try {
+      assertTrue(started.await(2, TimeUnit.SECONDS))
+      test(thread, finish)
+    } finally {
+      finish()
+    }
   }
 
   private fun releaseTimeout() = TestPlaybackException(

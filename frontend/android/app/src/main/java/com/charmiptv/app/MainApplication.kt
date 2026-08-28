@@ -73,7 +73,7 @@ class MainApplication : Application(), ReactApplication {
   override fun onTrimMemory(level: Int) {
     super.onTrimMemory(level)
     val trimLevel = charmMemoryTrimLevel(level) ?: return
-    CharmMemoryCoordinator.trim(trimLevel)
+    if (!CharmMemoryCoordinator.trim(trimLevel)) return
     val pressure = trimLevel.name.lowercase()
     try {
       reactNativeHost.reactInstanceManager.currentReactContext

@@ -31,7 +31,7 @@ import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
-import { stopFullscreenSession, stopAllPlaybackSessions, waitForFullscreenRelease, type SessionFailReason } from "@/src/core/playbackSession";
+import { stopFullscreenSession, stopAllPlaybackSessions, waitForFullscreenRelease, type PlaybackStopOutcome, type SessionFailReason } from "@/src/core/playbackSession";
 import { requestPlayerExit } from "@/src/core/playerExit";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
@@ -94,6 +94,7 @@ export default function PlayerScreen() {
   const [status, setStatus] = useState<StreamStatus>("loading");
   const [failReason, setFailReason] = useState<SessionFailReason | null>(null);
   const [retryToken, setRetryToken] = useState(0);
+  const [crashRetryPending, setCrashRetryPending] = useState(false);
   const [controls, setControls] = useState(true);
   const [playerOverlay, setPlayerOverlay] = useState<"channels" | "tracks" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -127,6 +128,7 @@ export default function PlayerScreen() {
   const channelsOpenRef = useRef(false);
   const generationRef = useRef(0);
   const exitInFlightRef = useRef(false);
+  const crashRetryInFlightRef = useRef(false);
   const mountedRef = useRef(false);
   const exitRouteRef = useRef({ pathname, focused: routeFocused, channelId: params.channelId, revision: 0 });
   const previousRoute = exitRouteRef.current;
@@ -297,6 +299,30 @@ export default function PlayerScreen() {
   }, [channel?.name, failReason, hasStream, showNotice]);
   const retryNow = useCallback(() => restartStream(), [restartStream]);
 
+  const retryAfterCrash = useCallback((reset: () => void) => {
+    if (crashRetryInFlightRef.current || exitInFlightRef.current || !mountedRef.current) return;
+    crashRetryInFlightRef.current = true;
+    setCrashRetryPending(true);
+    const generation = ++generationRef.current;
+    const routeRevision = exitRouteRef.current.revision;
+    const isCurrent = () => mountedRef.current && !exitInFlightRef.current && generation === generationRef.current &&
+      routeRevision === exitRouteRef.current.revision && exitRouteRef.current.pathname === "/player" && exitRouteRef.current.focused;
+    const reportReleaseFailure = () => {
+      if (!isCurrent()) return;
+      setStatus("error"); setFailReason("stream-error");
+      showNotice("The previous player is still stopping. Wait a moment, then retry.");
+    };
+    setStatus("loading"); setFailReason(null);
+    void stopAllPlaybackSessions("crashed").then((outcome) => {
+      if (!isCurrent()) return;
+      if (outcome.status === "completed") { setRetryToken((value) => value + 1); reset(); }
+      else if (outcome.status === "failed") reportReleaseFailure();
+    }).catch(reportReleaseFailure).finally(() => {
+      crashRetryInFlightRef.current = false;
+      if (mountedRef.current) setCrashRetryPending(false);
+    });
+  }, [showNotice]);
+
   useEffect(() => { controlsRef.current = controls; }, [controls]);
   useEffect(() => { channelsOpenRef.current = channelsOpen; }, [channelsOpen]);
 
@@ -465,9 +491,19 @@ export default function PlayerScreen() {
     const routeChannelId = String(params.channelId || "").trim();
     if (!routeChannelId || routeChannelId === lastRouteChannelIdRef.current) return;
     let canceled = false;
-    const applyRouteChannel = () => {
+    const applyRouteChannel = (outcome: PlaybackStopOutcome) => {
       if (canceled || !mountedRef.current || exitInFlightRef.current || !exitRouteRef.current.focused ||
         exitRouteRef.current.pathname !== "/player" || String(exitRouteRef.current.channelId || "").trim() !== routeChannelId) return;
+      if (outcome.status !== "completed") {
+        if (outcome.status === "failed") {
+          // Consume this route request so a status render does not retry it.
+          // Another explicit Play action can ask native to acknowledge cleanup.
+          lastRouteChannelIdRef.current = routeChannelId;
+          setStatus("error"); setFailReason("stream-error");
+          showNotice("The previous player is still stopping. Wait a moment, then retry.");
+        }
+        return;
+      }
       lastRouteChannelIdRef.current = routeChannelId;
       if (routeChannelId === channelIdRef.current) return;
       changeChannel(routeChannelId);
@@ -475,10 +511,9 @@ export default function PlayerScreen() {
     // A replacement player route can arrive while its predecessor is stopping.
     // The old exit first cancels and releases its flag; only then apply the new
     // route's channel instead of dropping it behind exitInFlightRef.
-    if (exitInFlightRef.current) void waitForFullscreenRelease().then(applyRouteChannel);
-    else applyRouteChannel();
+    void waitForFullscreenRelease().then(applyRouteChannel);
     return () => { canceled = true; };
-  }, [changeChannel, params.channelId, pathname, routeFocused]);
+  }, [changeChannel, params.channelId, pathname, routeFocused, showNotice]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -497,17 +532,13 @@ export default function PlayerScreen() {
       <RNStatusBar hidden />
       {hasStream ? (
         <ErrorBoundary
-          onReset={() => {
-            const generation = generationRef.current + 1; generationRef.current = generation; setStatus("loading"); setFailReason(null);
-            void stopAllPlaybackSessions("crashed").then(() => { if (generation === generationRef.current) setRetryToken((value) => value + 1); });
-          }}
           fallback={(reset) => (
             <View style={styles.errorOverlay}>
               <Ionicons name="warning-outline" size={32} color={tvColors.purpleSoft} />
               <Text style={styles.errorTitle}>Player crashed</Text>
               <Text style={styles.errorText}>The decoder hit an unexpected error. Retry keeps you on this channel.</Text>
-              <Pressable hasTVPreferredFocus onPress={reset} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
-                <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>Retry Player</Text>
+              <Pressable hasTVPreferredFocus accessibilityState={{ busy: crashRetryPending, disabled: crashRetryPending }} onPress={() => retryAfterCrash(reset)} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
+                <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>{crashRetryPending ? "Stopping player..." : "Retry Player"}</Text>
               </Pressable>
             </View>
           )}

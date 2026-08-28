@@ -245,6 +245,7 @@ object NativePlaybackManager {
   fun setListener(next: Listener?) = runOnMain { listener = next }
   fun installIntoActivity(activity: Activity) = runOnMain { this.activity = activity }
   fun attachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
+    acknowledgeCompletedDecoderRelease()
     when (surfaceOwner) {
       Owner.PREVIEW -> previewSurface = surface
       Owner.FULLSCREEN -> fullscreenSurface = surface
@@ -310,6 +311,7 @@ object NativePlaybackManager {
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?, bufferProfile: String? = null) = runOnMain {
+    acknowledgeCompletedDecoderRelease()
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
       pendingPrepare = null
       publishState("error", "owner-reserved")
@@ -318,7 +320,18 @@ object NativePlaybackManager {
     cancelRecoveryCallbacks()
     playbackRevision += 1
     userPaused = false
-    val video = playerViewFor(requestedOwner)
+    val surface = when (requestedOwner) {
+      Owner.PREVIEW -> previewSurface
+      Owner.FULLSCREEN -> fullscreenSurface
+      Owner.NONE -> null
+    }
+    // A Fabric host may have attached while the previous decoder was still
+    // releasing. Resolve against the current host after internal release
+    // completion, including when a cached PlayerView belongs to an older host.
+    // An already mounted host will not send another attach event.
+    val video = surface
+      ?.takeIf { decoderReleaseFailure == null }
+      ?.let { ensurePlayerViewIn(requestedOwner, it) }
     if (video == null) {
       // Retire the old source before waiting; this pending tune is cancellable
       // even though it does not yet own a decoder or a Fabric surface.
@@ -484,8 +497,14 @@ object NativePlaybackManager {
     listener = null; activity = null; previewSurface = null; fullscreenSurface = null
     previewPlayerView = null; fullscreenPlayerView = null
   }
-  fun currentOwner(): Owner = pendingPrepare?.requestedOwner ?: owner
-  fun hasReleaseFailure(): Boolean = decoderReleaseFailure != null
+  fun currentOwner(): Owner {
+    acknowledgeCompletedDecoderRelease()
+    return pendingPrepare?.requestedOwner ?: owner
+  }
+  fun hasReleaseFailure(): Boolean {
+    acknowledgeCompletedDecoderRelease()
+    return decoderReleaseFailure != null
+  }
 
   private fun publishState(state: String, reason: String? = null) { listener?.onState(state, reason) }
   private fun stopInternal(releasePlayer: Boolean) {
@@ -522,9 +541,28 @@ object NativePlaybackManager {
   // both the reference and failure so a later no-op release cannot clear it.
   private fun releaseDecoder(instance: ExoPlayer?): Boolean {
     playbackRevision += 1
-    if (!decoderReleaseGuard.release(instance)) return false
+    // This builder owns its default playback looper; no shared looper/provider
+    // is installed. Capture it before release, which may finish asynchronously.
+    val playbackThread = if (decoderReleaseFailure == null) instance?.playbackLooper?.thread else null
+    if (!decoderReleaseGuard.release(instance, playbackThread)) return false
     if (player === instance) player = null
     return true
+  }
+
+  private fun acknowledgeCompletedDecoderRelease() {
+    if (!decoderReleaseGuard.acknowledgeCompletedRelease()) return
+    // Discard the retired instance, never resume or rebind it. A fresh explicit
+    // prepare can create the next decoder after the old owned thread has ended.
+    playbackRevision += 1
+    player = null
+    playbackListener = null
+    analyticsListener = null
+    owner = Owner.NONE
+    activeSource = null
+    pendingPrepare = null
+    cancelRecoveryCallbacks()
+    clearAllPlayerViews()
+    Log.i(TAG, "event=decoder-release-completed")
   }
 
   private fun ensurePlayer(): ExoPlayer {

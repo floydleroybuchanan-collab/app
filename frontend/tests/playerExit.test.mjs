@@ -167,7 +167,8 @@ test("PlayerScreen shares awaited exit ownership and validates live route identi
   assert.match(player, /command === "OPEN_SETTINGS"\) return openSettings\(\)/);
   assert.match(player, /exitPlayer\(\(\) => router.replace\("\/settings" as any\)\)/);
   assert.match(player, /exitPlayer\(\(\) => router.replace\("\/" as any\)\)/);
-  assert.match(player, /if \(exitInFlightRef.current\) void waitForFullscreenRelease\(\).then\(applyRouteChannel\)/);
+  assert.match(player, /void waitForFullscreenRelease\(\).then\(applyRouteChannel\)/);
+  assert.match(player, /const applyRouteChannel = \(outcome: PlaybackStopOutcome\)[\s\S]*?if \(outcome.status !== "completed"\)/);
   assert.match(player, /if \(canceled \|\| !mountedRef.current \|\| exitInFlightRef.current/);
   assert.match(player, /String\(exitRouteRef.current.channelId \|\| ""\).trim\(\) !== routeChannelId/);
 });

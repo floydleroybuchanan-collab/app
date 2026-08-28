@@ -1,3 +1,5 @@
+import type { PlaybackStopOutcome } from "./playbackSession";
+
 type MutableValue<T> = { current: T };
 const exitOwners = new WeakMap<MutableValue<boolean>, object>();
 
@@ -12,7 +14,7 @@ export async function requestPlayerExit({
   inFlight: MutableValue<boolean>;
   generation: MutableValue<number>;
   isCurrentRoute: () => boolean;
-  stop: () => Promise<void>;
+  stop: () => Promise<void | PlaybackStopOutcome>;
   navigate: () => void;
 }): Promise<boolean> {
   if (inFlight.current || !isCurrentRoute()) return false;
@@ -22,6 +24,9 @@ export async function requestPlayerExit({
   const exitGeneration = ++generation.current;
   let navigated = false;
   try {
+    // Leaving a screen needs cleanup to settle, even if native release failed.
+    // The outcome remains in the registry; a later playback handoff must check
+    // it before starting a decoder. Successful navigation is not a release ack.
     await stop();
     if (generation.current !== exitGeneration || !isCurrentRoute()) return false;
     navigate();

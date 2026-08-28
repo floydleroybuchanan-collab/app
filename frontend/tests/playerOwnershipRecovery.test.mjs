@@ -25,9 +25,12 @@ test("Guide blur cleanup cannot clobber a newer TV remote owner", async () => {
 
 test("ErrorBoundary crash recovery waits for native decoder release before remount", async () => {
   const player = await source("app/player.tsx");
-  const reset = player.match(/onReset=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] || "";
-  assert.match(reset, /void stopAllPlaybackSessions\("crashed"\)\.then\(\(\) => \{/);
-  assert.match(reset, /if \(generation === generationRef\.current\) setRetryToken/);
+  const reset = player.slice(player.indexOf("const retryAfterCrash ="), player.indexOf("useEffect(() => { controlsRef.current"));
+  assert.match(reset, /void stopAllPlaybackSessions\("crashed"\)\.then\(\(outcome\) => \{/);
+  assert.match(reset, /if \(!isCurrent\(\)\) return/);
+  assert.match(reset, /if \(outcome.status === "completed"\) \{ setRetryToken[\s\S]*?reset\(\)/);
+  assert.match(player, /onPress=\{\(\) => retryAfterCrash\(reset\)\}/);
+  assert.doesNotMatch(player, /onReset=\{/);
   assert.doesNotMatch(reset, /decoderArmed|DECODER_RESTART_SETTLE_MS|setTimeout/);
 });
 

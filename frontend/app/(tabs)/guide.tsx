@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import {
   ActivityIndicator,
@@ -41,7 +41,7 @@ import {
   setGuideFocusedProgram,
   useGuideSelection,
 } from "@/src/core/guideSelectionStore";
-import { stopPreviewSession } from "@/src/core/playbackSession";
+import { hasPlaybackReleaseFailure, stopPreviewSession, subscribePlaybackOwnership } from "@/src/core/playbackSession";
 import { detectStreamKind, isNativeMedia3SupportedStreamKind, parsePipeHeaders } from "@/src/core/streamPolicy";
 import { getPowerProfileTuning } from "@/src/core/devicePowerProfile";
 import { shouldUseLowRamTuning, useDeviceMemoryProfile } from "@/src/core/deviceMemoryProfile";
@@ -115,6 +115,8 @@ function GuideSelectionPreview({
   onToggleMute,
   previewId,
   previewStatus,
+  previewMemoryPaused,
+  previewReleaseBlocked,
   previewEpoch,
   onPreviewStatus,
   onPlay,
@@ -139,6 +141,8 @@ function GuideSelectionPreview({
   onToggleMute: () => void;
   previewId: string | null;
   previewStatus: StreamStatus;
+  previewMemoryPaused: boolean;
+  previewReleaseBlocked: boolean;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
   onPlay: (channel: Channel) => void;
@@ -173,6 +177,7 @@ function GuideSelectionPreview({
   const unsupportedPreviewProtocol = !isPreviewProtocolSupported(channel);
   const previewVisible =
     !hidePreview &&
+    !previewMemoryPaused &&
     !unsupportedPreviewProtocol &&
     !!channel?.url &&
     previewId === channel.id;
@@ -204,11 +209,25 @@ function GuideSelectionPreview({
         focusRequestToken={focusRequestToken}
         guideFocusTag={guideFocusTag}
       />
-      {!hidePreview && unsupportedPreviewProtocol ? (
+      {!hidePreview && !previewReleaseBlocked && unsupportedPreviewProtocol ? (
         <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-unsupported-protocol">
           <Ionicons name="warning-outline" size={22} color={tvColors.purpleSoft} />
           <Text style={styles.unsupportedPreviewTitle}>Unsupported stream protocol</Text>
           <Text style={styles.unsupportedPreviewText}>This build uses Media3. Ask your provider for an HTTP(S) HLS, DASH, or MPEG-TS URL.</Text>
+        </View>
+      ) : null}
+      {!hidePreview && !previewReleaseBlocked && !unsupportedPreviewProtocol && previewMemoryPaused ? (
+        <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-memory-paused">
+          <Ionicons name="pause-circle-outline" size={22} color={tvColors.purpleSoft} />
+          <Text style={styles.unsupportedPreviewTitle}>Preview paused to free memory</Text>
+          <Text style={styles.unsupportedPreviewText}>Select another channel or press Play to watch fullscreen.</Text>
+        </View>
+      ) : null}
+      {!hidePreview && previewReleaseBlocked ? (
+        <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-release-blocked">
+          <Ionicons name="pause-circle-outline" size={22} color={tvColors.purpleSoft} />
+          <Text style={styles.unsupportedPreviewTitle}>Previous player could not finish stopping</Text>
+          <Text style={styles.unsupportedPreviewText}>Press Play to try again. If this persists, force-stop CharmIPTV in Android Settings, then reopen it.</Text>
         </View>
       ) : null}
     </View>
@@ -222,6 +241,11 @@ function PurpleGuideScreenContent() {
   const guideForeground = isFocused && appForeground;
   const guideForegroundRef = useRef(guideForeground);
   guideForegroundRef.current = guideForeground;
+  // Observe only the retained failure flag, not every buffering/ownership
+  // revision. This changes the notice without resetting preview identity.
+  const previewReleaseBlocked = useSyncExternalStore(
+    subscribePlaybackOwnership, hasPlaybackReleaseFailure, hasPlaybackReleaseFailure,
+  );
   const { drawerOpen, openDrawer, closeDrawer } = usePurpleTvDrawer();
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
@@ -308,6 +332,7 @@ function PurpleGuideScreenContent() {
   const [group, setGroup] = useState(() => guideSessionGroup);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<StreamStatus>("loading");
+  const [previewMemoryPaused, setPreviewMemoryPaused] = useState(false);
   const [previewActionsFocused, setPreviewActionsFocused] = useState(false);
   const [previewFocusRequestToken, setPreviewFocusRequestToken] = useState(0);
   const [nativeGuideFocusTag, setNativeGuideFocusTag] = useState<number | null>(null);
@@ -318,6 +343,8 @@ function PurpleGuideScreenContent() {
   const [pinDigits, setPinDigits] = useState("");
   const [pinError, setPinError] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRequestGenerationRef = useRef(0);
+  const previewMemoryPauseRef = useRef<{ channelId: string | null } | null>(null);
   const surfReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memoryLogoRestoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const runwayPatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -342,6 +369,7 @@ function PurpleGuideScreenContent() {
   const startPreferenceAppliedRef = useRef(false);
 
   const cancelGuideTransientTimers = useCallback(() => {
+    previewRequestGenerationRef.current += 1;
     if (previewFocusFrame.current != null) cancelAnimationFrame(previewFocusFrame.current);
     previewFocusFrame.current = null;
     if (previewTimer.current) clearTimeout(previewTimer.current);
@@ -373,16 +401,22 @@ function PurpleGuideScreenContent() {
   }, []);
   useEffect(
     () => subscribeAndroidMemoryPressure((pressure) => {
+      // Store/native listeners trim bounded programme and logo caches for every
+      // pressure level. A moderate/UI-hidden hint must not cancel a visible or
+      // pending tune. Actual route/app background already quiesces the Guide.
+      if (pressure !== "critical") return;
+      previewMemoryPauseRef.current = { channelId: guideSessionChannelId };
+      setPreviewMemoryPaused(true);
       cancelGuideTransientTimers();
       if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
       setPreviewId(null);
       void stopPreviewSession("superseded");
       setSurfLogosSuppressed(true);
       if (!guideForegroundRef.current) return;
-      memoryLogoRestoreTimer.current = setTimeout(
-        () => setSurfLogosSuppressed(false),
-        pressure === "critical" ? 12_000 : 4_000,
-      );
+      memoryLogoRestoreTimer.current = setTimeout(() => {
+        memoryLogoRestoreTimer.current = null;
+        if (guideForegroundRef.current) setSurfLogosSuppressed(false);
+      }, 12_000);
     }),
     [cancelGuideTransientTimers],
   );
@@ -510,6 +544,13 @@ function PurpleGuideScreenContent() {
   runwayLifecycleRef.current = { channelsCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache };
   useEffect(() => {
     if (!guideForeground) return;
+    if (previewMemoryPauseRef.current) {
+      previewMemoryPauseRef.current = null;
+      setPreviewMemoryPaused(false);
+      // One real foreground transition may resume the preserved selection. A
+      // fresh native restore also covers an active event queued before effects.
+      setResetToken((value) => value + 1);
+    }
     const lifecycle = runwayLifecycleRef.current;
     setSurfLogosSuppressed(false);
     const last = lastRunwayRef.current;
@@ -770,6 +811,7 @@ function PurpleGuideScreenContent() {
       : powerTuning.surfSettleExtraMs;
 
   const schedulePreview = useCallback((requestedId: string, delay: number, hasUrl: boolean) => {
+    const generation = ++previewRequestGenerationRef.current;
     if (previewTimer.current) {
       clearTimeout(previewTimer.current);
       previewTimer.current = null;
@@ -778,6 +820,7 @@ function PurpleGuideScreenContent() {
       setPreviewId(null);
       return;
     }
+    if (previewMemoryPauseRef.current) return;
     // Unsupported transports cannot recover through another native mount.
     // Re-evaluate the current URL so a refreshed provider entry can play later.
     if (!isPreviewProtocolSupported(channelById(requestedId))) {
@@ -786,8 +829,10 @@ function PurpleGuideScreenContent() {
       return;
     }
     previewTimer.current = setTimeout(() => {
+      if (generation !== previewRequestGenerationRef.current) return;
       previewTimer.current = null;
       if (!guideForegroundRef.current) return;
+      if (previewMemoryPauseRef.current) return;
       setPreviewStatus("loading");
       setPreviewEpoch((value) => value + 1);
       setPreviewId(requestedId);
@@ -801,9 +846,21 @@ function PurpleGuideScreenContent() {
   );
   const armPreviewForChannel = useCallback(
     (channel: Channel) => {
+      if (!guideForegroundRef.current) return;
       if (previewTimer.current) clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+      previewRequestGenerationRef.current += 1;
       const requestedId = channel.id;
       guideSessionChannelId = requestedId;
+      const memoryPause = previewMemoryPauseRef.current;
+      if (memoryPause) {
+        // EPG refresh/restore events for the same channel are not user retries.
+        // If pressure preceded the first selection, record it without tuning.
+        if (memoryPause.channelId == null) memoryPause.channelId = requestedId;
+        if (memoryPause.channelId === requestedId) return;
+        previewMemoryPauseRef.current = null;
+        setPreviewMemoryPaused(false);
+      }
       if (!isPreviewProtocolSupported(channel)) {
         setPreviewId(null);
         setPreviewStatus("error");
@@ -885,6 +942,9 @@ function PurpleGuideScreenContent() {
 
   const applyGroup = useCallback((next: string) => {
     void Haptics.selectionAsync().catch(() => undefined);
+    // Explicit group selection is an allowed retry, unlike a cache timer.
+    previewMemoryPauseRef.current = null;
+    setPreviewMemoryPaused(false);
     if (next !== group) quiesceGuideForTransition(true);
     else cancelGuideTransientTimers();
     groupChangedAt.current = Date.now();
@@ -1102,6 +1162,8 @@ function PurpleGuideScreenContent() {
               onToggleMute={() => setMutePreview(!mutePreview)}
               previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !guideForeground ? null : previewId}
               previewStatus={previewStatus}
+              previewMemoryPaused={previewMemoryPaused}
+              previewReleaseBlocked={previewReleaseBlocked}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
               onPlay={play}

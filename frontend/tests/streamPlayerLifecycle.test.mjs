@@ -14,7 +14,7 @@ const compiled = ts.transpileModule(source, {
 
 // Execute the production component's effects against fake native bindings.
 // This tests prepare/control calls; it is not a React Native renderer or TV test.
-function fixture(initial = {}, initialAppState = "active") {
+function fixture(initial = {}, initialAppState = "active", options = {}) {
   session.resetPlaybackSessionsForTests();
   const calls = [];
   const slots = [];
@@ -23,7 +23,7 @@ function fixture(initial = {}, initialAppState = "active") {
   let cursor = 0;
   let dirty = true;
   let effects = [];
-  let nativeOwner = "none";
+  let nativeOwner = options.initialNativeOwner ?? "none";
   let focused = true;
   let appState = initialAppState;
   let confirmedType;
@@ -62,10 +62,16 @@ function fixture(initial = {}, initialAppState = "active") {
     prepareNativeFullscreen: (generation, channelKey, uri, headers, contentType, bufferProfile) => {
       nativeOwner = "fullscreen";
       calls.push({ type: "prepare", generation, channelKey, uri, headers, contentType, bufferProfile });
+      if (options.synchronousPrepareState) {
+        for (const listener of nativeListeners.state) listener({ owner: nativeOwner, generation, channelKey, state: options.synchronousPrepareState });
+      }
     },
     prepareNativePreview: (generation, channelKey, uri, headers, contentType, bufferProfile) => {
       nativeOwner = "preview";
       calls.push({ type: "prepare", generation, channelKey, uri, headers, contentType, bufferProfile });
+      if (options.synchronousPrepareState) {
+        for (const listener of nativeListeners.state) listener({ owner: nativeOwner, generation, channelKey, state: options.synchronousPrepareState });
+      }
     },
     pauseNativePlayback: () => calls.push({ type: "pause" }),
     resumeNativePlayback: () => calls.push({ type: "resume" }),
@@ -80,8 +86,12 @@ function fixture(initial = {}, initialAppState = "active") {
     ["addNativePlaybackSourceRefreshListener", "refresh"], ["addNativePlaybackTracksListener", "tracks"],
   ]) native[name] = listener => { nativeListeners[kind].add(listener); return () => nativeListeners[kind].delete(listener); };
   const coordinator = createPlaybackCoordinator({
-    owner: async () => nativeOwner,
-    stop: async (_engine, role) => { calls.push({ type: "stop", role }); nativeOwner = "none"; },
+    owner: async () => { if (options.waitForOwner) await options.waitForOwner; return nativeOwner; },
+    stop: async (_engine, role) => {
+      calls.push({ type: "stop", role });
+      if (options.releaseFailure) throw options.releaseFailure;
+      nativeOwner = "none";
+    },
     pause: () => native.pauseNativePlayback(),
   });
   const modules = {
@@ -124,6 +134,7 @@ function fixture(initial = {}, initialAppState = "active") {
         for (const effect of effects) effect.cleanup?.();
         for (const effect of effects) slots[effect.i].cleanup = effect.create();
       }
+      if (dirty && options.renderBeforeNativeCommands) continue;
       await new Promise(resolve => setImmediate(resolve));
       if (!dirty) return;
     }
@@ -149,6 +160,50 @@ function fixture(initial = {}, initialAppState = "active") {
     },
   };
 }
+
+test("cold fullscreen prepares with null AppState and synchronous native loading or playing callbacks", async () => {
+  for (const appState of [null, "active", "inactive"]) {
+    for (const synchronousPrepareState of ["loading", "playing"]) {
+      const player = fixture({}, appState, { synchronousPrepareState, renderBeforeNativeCommands: true });
+      await player.flush();
+      assert.equal(player.calls.filter(call => call.type === "prepare").length, 1, `${appState}/${synchronousPrepareState}: prepare`);
+      assert.equal(player.calls.filter(call => call.type === "pause").length, 0, `${appState}/${synchronousPrepareState}: no pause`);
+      assert.equal(player.calls.filter(call => call.type === "resume").length, 1, `${appState}/${synchronousPrepareState}: resume`);
+      await player.unmount();
+    }
+  }
+});
+
+test("blocked preview renders do not retry a failed release or prepare another player in a loop", async () => {
+  const player = fixture({ mode: "preview", sessionRole: "preview" }, "active", {
+    releaseFailure: Object.assign(new Error("Native release is still blocked"), { code: "E_PLAYBACK_RELEASE" }),
+    renderBeforeNativeCommands: true,
+  });
+  await player.flush();
+  const stopped = session.stopPreviewSession();
+  await player.flush();
+  assert.equal((await stopped).status, "failed");
+  assert.equal(session.hasPlaybackReleaseFailure(), true);
+  const stops = player.calls.filter(call => call.type === "stop").length;
+  for (let i = 0; i < 20; i += 1) await player.update({ onStatus() {}, style: { width: 320 + i } });
+  assert.equal(player.calls.filter(call => call.type === "stop").length, stops);
+  assert.equal(player.calls.filter(call => call.type === "prepare").length, 1);
+  await player.unmount();
+});
+
+test("cold fullscreen waits for a stale native owner, then releases and prepares without a pause", async () => {
+  let resolveOwner;
+  const waitForOwner = new Promise(resolve => { resolveOwner = resolve; });
+  const player = fixture({}, null, { initialNativeOwner: "preview", waitForOwner, synchronousPrepareState: "loading", renderBeforeNativeCommands: true });
+  await player.flush();
+  assert.equal(player.calls.filter(call => call.type === "prepare").length, 0);
+  resolveOwner();
+  await player.flush();
+  const transport = player.calls.filter(call => ["stop", "prepare", "pause", "resume"].includes(call.type));
+  assert.deepEqual(transport.map(call => call.type), ["stop", "prepare", "resume"]);
+  assert.equal(transport[0].role, "preview");
+  await player.unmount();
+});
 
 test("repeated clock, status, and learned-profile renders leave a healthy source prepared once", async () => {
   const player = fixture();

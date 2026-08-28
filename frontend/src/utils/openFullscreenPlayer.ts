@@ -1,4 +1,5 @@
 import type { Router } from "expo-router";
+import { Alert } from "react-native";
 import {
   stopPreviewForFullscreen,
   waitForFullscreenRelease,
@@ -18,12 +19,19 @@ export function openFullscreenPlayer(
 ): void {
   if (!channelId) return;
   const sequence = ++handoffSequence;
+  const showReleaseFailure = () => {
+    if (sequence !== handoffSequence) return;
+    Alert.alert(
+      "Playback is still stopping",
+      "The previous player could not confirm that it had stopped. No new stream was started. Wait a moment and try again. If playback stays blocked, force-stop CharmIPTV in Android Settings, then reopen it.",
+    );
+  };
 
   void waitForFullscreenRelease()
-    .then(() => stopPreviewForFullscreen())
-    .catch(() => undefined)
-    .then(() => {
-      if (sequence !== handoffSequence) return;
+    .then((outcome) => outcome.status === "completed" && sequence === handoffSequence ? stopPreviewForFullscreen() : outcome)
+    .then((outcome) => {
+      if (sequence !== handoffSequence || outcome.status === "superseded") return;
+      if (outcome.status === "failed") { showReleaseFailure(); return; }
       router.push({
         pathname: "/player",
         params: {
@@ -34,5 +42,6 @@ export function openFullscreenPlayer(
             : undefined,
         },
       });
-    });
+    })
+    .catch(showReleaseFailure);
 }
