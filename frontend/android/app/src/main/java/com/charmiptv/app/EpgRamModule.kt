@@ -84,15 +84,11 @@ class EpgRamModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun clearMemory(promise: Promise) {
-    // An epoch transition can be waiting for SQLite. Never wait on that lock on
-    // the shared React Native module queue: player and navigation calls use it.
-    worker.execute {
-      synchronized(epochTransitionLock) {
-        engine.clear()
-        warmGuideEpoch = -1L
-      }
-      promise.resolve(true)
+    synchronized(epochTransitionLock) {
+      engine.clear()
+      warmGuideEpoch = -1L
     }
+    promise.resolve(true)
   }
 
   @ReactMethod

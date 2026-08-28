@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from collections import Counter
 from media3_source_contract import normalize_audited_playback_refresh
-from guide_cache_source_contract import normalize_audited_guide_cache_lifecycle
-from source_lifecycle_contract import lifecycle_findings
 from pathlib import Path
 import re
 import subprocess
@@ -168,9 +166,14 @@ for path in current_files:
         if decoder_tokens:
             critical.append(f"decoder owner outside StreamPlayer: {rel}: {', '.join(decoder_tokens)}")
 
-    # Regression tests contain escaped source assertions, not running listeners.
-    # Keep their census entries but apply lifecycle checks only to runtime code.
-    critical.extend(lifecycle_findings(rel, data))
+    if "setInterval(" in data and "clearInterval(" not in data:
+        critical.append(f"interval has no file-local cleanup: {rel}")
+    if (
+        "AppState.addEventListener" in data
+        and ".remove()" not in data
+        and "sub.remove()" not in data
+    ):
+        critical.append(f"AppState listener has no obvious cleanup: {rel}")
 
 # Exact repair-entry transport baseline: the player repair must not mutate the
 # already-established Android M3U/XMLTV ownership implementation.
@@ -198,7 +201,6 @@ for rel in (
     # Auth recovery now reads a fresh M3U without joining EPG/cache writes.
     # Normalize only that exact reviewed helper; other transport edits still fail.
     if rel == "frontend/src/source.native.ts":
-        current = normalize_audited_guide_cache_lifecycle(current)
         current = normalize_audited_playback_refresh(current)
     if is_exact_audited_epg_fix(rel) or is_audited_epg_fix_with_panel_ua(rel, current):
         continue

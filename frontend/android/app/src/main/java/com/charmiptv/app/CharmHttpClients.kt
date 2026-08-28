@@ -1,21 +1,25 @@
 package com.charmiptv.app
 
+import okhttp3.JavaNetCookieJar
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import java.net.CookieManager
+import java.net.CookiePolicy
 import java.util.concurrent.TimeUnit
 
 /**
  * Shared HTTP identity for playlist fetch and Media3 stream bytes.
  *
- * One bounded CookieJar so Set-Cookie from M3U/panel redirects is available on the
+ * One CookieManager so Set-Cookie from M3U/panel redirects is available on the
  * later media GETs (TiViMate-class panels that gate segments on session cookies).
  */
 object CharmHttpClients {
-  // No periodic cookie clearing; preserve valid host/domain/path/Secure identity
-  // while bounding accumulated panel/session cookies.
-  private val cookieJar = BoundedCookieJar()
+  // ACCEPT_ALL matches IPTV panel behavior better than ACCEPT_ORIGINAL_SERVER,
+  // which drops many Domain=/cross-host cookies TiViMate-class clients keep.
+  private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
+  private val cookieJar = JavaNetCookieJar(cookieManager)
 
   /**
    * The active M3U downloader is JS fetch, using React Native's own CookieJar.

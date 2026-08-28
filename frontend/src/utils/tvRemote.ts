@@ -15,7 +15,7 @@ export type TvKey = "UP" | "DOWN" | "LEFT" | "RIGHT" | "SELECT" | "BACK";
 export type TvLongPressKey = "DOWN" | "SELECT" | "BACK";
 export type TvShortcutKey = "CHANNEL_UP" | "CHANNEL_DOWN" | "MEDIA_PLAY_PAUSE";
 export type TvQuickActionsContext = "guide" | "player";
-export type PlayerQuickCommand = "OPEN_TRACKS" | "CYCLE_ASPECT" | "PREVIOUS_CHANNEL" | "SAVE_DIAGNOSTICS" | "GO_GUIDE" | "OPEN_SETTINGS";
+export type PlayerQuickCommand = "OPEN_TRACKS" | "CYCLE_ASPECT" | "PREVIOUS_CHANNEL" | "SAVE_DIAGNOSTICS";
 export type DeviceMemoryProfile = {
   memoryClassMb: number;
   lowRamDevice: boolean;

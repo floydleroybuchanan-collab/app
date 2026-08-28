@@ -102,8 +102,6 @@ let programmeWindowEmptyKeys = new Set<string>();
 /** Shared LRU order for positive and negative window rows. */
 let programmeWindowAccessOrder = new Set<string>();
 let programmeWindowCacheKey = "";
-/** Invalidates pending reads without discarding the retained focus rows. */
-let programmeWindowGeneration = 0;
 /** Coalesce overlapping warm/viewport reads so one channel is never queried twice. */
 const programmeWindowInFlight = new Map<string, Promise<void>>();
 let lastNativeMatchWriteFingerprint = "";
@@ -340,13 +338,8 @@ function clearProgrammeWindowCache(): void {
   programmeWindowEmptyKeys.clear();
   programmeWindowAccessOrder.clear();
   programmeWindowCacheKey = "";
-  invalidateProgrammeWindowReads();
-}
-
-function invalidateProgrammeWindowReads(): void {
-  // Native bridge reads can finish late. A generation also rejects resets that
-  // return to the same window key, while leaving retained focus rows intact.
-  programmeWindowGeneration += 1;
+  // In-flight native reads cannot be cancelled, but their cache-key guard keeps
+  // them from merging stale results after this reset. Let new-window reads start.
   programmeWindowInFlight.clear();
 }
 
@@ -393,7 +386,6 @@ export function trimProgrammeWindowCacheForMemoryPressure(
   keepIds: string[] = [],
   critical = false,
 ): void {
-  invalidateProgrammeWindowReads();
   const previous = maxProgrammeWindowKeys;
   maxProgrammeWindowKeys = critical
     ? Math.max(128, keepIds.length)
@@ -1032,13 +1024,11 @@ async function loadProgrammeCacheMisses(
   if (!requested.length || !nativeEpgAvailable) return {};
 
   const requestCacheKey = programmeWindowCacheKey;
-  const requestGeneration = programmeWindowGeneration;
-  const isCurrentRequest = () => programmeWindowCacheKey === requestCacheKey && programmeWindowGeneration === requestGeneration;
   const owned: string[] = [];
   const waits = new Set<Promise<void>>();
   for (const id of requested) {
     if (hasCachedProgrammeResult(id)) continue;
-    const inFlightKey = `${requestGeneration}|${requestCacheKey}|${id}`;
+    const inFlightKey = `${requestCacheKey}|${id}`;
     const existing = programmeWindowInFlight.get(inFlightKey);
     if (existing) waits.add(existing);
     else owned.push(id);
@@ -1047,7 +1037,6 @@ async function loadProgrammeCacheMisses(
   if (owned.length) {
     const task = (async () => {
       const joined = await queryNativeGuideWindow(owned, startMs, endMs);
-      if (!isCurrentRequest()) return;
       const merged: Record<string, Program[]> = { ...joined };
       const missingAfterJoin = owned.filter((id) => !merged[id]?.length);
 
@@ -1060,7 +1049,6 @@ async function loadProgrammeCacheMisses(
           getEpgSourcePreferences(),
           getMultiEpgSources(),
         ]);
-        if (!isCurrentRequest()) return;
         const customOwned = new Set<string>();
         if (ownership.userEnabled && ownership.userUrl) {
           for (const channelId of Object.keys(ownership.userOverrides)) customOwned.add(channelId);
@@ -1088,7 +1076,6 @@ async function loadProgrammeCacheMisses(
           }
           if (xmltvIds.length) {
             const byXmltv = await loadNativeEpgWindow(xmltvIds, startMs, endMs);
-            if (!isCurrentRequest()) return;
             for (const playlistId of primaryFallbackIds) {
               const xmltvId = (byId.get(playlistId)?.tvg_id || playlistId).trim();
               const list = byXmltv[xmltvId];
@@ -1098,16 +1085,16 @@ async function loadProgrammeCacheMisses(
         }
       }
 
-      // A date/epoch change or release may finish while SQLite is reading.
-      // Never let the old read refill the newly cleared or trimmed cache.
-      if (isCurrentRequest()) {
+      // A date/epoch change may finish while SQLite is reading. Never merge an
+      // old window into the newly cleared cache.
+      if (programmeWindowCacheKey === requestCacheKey) {
         mergeProgrammeQueryResult(owned, merged);
       }
     })();
-    for (const id of owned) programmeWindowInFlight.set(`${requestGeneration}|${requestCacheKey}|${id}`, task);
+    for (const id of owned) programmeWindowInFlight.set(`${requestCacheKey}|${id}`, task);
     const cleanup = () => {
       for (const id of owned) {
-        const inFlightKey = `${requestGeneration}|${requestCacheKey}|${id}`;
+        const inFlightKey = `${requestCacheKey}|${id}`;
         if (programmeWindowInFlight.get(inFlightKey) === task) {
           programmeWindowInFlight.delete(inFlightKey);
         }
@@ -1119,7 +1106,7 @@ async function loadProgrammeCacheMisses(
 
   if (waits.size) await Promise.all(waits);
   const result: Record<string, Program[]> = {};
-  if (!isCurrentRequest()) return result;
+  if (programmeWindowCacheKey !== requestCacheKey) return result;
   for (const id of requested) {
     const list = programmeWindowCache[id];
     if (list?.length) result[id] = list;
@@ -1204,7 +1191,6 @@ export async function loadGuideProgramsForChannelIds(
     clearProgrammeWindowCache();
     programmeWindowCacheKey = cacheKey;
   }
-  const requestGeneration = programmeWindowGeneration;
 
   const remapped = withManualRemaps(parsed.channels);
 
@@ -1215,7 +1201,7 @@ export async function loadGuideProgramsForChannelIds(
   // A background EPG refresh can replace the cache while SQLite is reading.
   // Returning explicit empty rows here would erase the last-good Guide even
   // though the old query correctly refused to merge into the new epoch.
-  if (programmeWindowCacheKey !== cacheKey || programmeWindowGeneration !== requestGeneration) return {};
+  if (programmeWindowCacheKey !== cacheKey) return {};
   const delta: Record<string, Program[]> = {};
   for (const id of unique) {
     const cached = programmeWindowCache[id];

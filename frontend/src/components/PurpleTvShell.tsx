@@ -11,7 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useFocusEffect, usePathname, useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -23,8 +23,6 @@ import { evaluateDrawerBack } from "@/src/core/drawerNavigationPolicy";
 import { requestGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
 import { isGuideScreenActive, isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { useTvCalibration } from "@/src/tvCalibration";
-import { useAppForeground } from "@/src/hooks/useAppForeground";
-import { overlayRestoreContext } from "@/src/core/screenActivity";
 import { addTvKeyListener, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 
 type Route =
@@ -99,8 +97,6 @@ type DrawerContextValue = {
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 
 export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const appForeground = useAppForeground();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [focusDrawerTop, setFocusDrawerTop] = useState(false);
   const drawerProgress = useRef(new Animated.Value(0)).current;
@@ -125,13 +121,6 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   }, []);
 
   const consumeFocusDrawerTop = useCallback(() => setFocusDrawerTop(false), []);
-
-  // External navigation (player exit, notification, Quick Actions) can bypass
-  // the drawer's navigate callback. Never carry its focus tree into that route.
-  useEffect(() => { closeDrawer({ force: true }); }, [closeDrawer, pathname]);
-  useEffect(() => {
-    if (!appForeground) closeDrawer({ force: true });
-  }, [appForeground, closeDrawer]);
 
   useEffect(() => {
     const animation = Animated.timing(drawerProgress, {
@@ -195,12 +184,6 @@ export function PurpleTvShell({
   watchingChannelId?: string | null;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const appForeground = useAppForeground();
-  const pathnameRef = useRef(pathname);
-  const foregroundRef = useRef(appForeground);
-  pathnameRef.current = pathname;
-  foregroundRef.current = appForeground;
   const { drawerOpen, drawerProgress, openDrawer, closeDrawer, focusDrawerTop, consumeFocusDrawerTop } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
@@ -212,7 +195,7 @@ export function PurpleTvShell({
 
   const navRefs = useRef(new Map<Route, unknown>());
   const guideGroupRefs = useRef(new Map<string, unknown>());
-  const navigationFrameRef = useRef<number | null>(null);
+  const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
   const [drawerPreferredRoute, setDrawerPreferredRoute] = useState<Route | null>(drawerOpen ? active : null);
@@ -220,28 +203,6 @@ export function PurpleTvShell({
     () => guideGroups?.find((item) => item.active)?.name || null,
     [guideGroups],
   );
-  const blockingModalRef = useRef(!!activeProgram);
-  blockingModalRef.current = !!activeProgram;
-
-  useFocusEffect(useCallback(() => {
-    if (active === "/guide") return;
-    // Favorites/settings/collections must own ordinary native D-pad movement
-    // immediately on entry, even if the outgoing player's release is delayed.
-    setGuideNavigationActive(false);
-    if (!blockingModalRef.current) setRemoteContext("default");
-  }, [active]));
-
-  const afterDrawerClose = useCallback((run: () => void) => {
-    const path = pathnameRef.current;
-    if (navigationFrameRef.current != null) cancelAnimationFrame(navigationFrameRef.current);
-    navigationFrameRef.current = requestAnimationFrame(() => {
-      navigationFrameRef.current = null;
-      if (foregroundRef.current && pathnameRef.current === path) run();
-    });
-  }, []);
-  useEffect(() => () => {
-    if (navigationFrameRef.current != null) cancelAnimationFrame(navigationFrameRef.current);
-  }, []);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -254,18 +215,23 @@ export function PurpleTvShell({
           // accidental close during animation. Main must be gone before Groups
           // becomes remote owner or both focus trees can be live at once.
           closeDrawer({ force: true });
-          afterDrawerClose(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+          requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
         })
       : () => undefined;
     return () => {
       off();
-      // A Right transition can let Groups claim ownership first. Background
-      // cleanup must also leave native Guide navigation disabled.
-      const restore = overlayRestoreContext(pathnameRef.current, foregroundRef.current);
-      const restored = resetRemoteContextIfOwned("main_drawer", restore);
-      if (restored && restore === "guide") setGuideNavigationActive(true);
+      if (active === "/guide") {
+        // A Right transition can let the Groups drawer claim ownership before
+        // this outgoing effect cleans up. Never re-enable the native Guide or
+        // replace that newer owner from stale main-drawer cleanup.
+        if (resetRemoteContextIfOwned("main_drawer", "guide")) {
+          setGuideNavigationActive(true);
+        }
+      } else {
+        resetRemoteContextIfOwned("main_drawer", "default");
+      }
     };
-  }, [active, afterDrawerClose, closeDrawer, drawerOpen]);
+  }, [active, closeDrawer, drawerOpen]);
 
   useEffect(() => {
     if (!drawerOpen) {
@@ -340,26 +306,35 @@ export function PurpleTvShell({
   const navigate = useCallback(
     (route: Route) => {
       void Haptics.selectionAsync().catch(() => undefined);
-      // The drawer must fully relinquish the
+      if (deferredDrawerCloseTimer.current) {
+        clearTimeout(deferredDrawerCloseTimer.current);
+        deferredDrawerCloseTimer.current = null;
+      }
+
+      // TiviMate-style focus ownership: the drawer must fully relinquish the
       // remote/focus tree before a different route mounts and claims focus.
       // A normal close can be rejected by the anti-bounce opening guard, which
       // previously allowed two live focus owners during rapid drawer selection.
       closeDrawer({ force: true });
       if (route === active) {
         if (route === "/guide") {
-          afterDrawerClose(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+          requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
         }
         return;
       }
       if (route === "/guide") requestGuideGroupsOnEntry();
 
-      afterDrawerClose(() => {
+      requestAnimationFrame(() => {
         if (route === "/settings") DeviceEventEmitter.emit("CharmShowAllSettings");
         router.replace(route as any);
       });
     },
-    [active, afterDrawerClose, closeDrawer, router],
+    [active, closeDrawer, router],
   );
+
+  useEffect(() => () => {
+    if (deferredDrawerCloseTimer.current) clearTimeout(deferredDrawerCloseTimer.current);
+  }, []);
 
   const exit = useCallback(() => {
     void Haptics.selectionAsync().catch(() => undefined);
@@ -430,17 +405,9 @@ export function PurpleTvShell({
     >
       <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
-        importantForAccessibility={drawerOpen ? "auto" : "no-hide-descendants"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide
-          style={styles.sidebar}
-          focusable={drawerOpen}
-          trapFocusUp={drawerOpen}
-          trapFocusDown={drawerOpen}
-          trapFocusLeft={drawerOpen}
-          trapFocusRight={drawerOpen}
-        >
+        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
           <SmallBrand />
 
           {contextActions?.length ? (

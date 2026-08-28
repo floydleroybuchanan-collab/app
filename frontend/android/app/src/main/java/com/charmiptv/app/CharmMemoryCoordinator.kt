@@ -2,7 +2,6 @@ package com.charmiptv.app
 
 import android.app.ActivityManager
 import android.content.Context
-import android.os.SystemClock
 
 internal enum class CharmTrimLevel { BACKGROUND, MODERATE, CRITICAL }
 
@@ -15,27 +14,9 @@ internal data class CharmMemoryBudgets(
   val vodCacheBytes: Long,
 )
 
-/** One acceptance decision for native trim and its matching JS notification. */
-internal class CharmMemoryStartupGrace(
-  private val elapsedRealtimeMs: () -> Long = SystemClock::elapsedRealtime,
-) {
-  @Volatile private var playbackStartingUntilMs = 0L
-
-  fun setPlaybackStarting(starting: Boolean) {
-    playbackStartingUntilMs = if (starting) elapsedRealtimeMs() + 15_000L else 0L
-  }
-
-  fun dispatch(level: CharmTrimLevel, onTrim: (CharmTrimLevel) -> Unit): Boolean {
-    // Critical pressure must pass even during the first decoder preparation.
-    if (level != CharmTrimLevel.CRITICAL && elapsedRealtimeMs() < playbackStartingUntilMs) return false
-    onTrim(level)
-    return true
-  }
-}
-
 internal object CharmMemoryCoordinator {
   @Volatile private var budgets = CharmMemoryBudgets(192, false, 48L shl 20, 24L shl 20, 32L shl 20, 32L shl 20)
-  private val startupGrace = CharmMemoryStartupGrace()
+  @Volatile private var playbackStartingUntilMs = 0L
   private val listeners = LinkedHashSet<(CharmTrimLevel, CharmMemoryBudgets) -> Unit>()
 
   fun initialize(context: Context) {
@@ -56,7 +37,7 @@ internal object CharmMemoryCoordinator {
   fun budgets(): CharmMemoryBudgets = budgets
 
   fun setPlaybackStarting(starting: Boolean) {
-    startupGrace.setPlaybackStarting(starting)
+    playbackStartingUntilMs = if (starting) System.currentTimeMillis() + 15_000L else 0L
   }
 
   fun register(listener: (CharmTrimLevel, CharmMemoryBudgets) -> Unit): () -> Unit = synchronized(listeners) {
@@ -64,11 +45,11 @@ internal object CharmMemoryCoordinator {
     return@synchronized { synchronized(listeners) { listeners.remove(listener) } }
   }
 
-  fun trim(level: CharmTrimLevel): Boolean {
+  fun trim(level: CharmTrimLevel) {
     // Delay background/moderate cleanup during decoder startup. Critical
-    // pressure always wins. Callers must not emit a JS pressure event when
-    // native cleanup was deferred by this same startup decision.
-    return startupGrace.dispatch(level, ::dispatchTrim)
+    // pressure always wins so Android does not kill the process outright.
+    if (level != CharmTrimLevel.CRITICAL && System.currentTimeMillis() < playbackStartingUntilMs) return
+    dispatchTrim(level)
   }
 
   /**

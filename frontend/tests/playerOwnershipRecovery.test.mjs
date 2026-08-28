@@ -25,12 +25,9 @@ test("Guide blur cleanup cannot clobber a newer TV remote owner", async () => {
 
 test("ErrorBoundary crash recovery waits for native decoder release before remount", async () => {
   const player = await source("app/player.tsx");
-  const reset = player.slice(player.indexOf("const retryAfterCrash ="), player.indexOf("useEffect(() => { controlsRef.current"));
-  assert.match(reset, /void stopAllPlaybackSessions\("crashed"\)\.then\(\(outcome\) => \{/);
-  assert.match(reset, /if \(!isCurrent\(\)\) return/);
-  assert.match(reset, /if \(outcome.status === "completed"\) \{ setRetryToken[\s\S]*?reset\(\)/);
-  assert.match(player, /onPress=\{\(\) => retryAfterCrash\(reset\)\}/);
-  assert.doesNotMatch(player, /onReset=\{/);
+  const reset = player.match(/onReset=\{\(\) => \{[\s\S]*?\n\s*\}\}/)?.[0] || "";
+  assert.match(reset, /void stopAllPlaybackSessions\("crashed"\)\.then\(\(\) => \{/);
+  assert.match(reset, /if \(generation === generationRef\.current\) setRetryToken/);
   assert.doesNotMatch(reset, /decoderArmed|DECODER_RESTART_SETTLE_MS|setTimeout/);
 });
 
@@ -38,9 +35,7 @@ test("fullscreen exit serializes decoder teardown before Guide remount", async (
   const player = await source("app/player.tsx");
   assert.match(player, /const exitInFlightRef = useRef\(false\)/);
   assert.match(player, /if \(exitInFlightRef\.current\) return/);
-  assert.match(player, /stop: stopFullscreenSession/);
-  assert.match(player, /exitPlayer\(\(\) => \{[\s\S]*?router\.replace\("\/guide" as any\)/);
-  assert.match(player, /if \(!exitInFlightRef.current\) void stopFullscreenSession\(\)/);
+  assert.match(player, /void stopFullscreenSession\(\)\.then\(\(\) => \{[\s\S]*?router\.replace\("\/guide" as any\)/);
 });
 
 test("unsupported protocol errors explain the Media3 limitation without offering another identical retry", async () => {

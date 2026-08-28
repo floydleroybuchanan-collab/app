@@ -45,10 +45,7 @@ test("Player Quick Actions dispatch into the mounted player instead of duplicati
 
   assert.match(overlay, /label="Aspect ratio"[\s\S]{0,180}runPlayerCommand\("CYCLE_ASPECT"\)/);
   assert.match(overlay, /label="Audio \/ subtitles"[\s\S]{0,180}runPlayerCommand\("OPEN_TRACKS"\)/);
-  assert.match(overlay, /afterPlayerOverlayClose\(\(\) => emitPlayerQuickCommand\(command\)\)/);
-  const deferredCommand = overlay.slice(overlay.indexOf("const afterPlayerOverlayClose"), overlay.indexOf("const runPlayerCommand"));
-  assert.match(deferredCommand, /close\(\);[\s\S]*commandFrameRef.current = requestAnimationFrame/);
-  assert.match(deferredCommand, /pathnameRef.current === path && acceptsQuickActionsContext\(path, "player"\)/);
+  assert.match(overlay, /close\(\);[\s\S]{0,120}emitPlayerQuickCommand\(command\)/);
 
   assert.match(player, /addPlayerQuickCommandListener\(\(command\) =>/);
   assert.match(player, /command === "CYCLE_ASPECT"[\s\S]{0,100}cycleScaleMode\(\)/);

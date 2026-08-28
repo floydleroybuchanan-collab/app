@@ -15,7 +15,7 @@ test("native Guide advances its live runway even when the user is not pressing a
   assert.doesNotMatch(guide, /postInvalidateDelayed\(30_000L\)/);
   assert.match(guide, /advanceLiveViewport\(wallClockNow\)/);
   assert.match(guide, /scheduleLiveClock\(\)\s*\n\s*applyPendingRestoreChannel\(\)/);
-  assert.match(guide, /override fun onDetachedFromWindow\(\) \{\s*attached = false\s*stopLiveClock\(\)/);
+  assert.match(guide, /override fun onDetachedFromWindow\(\) \{\s*stopLiveClock\(\)/);
   assert.match(guide, /fun dispose\(\) \{\s*if \(disposed\) return\s*stopLiveClock\(\)/);
 });
 

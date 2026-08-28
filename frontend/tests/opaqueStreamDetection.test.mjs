@@ -41,7 +41,7 @@ test("pending native surface preparation has a deadline and participates in owne
   const timeout = native.slice(native.indexOf("private val startupTimeout"), native.indexOf("private val delayedRecovery"));
   assert.match(timeout, /pendingPrepare != null[\s\S]*?pendingPrepare = null[\s\S]*?finishWithError\("start-timeout"\)/);
   assert.doesNotMatch(timeout, /armStartupTimeout\(\)/);
-  assert.match(native, /fun currentOwner\(\): Owner \{\s*acknowledgeCompletedDecoderRelease\(\)\s*return pendingPrepare\?\.requestedOwner \?: owner/);
+  assert.match(native, /fun currentOwner\(\): Owner = pendingPrepare\?\.requestedOwner \?: owner/);
   assert.match(native, /if \(owner == Owner.NONE && pendingPrepare == null\) return/);
   const advance = native.slice(native.indexOf("private fun advanceOpaqueCandidate("), native.indexOf("private fun buildOpaqueAttempts"));
   assert.doesNotMatch(advance, /recoveryAttempts = 0/);

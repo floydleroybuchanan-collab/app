@@ -118,9 +118,7 @@ test("main drawer cleanup cannot steal the Guide Groups drawer owner", async () 
     source("src/components/PurpleTvShell.tsx"),
     source("src/components/PurpleGuideGroupDrawer.tsx"),
   ]);
-  assert.match(shell, /const restore = overlayRestoreContext\(pathnameRef.current, foregroundRef.current\)/);
-  assert.match(shell, /const restored = resetRemoteContextIfOwned\("main_drawer", restore\)/);
-  assert.match(shell, /if \(restored && restore === "guide"\) setGuideNavigationActive\(true\)/);
+  assert.match(shell, /resetRemoteContextIfOwned\("main_drawer", "guide"\)/);
   assert.doesNotMatch(shell, /if \(active === "\/guide"\) \{\s*setRemoteContext\("guide"\)/);
   assert.match(groups, /setRemoteContext\("guide_groups"\)/);
   assert.match(groups, /hasTVPreferredFocus=\{preferActiveFocus && item\.name === activeNameRef\.current\}/);

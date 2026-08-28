@@ -18,8 +18,6 @@ on:
       - "ci/verify-android-apk.py"
       - "ci/verify-media3-only.py"
       - "ci/media3_source_contract.py"
-      - "ci/source_lifecycle_contract.py"
-      - "ci/guide_cache_source_contract.py"
       - "ci/test_*.py"
       - "ci/retired-player-automation.json"
       - "ci/protect-sideload-artifact.mjs"

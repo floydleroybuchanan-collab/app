@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
-import { useIsFocused } from "@react-navigation/native";
-import { useAppForeground } from "@/src/hooks/useAppForeground";
 import * as Haptics from "expo-haptics";
 import { usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { fonts, radius, tvColors } from "@/src/theme";
@@ -12,8 +10,6 @@ import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@
 /** Consistent, explicit Drawer entry for full-bleed TV pages. */
 export function PurpleDrawerButton({ testID }: { testID: string }) {
   const pathname = usePathname();
-  const routeFocused = useIsFocused();
-  const appForeground = useAppForeground();
   const { openDrawer } = usePurpleTvDrawer();
   const [focused, setFocused] = useState(false);
   const open = useCallback(() => {
@@ -26,7 +22,7 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
   // native LEFT event as a deterministic drawer handoff instead of allowing the
   // platform focus engine to search for a non-existent neighbour.
   useEffect(() => {
-    if (!focused || !routeFocused || !appForeground) return;
+    if (!focused) return;
     // Declare this edge explicitly to the Activity-level router. Default TV
     // pages do not mirror raw D-pad events into JS; the native router owns the
     // LEFT boundary and emits exactly one semantic handoff while this control
@@ -46,7 +42,7 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
           : "default";
       resetRemoteContextIfOwned("drawer_edge", fallback);
     };
-  }, [appForeground, focused, open, pathname, routeFocused]);
+  }, [focused, open, pathname]);
 
   return (
     <Pressable

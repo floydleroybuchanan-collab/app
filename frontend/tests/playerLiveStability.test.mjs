@@ -115,8 +115,7 @@ test("fullscreen exit returns currently tuned channel to the originating Guide g
   assert.match(player, /const currentChannelId = pendingChannelIdRef\.current \|\| channelIdRef\.current/);
   assert.match(player, /const returnGuideGroup = String\(params\.returnGuideGroup \|\| ""\)\.trim\(\) \|\| "All"/);
   assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: returnGuideGroup \}\)/);
-  assert.match(player, /stop: stopFullscreenSession/);
-  assert.match(player, /exitPlayer\(\(\) => \{/);
+  assert.match(player, /stopFullscreenSession\(\)\.then\(\(\) => \{/);
   assert.match(player, /router\.replace\("\/guide" as any\)/);
 });
 

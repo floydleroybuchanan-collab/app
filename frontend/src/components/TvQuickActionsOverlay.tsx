@@ -18,7 +18,6 @@ import { requestNativeFocus } from "@/src/utils/tvFocus";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { addTvQuickActionsListener, emitPlayerQuickCommand, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext, type PlayerQuickCommand, type TvQuickActionsContext } from "@/src/utils/tvRemote";
 import { getGuideSelection } from "@/src/core/guideSelectionStore";
-import { getSessionGeneration } from "@/src/core/playbackSession";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
@@ -36,12 +35,10 @@ import {
   setNativeSourceGuideBinding,
 } from "@/src/nativeEpg";
 import { invalidateGuideOwnershipCaches } from "@/src/source";
-import { matchesStreamFingerprint, getLastAudioDiagnostics } from "@/src/core/audioDiagnostics";
+import { fingerprintStreamUri, getLastAudioDiagnostics } from "@/src/core/audioDiagnostics";
 import { usePlaybackBufferProfile, playbackBufferProfileLabel, type PlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import type { Program } from "@/src/api";
 import { reminderKey } from "@/src/utils/time";
-import { useAppForeground } from "@/src/hooks/useAppForeground";
-import { acceptsQuickActionsContext, overlayRestoreContext } from "@/src/core/screenActivity";
 
 type Mode = "main" | "epg-source" | "epg-channel";
 type SourceChoice = { id: string; name: string; url: string; enabled: boolean; legacy: boolean };
@@ -57,11 +54,6 @@ function nextValue<T>(values: readonly T[], current: T): T {
 export function TvQuickActionsOverlay() {
   const router = useRouter();
   const pathname = usePathname();
-  const appForeground = useAppForeground();
-  const pathnameRef = useRef(pathname);
-  const foregroundRef = useRef(appForeground);
-  pathnameRef.current = pathname;
-  foregroundRef.current = appForeground;
   const params = useGlobalSearchParams<{ channelId?: string }>();
   const {
     channels,
@@ -92,9 +84,6 @@ export function TvQuickActionsOverlay() {
   const [status, setStatus] = useState<string | null>(null);
   const [focusClaim, setFocusClaim] = useState(false);
   const queryGeneration = useRef(0);
-  const overlayGeneration = useRef(0);
-  const operationBusyRef = useRef(false);
-  const commandFrameRef = useRef<number | null>(null);
   const openPathRef = useRef<string | null>(null);
   const firstActionRef = useRef<any>(null);
 
@@ -107,7 +96,7 @@ export function TvQuickActionsOverlay() {
     if (diagnostics?.role === "fullscreen" && diagnostics.streamKey) {
       for (const item of channels) {
         if (!item.url) continue;
-        if (matchesStreamFingerprint(item.url, diagnostics.streamKey)) return item.id;
+        if (fingerprintStreamUri(item.url) === diagnostics.streamKey) return item.id;
       }
     }
     const routeId = String(params.channelId || "").trim();
@@ -115,10 +104,6 @@ export function TvQuickActionsOverlay() {
   }, [channelById, channels, params.channelId]);
 
   const close = useCallback(() => {
-    overlayGeneration.current += 1;
-    queryGeneration.current += 1;
-    operationBusyRef.current = false;
-    setChannelId(null);
     setOpen(false);
     setMode("main");
     setSourceChoice(null);
@@ -130,38 +115,20 @@ export function TvQuickActionsOverlay() {
     setBusy(false);
     DeviceEventEmitter.emit("CharmQuickActionsVisibility", false);
     openPathRef.current = null;
-    const restore = overlayRestoreContext(pathnameRef.current, foregroundRef.current);
+    const restore = pathname?.startsWith("/player") ? "player" : pathname?.startsWith("/guide") ? "guide" : "default";
     // A route can claim its new owner before a stale modal close runs. Release
     // only if Quick Actions still owns the remote context so modal teardown can
     // never overwrite the player/Guide/drawer that replaced it.
     const restored = resetRemoteContextIfOwned("modal", restore);
     if (restored && restore === "guide") setGuideNavigationActive(true);
-  }, []);
-
-  const afterPlayerOverlayClose = useCallback((run: () => void) => {
-    close();
-    const path = pathnameRef.current;
-    const generation = overlayGeneration.current;
-    const playbackGeneration = getSessionGeneration("fullscreen");
-    if (commandFrameRef.current != null) cancelAnimationFrame(commandFrameRef.current);
-    commandFrameRef.current = requestAnimationFrame(() => {
-      commandFrameRef.current = null;
-      if (generation === overlayGeneration.current && playbackGeneration === getSessionGeneration("fullscreen") &&
-        foregroundRef.current && pathnameRef.current === path && acceptsQuickActionsContext(path, "player")) {
-        run();
-      }
-    });
-  }, [close]);
+  }, [pathname]);
 
   const runPlayerCommand = useCallback((command: PlayerQuickCommand) => {
-    afterPlayerOverlayClose(() => emitPlayerQuickCommand(command));
-  }, [afterPlayerOverlayClose]);
+    close();
+    requestAnimationFrame(() => emitPlayerQuickCommand(command));
+  }, [close]);
 
   useEffect(() => addTvQuickActionsListener((nextContext) => {
-    if (!foregroundRef.current || !acceptsQuickActionsContext(pathnameRef.current, nextContext)) return;
-    overlayGeneration.current += 1;
-    queryGeneration.current += 1;
-    operationBusyRef.current = false;
     const guideSelection = nextContext === "guide" ? getGuideSelection() : null;
     const id = guideSelection?.channelId || resolvePlayerChannelId();
     if (!id) return;
@@ -169,7 +136,6 @@ export function TvQuickActionsOverlay() {
     if (!selectedChannel) return;
     void Haptics.selectionAsync().catch(() => undefined);
 
-    setBusy(false);
     setContext(nextContext);
     setChannelId(id);
     setGuideProgram(
@@ -188,22 +154,17 @@ export function TvQuickActionsOverlay() {
   }), [channelById, pathname, resolvePlayerChannelId]);
 
   useEffect(() => () => {
-    overlayGeneration.current += 1;
-    queryGeneration.current += 1;
-    if (commandFrameRef.current != null) cancelAnimationFrame(commandFrameRef.current);
     DeviceEventEmitter.emit("CharmQuickActionsVisibility", false);
   }, []);
 
   useEffect(() => {
     if (!open) return;
-    if (!appForeground) { close(); return; }
-    if (!channel) { close(); return; }
     const openedPath = openPathRef.current;
     if (openedPath == null || openedPath === (pathname || "")) return;
     // Automatic navigation (sleep timer, player recovery exit, etc.) must not
     // leave a stale modal/focus layer running over the next screen.
     close();
-  }, [appForeground, channel, close, open, pathname]);
+  }, [close, open, pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -243,28 +204,25 @@ export function TvQuickActionsOverlay() {
 
   useEffect(() => {
     if (!open || mode !== "epg-channel" || !sourceChoice) return;
-    const generation = ++queryGeneration.current;
     const timer = setTimeout(() => {
+      const generation = ++queryGeneration.current;
       void (async () => {
         try {
           const page = sourceChoice.legacy
             ? await listNativeUserGuideChannels(epgQuery, 0, 80)
             : await listNativeSourceGuideChannels(sourceChoice.id, epgQuery, 0, 80);
-          if (generation !== queryGeneration.current || !foregroundRef.current || openPathRef.current !== pathnameRef.current) return;
+          if (generation !== queryGeneration.current) return;
           setEpgRows(page.rows || []);
           setEpgTotal(Math.max(0, Number(page.total) || 0));
         } catch (error) {
-          if (generation !== queryGeneration.current || !foregroundRef.current || openPathRef.current !== pathnameRef.current) return;
+          if (generation !== queryGeneration.current) return;
           setEpgRows([]);
           setEpgTotal(0);
           setStatus(error instanceof Error ? error.message : "Could not read EPG channels.");
         }
       })();
     }, 180);
-    return () => {
-      queryGeneration.current += 1;
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, [epgQuery, mode, open, sourceChoice]);
 
   const sourceChoices = useMemo<SourceChoice[]>(() => {
@@ -308,15 +266,8 @@ export function TvQuickActionsOverlay() {
     ]);
   }, [multiEpg.sources, primaryEpg.primaryEnabled, primaryEpg.userEnabled, primaryEpg.userUrl, refreshPrefs.epgHours]);
 
-  const isCurrentOverlay = useCallback((generation: number) =>
-    generation === overlayGeneration.current &&
-    openPathRef.current === pathnameRef.current && foregroundRef.current,
-  []);
-
   const assignEpg = useCallback(async (xmltvId: string) => {
-    if (!channel || !sourceChoice || operationBusyRef.current) return;
-    operationBusyRef.current = true;
-    const generation = overlayGeneration.current;
+    if (!channel || !sourceChoice || busy) return;
     setBusy(true);
     setStatus("Assigning EPG…");
     try {
@@ -337,21 +288,17 @@ export function TvQuickActionsOverlay() {
         assignMultiEpgChannel(sourceChoice.id, channel.id, xmltvId);
       }
       invalidateGuideOwnershipCaches();
-      if (isCurrentOverlay(generation)) {
-        setStatus(`${channel.name} now uses ${sourceChoice.name}: ${xmltvId}`);
-        setMode("main");
-      }
+      setStatus(`${channel.name} now uses ${sourceChoice.name}: ${xmltvId}`);
+      setMode("main");
     } catch (error) {
-      if (isCurrentOverlay(generation)) setStatus(error instanceof Error ? error.message : "Could not assign EPG.");
+      setStatus(error instanceof Error ? error.message : "Could not assign EPG.");
     } finally {
-      if (isCurrentOverlay(generation)) { operationBusyRef.current = false; setBusy(false); }
+      setBusy(false);
     }
-  }, [channel, ensureNativeSources, extraOwner, isCurrentOverlay, legacyOwnerId, multiEpg, primaryEpg, sourceChoice]);
+  }, [busy, channel, ensureNativeSources, extraOwner, legacyOwnerId, multiEpg, primaryEpg, sourceChoice]);
 
   const clearEpgAssignment = useCallback(async () => {
-    if (!channel || operationBusyRef.current) return;
-    operationBusyRef.current = true;
-    const generation = overlayGeneration.current;
+    if (!channel || busy) return;
     setBusy(true);
     setStatus("Returning channel to automatic EPG…");
     try {
@@ -364,13 +311,13 @@ export function TvQuickActionsOverlay() {
         clearMultiEpgChannelAssignments(channel.id);
       }
       invalidateGuideOwnershipCaches();
-      if (isCurrentOverlay(generation)) setStatus(primaryEpg.primaryEnabled ? "Automatic Charm EPG restored." : "Custom assignment cleared; built-in EPG is disabled.");
+      setStatus(primaryEpg.primaryEnabled ? "Automatic Charm EPG restored." : "Custom assignment cleared; built-in EPG is disabled.");
     } catch (error) {
-      if (isCurrentOverlay(generation)) setStatus(error instanceof Error ? error.message : "Could not clear EPG assignment.");
+      setStatus(error instanceof Error ? error.message : "Could not clear EPG assignment.");
     } finally {
-      if (isCurrentOverlay(generation)) { operationBusyRef.current = false; setBusy(false); }
+      setBusy(false);
     }
-  }, [channel, extraOwner, isCurrentOverlay, legacyOwnerId, primaryEpg]);
+  }, [busy, channel, extraOwner, legacyOwnerId, primaryEpg]);
 
   const favorite = useCallback(() => {
     if (!channel) return;
@@ -389,18 +336,16 @@ export function TvQuickActionsOverlay() {
   ));
 
   const toggleSelectedReminder = useCallback(() => {
-    if (!channel || !guideProgram || operationBusyRef.current) return;
-    operationBusyRef.current = true;
-    const generation = overlayGeneration.current;
+    if (!channel || !guideProgram || busy) return;
     setBusy(true);
     setStatus(reminded ? "Removing reminder…" : "Setting reminder…");
     void toggleReminder(guideProgram, channel)
       .then((result) => {
-        if (isCurrentOverlay(generation)) setStatus(result === "added" ? "Reminder set." : result === "removed" ? "Reminder removed." : "Notifications are required for reminders.");
+        setStatus(result === "added" ? "Reminder set." : result === "removed" ? "Reminder removed." : "Notifications are required for reminders.");
       })
-      .catch(() => { if (isCurrentOverlay(generation)) setStatus("Could not update reminder."); })
-      .finally(() => { if (isCurrentOverlay(generation)) { operationBusyRef.current = false; setBusy(false); } });
-  }, [channel, guideProgram, isCurrentOverlay, reminded, toggleReminder]);
+      .catch(() => setStatus("Could not update reminder."))
+      .finally(() => setBusy(false));
+  }, [busy, channel, guideProgram, reminded, toggleReminder]);
 
   const play = useCallback(() => {
     if (!channel) return;
@@ -409,18 +354,16 @@ export function TvQuickActionsOverlay() {
   }, [channel, close, context, router]);
 
   const goGuide = useCallback(() => {
-    if (context === "player") { runPlayerCommand("GO_GUIDE"); return; }
     close();
     router.replace("/guide" as any);
-  }, [close, context, router, runPlayerCommand]);
+  }, [close, router]);
 
   const openSettings = useCallback(() => {
-    if (context === "player") { runPlayerCommand("OPEN_SETTINGS"); return; }
     close();
     router.replace("/settings" as any);
-  }, [close, context, router, runPlayerCommand]);
+  }, [close, router]);
 
-  if (!open || !channel || !appForeground || openPathRef.current !== pathname) return null;
+  if (!open || !channel) return null;
 
   return (
     <View style={styles.backdrop}>
@@ -465,7 +408,7 @@ export function TvQuickActionsOverlay() {
                 <Action icon="calendar-outline" label="Open TV Guide" onPress={goGuide} />
                 <Action icon="resize-outline" label="Aspect ratio" value="Fit / Zoom / Stretch" onPress={() => runPlayerCommand("CYCLE_ASPECT")} />
                 <Action icon="musical-notes-outline" label="Audio / subtitles" value="Live tracks" onPress={() => runPlayerCommand("OPEN_TRACKS")} />
-                <Action icon="speedometer-outline" label="Buffer size" value={playbackBufferProfileLabel(bufferProfile)} onPress={() => { const next = nextValue(BUFFER_ORDER, bufferProfile); afterPlayerOverlayClose(() => setBufferProfile(next)); }} />
+                <Action icon="speedometer-outline" label="Buffer size" value={playbackBufferProfileLabel(bufferProfile)} onPress={() => { const next = nextValue(BUFFER_ORDER, bufferProfile); close(); requestAnimationFrame(() => setBufferProfile(next)); }} />
                 <Action icon="moon-outline" label="Sleep timer" value={sleepTimerMinutes ? `${sleepTimerMinutes}m` : "Off"} onPress={() => setSleepTimerMinutes(sleepTimerMinutes === 0 ? 15 : sleepTimerMinutes === 15 ? 30 : sleepTimerMinutes === 30 ? 60 : sleepTimerMinutes === 60 ? 90 : 0)} />
                 <Action icon="bug-outline" label="Diagnostics" value="Save player report" onPress={() => runPlayerCommand("SAVE_DIAGNOSTICS")} />
                 <Action icon="options-outline" label="Playback settings" value="Media3 / ExoPlayer" onPress={openSettings} />
@@ -540,10 +483,9 @@ function Action({
   return (
     <Pressable
       ref={buttonRef}
-      focusable
-      accessibilityState={{ disabled }}
+      disabled={disabled}
       hasTVPreferredFocus={preferredFocus}
-      onPress={() => { if (!disabled) onPress(); }}
+      onPress={onPress}
       style={({ focused }: any) => [styles.row, disabled && styles.disabled, focused && styles.focused]}
     >
       <Ionicons name={icon} size={17} color={tvColors.purpleSoft} />

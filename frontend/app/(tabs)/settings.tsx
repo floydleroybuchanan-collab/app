@@ -169,9 +169,7 @@ function SettingsScreenContent() {
 
   useEffect(() => {
     if (section !== "health" && section !== "about") return;
-    let current = true;
-    void getDeviceCodecCapabilities().then(value => { if (current) setCodecCapabilities(value); });
-    return () => { current = false; };
+    void getDeviceCodecCapabilities().then(setCodecCapabilities);
   }, [section]);
 
   useEffect(() => {
@@ -983,7 +981,7 @@ function ChoiceRow<T extends string | number>({ label, value, options, onChange 
 
 function Action({ label, icon, onPress, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean }) {
   return (
-    <Pressable focusable accessibilityState={{ disabled: !!disabled }} onPress={() => { if (!disabled) onPress(); }} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}>
+    <Pressable disabled={disabled} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}>
       <Ionicons name={icon} size={14} color="#fff" />
       <Text style={styles.actionText}>{label}</Text>
     </Pressable>

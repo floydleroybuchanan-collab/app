@@ -11,8 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
-import { useIsFocused } from "@react-navigation/native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,8 +30,7 @@ import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
-import { stopFullscreenSession, stopAllPlaybackSessions, waitForFullscreenRelease, type PlaybackStopOutcome, type SessionFailReason } from "@/src/core/playbackSession";
-import { requestPlayerExit } from "@/src/core/playerExit";
+import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
@@ -71,8 +69,6 @@ function AutoScrollProgramDescription({ text }: { text: string; activeKey: strin
 
 export default function PlayerScreen() {
   const router = useRouter();
-  const pathname = usePathname();
-  const routeFocused = useIsFocused();
   const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -94,7 +90,6 @@ export default function PlayerScreen() {
   const [status, setStatus] = useState<StreamStatus>("loading");
   const [failReason, setFailReason] = useState<SessionFailReason | null>(null);
   const [retryToken, setRetryToken] = useState(0);
-  const [crashRetryPending, setCrashRetryPending] = useState(false);
   const [controls, setControls] = useState(true);
   const [playerOverlay, setPlayerOverlay] = useState<"channels" | "tracks" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -128,12 +123,6 @@ export default function PlayerScreen() {
   const channelsOpenRef = useRef(false);
   const generationRef = useRef(0);
   const exitInFlightRef = useRef(false);
-  const crashRetryInFlightRef = useRef(false);
-  const mountedRef = useRef(false);
-  const exitRouteRef = useRef({ pathname, focused: routeFocused, channelId: params.channelId, revision: 0 });
-  const previousRoute = exitRouteRef.current;
-  const routeIdentityChanged = previousRoute.pathname !== pathname || previousRoute.channelId !== params.channelId;
-  exitRouteRef.current = { pathname, focused: routeFocused, channelId: params.channelId, revision: previousRoute.revision + (routeIdentityChanged ? 1 : 0) };
   const channelsButtonRef = useRef<any>(null);
   const overlayOpenerRef = useRef<any>(null);
   const saveAudioReportRef = useRef<() => void>(() => undefined);
@@ -148,23 +137,6 @@ export default function PlayerScreen() {
   const subtitleDefaultLanguageRef = useRef(subtitleDefaultLanguage);
   const subtitleAutoAppliedRef = useRef<string | null>(null);
   const audioAutoAppliedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; generationRef.current += 1; };
-  }, []);
-
-  const exitPlayer = useCallback((navigate: () => void) => {
-    const routeRevision = exitRouteRef.current.revision;
-    void requestPlayerExit({
-      inFlight: exitInFlightRef,
-      generation: generationRef,
-      isCurrentRoute: () => mountedRef.current && exitRouteRef.current.revision === routeRevision &&
-        exitRouteRef.current.focused && exitRouteRef.current.pathname === "/player",
-      stop: stopFullscreenSession,
-      navigate,
-    }).catch(() => undefined);
-  }, []);
 
   const isTV = Platform.OS !== "web" && Platform.isTV;
   useEffect(() => {
@@ -209,11 +181,13 @@ export default function PlayerScreen() {
     const endsAt = Date.now() + sleepTimerMinutes * 60_000;
     const timer = setInterval(() => {
       if (Date.now() < endsAt || exitInFlightRef.current) return;
+      exitInFlightRef.current = true;
       setSleepTimerMinutes(0);
-      exitPlayer(() => router.replace("/" as any));
+      generationRef.current += 1;
+      void stopFullscreenSession().then(() => router.replace("/" as any));
     }, 15_000);
     return () => clearInterval(timer);
-  }, [exitPlayer, router, setSleepTimerMinutes, sleepTimerMinutes]);
+  }, [router, setSleepTimerMinutes, sleepTimerMinutes]);
 
   useEffect(() => { textTrackIdRef.current = textTrackId; }, [textTrackId]);
   useEffect(() => { subtitleDefaultLanguageRef.current = subtitleDefaultLanguage; }, [subtitleDefaultLanguage]);
@@ -293,35 +267,23 @@ export default function PlayerScreen() {
     revealControls({ claimChannelsFocus: false });
   }, [revealControls, showNotice]);
 
+  useEffect(() => {
+    if (!isTV) return;
+    return addPlayerQuickCommandListener((command) => {
+      if (command === "CYCLE_ASPECT") return cycleScaleMode();
+      if (command === "OPEN_TRACKS") {
+        controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
+      }
+      if (command === "PREVIOUS_CHANNEL") return returnToPreviousChannel();
+      if (command === "SAVE_DIAGNOSTICS") saveAudioReportRef.current();
+    });
+  }, [cycleScaleMode, isTV, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
+
   const restartStream = useCallback(() => {
     if (!hasStream || exitInFlightRef.current || failReason === "unsupported-protocol") return;
     generationRef.current += 1; setStatus("loading"); setFailReason(null); showNotice(`Reconnecting ${channel?.name || "stream"}`); setRetryToken((value) => value + 1);
   }, [channel?.name, failReason, hasStream, showNotice]);
   const retryNow = useCallback(() => restartStream(), [restartStream]);
-
-  const retryAfterCrash = useCallback((reset: () => void) => {
-    if (crashRetryInFlightRef.current || exitInFlightRef.current || !mountedRef.current) return;
-    crashRetryInFlightRef.current = true;
-    setCrashRetryPending(true);
-    const generation = ++generationRef.current;
-    const routeRevision = exitRouteRef.current.revision;
-    const isCurrent = () => mountedRef.current && !exitInFlightRef.current && generation === generationRef.current &&
-      routeRevision === exitRouteRef.current.revision && exitRouteRef.current.pathname === "/player" && exitRouteRef.current.focused;
-    const reportReleaseFailure = () => {
-      if (!isCurrent()) return;
-      setStatus("error"); setFailReason("stream-error");
-      showNotice("The previous player is still stopping. Wait a moment, then retry.");
-    };
-    setStatus("loading"); setFailReason(null);
-    void stopAllPlaybackSessions("crashed").then((outcome) => {
-      if (!isCurrent()) return;
-      if (outcome.status === "completed") { setRetryToken((value) => value + 1); reset(); }
-      else if (outcome.status === "failed") reportReleaseFailure();
-    }).catch(reportReleaseFailure).finally(() => {
-      crashRetryInFlightRef.current = false;
-      if (mountedRef.current) setCrashRetryPending(false);
-    });
-  }, [showNotice]);
 
   useEffect(() => { controlsRef.current = controls; }, [controls]);
   useEffect(() => { channelsOpenRef.current = channelsOpen; }, [channelsOpen]);
@@ -341,11 +303,7 @@ export default function PlayerScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryToken]);
 
-  useEffect(() => () => {
-    // Explicit Back/Guide/Settings/sleep exit already awaits the release before
-    // navigating. Do not enqueue a second owner lookup/release on unmount.
-    if (!exitInFlightRef.current) void stopFullscreenSession();
-  }, []);
+  useEffect(() => () => { void stopFullscreenSession(); }, [setTracksOpen]);
 
   useEffect(() => {
     if (!controls) return;
@@ -386,18 +344,20 @@ export default function PlayerScreen() {
 
   const stopAndExit = useCallback(() => {
     if (exitInFlightRef.current) return;
+    exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
     const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
+    generationRef.current += 1;
     const returnToGuide = params.returnToGuide === "1" && !!currentChannelId;
     const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
+    if (returnToGuide && currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
     // Do not mount the Guide/home tree while MediaCodec/ExoPlayer is still
     // releasing. That overlap was a reproducible peak-RAM/lifecycle crash path.
-    exitPlayer(() => {
-      if (returnToGuide && currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
+    void stopFullscreenSession().then(() => {
       if (returnToGuide) router.replace("/guide" as any);
       else router.back();
     });
-  }, [exitPlayer, params.returnGuideGroup, params.returnToGuide, router]);
+  }, [params.returnGuideGroup, params.returnToGuide, router]);
 
   const handleStreamStatus = useCallback((nextStatus: StreamStatus, reason?: SessionFailReason | null) => {
     setStatus(nextStatus);
@@ -431,32 +391,14 @@ export default function PlayerScreen() {
 
   const goGuide = useCallback(() => {
     if (exitInFlightRef.current) return;
+    exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
     const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
     const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
-    exitPlayer(() => {
-      if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
-      router.replace("/guide" as any);
-    });
-  }, [exitPlayer, params.returnGuideGroup, router]);
-
-  const openSettings = useCallback(() => {
-    exitPlayer(() => router.replace("/settings" as any));
-  }, [exitPlayer, router]);
-
-  useEffect(() => {
-    return addPlayerQuickCommandListener((command) => {
-      if (exitInFlightRef.current || !mountedRef.current || !exitRouteRef.current.focused || exitRouteRef.current.pathname !== "/player") return;
-      if (command === "GO_GUIDE") return goGuide();
-      if (command === "OPEN_SETTINGS") return openSettings();
-      if (command === "CYCLE_ASPECT") return cycleScaleMode();
-      if (command === "OPEN_TRACKS") {
-        controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
-      }
-      if (command === "PREVIOUS_CHANNEL") return returnToPreviousChannel();
-      if (command === "SAVE_DIAGNOSTICS") saveAudioReportRef.current();
-    });
-  }, [cycleScaleMode, goGuide, openSettings, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
+    if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
+    generationRef.current += 1;
+    void stopFullscreenSession().then(() => router.replace("/guide" as any));
+  }, [params.returnGuideGroup, router]);
 
   const runRemoteAction = useCallback((action: PlayerRemoteAction) => {
     if (exitInFlightRef.current) return;
@@ -490,30 +432,10 @@ export default function PlayerScreen() {
   useEffect(() => {
     const routeChannelId = String(params.channelId || "").trim();
     if (!routeChannelId || routeChannelId === lastRouteChannelIdRef.current) return;
-    let canceled = false;
-    const applyRouteChannel = (outcome: PlaybackStopOutcome) => {
-      if (canceled || !mountedRef.current || exitInFlightRef.current || !exitRouteRef.current.focused ||
-        exitRouteRef.current.pathname !== "/player" || String(exitRouteRef.current.channelId || "").trim() !== routeChannelId) return;
-      if (outcome.status !== "completed") {
-        if (outcome.status === "failed") {
-          // Consume this route request so a status render does not retry it.
-          // Another explicit Play action can ask native to acknowledge cleanup.
-          lastRouteChannelIdRef.current = routeChannelId;
-          setStatus("error"); setFailReason("stream-error");
-          showNotice("The previous player is still stopping. Wait a moment, then retry.");
-        }
-        return;
-      }
-      lastRouteChannelIdRef.current = routeChannelId;
-      if (routeChannelId === channelIdRef.current) return;
-      changeChannel(routeChannelId);
-    };
-    // A replacement player route can arrive while its predecessor is stopping.
-    // The old exit first cancels and releases its flag; only then apply the new
-    // route's channel instead of dropping it behind exitInFlightRef.
-    void waitForFullscreenRelease().then(applyRouteChannel);
-    return () => { canceled = true; };
-  }, [changeChannel, params.channelId, pathname, routeFocused, showNotice]);
+    lastRouteChannelIdRef.current = routeChannelId;
+    if (routeChannelId === channelIdRef.current) return;
+    changeChannel(routeChannelId);
+  }, [changeChannel, params.channelId]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -532,13 +454,17 @@ export default function PlayerScreen() {
       <RNStatusBar hidden />
       {hasStream ? (
         <ErrorBoundary
+          onReset={() => {
+            const generation = generationRef.current + 1; generationRef.current = generation; setStatus("loading"); setFailReason(null);
+            void stopAllPlaybackSessions("crashed").then(() => { if (generation === generationRef.current) setRetryToken((value) => value + 1); });
+          }}
           fallback={(reset) => (
             <View style={styles.errorOverlay}>
               <Ionicons name="warning-outline" size={32} color={tvColors.purpleSoft} />
               <Text style={styles.errorTitle}>Player crashed</Text>
               <Text style={styles.errorText}>The decoder hit an unexpected error. Retry keeps you on this channel.</Text>
-              <Pressable hasTVPreferredFocus accessibilityState={{ busy: crashRetryPending, disabled: crashRetryPending }} onPress={() => retryAfterCrash(reset)} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
-                <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>{crashRetryPending ? "Stopping player..." : "Retry Player"}</Text>
+              <Pressable hasTVPreferredFocus onPress={reset} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
+                <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>Retry Player</Text>
               </Pressable>
             </View>
           )}

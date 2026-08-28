@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import {
   ActivityIndicator,
@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
-import { useAppForeground } from "@/src/hooks/useAppForeground";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import {
@@ -41,7 +40,7 @@ import {
   setGuideFocusedProgram,
   useGuideSelection,
 } from "@/src/core/guideSelectionStore";
-import { hasPlaybackReleaseFailure, stopPreviewSession, subscribePlaybackOwnership } from "@/src/core/playbackSession";
+import { stopPreviewSession } from "@/src/core/playbackSession";
 import { detectStreamKind, isNativeMedia3SupportedStreamKind, parsePipeHeaders } from "@/src/core/streamPolicy";
 import { getPowerProfileTuning } from "@/src/core/devicePowerProfile";
 import { shouldUseLowRamTuning, useDeviceMemoryProfile } from "@/src/core/deviceMemoryProfile";
@@ -115,8 +114,6 @@ function GuideSelectionPreview({
   onToggleMute,
   previewId,
   previewStatus,
-  previewMemoryPaused,
-  previewReleaseBlocked,
   previewEpoch,
   onPreviewStatus,
   onPlay,
@@ -141,8 +138,6 @@ function GuideSelectionPreview({
   onToggleMute: () => void;
   previewId: string | null;
   previewStatus: StreamStatus;
-  previewMemoryPaused: boolean;
-  previewReleaseBlocked: boolean;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
   onPlay: (channel: Channel) => void;
@@ -177,7 +172,6 @@ function GuideSelectionPreview({
   const unsupportedPreviewProtocol = !isPreviewProtocolSupported(channel);
   const previewVisible =
     !hidePreview &&
-    !previewMemoryPaused &&
     !unsupportedPreviewProtocol &&
     !!channel?.url &&
     previewId === channel.id;
@@ -209,25 +203,11 @@ function GuideSelectionPreview({
         focusRequestToken={focusRequestToken}
         guideFocusTag={guideFocusTag}
       />
-      {!hidePreview && !previewReleaseBlocked && unsupportedPreviewProtocol ? (
+      {!hidePreview && unsupportedPreviewProtocol ? (
         <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-unsupported-protocol">
           <Ionicons name="warning-outline" size={22} color={tvColors.purpleSoft} />
           <Text style={styles.unsupportedPreviewTitle}>Unsupported stream protocol</Text>
           <Text style={styles.unsupportedPreviewText}>This build uses Media3. Ask your provider for an HTTP(S) HLS, DASH, or MPEG-TS URL.</Text>
-        </View>
-      ) : null}
-      {!hidePreview && !previewReleaseBlocked && !unsupportedPreviewProtocol && previewMemoryPaused ? (
-        <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-memory-paused">
-          <Ionicons name="pause-circle-outline" size={22} color={tvColors.purpleSoft} />
-          <Text style={styles.unsupportedPreviewTitle}>Preview paused to free memory</Text>
-          <Text style={styles.unsupportedPreviewText}>Select another channel or press Play to watch fullscreen.</Text>
-        </View>
-      ) : null}
-      {!hidePreview && previewReleaseBlocked ? (
-        <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-release-blocked">
-          <Ionicons name="pause-circle-outline" size={22} color={tvColors.purpleSoft} />
-          <Text style={styles.unsupportedPreviewTitle}>Previous player could not finish stopping</Text>
-          <Text style={styles.unsupportedPreviewText}>Press Play to try again. If this persists, force-stop CharmIPTV in Android Settings, then reopen it.</Text>
         </View>
       ) : null}
     </View>
@@ -237,32 +217,22 @@ function GuideSelectionPreview({
 function PurpleGuideScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const appForeground = useAppForeground();
-  const guideForeground = isFocused && appForeground;
-  const guideForegroundRef = useRef(guideForeground);
-  guideForegroundRef.current = guideForeground;
-  // Observe only the retained failure flag, not every buffering/ownership
-  // revision. This changes the notice without resetting preview identity.
-  const previewReleaseBlocked = useSyncExternalStore(
-    subscribePlaybackOwnership, hasPlaybackReleaseFailure, hasPlaybackReleaseFailure,
-  );
   const { drawerOpen, openDrawer, closeDrawer } = usePurpleTvDrawer();
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  useEffect(() => {
-    if (!guideForeground) return;
-    guideForegroundRef.current = true;
-    setGuideScreenActive(true);
-    // The overlay-aware ownership effect below chooses Guide, drawers or PIN.
-    // An unconditional claim here would steal an open drawer on app resume.
-    return () => {
-      guideForegroundRef.current = false;
-      setGuideScreenActive(false);
-      setGuideNavigationActive(false);
-      resetRemoteContextIfOwned("guide", "default");
-    };
-  }, [guideForeground]);
+  useFocusEffect(
+    useCallback(() => {
+      setGuideScreenActive(true);
+      setRemoteContext("guide");
+      setGuideNavigationActive(true);
+      return () => {
+        setGuideScreenActive(false);
+        setGuideNavigationActive(false);
+        resetRemoteContextIfOwned("guide", "default");
+      };
+    }, []),
+  );
   const {
     channels,
     windowStart,
@@ -332,7 +302,6 @@ function PurpleGuideScreenContent() {
   const [group, setGroup] = useState(() => guideSessionGroup);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<StreamStatus>("loading");
-  const [previewMemoryPaused, setPreviewMemoryPaused] = useState(false);
   const [previewActionsFocused, setPreviewActionsFocused] = useState(false);
   const [previewFocusRequestToken, setPreviewFocusRequestToken] = useState(0);
   const [nativeGuideFocusTag, setNativeGuideFocusTag] = useState<number | null>(null);
@@ -343,12 +312,9 @@ function PurpleGuideScreenContent() {
   const [pinDigits, setPinDigits] = useState("");
   const [pinError, setPinError] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewRequestGenerationRef = useRef(0);
-  const previewMemoryPauseRef = useRef<{ channelId: string | null } | null>(null);
   const surfReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memoryLogoRestoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const runwayPatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewFocusFrame = useRef<number | null>(null);
   const pendingRunwayPatchRef = useRef<{ ids: string[]; priorityIds: string[] } | null>(null);
   const groupChangedAt = useRef(0);
   const bootRetryRef = useRef(0);
@@ -369,9 +335,6 @@ function PurpleGuideScreenContent() {
   const startPreferenceAppliedRef = useRef(false);
 
   const cancelGuideTransientTimers = useCallback(() => {
-    previewRequestGenerationRef.current += 1;
-    if (previewFocusFrame.current != null) cancelAnimationFrame(previewFocusFrame.current);
-    previewFocusFrame.current = null;
     if (previewTimer.current) clearTimeout(previewTimer.current);
     if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
     if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
@@ -382,16 +345,14 @@ function PurpleGuideScreenContent() {
     rapidSurfUntilRef.current = 0;
   }, []);
 
-  const quiesceGuideForTransition = useCallback((releaseCache: boolean, preserveRunway = false) => {
+  const quiesceGuideForTransition = useCallback((releaseCache: boolean) => {
     cancelGuideTransientTimers();
-    if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
-    memoryLogoRestoreTimer.current = null;
     setPreviewId(null);
     setPreviewStatus("loading");
     setPreviewActionsFocused(false);
     setViewportGuideChannelIds(null);
     setPriorityMatchChannelIds([]);
-    if (!preserveRunway) lastRunwayRef.current = { ids: [], priority: [], pageSize: 8 };
+    lastRunwayRef.current = { ids: [], priority: [], pageSize: 8 };
     void stopPreviewSession("superseded");
     if (releaseCache) releaseGuideSlidingCache();
   }, [cancelGuideTransientTimers, releaseGuideSlidingCache]);
@@ -401,22 +362,15 @@ function PurpleGuideScreenContent() {
   }, []);
   useEffect(
     () => subscribeAndroidMemoryPressure((pressure) => {
-      // Store/native listeners trim bounded programme and logo caches for every
-      // pressure level. A moderate/UI-hidden hint must not cancel a visible or
-      // pending tune. Actual route/app background already quiesces the Guide.
-      if (pressure !== "critical") return;
-      previewMemoryPauseRef.current = { channelId: guideSessionChannelId };
-      setPreviewMemoryPaused(true);
       cancelGuideTransientTimers();
       if (memoryLogoRestoreTimer.current) clearTimeout(memoryLogoRestoreTimer.current);
       setPreviewId(null);
       void stopPreviewSession("superseded");
       setSurfLogosSuppressed(true);
-      if (!guideForegroundRef.current) return;
-      memoryLogoRestoreTimer.current = setTimeout(() => {
-        memoryLogoRestoreTimer.current = null;
-        if (guideForegroundRef.current) setSurfLogosSuppressed(false);
-      }, 12_000);
+      memoryLogoRestoreTimer.current = setTimeout(
+        () => setSurfLogosSuppressed(false),
+        pressure === "critical" ? 12_000 : 4_000,
+      );
     }),
     [cancelGuideTransientTimers],
   );
@@ -458,7 +412,7 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (!guideForeground) {
+    if (!isFocused) {
       setQuickActionsOpen(false);
       return;
     }
@@ -469,10 +423,10 @@ function PurpleGuideScreenContent() {
       sub.remove();
       setQuickActionsOpen(false);
     };
-  }, [guideForeground]);
+  }, [isFocused]);
 
   useEffect(() => {
-    if (!guideForeground) {
+    if (!isFocused) {
       setGuideNavigationActive(false);
       if (pinModalOwnedRef.current) {
         pinModalOwnedRef.current = false;
@@ -496,16 +450,16 @@ function PurpleGuideScreenContent() {
       setRemoteContext("guide");
       setGuideNavigationActive(true);
     }
-  }, [activeProgram, drawerOpen, groupDrawerOpen, guideForeground, pinPromptGroup, quickActionsOpen]);
+  }, [activeProgram, drawerOpen, groupDrawerOpen, isFocused, pinPromptGroup, quickActionsOpen]);
 
   useEffect(() => {
-    if (!guideForeground) return;
+    if (!isFocused) return;
     const sub = DeviceEventEmitter.addListener("CharmGuideGroupsRequestOpen", () => {
-      closeDrawer({ force: true });
+      closeDrawer();
       setGroupDrawerOpen(true);
     });
     return () => sub.remove();
-  }, [closeDrawer, guideForeground]);
+  }, [closeDrawer, isFocused]);
 
   useFocusEffect(
     useCallback(() => {
@@ -514,19 +468,19 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (!guideForeground || loading || refreshing || channels.length > 0) return;
+    if (loading || refreshing || channels.length > 0) return;
     if (bootRetryRef.current >= 1) return;
     bootRetryRef.current += 1;
     const timer = setTimeout(() => void hardRefresh(), 5000);
     return () => clearTimeout(timer);
-  }, [guideForeground, loading, refreshing, channels.length, hardRefresh]);
+  }, [loading, refreshing, channels.length, hardRefresh]);
 
   useEffect(() => {
-    if (!guideForeground) return;
+    if (!isFocused) return;
     setNow(new Date().toISOString());
     const timer = setInterval(() => setNow(new Date().toISOString()), 30_000);
     return () => clearInterval(timer);
-  }, [guideForeground]);
+  }, [isFocused]);
 
   useEffect(
     () => () => {
@@ -540,38 +494,32 @@ function PurpleGuideScreenContent() {
     [cancelGuideTransientTimers],
   );
 
-  const runwayLifecycleRef = useRef({ channelsCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache });
-  runwayLifecycleRef.current = { channelsCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache };
-  useEffect(() => {
-    if (!guideForeground) return;
-    if (previewMemoryPauseRef.current) {
-      previewMemoryPauseRef.current = null;
-      setPreviewMemoryPaused(false);
-      // One real foreground transition may resume the preserved selection. A
-      // fresh native restore also covers an active event queued before effects.
-      setResetToken((value) => value + 1);
-    }
-    const lifecycle = runwayLifecycleRef.current;
-    setSurfLogosSuppressed(false);
-    const last = lastRunwayRef.current;
-    if (!peekGuideJump() && last.ids.length) {
-      setViewportGuideChannelIds(last.ids);
-      setPriorityMatchChannelIds(
-        lifecycle.channelsCount >= 400
-          ? Array.from(new Set([...last.priority, ...last.ids])).slice(0, 400)
-          : [],
-      );
-      lifecycle.retainGuideSlidingCache(
-        expandRunwayKeepSet(orderedFilteredIdsRef.current, last.ids, last.pageSize, 1, filteredIdIndexRef.current),
-      );
-      void lifecycle.patchProgramsForChannelIds(last.ids, last.priority);
-    }
-    return () => {
-      // Preserve the runway for a background/foreground round trip. A group or
-      // channel transition still deliberately clears it through the same helper.
-      runwayLifecycleRef.current.quiesceGuideForTransition(true, true);
-    };
-  }, [guideForeground]);
+  useFocusEffect(
+    useCallback(() => {
+      const last = lastRunwayRef.current;
+      if (!peekGuideJump() && last.ids.length) {
+        setViewportGuideChannelIds(last.ids);
+        setPriorityMatchChannelIds(
+          channels.length >= 400
+            ? Array.from(new Set([...last.priority, ...last.ids])).slice(0, 400)
+            : [],
+        );
+        retainGuideSlidingCache(
+          expandRunwayKeepSet(
+            orderedFilteredIdsRef.current,
+            last.ids,
+            last.pageSize,
+            1,
+            filteredIdIndexRef.current,
+          ),
+        );
+        void patchProgramsForChannelIds(last.ids, last.priority);
+      }
+      return () => {
+        quiesceGuideForTransition(true);
+      };
+    }, [channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache]),
+  );
 
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const recentIdSet = useMemo(() => new Set(recentIds), [recentIds]);
@@ -613,7 +561,7 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (startPreferenceAppliedRef.current || !guideForeground || !channels.length) return;
+    if (startPreferenceAppliedRef.current || !isFocused || !channels.length) return;
     if (peekGuideJump()) return;
     startPreferenceAppliedRef.current = true;
     // A remembered channel/group means this is a session restore (for example,
@@ -632,7 +580,7 @@ function PurpleGuideScreenContent() {
     resetGuideSelection(guideSessionChannelId);
     setRestoreTimeMs(null);
     setResetToken((value) => value + 1);
-  }, [channels.length, group, groups, guideForeground, overflowGroups, startGroup]);
+  }, [channels.length, group, groups, isFocused, overflowGroups, startGroup]);
 
   const filteredMeta = useMemo(() => {
     let list = filterChannelsByGroup(channels, group, {
@@ -674,7 +622,6 @@ function PurpleGuideScreenContent() {
   filteredIdIndexRef.current = filteredIdIndex;
 
   const onViewportChannelIds = useCallback((ids: string[], priorityIds: string[] = [], pageSize = 8, velocity = 0) => {
-    if (!guideForegroundRef.current) return;
     const focusIndex = Math.max(0, ids.indexOf(priorityIds[0] || ""));
     const rapid = velocity > 0 || isGuideSurfing();
     const dataIds = rapid
@@ -703,7 +650,7 @@ function PurpleGuideScreenContent() {
       runwayPatchTimer.current = null;
       const pending = pendingRunwayPatchRef.current;
       pendingRunwayPatchRef.current = null;
-      if (!pending || !guideForegroundRef.current) return;
+      if (!pending) return;
       void patchProgramsForChannelIds(pending.ids, pending.priorityIds);
     }, delay);
   }, [
@@ -716,7 +663,7 @@ function PurpleGuideScreenContent() {
 
   const viewportSeedKeyRef = useRef("");
   useEffect(() => {
-    if (!guideForeground || !filtered.length) return;
+    if (!isFocused || !filtered.length) return;
     const key = `${group}:${resetToken}:${powerProfile}`;
     if (viewportSeedKeyRef.current === key) return;
     viewportSeedKeyRef.current = key;
@@ -762,7 +709,7 @@ function PurpleGuideScreenContent() {
     filteredIdIndex,
     group,
     guideDensity,
-    guideForeground,
+    isFocused,
     orderedFilteredIds,
     patchProgramsForChannelIds,
     powerProfile,
@@ -811,16 +758,14 @@ function PurpleGuideScreenContent() {
       : powerTuning.surfSettleExtraMs;
 
   const schedulePreview = useCallback((requestedId: string, delay: number, hasUrl: boolean) => {
-    const generation = ++previewRequestGenerationRef.current;
     if (previewTimer.current) {
       clearTimeout(previewTimer.current);
       previewTimer.current = null;
     }
-    if (!guideForegroundRef.current || safePreviewMode === "off" || !hasUrl) {
+    if (safePreviewMode === "off" || !hasUrl) {
       setPreviewId(null);
       return;
     }
-    if (previewMemoryPauseRef.current) return;
     // Unsupported transports cannot recover through another native mount.
     // Re-evaluate the current URL so a refreshed provider entry can play later.
     if (!isPreviewProtocolSupported(channelById(requestedId))) {
@@ -829,10 +774,7 @@ function PurpleGuideScreenContent() {
       return;
     }
     previewTimer.current = setTimeout(() => {
-      if (generation !== previewRequestGenerationRef.current) return;
       previewTimer.current = null;
-      if (!guideForegroundRef.current) return;
-      if (previewMemoryPauseRef.current) return;
       setPreviewStatus("loading");
       setPreviewEpoch((value) => value + 1);
       setPreviewId(requestedId);
@@ -846,21 +788,9 @@ function PurpleGuideScreenContent() {
   );
   const armPreviewForChannel = useCallback(
     (channel: Channel) => {
-      if (!guideForegroundRef.current) return;
       if (previewTimer.current) clearTimeout(previewTimer.current);
-      previewTimer.current = null;
-      previewRequestGenerationRef.current += 1;
       const requestedId = channel.id;
       guideSessionChannelId = requestedId;
-      const memoryPause = previewMemoryPauseRef.current;
-      if (memoryPause) {
-        // EPG refresh/restore events for the same channel are not user retries.
-        // If pressure preceded the first selection, record it without tuning.
-        if (memoryPause.channelId == null) memoryPause.channelId = requestedId;
-        if (memoryPause.channelId === requestedId) return;
-        previewMemoryPauseRef.current = null;
-        setPreviewMemoryPaused(false);
-      }
       if (!isPreviewProtocolSupported(channel)) {
         setPreviewId(null);
         setPreviewStatus("error");
@@ -942,9 +872,6 @@ function PurpleGuideScreenContent() {
 
   const applyGroup = useCallback((next: string) => {
     void Haptics.selectionAsync().catch(() => undefined);
-    // Explicit group selection is an allowed retry, unlike a cache timer.
-    previewMemoryPauseRef.current = null;
-    setPreviewMemoryPaused(false);
     if (next !== group) quiesceGuideForTransition(true);
     else cancelGuideTransientTimers();
     groupChangedAt.current = Date.now();
@@ -1044,12 +971,9 @@ function PurpleGuideScreenContent() {
   }, [activeProgram, drawerOpen, groupDrawerOpen]);
 
   const onGuideUpBoundary = useCallback(() => {
-    if (!guideForegroundRef.current) return;
     setPreviewFocusRequestToken((value) => value + 1);
-    if (previewFocusFrame.current != null) cancelAnimationFrame(previewFocusFrame.current);
-    previewFocusFrame.current = requestAnimationFrame(() => {
-      previewFocusFrame.current = null;
-      if (guideForegroundRef.current) focusGuidePreviewSurface();
+    requestAnimationFrame(() => {
+      focusGuidePreviewSurface();
     });
   }, []);
 
@@ -1110,7 +1034,7 @@ function PurpleGuideScreenContent() {
     >
       <View style={styles.page}>
         <PurpleGuideGroupDrawer
-          open={groupDrawerOpen && guideForeground}
+          open={groupDrawerOpen}
           groups={drawerGroups}
           onCloseToGuide={() => setGroupDrawerOpen(false)}
           onOpenMainDrawer={() => {
@@ -1155,15 +1079,13 @@ function PurpleGuideScreenContent() {
               now={now}
               channelNumberById={channelNumberById}
               showChannelNumbers={channelNumbers}
-              showLogos={guideForeground && channelLogos && !surfLogosSuppressed}
+              showLogos={isFocused && channelLogos && !surfLogosSuppressed}
               favoriteSet={favoriteSet}
               hidePreview={hidePreview}
               muted={mutePreview}
               onToggleMute={() => setMutePreview(!mutePreview)}
-              previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !guideForeground ? null : previewId}
+              previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
               previewStatus={previewStatus}
-              previewMemoryPaused={previewMemoryPaused}
-              previewReleaseBlocked={previewReleaseBlocked}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
               onPlay={play}
@@ -1184,7 +1106,7 @@ function PurpleGuideScreenContent() {
                 channels={filtered}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
-                active={guideForeground && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
+                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
                 restoreChannelId={guideSessionChannelId}
                 restoreTimeMs={restoreTimeMs}
                 reloadGeneration={resetToken}

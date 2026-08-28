@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { findNodeHandle, Platform, requireNativeComponent, type NativeSyntheticEvent, View } from "react-native";
 import type { Channel, Program } from "@/src/api";
 import { setGuideFocusedChannel, setGuideFocusedProgram } from "@/src/core/guideSelectionStore";
@@ -37,14 +37,6 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   onLeftBoundary,
   onUpBoundary,
 }: Props) {
-  // Events already queued on the bridge can arrive after an overlay/background
-  // transition disabled native input. They must not re-arm preview or EPG work.
-  const activeRef = useRef(active);
-  activeRef.current = active;
-  useEffect(() => {
-    activeRef.current = active;
-    return () => { activeRef.current = false; };
-  }, [active]);
   // Build the lookup directly. `new Map(channels.map(...))` materialized a
   // second 6k-entry tuple array before Map construction on large playlists.
   const channelById = useMemo(() => {
@@ -93,7 +85,6 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   }, [validRestoreChannelId, validRestoreTimeMs]);
 
   const handleSelectionChange = useCallback((event: NativeSyntheticEvent<SelectionEvent>) => {
-    if (!activeRef.current) return;
     const value = event.nativeEvent;
     const channel = channelById.get(value.channelId);
     if (!channel) return;
@@ -119,17 +110,9 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   }, [channelById, onChannelFocus, onProgramFocus, onProgramPress]);
 
   const handleRunwayChange = useCallback((event: NativeSyntheticEvent<RunwayEvent>) => {
-    if (!activeRef.current) return;
     const value = event.nativeEvent;
     onViewportChannelIds(value.ids || [], value.priorityIds || [], value.pageSize || 8, Math.max(0, value.velocity || 0));
   }, [onViewportChannelIds]);
-
-  const handleLeftBoundary = useCallback(() => {
-    if (activeRef.current) onLeftBoundary();
-  }, [onLeftBoundary]);
-  const handleUpBoundary = useCallback(() => {
-    if (activeRef.current) onUpBoundary();
-  }, [onUpBoundary]);
 
   const bindNativeGuideRef = useCallback((node: unknown) => {
     const tag = node ? findNodeHandle(node as any) : null;
@@ -151,8 +134,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       clock24h={clock24h}
       onSelectionChange={handleSelectionChange}
       onRunwayChange={handleRunwayChange}
-      onLeftBoundary={handleLeftBoundary}
-      onUpBoundary={handleUpBoundary}
+      onLeftBoundary={onLeftBoundary}
+      onUpBoundary={onUpBoundary}
     />
   );
 });
