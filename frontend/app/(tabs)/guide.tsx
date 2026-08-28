@@ -41,6 +41,7 @@ import {
   useGuideSelection,
 } from "@/src/core/guideSelectionStore";
 import { stopPreviewSession } from "@/src/core/playbackSession";
+import { detectStreamKind, isNativeMedia3SupportedStreamKind, parsePipeHeaders } from "@/src/core/streamPolicy";
 import { getPowerProfileTuning } from "@/src/core/devicePowerProfile";
 import { shouldUseLowRamTuning, useDeviceMemoryProfile } from "@/src/core/deviceMemoryProfile";
 import { channelHasOwnedEpgMatch } from "@/src/core/epgUserOverrides";
@@ -89,6 +90,11 @@ function rememberGuideGroupChannel(groupName: string, channelId: string): void {
   }
 }
 
+function isPreviewProtocolSupported(channel: Channel | null | undefined): boolean {
+  if (!channel?.url) return true;
+  return isNativeMedia3SupportedStreamKind(detectStreamKind(parsePipeHeaders(channel.url).uri, channel.stream_type));
+}
+
 /**
  * The only React subtree subscribed to logical Guide selection. The native
  * canvas and screen shell therefore stay render-stable while the cursor moves;
@@ -110,7 +116,6 @@ function GuideSelectionPreview({
   previewStatus,
   previewEpoch,
   onPreviewStatus,
-  onPreviewErrorRemount,
   onPlay,
   onFavorite,
   onOpenReminders,
@@ -135,7 +140,6 @@ function GuideSelectionPreview({
   previewStatus: StreamStatus;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
-  onPreviewErrorRemount: () => void;
   onPlay: (channel: Channel) => void;
   onFavorite: (channelId: string) => void;
   onOpenReminders: () => void;
@@ -165,38 +169,48 @@ function GuideSelectionPreview({
       nextProgram: index >= 0 ? programs[index + 1] : undefined,
     };
   }, [channel, liveCurrent, liveNext, programs, selection]);
+  const unsupportedPreviewProtocol = !isPreviewProtocolSupported(channel);
   const previewVisible =
     !hidePreview &&
+    !unsupportedPreviewProtocol &&
     !!channel?.url &&
     previewId === channel.id;
 
   return (
-    <GuidePreviewRail
-      width={width}
-      channel={channel}
-      current={displayedProgram}
-      next={nextProgram}
-      now={now}
-      channelNumber={channel ? channelNumberById[channel.id] : undefined}
-      showChannelNumbers={showChannelNumbers}
-      showLogos={showLogos}
-      isFavorite={!!channel && favoriteSet.has(channel.id)}
-      hidePreview={hidePreview}
-      muted={muted}
-      onToggleMute={onToggleMute}
-      previewVisible={previewVisible}
-      previewEpoch={previewEpoch}
-      onPreviewStatus={onPreviewStatus}
-      onPreviewErrorRemount={onPreviewErrorRemount}
-      onPlay={() => channel && onPlay(channel)}
-      onFavorite={() => channel && onFavorite(channel.id)}
-      onOpenReminders={onOpenReminders}
-      onHideToggle={onHideToggle}
-      onOpenDrawer={onOpenDrawer}
-      onActionsFocusChange={onActionsFocusChange}
-      focusRequestToken={focusRequestToken}
-      guideFocusTag={guideFocusTag}
-    />
+    <View style={styles.previewRailContainer}>
+      <GuidePreviewRail
+        width={width}
+        channel={channel}
+        current={displayedProgram}
+        next={nextProgram}
+        now={now}
+        channelNumber={channel ? channelNumberById[channel.id] : undefined}
+        showChannelNumbers={showChannelNumbers}
+        showLogos={showLogos}
+        isFavorite={!!channel && favoriteSet.has(channel.id)}
+        hidePreview={hidePreview}
+        muted={muted}
+        onToggleMute={onToggleMute}
+        previewVisible={previewVisible}
+        previewEpoch={previewEpoch}
+        onPreviewStatus={onPreviewStatus}
+        onPlay={() => channel && onPlay(channel)}
+        onFavorite={() => channel && onFavorite(channel.id)}
+        onOpenReminders={onOpenReminders}
+        onHideToggle={onHideToggle}
+        onOpenDrawer={onOpenDrawer}
+        onActionsFocusChange={onActionsFocusChange}
+        focusRequestToken={focusRequestToken}
+        guideFocusTag={guideFocusTag}
+      />
+      {!hidePreview && unsupportedPreviewProtocol ? (
+        <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-unsupported-protocol">
+          <Ionicons name="warning-outline" size={22} color={tvColors.purpleSoft} />
+          <Text style={styles.unsupportedPreviewTitle}>Unsupported stream protocol</Text>
+          <Text style={styles.unsupportedPreviewText}>This build uses Media3. Ask your provider for an HTTP(S) HLS, DASH, or MPEG-TS URL.</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -298,7 +312,6 @@ function PurpleGuideScreenContent() {
   const [pinDigits, setPinDigits] = useState("");
   const [pinError, setPinError] = useState(false);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewRecoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const surfReleaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const memoryLogoRestoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const runwayPatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -323,11 +336,9 @@ function PurpleGuideScreenContent() {
 
   const cancelGuideTransientTimers = useCallback(() => {
     if (previewTimer.current) clearTimeout(previewTimer.current);
-    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
     if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
     if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
     previewTimer.current = null;
-    previewRecoverTimer.current = null;
     surfReleaseTimer.current = null;
     runwayPatchTimer.current = null;
     pendingRunwayPatchRef.current = null;
@@ -755,6 +766,13 @@ function PurpleGuideScreenContent() {
       setPreviewId(null);
       return;
     }
+    // Unsupported transports cannot recover through another native mount.
+    // Re-evaluate the current URL so a refreshed provider entry can play later.
+    if (!isPreviewProtocolSupported(channelById(requestedId))) {
+      setPreviewId(null);
+      setPreviewStatus("error");
+      return;
+    }
     previewTimer.current = setTimeout(() => {
       previewTimer.current = null;
       setPreviewStatus("loading");
@@ -762,7 +780,7 @@ function PurpleGuideScreenContent() {
       setPreviewId(requestedId);
       setSurfLogosSuppressed(false);
     }, delay);
-  }, [safePreviewMode]);
+  }, [channelById, safePreviewMode]);
 
   const guideTopPanelWidth = useMemo(
     () => Math.max(0, screenWidth - 24),
@@ -773,6 +791,11 @@ function PurpleGuideScreenContent() {
       if (previewTimer.current) clearTimeout(previewTimer.current);
       const requestedId = channel.id;
       guideSessionChannelId = requestedId;
+      if (!isPreviewProtocolSupported(channel)) {
+        setPreviewId(null);
+        setPreviewStatus("error");
+        return;
+      }
       if (previewId === requestedId && previewStatus !== "error") return;
 
       const nowTs = Date.now();
@@ -984,22 +1007,6 @@ function PurpleGuideScreenContent() {
 
   const onPreviewStatus = useCallback((status: StreamStatus) => {
     setPreviewStatus(status);
-    if (status !== "error") return;
-    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
-    previewRecoverTimer.current = setTimeout(() => {
-      previewRecoverTimer.current = null;
-      setPreviewStatus("loading");
-      setPreviewEpoch((value) => value + 1);
-    }, 1_500);
-  }, []);
-
-  const onPreviewErrorRemount = useCallback(() => {
-    if (previewRecoverTimer.current) clearTimeout(previewRecoverTimer.current);
-    previewRecoverTimer.current = setTimeout(() => {
-      previewRecoverTimer.current = null;
-      setPreviewStatus("loading");
-      setPreviewEpoch((value) => value + 1);
-    }, 700);
   }, []);
 
   const drawerGroups = useMemo<PurpleGuideGroup[]>(() => {
@@ -1081,7 +1088,6 @@ function PurpleGuideScreenContent() {
               previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
-              onPreviewErrorRemount={onPreviewErrorRemount}
               onPlay={play}
               onFavorite={toggleFavorite}
               onOpenReminders={() => {
@@ -1158,6 +1164,10 @@ function PurpleGuideScreenContent() {
 }
 
 const styles = StyleSheet.create({
+  previewRailContainer: { position: "relative", flexShrink: 0 },
+  unsupportedPreview: { position: "absolute", left: 7, top: 7, bottom: 7, width: 278, justifyContent: "center", alignItems: "center", gap: 7, padding: 12, backgroundColor: "#05050B" },
+  unsupportedPreviewTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
+  unsupportedPreviewText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, textAlign: "center" },
   page: { flex: 1, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 3 },
   body: { flex: 1, minHeight: 0, flexDirection: "column", gap: 6 },
   gridPanel: { flex: 1, minWidth: 0, minHeight: 0 },

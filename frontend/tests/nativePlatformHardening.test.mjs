@@ -75,7 +75,7 @@ test("native provider connections close when connect or response acquisition fai
   for (const native of [primary, custom]) {
     assert.match(native, /val status = try \{[\s\S]{0,180}connection\.connect\(\)[\s\S]{0,120}connection\.responseCode[\s\S]{0,180}catch \(t: Throwable\) \{[\s\S]{0,100}connection\.disconnect\(\)/);
   }
-  assert.match(playlist, /OkHttpClientProvider\.getOkHttpClient\(\)\.newBuilder\(\)/);
+  assert.match(playlist, /CharmHttpClients\.playlistClient\(OkHttpClientProvider\.getOkHttpClient\(\)\)/);
   assert.match(playlist, /callTimeout\(CALL_TIMEOUT_SECONDS, TimeUnit\.SECONDS\)/);
   assert.match(playlist, /if \(!response\.isSuccessful\)[\s\S]{0,180}response\.close\(\)/);
   assert.match(playlist, /if \(body == null\)[\s\S]{0,120}response\.close\(\)/);
@@ -115,7 +115,7 @@ test("memory and logo work is bounded and releases native listeners", async () =
   assert.match(remote, /playerCacheBytes/);
 });
 
-test("player recovery is bounded and history waits for stable playback", async () => {
+test("player recovery is paced and history waits for stable playback", async () => {
   const [player, adapter, native, nativeSource] = await Promise.all([
     source("app/player.tsx"),
     source("src/components/StreamPlayer.tsx"),
@@ -124,14 +124,13 @@ test("player recovery is bounded and history waits for stable playback", async (
   ]);
   assert.match(player, /STABLE_HISTORY_DELAY_MS = 5000/);
   assert.doesNotMatch(player, /MAX_TOKEN_REFRESH_CHANNELS/);
-  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
-  assert.match(native, /if \(!firstFrameRendered\) return@Runnable/);
-  assert.match(native, /instance\.isPlaying/);
-  assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
-  assert.match(native, /recoveryAttempts \+= 1[\s\S]*?performRecovery\(instance\)/);
+  assert.match(native, /START_TIMEOUT_MS = 30_000L/);
+  assert.match(native, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
+  assert.match(native, /if \(decision\.action == Action\.STOP\)[\s\S]*?finishWithError\("stream-error", instance\)/);
+  assert.match(native, /pendingRecovery = PendingRecovery[\s\S]*?postDelayed\(delayedRecovery, decision\.delayMs\)/);
   assert.match(native, /removeCallbacks\(delayedRecovery\)/);
+  assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|silentAudioCheck/);
   assert.doesNotMatch(adapter, /MEDIA3_FROZEN_CLOCK_MS|const frozenReadyClock =|REBUFFER_REPREPARE_MS/);
   assert.doesNotMatch(player, /decoderArmed|pauseSessionDecoders|STREAM_RETRY_DELAYS_MS|refreshPlaybackChannel/);
   assert.doesNotMatch(player, /refreshPlaylistOnly\(\)/);

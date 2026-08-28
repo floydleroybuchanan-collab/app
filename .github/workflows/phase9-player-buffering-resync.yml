@@ -8,10 +8,12 @@ on:
       - ci/phase9-player-buffering-resync.trigger
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   patch:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262

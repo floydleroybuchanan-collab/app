@@ -14,10 +14,12 @@ CharmIPTV is an Expo/React Native television guide and IPTV player designed for 
 1. Copy `frontend/.env.example` to `frontend/.env` and set the deployed Worker URL.
 2. From `frontend/`, install dependencies with `npm ci`.
 3. Run `npm run typecheck` and `npm run lint`.
-4. Run `npm run android:prebuild` to generate the Android Studio project.
-5. Open `frontend/android` in Android Studio.
+4. Open the checked-in `frontend/android` project in Android Studio; do not regenerate over its custom native player and Guide code.
+5. Use a native Android build for playback testing. `npm run android` starts Expo and opens the Android target; it does not add the custom player to Expo Go.
 
-The native VLC player is unavailable in Expo Go and the browser preview.
+Android playback uses Media3/ExoPlayer only, with the FFmpeg audio extension.
+VLC is removed from the app and the APK. Expo Go and browser previews cannot
+validate the custom Android player; use a native build for playback testing.
 
 ## Release safety
 

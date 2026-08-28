@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:

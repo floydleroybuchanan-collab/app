@@ -1,3 +1,7 @@
+
+# Historical code is preserved below but must never modify current playback.
+raise SystemExit("Retired player repair: Media3-only playback supersedes this historical mutation/validator.")
+
 from pathlib import Path
 import re
 
@@ -85,15 +89,15 @@ t = t.replace(
 )
 write(p, t)
 
-# 5) Update obsolete tests to assert the intentionally changed RAM/TiViMate behavior.
+# 5) Keep TiViMate-class VLC routing for opaque/live transport in unit tests.
 p = 'frontend/tests/playerAndFocus.test.mjs'
-t = read(p).replace('assert.equal(preferredEngine("transport"), "vlc");', 'assert.equal(preferredEngine("transport"), "media3");')
+t = read(p).replace('assert.equal(preferredEngine("transport"), "media3");', 'assert.equal(preferredEngine("transport"), "vlc");')
 write(p, t)
 
 p = 'frontend/tests/playbackSession.test.mjs'
 t = read(p)
-t = t.replace('capability-based engine selection still prefers Media3 for HLS and VLC for TS', 'default engine selection prefers Media3 for HLS and TS with VLC fallback')
-t = t.replace('assert.equal(preferredEngine("transport"), "vlc");', 'assert.equal(preferredEngine("transport"), "media3");')
+t = t.replace('default engine selection prefers Media3 for HLS and TS with VLC fallback', 'capability-based engine selection still prefers Media3 for HLS and VLC for TS')
+t = t.replace('assert.equal(preferredEngine("transport"), "media3");', 'assert.equal(preferredEngine("transport"), "vlc");')
 t = t.replace('assert.match(playerComp, /surfaceType=\\{Platform\\.OS === "android" \\? "textureView"/);', 'assert.match(playerComp, /mode === "preview" \\? "textureView" : "surfaceView"/);')
 write(p, t)
 

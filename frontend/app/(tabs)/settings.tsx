@@ -44,8 +44,6 @@ import {
   usePlaybackBufferProfile,
   type PlaybackBufferProfile,
 } from "@/src/core/playbackBufferProfile";
-import { usePlayerEnginePreference } from "@/src/playerEnginePreference";
-import { useVlcPlaybackPreferences } from "@/src/core/vlcPlaybackPreferences";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { useParentalPin } from "@/src/core/parentalPin";
@@ -151,8 +149,6 @@ function SettingsScreenContent() {
   } = useStore();
   const remoteShortcuts = useRemoteShortcutPreferences();
   const [playbackBufferProfile, setPlaybackBufferProfile] = usePlaybackBufferProfile();
-  const [playerEngine, setPlayerEngine] = usePlayerEnginePreference();
-  const vlcPlayback = useVlcPlaybackPreferences();
   const channelCustomize = useChannelCustomize();
   const guideUi = useGuideUiPreferences();
   const parental = useParentalPin();
@@ -511,7 +507,7 @@ function SettingsScreenContent() {
               <SettingsCard title="Playback" icon="play-circle-outline">
                 <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
-                  Media3 is recommended. VLC is a manual compatibility option for streams or devices that need it. Only the selected engine owns the decoder; CharmIPTV never auto-starts the other engine as a fallback.
+                  All supported streams play in Media3/ExoPlayer. Brief source buffering keeps the current player; recoverable network errors retry within Media3. No alternate player is installed.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"
@@ -530,15 +526,6 @@ function SettingsScreenContent() {
                   onChange={remoteShortcuts.setLongDown}
                 />
                 <Text style={styles.help}>Long OK/Select is reserved for contextual Quick Actions. Directional D-pad keys remain deterministic; Long Down is the only remappable D-pad hold.</Text>
-                <ChoiceRow<"media3" | "vlc">
-                  label="Player engine" value={playerEngine}
-                  options={[{ label: "Media3 (recommended)", value: "media3" }, { label: "VLC compatibility", value: "vlc" }]}
-                  onChange={setPlayerEngine}
-                />
-                {playerEngine === "vlc" ? (<>
-                  <ToggleRow label="VLC hardware decoding" value={vlcPlayback.hardwareDecode} onChange={vlcPlayback.setHardwareDecode} />
-                  <ChoiceRow<"auto" | "stereo" | "passthrough"> label="VLC audio output" value={vlcPlayback.audioOutput} options={[{ label: "Auto", value: "auto" }, { label: "Stereo", value: "stereo" }, { label: "Passthrough", value: "passthrough" }]} onChange={vlcPlayback.setAudioOutput} />
-                </>) : null}
                 <ChoiceRow<PlaybackBufferProfile>
                   label="Buffer size"
                   value={playbackBufferProfile}
@@ -549,7 +536,7 @@ function SettingsScreenContent() {
                   ]}
                   onChange={setPlaybackBufferProfile}
                 />
-                <Text style={styles.help}>TiViMate-style buffer size: Small starts sooner, Large absorbs provider jitter. Large is the Onn-proven default.</Text>
+                <Text style={styles.help}>Small starts sooner; Medium balances startup and jitter; Large is the 48 MB-capped TV default.</Text>
                 <ChoiceRow<SleepTimerMinutes>
                   label="Sleep timer"
                   value={sleepTimerMinutes}
@@ -627,6 +614,10 @@ function SettingsScreenContent() {
                     : "Unavailable"}
                 />
                 <InfoRow
+                  label="FFmpeg audio extension"
+                  value={codecCapabilities ? (codecCapabilities.ffmpegAudio ? "Available (AC-3 soft decode)" : "Missing — rebuild APK") : "Unavailable"}
+                />
+                <InfoRow
                   label="Advertised video max"
                   value={codecCapabilities?.maxWidth ? `${codecCapabilities.maxWidth} × ${codecCapabilities.maxHeight}` : "Unavailable"}
                 />
@@ -640,8 +631,8 @@ function SettingsScreenContent() {
                   value={latestAudio?.mimeType || "—"}
                 />
                 <InfoRow
-                  label="Last audio silent"
-                  value={latestAudio ? (latestAudio.silentAudio ? "Yes" : "No") : "—"}
+                  label="Last audio decoder"
+                  value={latestAudio?.decoder || "—"}
                 />
                 <InfoRow
                   label="Audio tracks seen"

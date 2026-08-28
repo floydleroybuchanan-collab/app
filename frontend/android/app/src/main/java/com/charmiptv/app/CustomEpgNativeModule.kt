@@ -159,7 +159,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     var currentUrl = URL(urlString); var redirects = 0
     while (true) {
       val scheme = currentUrl.protocol.lowercase(Locale.US); if (scheme != "http" && scheme != "https") throw IllegalStateException("Custom EPG redirect used unsupported scheme: $scheme")
-      val connection = currentUrl.openConnection() as HttpURLConnection; connection.connectTimeout = 15_000; connection.readTimeout = 45_000; connection.instanceFollowRedirects = false; connection.setRequestProperty("User-Agent", "CharmIPTV/Experimental-v3"); connection.setRequestProperty("Accept", "*/*"); connection.setRequestProperty("Accept-Encoding", "gzip")
+      val connection = currentUrl.openConnection() as HttpURLConnection; connection.connectTimeout = 15_000; connection.readTimeout = 45_000; connection.instanceFollowRedirects = false; connection.setRequestProperty("User-Agent", "TiviMate/5.1.6 (Linux; Android TV)"); connection.setRequestProperty("Accept", "*/*"); connection.setRequestProperty("Accept-Encoding", "gzip")
       val status = try { connection.connect(); connection.responseCode } catch (t: Throwable) { connection.disconnect(); throw t }
       if (isRedirect(status)) { val location = connection.getHeaderField("Location")?.trim().orEmpty(); connection.disconnect(); if (location.isEmpty()) throw IllegalStateException("Custom EPG HTTP $status redirect missing Location"); redirects += 1; if (redirects > MAX_HTTP_REDIRECTS) throw IllegalStateException("Custom EPG redirect limit exceeded"); currentUrl = URL(currentUrl, location); continue }
       if (status !in 200..299) { connection.disconnect(); throw IllegalStateException("Custom EPG HTTP $status") }

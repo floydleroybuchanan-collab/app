@@ -7,101 +7,22 @@ on:
     paths:
       - ".github/workflows/charm-media3-surface-handoff-fix.yml"
       - ".github/scripts/charm_media3_surface_handoff_fix.py"
+      - "frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch-and-validate:
+  validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      TARGET_BRANCH: claude/repo-branch-access-dxx6wf
-      CMAKE_BUILD_PARALLEL_LEVEL: "1"
-      CI: "1"
+    timeout-minutes: 5
     steps:
-      - name: Checkout playback branch
+      - name: Checkout main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: claude/repo-branch-access-dxx6wf
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Checkout validator files from main
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: main
-          path: _ci_main
-          sparse-checkout: |
-            .github/scripts/charm_media3_surface_handoff_fix.py
-
-      - name: Patch Media3 render-target handoff
-        run: python3 _ci_main/.github/scripts/charm_media3_surface_handoff_fix.py
-
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Setup Java
-        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Setup Gradle cache
-        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
-
-      - name: Install Android native toolchain
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
-
-      - name: Install JavaScript dependencies
-        working-directory: frontend
-        run: npm ci --legacy-peer-deps --no-audit --no-fund
-
-      - name: Typecheck
-        working-directory: frontend
-        run: npm run typecheck
-
-      - name: Lint
-        working-directory: frontend
-        run: npm run lint
-
-      - name: Build pinned LGPL FFmpeg audio extension
-        working-directory: frontend
-        run: |
-          chmod +x scripts/build-media3-ffmpeg-audio.sh
-          ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/27.1.12297006" ./scripts/build-media3-ffmpeg-audio.sh
-
-      - name: Configure deterministic low-memory compile
-        working-directory: frontend
-        run: |
-          cat >> android/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=768m -XX:+UseG1GC -Dfile.encoding=UTF-8
-          org.gradle.parallel=false
-          org.gradle.workers.max=1
-          org.gradle.vfs.watch=false
-          kotlin.compiler.execution.strategy=in-process
-          kotlin.daemon.enabled=false
-          reactNativeArchitectures=armeabi-v7a,arm64-v8a
-          EOF
-
-      - name: Compile Android sideload Kotlin
-        working-directory: frontend
-        run: |
-          chmod +x android/gradlew
-          ./android/gradlew -p android :app:compileSideloadKotlin --no-daemon --max-workers=1 --stacktrace
-
-      - name: Commit validated surface handoff fix
-        shell: bash
-        run: |
-          rm -rf _ci_main
-          git config user.name "Charm Fix Bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackSurface.kt
-          git commit -m "fix(player): enforce one active Media3 video target"
-          git push origin HEAD:"$TARGET_BRANCH"
+      - name: Validate Media3 TiViMate surface/handoff contract
+        run: python3 .github/scripts/charm_media3_surface_handoff_fix.py

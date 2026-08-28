@@ -2,7 +2,12 @@ import type { Channel } from "@/src/api";
 
 /** Normalize playlist / XMLTV ids and names for fuzzy guide matching. */
 export function normalizeGuideKey(value: string | undefined | null): string {
-  return (value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return (value || "")
+    .replace(/\s*\((m3u4u|src\d+|source\d+)\)\s*$/i, "")
+    .replace(/[#-](m3u4u|src\d+|source\d+)$/i, "")
+    .toLowerCase()
+    .replace(/\b(vip|fhd|uhd|hd|sd|live)\b/g, "")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 /** Identity used for rematch decisions — logo URL changes must not force a full rematch. */
@@ -177,13 +182,21 @@ export function matchPlaylistChannelToXmltv(
 
   const tvgNorm = resolveNormalizedId(normalizeGuideKey(tvgId), idByNormalizedId, ambiguousNormalizedIds);
   const idNorm = resolveNormalizedId(normalizeGuideKey(channel.id), idByNormalizedId, ambiguousNormalizedIds);
+  // Xtream / provider ids often look like "US:ESPN HD" — try the trailing segment too.
+  const tvgTail = tvgId.includes(":") || tvgId.includes(" - ")
+    ? resolveNormalizedId(
+        normalizeGuideKey(tvgId.split(/:|\s+-\s+/).pop()),
+        idByNormalizedId,
+        ambiguousNormalizedIds,
+      )
+    : { id: "", ambiguous: false };
   const nameNorm = preferTvgIdOnly
     ? { id: "", ambiguous: false }
     : resolveNormalizedId(normalizeGuideKey(channel.name), idByNormalizedName, ambiguousNormalizedNames);
 
-  const normalizedIdMatch = tvgNorm.id || idNorm.id || "";
+  const normalizedIdMatch = tvgNorm.id || idNorm.id || tvgTail.id || "";
   const nameMatch = nameNorm.id || "";
-  const hitAmbiguous = tvgNorm.ambiguous || idNorm.ambiguous || nameNorm.ambiguous;
+  const hitAmbiguous = tvgNorm.ambiguous || idNorm.ambiguous || tvgTail.ambiguous || nameNorm.ambiguous;
 
   let sourceId = "";
   let ambiguous = false;

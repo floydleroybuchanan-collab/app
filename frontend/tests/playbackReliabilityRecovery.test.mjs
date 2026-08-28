@@ -8,31 +8,32 @@ import { parsePipeHeaders } from "../src/core/streamPolicy.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("provider headers are preserved without a universal fake user agent", () => {
-  assert.deepEqual(parsePipeHeaders("https://provider.example/live"), { uri: "https://provider.example/live", headers: {} });
+test("stream requests default to Charm playlist UA when the M3U omits User-Agent", () => {
+  assert.deepEqual(parsePipeHeaders("https://provider.example/live"), {
+    uri: "https://provider.example/live",
+    headers: { "User-Agent": "TiviMate/5.1.6 (Linux; Android TV)" },
+  });
   const parsed = parsePipeHeaders("https://provider.example/live|User-Agent=Provider%20Box&Referer=https%3A%2F%2Fprovider.example&Authorization=Bearer%20abc");
   assert.equal(parsed.headers["User-Agent"], "Provider Box");
   assert.equal(parsed.headers.Referer, "https://provider.example");
   assert.equal(parsed.headers.Authorization, "Bearer abc");
 });
 
-test("native recovery escalates through a real playlist-only source refresh and full player rebuild without changing tuning", async () => {
+test("native recovery separates source reconnects, decoder rebuilds and authentication refresh", async () => {
   const [native, bridge, adapter, memory] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
     source("src/nativePlayback.ts"),
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/CharmMemoryCoordinator.kt"),
   ]);
-  assert.match(native, /fun tivimateBufferDurationsMs/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /when \(recoveryAttempts\)[\s\S]*?1 -> \{ instance\.prepare\(\)/);
-  assert.match(native, /2 -> \{[\s\S]*?rebuildMediaSource\(instance, source, "media-source-rebuild"\)/);
-  assert.match(native, /3 -> requestFreshSource\(instance, source\)/);
-  assert.match(native, /4 -> fullPlayerAndSourceRecovery\(instance, source\)/);
-  assert.match(native, /forceFreshSource && recoveryAttempts < 2/);
-  assert.match(native, /skipBarePrepare && recoveryAttempts < 1/);
-  assert.match(native, /isAuthenticationFailure\(error\)/);
-  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?recoverOnce\(created, skipBarePrepare = true\)/);
+  assert.match(native, /fun media3BufferDurationsMs/);
+  assert.match(native, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
+  assert.match(native, /Action\.REFRESH_SOURCE -> requestFreshSource\(instance, source\)/);
+  assert.match(native, /private fun performRecovery[\s\S]*?fullPlayerAndSourceRecovery\(instance, source, pending\.resumePositionMs\)/);
+  assert.doesNotMatch(native, /RECOVERY_BACKOFF_MS|MAX_AUTO_RECOVERIES|skipBarePrepare|when \(recoveryAttempts\)/);
+  assert.match(native, /classifyFailure\(error\)/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?scheduleRecovery\(created, Failure\.LIVE_END\)/);
   assert.match(native, /HlsMediaSource\.Factory\(dataSource\)[\s\S]*?DefaultHlsExtractorFactory\(liveTsFlags, true\)[\s\S]*?createMediaSource\(item\)/);
   assert.match(native, /DashMediaSource\.Factory\(dataSource\)\.createMediaSource\(item\)/);
   assert.match(native, /setWakeMode\(C\.WAKE_MODE_NETWORK\)/);
@@ -58,4 +59,42 @@ test("failure diagnostics include Media3, HTTP, buffering, memory and EPG contex
   assert.match(module, /NativePlaybackDiagnostics/);
   assert.match(module, /putMap\("epgRam", epg\)/);
   assert.match(bridge, /addNativePlaybackDiagnosticListener/);
+});
+
+test("HTTP defaults are not injected into non-HTTP protocol requests", () => {
+  assert.deepEqual(parsePipeHeaders("rtsp://provider.example/live"), { uri: "rtsp://provider.example/live", headers: {} });
+  assert.equal(parsePipeHeaders("rtsp://provider.example/live|User-Agent=Provider%20RTSP").headers["User-Agent"], "Provider RTSP");
+  assert.deepEqual(parsePipeHeaders("udp://@239.0.0.1:1234").headers, {});
+});
+
+test("only the matching session resolves source refresh and Media3 recovery retains fresh credentials", async () => {
+  const adapter = await source("src/components/StreamPlayer.tsx");
+  const handler = adapter.slice(adapter.indexOf("useEffect(() => addNativePlaybackSourceRefreshListener"), adapter.indexOf("useEffect(() => addNativePlaybackTracksListener"));
+  const admission = handler.slice(0, handler.indexOf("const current ="));
+  assert.match(admission, /event.owner !== owner/);
+  assert.match(admission, /event.generation !== generation/);
+  assert.match(admission, /event.channelKey !== currentChannelKey/);
+  assert.doesNotMatch(admission, /resolveNativePlaybackFreshSource/);
+  assert.match(handler, /generationRef.current !== generation/);
+  assert.match(handler, /currentSourceRef.current = \{ key: playbackKey, \.\.\.fresh, contentType: freshType \}/);
+  assert.match(adapter, /prepareNativeFullscreen\(generation, currentChannelKey, source.uri, source.headers/);
+});
+
+test("native release errors reject ownership handoffs and cannot allocate a replacement decoder", async () => {
+  const [media3, media3Bridge] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/NativePlaybackModule.kt"),
+  ]);
+  assert.match(media3, /check\(decoderReleaseFailure == null\)/);
+  assert.match(media3, /check\(releaseDecoder\(instance\)\)/);
+  const recovery = media3.slice(media3.indexOf("private fun performRecovery("), media3.indexOf("private fun requestFreshSource("));
+  assert.match(recovery, /catch \(t: Throwable\)[\s\S]*?finishWithError\("stream-error"\)/);
+  assert.doesNotMatch(recovery, /finishWithError\("stream-error", instance\)/);
+  assert.match(media3Bridge, /promise.reject\("E_PLAYBACK_RELEASE"/);
+});
+
+test("Media3 RTSP uses the provider user agent on its dedicated transport", async () => {
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  assert.match(native, /RtspMediaSource.Factory\(\).setUserAgent\(userAgent\).createMediaSource\(item\)/);
+  assert.match(native, /RTSP custom headers are unsupported/);
 });

@@ -89,7 +89,7 @@ export async function fetchNativePlaylist(url: string): Promise<NativePlaylistRe
   const timeout = setTimeout(() => controller.abort(), PLAYLIST_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(cleanUrl, {
-      headers: { "User-Agent": "CharmIPTV/Experimental-v3" },
+      headers: { "User-Agent": "TiviMate/5.1.6 (Linux; Android TV)" },
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`M3U HTTP ${response.status}`);

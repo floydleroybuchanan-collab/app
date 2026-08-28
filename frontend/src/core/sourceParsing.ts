@@ -16,6 +16,10 @@ const ALLOWED_PLAYLIST_SCHEMES = new Set([
   "rtsps:",
   "rtmp:",
   "rtmps:",
+  "rtp:",
+  "udp:",
+  "srt:",
+  "rist:",
 ]);
 
 export type ParseM3UStats = {
@@ -24,10 +28,74 @@ export type ParseM3UStats = {
   truncated: boolean;
 };
 
+/**
+ * Compact transport/container hint for the TiViMate-style Media3 path.
+ * Keep this in lockstep with NativePlaylistParser.streamType so M3U ingest
+ * (JS web + native Android) feeds the same contentType into detectStreamKind.
+ */
 export function streamType(url: string): string {
-  const clean = url.toLowerCase().split("?")[0].split("|")[0];
-  if (clean.endsWith(".m3u8")) return "hls";
-  if (clean.endsWith(".ts")) return "ts";
+  const clean = streamIdentityUrl(url);
+  const protocol = clean.slice(0, clean.indexOf(":"));
+  if (["rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp", "srt", "rist"].includes(protocol)) return protocol;
+  const path = clean.split("?")[0];
+  const query = clean.includes("?") ? clean.slice(clean.indexOf("?") + 1) : "";
+  const paddedQuery = query ? `&${query}&` : "";
+  if (
+    path.endsWith(".m3u8") ||
+    clean.includes("/hls/") ||
+    paddedQuery.includes("&format=m3u8&") ||
+    paddedQuery.includes("&type=hls&") ||
+    paddedQuery.includes("&output=hls&") ||
+    paddedQuery.includes("&format=hls&") ||
+    paddedQuery.includes("&type=m3u8&") ||
+    paddedQuery.includes("&output=m3u8&")
+  ) {
+    return "hls";
+  }
+  if (
+    path.endsWith(".mpd") ||
+    clean.includes("/dash/") ||
+    paddedQuery.includes("&format=mpd&") ||
+    paddedQuery.includes("&type=dash&") ||
+    paddedQuery.includes("&output=dash&") ||
+    paddedQuery.includes("&format=dash&") ||
+    paddedQuery.includes("&type=mpd&") ||
+    paddedQuery.includes("&output=mpd&")
+  ) {
+    return "dash";
+  }
+  if (
+    path.endsWith(".ts") ||
+    path.endsWith(".m2ts") ||
+    clean.includes("mpegts") ||
+    clean.includes("mpeg-ts") ||
+    paddedQuery.includes("&format=ts&") ||
+    paddedQuery.includes("&type=ts&") ||
+    paddedQuery.includes("&output=ts&") ||
+    paddedQuery.includes("&format=mpegts&") ||
+    paddedQuery.includes("&type=mpegts&") ||
+    paddedQuery.includes("&output=mpegts&")
+  ) {
+    return "ts";
+  }
+  if (
+    /\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)$/.test(path)
+  ) {
+    return "progressive";
+  }
+  return "unknown";
+}
+
+/**
+ * Xtream-style catalog bucket from URL path. Does not change Media3 sourceType —
+ * extensionless live stays `unknown` for the opaque router. Used by Movies/Series
+ * drawers so `/movie/` and `/series/` rows are not missed when group-title is empty.
+ */
+export function catalogKind(url: string): "live" | "movie" | "series" | "unknown" {
+  const path = streamIdentityUrl(url).split("?")[0];
+  if (/\/series\//i.test(path) || /\/series\/?\d+$/i.test(path)) return "series";
+  if (/\/movie\//i.test(path) || /\/movies\//i.test(path) || /\/vod\//i.test(path)) return "movie";
+  if (/\/live\//i.test(path) || /\/timeshift\//i.test(path)) return "live";
   return "unknown";
 }
 
@@ -132,13 +200,49 @@ export function parseM3UWithStats(
   const source = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const total = Math.max(1, source.length);
   let offset = 0;
-  let pending: { line: string; attrs: Record<string, string>; name: string } | null = null;
+  let pending: {
+    line: string;
+    attrs: Record<string, string>;
+    name: string;
+    headers: Record<string, string>;
+  } | null = null;
   let scanned = 0;
 
   const flushProgress = () => {
     if (!onProgress) return;
     scanned += 1;
     if (scanned % 400 === 0) onProgress(Math.min(0.95, offset / total));
+  };
+
+  const applyExtHttpOption = (headers: Record<string, string>, line: string) => {
+    const payload = line.slice(line.indexOf(":") + 1).trim();
+    if (!payload) return;
+    const lower = payload.toLowerCase();
+    if (lower.startsWith("http-user-agent=")) headers["User-Agent"] = payload.slice(payload.indexOf("=") + 1).trim();
+    else if (lower.startsWith("http-referrer=") || lower.startsWith("http-referer=")) {
+      headers.Referer = payload.slice(payload.indexOf("=") + 1).trim();
+    } else if (lower.startsWith("http-cookie=")) {
+      headers.Cookie = payload.slice(payload.indexOf("=") + 1).trim();
+    } else if (lower.startsWith("http-header=")) {
+      const header = payload.slice(payload.indexOf("=") + 1).trim();
+      const colon = header.indexOf(":");
+      if (colon > 0) {
+        const key = header.slice(0, colon).trim();
+        const value = header.slice(colon + 1).trim();
+        if (key && value) headers[key] = value;
+      }
+    }
+    // Ignore non-HTTP VLC options (network-caching, http-reconnect, …). Emitting
+    // them as request headers breaks panels/CDNs that TiViMate still plays.
+  };
+
+  const appendPipeHeaders = (url: string, headers: Record<string, string>) => {
+    const entries = Object.entries(headers);
+    if (!entries.length) return url;
+    const encoded = entries
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+      .join("&");
+    return url.includes("|") ? `${url}&${encoded}` : `${url}|${encoded}`;
   };
 
   while (offset <= source.length) {
@@ -159,14 +263,18 @@ export function parseM3UWithStats(
       const name = line.includes(",")
         ? line.slice(line.lastIndexOf(",") + 1).trim()
         : attrs["tvg-name"] || "Channel";
-      pending = { line, attrs, name };
+      pending = { line, attrs, name, headers: {} };
       continue;
     }
 
     if (!pending) continue;
+    if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:")) {
+      applyExtHttpOption(pending.headers, line);
+      continue;
+    }
     if (!line || line.startsWith("#")) continue;
 
-    const url = line;
+    const url = appendPipeHeaders(line, pending.headers);
     const attrs = pending.attrs;
     const name = pending.name;
     pending = null;

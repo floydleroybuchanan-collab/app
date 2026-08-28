@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
+  issues: read
 
 concurrency:
   group: manual-vlc-final-${{ github.ref }}
@@ -20,6 +20,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     name: Tests scan native compile no APK
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -100,7 +102,7 @@ jobs:
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
-          grep -q 'probeReason = "direct:transport"' "$PLAYER"
+          grep -q 'OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L' "$PLAYER"
           ! grep -q 'NativeOpaqueStreamProbe.start' "$PLAYER"
           grep -q 'OPAQUE_TYPE_PREFS = "charm_media3_stream_types"' "$PLAYER"
           grep -q 'main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)' "$PLAYER"
@@ -108,7 +110,7 @@ jobs:
           grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
           ! grep -q 'HUNG_BUFFER_REPREPARE_MS\|TRANSPORT_HUNG_BUFFER_REPREPARE_MS\|HARD_STALL_RECOVERY_MS\|STABLE_REARM_MS\|MIN_BUFFER_MS_LOW_RAM\|MIN_BUFFER_MS_NORMAL' "$PLAYER"
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
 

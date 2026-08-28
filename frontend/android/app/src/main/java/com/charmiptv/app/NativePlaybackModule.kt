@@ -1,5 +1,7 @@
 package com.charmiptv.app
 
+import android.os.Handler
+import android.os.Looper
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
@@ -17,6 +19,7 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   private var activeOwner = NativePlaybackManager.Owner.NONE
   private var activeGeneration = 0L
   private var activeChannelKey = ""
+  private val main = Handler(Looper.getMainLooper())
 
   override fun getName(): String = "NativePlayback"
 
@@ -27,24 +30,34 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
 
   @ReactMethod
   fun prepareFullscreen(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?, bufferProfile: String?) {
-    attachActivity()
-    setIdentity(NativePlaybackManager.Owner.FULLSCREEN, generation.toLong(), channelKey.orEmpty())
-    NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, activeChannelKey, uri, readableMapToStringMap(headers), contentType, bufferProfile)
+    val requestHeaders = readableMapToStringMap(headers)
+    onMain {
+      attachActivity()
+      setIdentity(NativePlaybackManager.Owner.FULLSCREEN, generation.toLong(), channelKey.orEmpty())
+      NativePlaybackManager.prepare(NativePlaybackManager.Owner.FULLSCREEN, activeChannelKey, uri, requestHeaders, contentType, bufferProfile)
+    }
   }
 
   @ReactMethod
   fun preparePreview(generation: Double, channelKey: String?, uri: String, headers: ReadableMap?, contentType: String?, bufferProfile: String?) {
-    attachActivity()
-    // Do NOT bail out here without calling setIdentity() first: that used to
-    // leave activeOwner/activeGeneration/activeChannelKey pointing at whatever
-    // session was active before (often a stale fullscreen identity), so no
-    // event this attempt's generation could ever match was published to JS --
-    // the preview stayed stuck on its initial "loading" state forever. Always
-    // register this attempt's identity and let NativePlaybackManager.prepare()
-    // itself publish a properly-identified error when the owner really is
-    // still reserved by fullscreen.
-    setIdentity(NativePlaybackManager.Owner.PREVIEW, generation.toLong(), channelKey.orEmpty())
-    NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, activeChannelKey, uri, readableMapToStringMap(headers), contentType, bufferProfile)
+    val requestHeaders = readableMapToStringMap(headers)
+    // Reject a late preview without replacing the active fullscreen identity.
+    // Otherwise subsequent fullscreen events are stamped as preview events.
+    onMain {
+      if (NativePlaybackManager.currentOwner() == NativePlaybackManager.Owner.FULLSCREEN) {
+        emit("NativePlaybackState", Arguments.createMap().apply {
+          putString("owner", "preview")
+          putDouble("generation", generation)
+          putString("channelKey", channelKey.orEmpty().trim())
+          putString("state", "error")
+          putString("reason", "owner-reserved")
+        })
+        return@onMain
+      }
+      attachActivity()
+      setIdentity(NativePlaybackManager.Owner.PREVIEW, generation.toLong(), channelKey.orEmpty())
+      NativePlaybackManager.prepare(NativePlaybackManager.Owner.PREVIEW, activeChannelKey, uri, requestHeaders, contentType, bufferProfile)
+    }
   }
 
   @ReactMethod fun resolveFreshSource(requestId: Double, uri: String?, headers: ReadableMap?, contentType: String?, failureReason: String?) { NativePlaybackManager.provideFreshSource(requestId.toLong(), uri, readableMapToStringMap(headers), contentType, failureReason) }
@@ -57,9 +70,12 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   @ReactMethod fun selectSubtitle(groupIndex: Double, trackIndex: Double) { NativePlaybackManager.selectSubtitle(groupIndex.toInt(), trackIndex.toInt(), null) }
   @ReactMethod fun selectSubtitleLanguage(language: String?) { NativePlaybackManager.selectSubtitle(null, null, language) }
   @ReactMethod fun subtitlesOff() { NativePlaybackManager.selectSubtitle(null, null, null) }
-  @ReactMethod fun stopPreview(promise: Promise) { stopOwner(NativePlaybackManager.Owner.PREVIEW, releasePlayer = false, promise) }
+  @ReactMethod fun stopPreview(releasePlayer: Boolean, promise: Promise) { stopOwner(NativePlaybackManager.Owner.PREVIEW, releasePlayer, promise) }
   @ReactMethod fun stopFullscreen(releasePlayer: Boolean, promise: Promise) { stopOwner(NativePlaybackManager.Owner.FULLSCREEN, releasePlayer, promise) }
-  @ReactMethod fun getOwner(promise: Promise) { promise.resolve(NativePlaybackManager.currentOwner().name.lowercase()) }
+  @ReactMethod fun getOwner(promise: Promise) { onMain {
+    if (NativePlaybackManager.hasReleaseFailure()) promise.reject("E_PLAYBACK_RELEASE", "Media3 ownership is uncertain after failed release")
+    else promise.resolve(NativePlaybackManager.currentOwner().name.lowercase())
+  } }
 
   override fun onState(state: String, reason: String?) {
     emit("NativePlaybackState", identityMap().apply {
@@ -154,34 +170,48 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
     })
   }
 
-  override fun onHostResume() = Unit
-  override fun onHostPause() { NativePlaybackManager.pause() }
+  override fun onHostResume() {
+    // Resume only what the native lifecycle paused. Fullscreen is JS-owned;
+    // a transient overlay must not undo the user's explicit pause.
+    if (NativePlaybackManager.currentOwner() == NativePlaybackManager.Owner.PREVIEW) {
+      NativePlaybackManager.resume()
+    }
+  }
+  override fun onHostPause() {
+    // Android TV fires HostPause for transient overlays without leaving the
+    // player. Pausing fullscreen here produced black+silent until an explicit
+    // JS pause. Preview may still pause; fullscreen pause is JS-owned.
+    if (NativePlaybackManager.currentOwner() == NativePlaybackManager.Owner.PREVIEW) {
+      NativePlaybackManager.pause()
+    }
+  }
   override fun onHostDestroy() {
-    NativePlaybackManager.releaseAll()
-    clearIdentity()
+    onMain {
+      NativePlaybackManager.releaseAll()
+      clearIdentity()
+    }
   }
 
   override fun invalidate() {
     try { ctx.removeLifecycleEventListener(this) } catch (_: Throwable) {}
-    NativePlaybackManager.setListener(null)
-    NativePlaybackManager.releaseAll()
-    clearIdentity()
+    onMain {
+      NativePlaybackManager.setListener(null)
+      NativePlaybackManager.releaseAll()
+      clearIdentity()
+    }
     super.invalidate()
   }
 
   private fun stopOwner(requestedOwner: NativePlaybackManager.Owner, releasePlayer: Boolean, promise: Promise) {
-    val activity = ctx.currentActivity
-    val stop = {
-      if (NativePlaybackManager.currentOwner() != requestedOwner) {
-        promise.resolve(null)
-      } else {
-        NativePlaybackManager.stop(requestedOwner, releasePlayer) {
+    onMain {
+      NativePlaybackManager.stop(requestedOwner, releasePlayer) { failure ->
+        if (failure != null) promise.reject("E_PLAYBACK_RELEASE", "Media3 decoder release failed", failure)
+        else {
           if (activeOwner == requestedOwner) clearIdentity()
           promise.resolve(null)
         }
       }
     }
-    if (activity == null) stop() else activity.runOnUiThread(stop)
   }
 
   private fun setIdentity(owner: NativePlaybackManager.Owner, generation: Long, channelKey: String) {
@@ -203,6 +233,7 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   }
 
   private fun attachActivity() { ctx.currentActivity?.let(NativePlaybackManager::installIntoActivity) }
+  private fun onMain(block: () -> Unit) { if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block) }
   private fun emit(name: String, value: Any) { try { ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java).emit(name, value) } catch (_: Throwable) {} }
   private fun readableMapToStringMap(readable: ReadableMap?): Map<String, String> {
     if (readable == null) return emptyMap()
@@ -210,7 +241,7 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
     val iterator = readable.keySetIterator()
     while (iterator.hasNextKey()) {
       val key = iterator.nextKey()
-      try { val value = readable.getString(key); if (!value.isNullOrBlank()) out[key] = value } catch (_: Throwable) {}
+      try { val value = readable.getString(key); if (value != null) out[key] = value } catch (_: Throwable) {}
     }
     return out
   }

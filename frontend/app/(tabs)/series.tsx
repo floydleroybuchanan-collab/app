@@ -2,8 +2,10 @@ import React from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Channel } from "@/src/api";
 import { PurpleChannelCollection } from "@/src/components/PurpleChannelCollection";
+import { catalogKind } from "@/src/core/sourceParsing";
 
 const matchesSeries = (channel: Channel) =>
+  catalogKind(channel.url || "") === "series" ||
   /series|show|shows|entertainment|drama|comedy|sitcom/i.test(`${channel.group || ""} ${channel.name || ""}`);
 
 function SeriesScreenContent() {

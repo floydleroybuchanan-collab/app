@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
 
-export type PlaybackProfileType = "hls" | "dash" | "transport" | "progressive" | "unknown";
-export type PlaybackProfileEngine = "media3" | "vlc";
-
-export type ChannelPlaybackProfile = {
-  declaredType: PlaybackProfileType;
-  confirmedType?: Exclude<PlaybackProfileType, "unknown">;
-  lastEngine?: PlaybackProfileEngine;
-  updatedAt: number;
-};
+import {
+  normalizePlaybackProfileType as normalizeType,
+  normalizeStoredPlaybackProfiles,
+  type ChannelPlaybackProfile,
+  type PlaybackProfileEngine,
+} from "./playbackProfileMigration";
+export type { ChannelPlaybackProfile, PlaybackProfileEngine, PlaybackProfileType } from "./playbackProfileMigration";
 
 const STORAGE_KEY = "gs_channel_playback_profiles_v1";
 const MAX_PROFILES = 512;
@@ -19,15 +17,6 @@ let loadPromise: Promise<void> | null = null;
 let persistChain: Promise<void> = Promise.resolve();
 let mutationRevision = 0;
 const listeners = new Set<() => void>();
-
-function normalizeType(raw: unknown): PlaybackProfileType {
-  const value = String(raw || "").trim().toLowerCase();
-  if (value === "ts" || value === "m2ts" || value === "mpegts" || value === "mpeg-ts" || value === "transport") return "transport";
-  if (value === "hls" || value === "m3u8") return "hls";
-  if (value === "dash" || value === "mpd") return "dash";
-  if (value === "progressive" || value === "mp4") return "progressive";
-  return "unknown";
-}
 
 function prune(input: Record<string, ChannelPlaybackProfile>): Record<string, ChannelPlaybackProfile> {
   const entries = Object.entries(input);
@@ -41,12 +30,15 @@ async function loadProfiles(): Promise<void> {
   if (loadPromise) return loadPromise;
   const revisionAtStart = mutationRevision;
   loadPromise = (async () => {
-    const stored = await storage.getItem<Record<string, ChannelPlaybackProfile>>(STORAGE_KEY, {});
-    const storedProfiles = stored && typeof stored === "object" ? prune(stored) : {};
+    const stored = await storage.getItem<unknown>(STORAGE_KEY, {});
+    const storedProfiles = prune(normalizeStoredPlaybackProfiles(stored));
     cached = mutationRevision === revisionAtStart
       ? storedProfiles
       : prune({ ...storedProfiles, ...cached });
     loaded = true;
+    // Persist the sanitized snapshot through the existing serial queue. An
+    // in-flight update wins over an old backup's source/engine confirmation.
+    persist();
   })();
   try { await loadPromise; } finally { loadPromise = null; }
 }

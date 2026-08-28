@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  issues: write
+  issues: read
 
 concurrency:
   group: media3-working-validation-${{ github.ref }}
@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -87,8 +89,8 @@ jobs:
         run: |
           PLAYER=frontend/android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt
           grep -q 'OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")' "$PLAYER"
-          grep -q 'probeReason = "direct:transport"' "$PLAYER"
-          grep -q 'startOpaqueCandidate(instance, source, cacheKey, "transport"' "$PLAYER"
+          grep -q 'OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L' "$PLAYER"
+          grep -q 'startOpaqueCandidate(instance, source, cacheKey, firstType' "$PLAYER"
           ! grep -q 'NativeOpaqueStreamProbe.start' "$PLAYER"
           ! grep -q 'opaqueProbeHttpClient' "$PLAYER"
           grep -q 'OPAQUE_TYPE_PREFS = "charm_media3_stream_types"' "$PLAYER"
@@ -98,12 +100,13 @@ jobs:
           grep -q 'tryNextOpaqueCandidate(created, error)' "$PLAYER"
           grep -q 'forgetDetectedType(cacheKey)' "$PLAYER"
           ! grep -q 'if (firstFrameRendered || !isContainerMismatch(error))' "$PLAYER"
-          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' "$PLAYER"
+          grep -q 'ConnectionPool(6, 5, TimeUnit.MINUTES)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'fun tivimateBufferDurationsMs' "$PLAYER"
           grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
           ! grep -q 'HUNG_BUFFER_REPREPARE_MS\|TRANSPORT_HUNG_BUFFER_REPREPARE_MS\|HARD_STALL_RECOVERY_MS\|STABLE_REARM_MS\|MIN_BUFFER_MS_LOW_RAM\|MIN_BUFFER_MS_NORMAL' "$PLAYER"
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
+          grep -q 'CharmHttpClients.mediaClient()' "$PLAYER"
           grep -q 'MAX_AUTO_RECOVERIES = 4' "$PLAYER"
           grep -q 'longArrayOf(0L, 1_000L, 3_000L, 6_000L)' "$PLAYER"
 

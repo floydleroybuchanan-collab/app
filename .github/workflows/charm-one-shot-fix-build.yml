@@ -8,11 +8,13 @@ on:
       - ".github/workflows/charm-one-shot-fix-build.yml"
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 jobs:
   fix-main-refresh:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -135,6 +137,8 @@ jobs:
           fi
 
   fix-build-apk:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     needs: fix-main-refresh
     runs-on: ubuntu-latest
     timeout-minutes: 90

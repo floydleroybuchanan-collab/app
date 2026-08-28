@@ -11,13 +11,13 @@ export type AudioDiagnosticsSnapshot = {
   streamKey: string;
   trackId?: string | number | null;
   mimeType?: string | null;
+  decoder?: string | null;
   language?: string | null;
   label?: string | null;
   isSupported?: boolean | null;
   trackCount: number;
   supportedCount: number;
   selectedBy: "user" | "current" | "auto-supported" | "auto-first" | "none";
-  silentAudio?: boolean;
   reason?: string | null;
   at: string;
 };
@@ -31,8 +31,7 @@ export function fingerprintStreamUri(uri: string, kind?: string): string {
   for (let i = 0; i < clean.length; i += 1) {
     hash = (hash * 31 + clean.charCodeAt(i)) | 0;
   }
-  const leaf = clean.split("/").pop()?.slice(0, 24) || "stream";
-  return `${kind || "unknown"}:${clean.length}:${(hash >>> 0).toString(16)}:${leaf}`;
+  return `${kind || "unknown"}:${clean.length}:${(hash >>> 0).toString(16)}`;
 }
 
 /** Match a diagnostic key without needing the player's stream-kind classifier. */
@@ -49,6 +48,13 @@ export function recordAudioDiagnostics(
 ): AudioDiagnosticsSnapshot {
   const snapshot: AudioDiagnosticsSnapshot = {
     ...input,
+    // Track-list events may follow decoder initialization. Do not erase a real
+    // decoder name with a snapshot that simply did not carry that field.
+    decoder: input.decoder !== undefined ? input.decoder : (
+      lastSnapshot?.engine === input.engine && lastSnapshot.role === input.role &&
+      lastSnapshot.streamKey === input.streamKey && lastSnapshot.mimeType === input.mimeType
+        ? lastSnapshot.decoder : null
+    ),
     at: input.at || new Date().toISOString(),
   };
   lastSnapshot = snapshot;
@@ -61,11 +67,11 @@ export function recordAudioDiagnostics(
         `stream=${snapshot.streamKey}`,
         `track=${snapshot.trackId ?? "none"}`,
         `mime=${snapshot.mimeType ?? "unknown"}`,
+        `decoder=${snapshot.decoder ?? "unknown"}`,
         `lang=${snapshot.language ?? "und"}`,
         `supported=${snapshot.isSupported ?? "n/a"}`,
         `by=${snapshot.selectedBy}`,
         `tracks=${snapshot.trackCount}/${snapshot.supportedCount}`,
-        snapshot.silentAudio ? "silent=1" : null,
         snapshot.reason ? `reason=${snapshot.reason}` : null,
       ]
         .filter(Boolean)
@@ -95,9 +101,9 @@ export function audioDiagnosticsExtras(
     return {
       audioEngine: null,
       audioMime: null,
+      audioDecoder: null,
       audioSupported: null,
       audioTrackCount: 0,
-      audioSilent: false,
     };
   }
   return {
@@ -106,12 +112,12 @@ export function audioDiagnosticsExtras(
     audioStreamKey: snapshot.streamKey,
     audioTrackId: snapshot.trackId == null ? null : String(snapshot.trackId),
     audioMime: snapshot.mimeType ?? null,
+    audioDecoder: snapshot.decoder ?? null,
     audioLanguage: snapshot.language ?? null,
     audioSupported: snapshot.isSupported ?? null,
     audioSelectedBy: snapshot.selectedBy,
     audioTrackCount: snapshot.trackCount,
     audioSupportedCount: snapshot.supportedCount,
-    audioSilent: !!snapshot.silentAudio,
     audioReason: snapshot.reason ?? null,
     audioAt: snapshot.at,
   };

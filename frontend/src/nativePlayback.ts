@@ -74,7 +74,7 @@ type NativePlaybackModuleShape = {
   selectSubtitle(groupIndex: number, trackIndex: number): void;
   selectSubtitleLanguage(language?: string | null): void;
   subtitlesOff(): void;
-  stopPreview(): Promise<void>;
+  stopPreview(releasePlayer: boolean): Promise<void>;
   stopFullscreen(releasePlayer: boolean): Promise<void>;
   getOwner(): Promise<NativePlaybackOwner>;
   addListener(eventName: string): void;
@@ -89,7 +89,7 @@ export function nativePlaybackAvailable(): boolean { return !!native; }
 export function prepareNativeFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.prepareFullscreen(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function prepareNativePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.preparePreview(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function resolveNativePlaybackFreshSource(requestId: number, uri?: string | null, headers: Record<string, string> = {}, contentType?: string | null, failureReason?: string | null): void { native?.resolveFreshSource(requestId, uri ?? null, headers, contentType ?? null, failureReason ?? null); }
-export function setNativePlaybackResizeMode(mode: "fit" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
+export function setNativePlaybackResizeMode(mode: "fit" | "fill" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
 export function pauseNativePlayback(): void { native?.pause(); }
 export function resumeNativePlayback(): void { native?.resume(); }
 export function setNativePlaybackMuted(muted: boolean): void { native?.setMuted(muted); }
@@ -100,7 +100,7 @@ export function selectNativeAudio(track?: NativePlaybackTrack | null, language?:
 export function selectNativeSubtitle(track?: NativePlaybackTrack | null, language?: string | null): void {
   if (track) native?.selectSubtitle(track.groupIndex, track.trackIndex); else if (language) native?.selectSubtitleLanguage(language); else native?.subtitlesOff();
 }
-export async function stopNativePreview(): Promise<void> { await native?.stopPreview(); }
+export async function stopNativePreview(releasePlayer = false): Promise<void> { await native?.stopPreview(releasePlayer); }
 export async function stopNativeFullscreen(releasePlayer = true): Promise<void> { await native?.stopFullscreen(releasePlayer); }
 export async function getNativePlaybackOwner(): Promise<NativePlaybackOwner> { return (await native?.getOwner()) ?? "none"; }
 export function addNativePlaybackStateListener(listener: (event: NativePlaybackIdentity & { state: NativePlaybackState; reason?: string | null }) => void): () => void { const sub = emitter?.addListener("NativePlaybackState", listener); return () => sub?.remove(); }

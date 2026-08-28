@@ -8,10 +8,12 @@ on:
       - ci/code-interaction-audit-player-freeze-convergence.trigger
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   converge-and-audit:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

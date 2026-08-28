@@ -53,6 +53,7 @@ internal object NativePlaylistParser {
     val name: String,
     val group: String,
     val logo: String,
+    val headers: LinkedHashMap<String, String> = LinkedHashMap(),
   )
 
   fun fetch(urlString: String): NativePlaylistResult {
@@ -100,9 +101,14 @@ internal object NativePlaylistParser {
           }
 
           val meta = pending ?: continue
+          if (line.startsWith("#EXTVLCOPT:", ignoreCase = true) || line.startsWith("#EXTHTTP:", ignoreCase = true)) {
+            applyExtHttpOption(meta.headers, line)
+            continue
+          }
           if (line.isEmpty() || line.startsWith('#')) continue
           pending = null
-          if (!isAllowedStreamUrl(line)) {
+          val streamUrl = appendPipeHeaders(line, meta.headers)
+          if (!isAllowedStreamUrl(streamUrl)) {
             rejected += 1
             continue
           }
@@ -111,7 +117,7 @@ internal object NativePlaylistParser {
             tvgCounts[meta.tvgId] = (tvgCounts[meta.tvgId] ?: 0) + 1
           }
           if (rawEntries.size < MAX_CHANNELS) {
-            rawEntries.add(RawEntry(meta.tvgId, meta.name, meta.group, meta.logo, line))
+            rawEntries.add(RawEntry(meta.tvgId, meta.name, meta.group, meta.logo, streamUrl))
           } else {
             truncated = true
           }
@@ -166,17 +172,14 @@ internal object NativePlaylistParser {
     // cleartext HTTP for both playlist and XMLTV endpoints; sideload builds
     // explicitly permit that transport. Stream URLs inside the M3U are also
     // retained verbatim.
-    val client = OkHttpClientProvider.getOkHttpClient().newBuilder()
-      .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-      .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    // Share CookieJar with Media3 so panel session cookies from M3U apply to streams.
+    val client = CharmHttpClients.playlistClient(OkHttpClientProvider.getOkHttpClient()).newBuilder()
       .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-      .followRedirects(true)
-      .followSslRedirects(true)
       .build()
     val request = Request.Builder()
       .url(cleanUrl)
-      .header("User-Agent", "CharmIPTV/Experimental-v3")
-      .header("Accept", "*/*")
+      .header("User-Agent", "TiviMate/5.1.6 (Linux; Android TV)")
+      .header("Accept", "application/x-mpegURL,application/vnd.apple.mpegurl,audio/mpegurl,application/xml,text/xml,*/*")
       .build()
     val response = client.newCall(request).execute()
     if (!response.isSuccessful) {
@@ -250,12 +253,45 @@ internal object NativePlaylistParser {
     }
   }
 
+  private fun applyExtHttpOption(headers: LinkedHashMap<String, String>, line: String) {
+    val payload = line.substringAfter(':', "").trim()
+    if (payload.isEmpty()) return
+    val lower = payload.lowercase(Locale.US)
+    when {
+      lower.startsWith("http-user-agent=") -> headers["User-Agent"] = payload.substringAfter('=').trim()
+      lower.startsWith("http-referrer=") || lower.startsWith("http-referer=") ->
+        headers["Referer"] = payload.substringAfter('=').trim()
+      lower.startsWith("http-cookie=") -> headers["Cookie"] = payload.substringAfter('=').trim()
+      lower.startsWith("http-header=") -> {
+        val header = payload.substringAfter('=').trim()
+        val colon = header.indexOf(':')
+        if (colon > 0) {
+          val key = header.substring(0, colon).trim()
+          val value = header.substring(colon + 1).trim()
+          if (key.isNotEmpty() && value.isNotEmpty()) headers[key] = value
+        }
+      }
+      // Ignore non-HTTP VLC options (network-caching, http-reconnect, …). Emitting
+      // them as request headers breaks panels/CDNs that TiViMate still plays.
+    }
+  }
+
+  private fun appendPipeHeaders(url: String, headers: Map<String, String>): String {
+    if (headers.isEmpty()) return url
+    val encoded = headers.entries.joinToString("&") { (key, value) ->
+      // Match encodeURIComponent on the JS parser: spaces are %20, literal
+      // plus signs are %2B. Pipe metadata must never use form decoding.
+      "${java.net.URLEncoder.encode(key, Charsets.UTF_8.name()).replace("+", "%20")}=${java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")}"
+    }
+    return if (url.contains('|')) "$url&$encoded" else "$url|$encoded"
+  }
+
   private fun isAllowedStreamUrl(raw: String): Boolean {
     val identity = streamIdentityUrl(raw)
     val colon = identity.indexOf(':')
     if (colon <= 0) return false
     return when (identity.substring(0, colon).lowercase(Locale.US)) {
-      "http", "https", "rtsp", "rtsps", "rtmp", "rtmps" -> true
+      "http", "https", "rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp", "srt", "rist" -> true
       else -> false
     }
   }
@@ -271,6 +307,8 @@ internal object NativePlaylistParser {
    */
   private fun streamType(url: String): String {
     val clean = streamIdentityUrl(url)
+    val protocol = clean.substringBefore(':')
+    if (protocol in setOf("rtsp", "rtsps", "rtmp", "rtmps", "rtp", "udp", "srt", "rist")) return protocol
     val path = clean.substringBefore('?')
     val query = clean.substringAfter('?', "")
     val paddedQuery = if (query.isEmpty()) "" else "&$query&"
@@ -279,12 +317,18 @@ internal object NativePlaylistParser {
         clean.contains("/hls/") ||
         paddedQuery.contains("&format=m3u8&") ||
         paddedQuery.contains("&type=hls&") ||
-        paddedQuery.contains("&output=hls&") -> "hls"
+        paddedQuery.contains("&output=hls&") ||
+        paddedQuery.contains("&format=hls&") ||
+        paddedQuery.contains("&type=m3u8&") ||
+        paddedQuery.contains("&output=m3u8&") -> "hls"
       path.endsWith(".mpd") ||
         clean.contains("/dash/") ||
         paddedQuery.contains("&format=mpd&") ||
         paddedQuery.contains("&type=dash&") ||
-        paddedQuery.contains("&output=dash&") -> "dash"
+        paddedQuery.contains("&output=dash&") ||
+        paddedQuery.contains("&format=dash&") ||
+        paddedQuery.contains("&type=mpd&") ||
+        paddedQuery.contains("&output=mpd&") -> "dash"
       path.endsWith(".ts") || path.endsWith(".m2ts") ||
         clean.contains("mpegts") || clean.contains("mpeg-ts") ||
         paddedQuery.contains("&format=ts&") ||
@@ -300,6 +344,20 @@ internal object NativePlaylistParser {
         path.endsWith(".mp3") || path.endsWith(".aac") || path.endsWith(".ogg") ||
         path.endsWith(".wav") || path.endsWith(".flac") || path.endsWith(".amr") ||
         path.endsWith(".cmfv") || path.endsWith(".cmfa") -> "progressive"
+      else -> "unknown"
+    }
+  }
+
+  /** Catalog drawer hint only — never forces Media3 opaque routing. */
+  fun catalogKind(url: String): String {
+    val path = streamIdentityUrl(url).substringBefore('?')
+    return when {
+      Regex("/series/", RegexOption.IGNORE_CASE).containsMatchIn(path) -> "series"
+      Regex("/movie/", RegexOption.IGNORE_CASE).containsMatchIn(path) ||
+        Regex("/movies/", RegexOption.IGNORE_CASE).containsMatchIn(path) ||
+        Regex("/vod/", RegexOption.IGNORE_CASE).containsMatchIn(path) -> "movie"
+      Regex("/live/", RegexOption.IGNORE_CASE).containsMatchIn(path) ||
+        Regex("/timeshift/", RegexOption.IGNORE_CASE).containsMatchIn(path) -> "live"
       else -> "unknown"
     }
   }

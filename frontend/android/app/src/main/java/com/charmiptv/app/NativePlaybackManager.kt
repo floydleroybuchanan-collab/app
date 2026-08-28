@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.TextureView
@@ -21,6 +22,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.Timeline
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -34,6 +36,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.rtsp.RtspMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -41,10 +44,13 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import okhttp3.ConnectionPool
-import okhttp3.OkHttpClient
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import java.io.IOException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
+import java.security.cert.CertificateException
+import com.charmiptv.app.Media3RecoveryPolicy.Action
+import com.charmiptv.app.Media3RecoveryPolicy.Failure
 
 @OptIn(UnstableApi::class)
 object NativePlaybackManager {
@@ -96,37 +102,35 @@ object NativePlaybackManager {
   }
   private data class PlaybackSource(val channelKey: String, val uri: String, val headers: Map<String, String>, val contentType: String?, val sourceType: String)
 
-  // TiViMate Buffer size mapped onto the Onn-proven Media3 budgets.
-  // Small/Medium/Large keep the Settings names; Stable = last known-good
-  // Amlogic profile (20/90/5/12 + 48MB) that painted video with audio.
+  // Small/Medium/Large keep the public player setting while the maximum native
+  // allocation remains capped at the Onn/Fire-TV-safe 48 MB budget.
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
+  // Match the builder's TiViMate-style panel UA. OkHttp's default "okhttp/x.x"
+  // (and unknown Charm-only strings) are blocked by many IPTV panels, which
+  // leaves every tune black+silent while the guide still loads.
+  private const val DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)"
 
-  // Single reconnect-on-error window (TiViMate does not expose separate
-  // transport/hard-stall timers). Keep it patient: Amlogic reports BUFFERING
-  // while frames still present; a short stall budget blacked the player.
-  private const val RECONNECT_STALL_MS = 50_000L
-  private const val WATCHDOG_POLL_MS = 3_000L
-  private const val START_TIMEOUT_MS = 60_000L
-  private const val SOURCE_REFRESH_TIMEOUT_MS = 15_000L
+  // Startup deadlines are armed only until the first rendered frame. Healthy
+  // playback has no periodic timer capable of stopping or rebuilding it.
+  private const val START_TIMEOUT_MS = 30_000L
+  // First opaque container guess often hangs without a parse error on Xtream
+  // /live/.../id URLs. Rotate sooner than the full start budget so HLS/DASH
+  // candidates still get airtime inside one tune.
+  private const val OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS = 12_000L
+  // The active JS playlist request has a 45s abort deadline. Allow parsing and
+  // bridge delivery too; this deadline is only for an authentication refresh.
+  private const val SOURCE_REFRESH_TIMEOUT_MS = 60_000L
   private const val OPAQUE_CONFIRM_MS = 5_000L
-  private const val MAX_AUTO_RECOVERIES = 4
-  private val RECOVERY_BACKOFF_MS = longArrayOf(0L, 1_000L, 3_000L, 6_000L)
   private const val OPAQUE_PROBE_CACHE_SIZE = 256
   private const val OPAQUE_TYPE_PREFS = "charm_media3_stream_types"
-  private val OPAQUE_LIVE_CANDIDATES = listOf("transport", "hls", "dash", "progressive")
+  private val OPAQUE_LIVE_CANDIDATES = listOf("progressive", "hls", "dash")
   private const val TAG = "CharmMedia3"
 
-  private val httpClient = OkHttpClient.Builder()
-    .connectionPool(ConnectionPool(6, 5, TimeUnit.MINUTES))
-    .connectTimeout(20, TimeUnit.SECONDS)
-    // Live IPTV is a long-lived byte stream. A 45s read timeout was aborting
-    // healthy Onn playback about once a minute, climbing the 3-step recovery
-    // ladder, then showing Retry.
-    .readTimeout(0, TimeUnit.SECONDS)
-    .writeTimeout(0, TimeUnit.SECONDS)
-    .retryOnConnectionFailure(true)
-    .build()
+  // Shared CookieJar with playlist fetch so panel Set-Cookie survives into stream GETs.
+  // The HTTP timeout is an inactivity timeout between bytes, never a total
+  // duration cap on a healthy live stream.
+  private val httpClient = CharmHttpClients.mediaClient()
   private val detectedTypeCache = object : LinkedHashMap<String, String>(64, 0.75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > OPAQUE_PROBE_CACHE_SIZE
   }
@@ -138,6 +142,7 @@ object NativePlaybackManager {
   private var fullscreenPlayerView: PlayerView? = null
   private var player: ExoPlayer? = null
   private var mutedState = false
+  private var fullscreenResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
   private var listener: Listener? = null
   private var owner: Owner = Owner.NONE
   private var activeSource: PlaybackSource? = null
@@ -146,15 +151,39 @@ object NativePlaybackManager {
   private var nextSourceRefreshRequestId = 1L
   private var lastPlaybackError: PlaybackException? = null
   private var firstFrameRendered = false
-  private var recoveryAttempts = 0
-  private var bufferingSinceMs = 0L
-  private var bufferingLastBufferedPositionMs = 0L
-  private var bufferingLastPositionMs = 0L
+  private val recoveryPolicy = Media3RecoveryPolicy()
+  private val recoveryAttempts: Int get() = recoveryPolicy.attempts
+  private var userPaused = false
+  private var hasPlayedThisTune = false
+  private var recoveringNetwork = false
+  private var lastKnownLive = false
+  private var playbackRevision = 0L
+  private var playbackListener: Player.Listener? = null
+  private var analyticsListener: AnalyticsListener? = null
+  private data class PendingRecovery(
+    val instance: ExoPlayer,
+    val revision: Long,
+    val decision: Media3RecoveryPolicy.Decision,
+    val resumePositionMs: Long?,
+  )
+  private var pendingRecovery: PendingRecovery? = null
   private var opaqueRouteSource: PlaybackSource? = null
-  private var opaqueRouteCandidates: List<String> = emptyList()
+  private var opaqueRouteCandidates: List<OpaqueAttempt> = emptyList()
   private var opaqueRouteIndex = -1
   private var opaqueRouteCacheKey: String? = null
   private var opaqueRouteWasCached = false
+  private var pendingPrepare: PendingPrepare? = null
+
+  private data class OpaqueAttempt(val uri: String, val sourceType: String)
+
+  private data class PendingPrepare(
+    val requestedOwner: Owner,
+    val channelKey: String,
+    val uri: String,
+    val headers: Map<String, String>,
+    val contentType: String?,
+    val bufferProfile: String?,
+  )
 
   private var detectedMimeType: String? = null
   private var resolvedUri: String? = null
@@ -169,84 +198,40 @@ object NativePlaybackManager {
   private var videoDecoder: String? = null
   private var audioDecoder: String? = null
   private var codecError: String? = null
+  private var decoderReleaseFailure: Throwable? = null
 
-  private val startupTimeout = Runnable {
+  private val startupTimeout: Runnable = Runnable {
+    if (userPaused) return@Runnable
+    if (pendingPrepare != null) {
+      pendingPrepare = null
+      finishWithError("start-timeout")
+      return@Runnable
+    }
     val instance = player ?: return@Runnable
-    if (owner == Owner.NONE || firstFrameRendered) return@Runnable
+    if (owner == Owner.NONE || firstFrameRendered || pendingRecovery != null || pendingSourceRefresh != null) return@Runnable
+    // An outage after playback began is not a failed channel. Let Media3's
+    // data source finish its bounded reads/retries; no buffering watchdog.
+    if ((hasPlayedThisTune || recoveringNetwork) && instance.playbackState == Player.STATE_BUFFERING) return@Runnable
     if (ensureActiveSurfaceBound(instance, "startup-timeout")) {
       recordDiagnostic("startup-surface-rebound", lastPlaybackError, instance)
-      armStartupTimeout()
-      return@Runnable
+      // Rebinding is not playback success and must not extend the deadline.
     }
     recordDiagnostic("start-timeout", lastPlaybackError, instance)
-    recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
-  }
-  private val bufferingWatchdog: Runnable = Runnable {
-    val instance = player ?: return@Runnable
-    if (!firstFrameRendered) return@Runnable
-    val bufferedPosition = instance.bufferedPosition
-    val position = instance.currentPosition
-    val bufferedDuration = instance.totalBufferedDuration
-    val hasForwardBuffer = bufferedDuration != C.TIME_UNSET && bufferedDuration > 0L
-    // Live MPEG-TS/HLS on Amlogic often reports BUFFERING while frames are
-    // still presenting and currentPosition is TIME_UNSET. Treat playWhenReady
-    // + any forward buffer / decoder as healthy — same class of gate TiViMate
-    // uses so reconnect-on-error does not kill a living stream.
-    if (
-      instance.isPlaying ||
-      (instance.playWhenReady && instance.playbackState == Player.STATE_READY) ||
-      (instance.playWhenReady && instance.playbackState == Player.STATE_BUFFERING && (hasForwardBuffer || videoDecoder != null || audioDecoder != null))
-    ) {
-      bufferingSinceMs = System.currentTimeMillis()
-      if (instance.playbackState == Player.STATE_BUFFERING) {
-        main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
-      }
-      return@Runnable
-    }
-    if (instance.playbackState != Player.STATE_BUFFERING) return@Runnable
-
-    val nowMs = System.currentTimeMillis()
-    val madeProgress = instance.isPlaying ||
-      (position != C.TIME_UNSET && position > bufferingLastPositionMs) ||
-      (bufferedPosition != C.TIME_UNSET && bufferedPosition > bufferingLastBufferedPositionMs) ||
-      hasForwardBuffer
-    if (position != C.TIME_UNSET) bufferingLastPositionMs = position
-    if (bufferedPosition != C.TIME_UNSET) bufferingLastBufferedPositionMs = bufferedPosition
-
-    if (madeProgress) {
-      bufferingSinceMs = nowMs
-      recordDiagnostic("buffer-progress", lastPlaybackError, instance)
-      main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
-      return@Runnable
-    }
-
-    if (bufferingSinceMs == 0L) bufferingSinceMs = nowMs
-    val hungForMs = nowMs - bufferingSinceMs
-    if (hungForMs < RECONNECT_STALL_MS) {
-      main.postDelayed(bufferingWatchdog, minOf(WATCHDOG_POLL_MS, RECONNECT_STALL_MS - hungForMs))
-      return@Runnable
-    }
-
-    if (ensureActiveSurfaceBound(instance, "buffer-watchdog")) {
-      bufferingSinceMs = nowMs
-      main.postDelayed(bufferingWatchdog, RECONNECT_STALL_MS)
-      return@Runnable
-    }
-
-    // TiViMate Reconnect on Error: one stall budget, then reconnect.
-    recordDiagnostic("buffer-watchdog", lastPlaybackError, instance)
-    recoverOnce(instance, skipBarePrepare = false)
+    // Opaque live URLs can hang on the wrong factory without a parse error.
+    // Rotate generic progressive/TS sniffing -> HLS -> DASH within Media3.
+    if (advanceOpaqueCandidateOnStall(instance, "start-timeout")) return@Runnable
+    scheduleRecovery(instance, Failure.STARTUP)
   }
   private val delayedRecovery = Runnable {
-    val instance = player ?: return@Runnable
-    if (owner != Owner.NONE) performRecovery(instance)
+    val pending = pendingRecovery ?: return@Runnable
+    if (!userPaused) performRecovery(pending)
   }
   private val sourceRefreshTimeout = Runnable {
     if (pendingSourceRefresh == null) return@Runnable
     pendingSourceRefresh = null
     val instance = player ?: return@Runnable
     recordDiagnostic("source-refresh-timeout", lastPlaybackError, instance)
-    recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
+    finishWithError("stream-error", instance)
   }
   private val opaqueTypeConfirmation = Runnable {
     val instance = player ?: return@Runnable
@@ -276,9 +261,16 @@ object NativePlaybackManager {
       video.player = instance
       clearInactivePlayerView(surfaceOwner)
       if (instance != null && activeSource != null) {
-        instance.playWhenReady = true
+        instance.playWhenReady = !userPaused
         recordDiagnostic("surface-attached", lastPlaybackError, instance)
       }
+    }
+    // prepare() can race Fabric mount and hit surface-unavailable. Flush any
+    // queued tune now that this owner's PlayerView exists.
+    val pending = pendingPrepare
+    if (pending != null && pending.requestedOwner == surfaceOwner) {
+      pendingPrepare = null
+      prepare(pending.requestedOwner, pending.channelKey, pending.uri, pending.headers, pending.contentType, pending.bufferProfile)
     }
   }
   fun detachSurface(surfaceOwner: Owner, surface: FrameLayout) = runOnMain {
@@ -306,31 +298,68 @@ object NativePlaybackManager {
     }
   }
   fun setResizeMode(mode: String?) = runOnMain {
-    playerViewFor(owner)?.resizeMode = when (mode) {
+    fullscreenResizeMode = when (mode) {
       "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
       "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
       else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     }
+    fullscreenPlayerView?.resizeMode = fullscreenResizeMode
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?, bufferProfile: String? = null) = runOnMain {
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
+      pendingPrepare = null
       publishState("error", "owner-reserved")
       return@runOnMain
     }
-    NativeVlcPlaybackManager.stopForEngineSwitch()
-    applyBufferProfile(bufferProfile)
-    val instance = ensurePlayer()
     cancelRecoveryCallbacks()
+    playbackRevision += 1
+    userPaused = false
     val video = playerViewFor(requestedOwner)
-    if (video == null) { finishWithError("surface-unavailable", instance); return@runOnMain }
+    if (video == null) {
+      // Retire the old source before waiting; this pending tune is cancellable
+      // even though it does not yet own a decoder or a Fabric surface.
+      stopInternal(releasePlayer = true)
+      if (decoderReleaseFailure != null) {
+        publishState("error", "release-failed")
+        return@runOnMain
+      }
+      // Fabric often mounts the native surface one frame after prepare*. Queue
+      // the tune instead of a definitive black+silent surface-unavailable error.
+      pendingPrepare = PendingPrepare(
+        requestedOwner,
+        channelKey.trim(),
+        uri,
+        LinkedHashMap(headers),
+        contentType,
+        bufferProfile,
+      )
+      publishState("loading", "awaiting-surface")
+      markPlaybackStarting("awaiting-surface")
+      recordDiagnostic("awaiting-surface", lastPlaybackError, player)
+      armStartupTimeout()
+      return@runOnMain
+    }
+    pendingPrepare = null
+    applyBufferProfile(bufferProfile)
+    val instance = try { ensurePlayer() } catch (failure: Exception) {
+      recordDiagnostic("player-init-failed:${failure.javaClass.simpleName}", null, null)
+      finishWithError("stream-error")
+      return@runOnMain
+    }
 
     // Bind the replacement video target before clearing the previous target.
     // Preview <-> fullscreen is a PlayerView handoff, not a stream failure;
     // this order avoids leaving the decoder with no output Surface.
     owner = requestedOwner
+    // Fullscreen must never inherit Guide preview mute (mutedState volume 0).
+    if (requestedOwner == Owner.FULLSCREEN) {
+      mutedState = false
+      instance.volume = 1f
+    }
     applyAudioAttributes(instance, requestedOwner)
     video.player = instance
+    video.resizeMode = if (requestedOwner == Owner.FULLSCREEN) fullscreenResizeMode else AspectRatioFrameLayout.RESIZE_MODE_FIT
     video.visibility = View.VISIBLE
     // Bind the new target first so Media3 never observes a no-surface gap,
     // then detach every inactive target.  `owner` may already be NONE after a
@@ -344,11 +373,18 @@ object NativePlaybackManager {
     seedKnownContainerMime(baseSource)
     lastPlaybackError = null
     firstFrameRendered = false
-    recoveryAttempts = 0
-    resetBufferingWatchdogState()
+    recoveryPolicy.reset()
+    hasPlayedThisTune = false
+    recoveringNetwork = false
+    lastKnownLive = false
     markPlaybackStarting("channel-start")
     publishState("loading", null)
-    startOrRouteMediaSource(instance, baseSource, "channel-start")
+    try {
+      startOrRouteMediaSource(instance, baseSource, "channel-start")
+    } catch (failure: Exception) {
+      recordDiagnostic("source-init-failed:${failure.javaClass.simpleName}", null, instance)
+      finishWithError("stream-error", instance)
+    }
   }
 
   fun provideFreshSource(requestId: Long, uri: String?, headers: Map<String, String>, contentType: String?, failureReason: String?) = runOnMain {
@@ -360,7 +396,7 @@ object NativePlaybackManager {
     val source = activeSource
     if (source == null || source.channelKey != pending.channelKey || uri.isNullOrBlank()) {
       recordDiagnostic("source-refresh-failed:${failureReason ?: "unavailable"}", lastPlaybackError, instance)
-      recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
+      finishWithError("stream-error", instance)
       return@runOnMain
     }
     val freshContentType = contentType?.trim()?.takeIf { it.isNotEmpty() } ?: source.contentType
@@ -374,12 +410,36 @@ object NativePlaybackManager {
       startOrRouteMediaSource(instance, baseSource, "fresh-source")
     } catch (error: Throwable) {
       recordDiagnostic("fresh-source-rebuild-failed:${error.javaClass.simpleName}", lastPlaybackError, instance)
-      if (recoveryAttempts < MAX_AUTO_RECOVERIES) recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport") else finishWithError("stream-error", instance)
+      finishWithError("stream-error", instance)
     }
   }
 
-  fun pause() = runOnMain { player?.pause() }
-  fun resume() = runOnMain { if (owner != Owner.NONE) player?.play() }
+  fun pause() = runOnMain {
+    userPaused = true
+    recoveryPolicy.onInterrupted(SystemClock.elapsedRealtime())
+    main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
+    player?.pause()
+  }
+  fun resume() = runOnMain {
+    if (owner == Owner.NONE) return@runOnMain
+    val instance = player ?: return@runOnMain
+    userPaused = false
+    val pending = pendingRecovery
+    if (pending != null) {
+      main.removeCallbacks(delayedRecovery)
+      main.postDelayed(delayedRecovery, pending.decision.delayMs)
+      return@runOnMain
+    }
+    if (pendingSourceRefresh != null) return@runOnMain
+    if (instance.playbackState == Player.STATE_ENDED && lastKnownLive) {
+      scheduleRecovery(instance, Failure.LIVE_END)
+      return@runOnMain
+    }
+    instance.playWhenReady = !userPaused
+    instance.play()
+    if (!firstFrameRendered) armStartupTimeout()
+  }
   fun setMuted(muted: Boolean) = runOnMain { mutedState = muted; player?.volume = if (muted) 0f else 1f }
   fun selectAudio(groupIndex: Int?, trackIndex: Int?, preferredLanguage: String?) = runOnMain {
     val instance = player ?: return@runOnMain
@@ -400,53 +460,77 @@ object NativePlaybackManager {
     else builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(preferredLanguage)
     instance.trackSelectionParameters = builder.build()
   }
-  fun stop(requestedOwner: Owner, releasePlayer: Boolean = false, onStopped: (() -> Unit)? = null) = runOnMain {
-    if (owner != requestedOwner) { onStopped?.invoke(); return@runOnMain }
-    stopInternal(releasePlayer); onStopped?.invoke()
+  fun stop(requestedOwner: Owner, releasePlayer: Boolean = false, onStopped: ((Throwable?) -> Unit)? = null) = runOnMain {
+    if (currentOwner() != requestedOwner && decoderReleaseFailure == null) { onStopped?.invoke(null); return@runOnMain }
+    stopInternal(releasePlayer); onStopped?.invoke(decoderReleaseFailure)
   }
   fun suspendForBackground() = runOnMain { stopInternal(releasePlayer = true) }
-  fun stopForEngineSwitch() = runOnMain { stopInternal(releasePlayer = true) }
   fun releaseAll() = runOnMain {
+    pendingPrepare = null
     stopInternal(releasePlayer = true)
     try { previewPlayerView?.player = null } catch (_: Throwable) {}
     try { fullscreenPlayerView?.player = null } catch (_: Throwable) {}
     listener = null; activity = null; previewSurface = null; fullscreenSurface = null
     previewPlayerView = null; fullscreenPlayerView = null
   }
-  fun currentOwner(): Owner = owner
+  fun currentOwner(): Owner = pendingPrepare?.requestedOwner ?: owner
+  fun hasReleaseFailure(): Boolean = decoderReleaseFailure != null
 
   private fun publishState(state: String, reason: String? = null) { listener?.onState(state, reason) }
   private fun stopInternal(releasePlayer: Boolean) {
+    val previousOwner = currentOwner()
+    playbackRevision += 1
+    pendingPrepare = null
     cancelRecoveryCallbacks()
     val instance = player
-    try { instance?.stop() } catch (_: Throwable) {}
-    try { instance?.clearMediaItems() } catch (_: Throwable) {}
-    owner = Owner.NONE; activeSource = null; lastPlaybackError = null; firstFrameRendered = false; recoveryAttempts = 0
-    resetBufferingWatchdogState()
+    var stopFailed = false
+    try { instance?.stop() } catch (_: Throwable) { stopFailed = true }
+    try { instance?.clearMediaItems() } catch (_: Throwable) { stopFailed = true }
+    if (releasePlayer || stopFailed || decoderReleaseFailure != null) releaseDecoder(instance)
+    owner = if (decoderReleaseFailure == null) Owner.NONE else previousOwner
+    activeSource = null; lastPlaybackError = null; firstFrameRendered = false
+    recoveryPolicy.reset()
+    userPaused = false
+    hasPlayedThisTune = false
+    recoveringNetwork = false
+    lastKnownLive = false
     resetMediaDiagnostics()
     resetOpaqueRoutingState()
     CharmMemoryCoordinator.setPlaybackStarting(false)
     // A soft stop intentionally retains ExoPlayer for the imminent
     // preview/fullscreen handoff, not its old SurfaceView.  Always unbind all
     // targets before returning so a retired preview cannot steal video output
-    // or make the watchdog recover a healthy transport stream.
+    // or leave a healthy transport stream rendering into a retired host.
     clearAllPlayerViews()
-    if (releasePlayer) {
-      try { instance?.release() } catch (_: Throwable) {}
-      player = null
-    }
+  }
+
+  // Never acknowledge decoder release after a platform exception. Retain the
+  // reference so the coordinator cannot allocate a replacement decoder.
+  private fun releaseDecoder(instance: ExoPlayer?): Boolean = try {
+    playbackRevision += 1
+    instance?.release()
+    if (player === instance) player = null
+    decoderReleaseFailure = null
+    true
+  } catch (failure: Throwable) {
+    decoderReleaseFailure = failure
+    false
   }
 
   private fun ensurePlayer(): ExoPlayer {
+    check(decoderReleaseFailure == null) { "Previous decoder release failed" }
     player?.let { return it }
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
     val lowRam = CharmMemoryCoordinator.budgets().lowRam
-    val durations = tivimateBufferDurationsMs(activeBufferProfile, lowRam)
+    val durations = media3BufferDurationsMs(activeBufferProfile, lowRam)
     val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(
       durations[0], durations[1], durations[2], durations[3],
-    ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(true).build()
+    ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(false).build()
     val renderers = DefaultRenderersFactory(context)
-      .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+      // Prefer the bundled LGPL FFmpeg audio renderer for AC3/E-AC3/DTS/
+      // TrueHD rather than repeatedly selecting an OEM decoder that advertises
+      // support but produces silence. Video remains on MediaCodec hardware.
+      .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
       .setEnableDecoderFallback(true)
       // Onn Google TV (Amlogic) often emits no video frames with forced async
       // MediaCodec queueing while audio continues. Disable async so hardware
@@ -460,116 +544,144 @@ object NativePlaybackManager {
         player = created
         applyAudioAttributes(created, owner)
         created.volume = if (mutedState) 0f else 1f
-        created.playWhenReady = true
-        created.addListener(object : Player.Listener {
-          override fun onPlaybackStateChanged(playbackState: Int) {
-            when (playbackState) {
-              Player.STATE_BUFFERING -> {
-                if (firstFrameRendered) {
-                  bufferingSinceMs = System.currentTimeMillis()
-                  bufferingLastBufferedPositionMs = created.bufferedPosition
-                  bufferingLastPositionMs = created.currentPosition
-                  main.removeCallbacks(bufferingWatchdog)
-                  main.postDelayed(bufferingWatchdog, WATCHDOG_POLL_MS)
-                }
-                if (!created.isPlaying) publishState("loading", null)
-              }
-              Player.STATE_READY -> {
-                main.removeCallbacks(bufferingWatchdog)
-                resetBufferingWatchdogState()
-                ensureActiveSurfaceBound(created, "state-ready")
-                if (firstFrameRendered) {
-                  // TiViMate: successful play clears reconnect budget.
-                  recoveryAttempts = 0
-                }
-                publishTracks(created.currentTracks)
-              }
-              Player.STATE_ENDED -> {
-                recordDiagnostic("stream-ended", lastPlaybackError, created)
-                recoverOnce(created, skipBarePrepare = true)
-              }
-              else -> Unit
-            }
-          }
-          override fun onRenderedFirstFrame() {
-            firstFrameRendered = true
-            recoveryAttempts = 0
-            main.removeCallbacks(startupTimeout)
-            main.removeCallbacks(bufferingWatchdog)
-            main.removeCallbacks(delayedRecovery)
-            main.removeCallbacks(opaqueTypeConfirmation)
-            if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)
-            resetBufferingWatchdogState()
-            CharmMemoryCoordinator.setPlaybackStarting(false)
-            recordDiagnostic("first-frame", lastPlaybackError, created)
-            publishState("playing", null)
-          }
-          override fun onPlayerError(error: PlaybackException) {
-            lastPlaybackError = error
-            main.removeCallbacks(startupTimeout)
-            main.removeCallbacks(bufferingWatchdog)
-            main.removeCallbacks(opaqueTypeConfirmation)
-            resetBufferingWatchdogState()
-            recordDiagnostic("player-error", error, created)
-            if (tryNextOpaqueCandidate(created, error)) return
-            recoverOnce(
-              created,
-              forceFreshSource = isAuthenticationFailure(error),
-              skipBarePrepare = isContainerMismatch(error),
-            )
-          }
-          override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (!firstFrameRendered) return
-            if (isPlaying) {
-              main.removeCallbacks(bufferingWatchdog)
-              resetBufferingWatchdogState()
-              publishState("playing", null)
-            }
-          }
-          override fun onTracksChanged(tracks: Tracks) = publishTracks(tracks)
-        })
-        created.addAnalyticsListener(object : AnalyticsListener {
-          override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
-            videoMimeType = format.sampleMimeType
-            videoCodecs = format.codecs
-            if (format.width > 0) videoWidth = format.width
-            if (format.height > 0) videoHeight = format.height
-            recordDiagnostic("video-format", lastPlaybackError, created)
-          }
-
-          override fun onAudioInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
-            audioMimeType = format.sampleMimeType
-            audioCodecs = format.codecs
-            recordDiagnostic("audio-format", lastPlaybackError, created)
-          }
-
-          override fun onVideoSizeChanged(eventTime: AnalyticsListener.EventTime, videoSize: VideoSize) {
-            if (videoSize.width > 0) videoWidth = videoSize.width
-            if (videoSize.height > 0) videoHeight = videoSize.height
-            recordDiagnostic("video-size", lastPlaybackError, created)
-          }
-
-          override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
-            videoDecoder = decoderName
-            recordDiagnostic("video-decoder-initialized", lastPlaybackError, created)
-          }
-
-          override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
-            audioDecoder = decoderName
-            recordDiagnostic("audio-decoder-initialized", lastPlaybackError, created)
-          }
-
-          override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
-            codecError = "video:${safeThrowableSummary(videoCodecError)}"
-            recordDiagnostic("video-codec-error", lastPlaybackError, created)
-          }
-
-          override fun onAudioCodecError(eventTime: AnalyticsListener.EventTime, audioCodecError: Exception) {
-            codecError = "audio:${safeThrowableSummary(audioCodecError)}"
-            recordDiagnostic("audio-codec-error", lastPlaybackError, created)
-          }
-        })
+        created.playWhenReady = !userPaused
       }
+  }
+
+  private fun bindPlaybackCallbacks(created: ExoPlayer) {
+    playbackListener?.let { created.removeListener(it) }
+    analyticsListener?.let { created.removeAnalyticsListener(it) }
+    val revision = playbackRevision
+    fun isCurrent(): Boolean = player === created && playbackRevision == revision && owner != Owner.NONE && activeSource != null
+    val nextListener = object : Player.Listener {
+      override fun onPlaybackStateChanged(playbackState: Int) {
+        if (!isCurrent() || created.playbackState != playbackState) return
+        when (playbackState) {
+          Player.STATE_BUFFERING -> {
+            recoveryPolicy.onInterrupted(SystemClock.elapsedRealtime())
+            if (!created.isPlaying) publishState("loading", null)
+          }
+          Player.STATE_READY -> {
+            ensureActiveSurfaceBound(created, "state-ready")
+            publishTracks(created.currentTracks)
+            markAudioOnlyReady(created)
+            if (!firstFrameRendered) armStartupTimeout()
+          }
+          Player.STATE_ENDED -> {
+            recoveryPolicy.onInterrupted(SystemClock.elapsedRealtime())
+            recordDiagnostic("stream-ended", lastPlaybackError, created)
+            if (Media3RecoveryPolicy.reconnectOnEnd(lastKnownLive, userPaused)) {
+              scheduleRecovery(created, Failure.LIVE_END)
+            }
+          }
+          else -> Unit
+        }
+      }
+      override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+        if (!isCurrent() || timeline.isEmpty) return
+        val window = timeline.getWindow(created.currentMediaItemIndex, Timeline.Window())
+        if (window.isPlaceholder) return
+        // Progressive live sources can acquire an estimated duration on EOF.
+        // Do not reinterpret a previously playing live feed as finished VOD.
+        if (!hasPlayedThisTune || created.isCurrentMediaItemLive) lastKnownLive = isLivePlayback(created)
+      }
+      override fun onRenderedFirstFrame() {
+        // A final queued frame after onPlayerError is not recovery. Cancelling
+        // the reconnect there leaves the failed player permanently idle.
+        if (!isCurrent() || created.playerError != null || created.playbackState == Player.STATE_IDLE || created.playbackState == Player.STATE_ENDED) return
+        lastKnownLive = lastKnownLive || isLivePlayback(created)
+        firstFrameRendered = true
+        hasPlayedThisTune = true
+        recoveringNetwork = false
+        main.removeCallbacks(startupTimeout)
+        main.removeCallbacks(delayedRecovery)
+        pendingRecovery = null
+        main.removeCallbacks(opaqueTypeConfirmation)
+        if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)
+        CharmMemoryCoordinator.setPlaybackStarting(false)
+        recordDiagnostic("first-frame", lastPlaybackError, created)
+        if (created.isPlaying && !userPaused) {
+          recoveryPolicy.onPlaying(SystemClock.elapsedRealtime())
+          lastPlaybackError = null
+          publishState("playing", null)
+        }
+      }
+      override fun onPlayerError(error: PlaybackException) {
+        if (!isCurrent() || created.playerError !== error) return
+        lastPlaybackError = error
+        main.removeCallbacks(startupTimeout)
+        main.removeCallbacks(opaqueTypeConfirmation)
+        recordDiagnostic("player-error", error, created)
+        if (tryNextOpaqueCandidate(created, error)) return
+        scheduleRecovery(created, classifyFailure(error))
+      }
+      override fun onIsPlayingChanged(isPlaying: Boolean) {
+        if (!isCurrent() || created.isPlaying != isPlaying) return
+        if (!isPlaying) recoveryPolicy.onInterrupted(SystemClock.elapsedRealtime())
+        if (!firstFrameRendered) return
+        if (isPlaying && !userPaused) {
+          recoveryPolicy.onPlaying(SystemClock.elapsedRealtime())
+          lastPlaybackError = null
+          publishState("playing", null)
+        }
+      }
+      override fun onTracksChanged(tracks: Tracks) {
+        if (!isCurrent()) return
+        publishTracks(tracks)
+      }
+    }
+    playbackListener = nextListener
+    created.addListener(nextListener)
+    val nextAnalytics = object : AnalyticsListener {
+      override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
+        if (!isCurrent()) return
+        videoMimeType = format.sampleMimeType
+        videoCodecs = format.codecs
+        if (format.width > 0) videoWidth = format.width
+        if (format.height > 0) videoHeight = format.height
+        recordDiagnostic("video-format", lastPlaybackError, created)
+      }
+
+      override fun onAudioInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
+        if (!isCurrent()) return
+        audioMimeType = format.sampleMimeType
+        audioCodecs = format.codecs
+        recordDiagnostic("audio-format", lastPlaybackError, created)
+      }
+
+      override fun onVideoSizeChanged(eventTime: AnalyticsListener.EventTime, videoSize: VideoSize) {
+        if (!isCurrent()) return
+        if (videoSize.width > 0) videoWidth = videoSize.width
+        if (videoSize.height > 0) videoHeight = videoSize.height
+        recordDiagnostic("video-size", lastPlaybackError, created)
+      }
+
+      override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+        if (!isCurrent()) return
+        videoDecoder = decoderName
+        recordDiagnostic("video-decoder-initialized", lastPlaybackError, created)
+      }
+
+      override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+        if (!isCurrent()) return
+        audioDecoder = decoderName
+        recordDiagnostic("audio-decoder-initialized", lastPlaybackError, created)
+      }
+
+      override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
+        if (!isCurrent()) return
+        codecError = "video:${safeThrowableSummary(videoCodecError)}"
+        recordDiagnostic("video-codec-error", lastPlaybackError, created)
+      }
+
+      override fun onAudioCodecError(eventTime: AnalyticsListener.EventTime, audioCodecError: Exception) {
+        if (!isCurrent()) return
+        codecError = "audio:${safeThrowableSummary(audioCodecError)}"
+        recordDiagnostic("audio-codec-error", lastPlaybackError, created)
+      }
+    }
+    analyticsListener = nextAnalytics
+    created.addAnalyticsListener(nextAnalytics)
   }
 
   private fun playerViewFor(target: Owner): PlayerView? = when (target) {
@@ -616,7 +728,7 @@ object NativePlaybackManager {
       video.player = instance
       video.visibility = View.VISIBLE
       clearInactivePlayerView(activeOwner)
-      if (activeSource != null) instance.playWhenReady = true
+      if (activeSource != null) instance.playWhenReady = !userPaused
       recordDiagnostic("surface-rebind:$event", lastPlaybackError, instance)
       true
     } catch (failure: Throwable) {
@@ -653,7 +765,7 @@ object NativePlaybackManager {
       setShutterBackgroundColor(Color.TRANSPARENT)
       setUseArtwork(false)
       setKeepContentOnPlayerReset(true)
-      resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+      resizeMode = if (surfaceOwner == Owner.FULLSCREEN) fullscreenResizeMode else AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.VISIBLE
       setLayerType(View.LAYER_TYPE_NONE, null)
       (videoSurfaceView as? TextureView)?.let { texture ->
@@ -672,45 +784,81 @@ object NativePlaybackManager {
     return video
   }
 
-  private fun recoverOnce(instance: ExoPlayer, forceFreshSource: Boolean = false, skipBarePrepare: Boolean = false): Boolean {
-    if (owner == Owner.NONE || player !== instance) return false
-    if (forceFreshSource && recoveryAttempts < 2) recoveryAttempts = 2
-    else if (skipBarePrepare && recoveryAttempts < 1) recoveryAttempts = 1
-    if (recoveryAttempts >= MAX_AUTO_RECOVERIES) { finishWithError("stream-error", instance); return false }
-    val delayMs = RECOVERY_BACKOFF_MS[recoveryAttempts]
-    recoveryAttempts += 1
+  private fun scheduleRecovery(instance: ExoPlayer, failure: Failure): Boolean {
+    if (owner == Owner.NONE || player !== instance || activeSource == null) return false
+    // A callback burst must never start two requests or overwrite a queued action.
+    if (pendingRecovery != null || pendingSourceRefresh != null) return true
+    val decision = recoveryPolicy.decide(failure, SystemClock.elapsedRealtime())
+    if (decision.action == Action.STOP) {
+      finishWithError("stream-error", instance)
+      return false
+    }
     cancelRecoveryCallbacks()
-    markPlaybackStarting("recovery-$recoveryAttempts")
-    recordDiagnostic("recovery-$recoveryAttempts-scheduled", lastPlaybackError, instance)
+    recoveringNetwork = failure == Failure.NETWORK || failure == Failure.LIVE_WINDOW || failure == Failure.LIVE_END
+    val resumePosition = if (lastKnownLive || isLivePlayback(instance)) null else instance.currentPosition.coerceAtLeast(0)
+    pendingRecovery = PendingRecovery(instance, playbackRevision, decision, resumePosition)
+    markPlaybackStarting("error-recovery")
+    recordDiagnostic("error-recovery-${decision.action.name.lowercase()}", lastPlaybackError, instance)
     publishState("loading", "native-reprepare")
-    if (delayMs == 0L) return performRecovery(instance)
-    main.postDelayed(delayedRecovery, delayMs)
+    if (!userPaused) main.postDelayed(delayedRecovery, decision.delayMs)
     return true
   }
-  private fun performRecovery(instance: ExoPlayer): Boolean {
-    if (owner == Owner.NONE || player !== instance) return false
+
+  private fun performRecovery(pending: PendingRecovery): Boolean {
+    val instance = pending.instance
+    if (pendingRecovery !== pending || owner == Owner.NONE || player !== instance || playbackRevision != pending.revision) return false
+    if (userPaused) return false
+    pendingRecovery = null
     val source = activeSource
     return try {
-      when (recoveryAttempts) {
-        1 -> { instance.prepare(); instance.playWhenReady = true; armStartupTimeout() }
-        2 -> { if (source == null) throw IllegalStateException("No active playback source"); rebuildMediaSource(instance, source, "media-source-rebuild") }
-        3 -> requestFreshSource(instance, source)
-        4 -> fullPlayerAndSourceRecovery(instance, source)
-        else -> finishWithError("stream-error", instance)
+      when (pending.decision.action) {
+        Action.REFRESH_SOURCE -> requestFreshSource(instance, source)
+        Action.REPREPARE_SOURCE -> {
+          check(source != null) { "No active playback source" }
+          // Reopen only the media source. A temporary network interruption is
+          // not evidence of a broken codec or a reason to destroy its surface.
+          rebuildMediaSource(instance, source, "network-source-recovery", pending.resumePositionMs)
+        }
+        Action.REBUILD_PLAYER -> fullPlayerAndSourceRecovery(instance, source, pending.resumePositionMs)
+        Action.STOP -> return false
       }
       true
     } catch (t: Throwable) {
-      recordDiagnostic("recovery-$recoveryAttempts-failed:${t.javaClass.simpleName}", lastPlaybackError, instance)
-      if (recoveryAttempts < MAX_AUTO_RECOVERIES) recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport") else {
-        finishWithError("stream-error", instance)
-        false
-      }
+      recordDiagnostic("error-recovery-failed:${t.javaClass.simpleName}", lastPlaybackError, instance)
+      // A replacement may already exist if source construction failed after
+      // decoder release. Always clean up the current instance, not an old one.
+      finishWithError("stream-error")
+      false
     }
   }
+
+  private fun classifyFailure(error: PlaybackException): Failure {
+    var current: Throwable? = error
+    var hasIoCause = false
+    var hasTlsFailure = false
+    repeat(12) {
+      hasIoCause = hasIoCause || current is IOException
+      hasTlsFailure = hasTlsFailure || current is SSLHandshakeException || current is SSLPeerUnverifiedException || current is CertificateException
+      current = current?.cause
+    }
+    return Media3RecoveryPolicy.classify(
+      error.errorCode, findHttpResponseCode(error), hasIoCause, hasTlsFailure,
+      isEstablishedLive = hasPlayedThisTune && lastKnownLive,
+    )
+  }
+
+  private fun isLivePlayback(instance: ExoPlayer): Boolean {
+    if (instance.isCurrentMediaItemLive) return true
+    // A known finite timeline wins even for a recorded .ts file.
+    if (instance.duration != C.TIME_UNSET && instance.duration > 0) return false
+    val source = activeSource ?: return false
+    return source.sourceType == "transport" || isOpaqueHttpUri(source.uri) || Uri.parse(source.uri).scheme.equals("rtsp", ignoreCase = true)
+  }
+
   private fun requestFreshSource(instance: ExoPlayer, source: PlaybackSource?) {
     if (source == null || source.channelKey.isBlank()) {
       recordDiagnostic("source-refresh-unavailable", lastPlaybackError, instance)
-      recoverOnce(instance, skipBarePrepare = activeSource?.sourceType == "transport")
+      finishWithError("stream-error", instance)
       return
     }
     val request = SourceRefreshRequest(nextSourceRefreshRequestId++, owner, source.channelKey, recoveryAttempts, lastPlaybackError?.errorCodeName ?: "stream-stalled", isAuthenticationFailure(lastPlaybackError))
@@ -719,7 +867,7 @@ object NativePlaybackManager {
     listener?.onSourceRefreshRequested(request)
     main.postDelayed(sourceRefreshTimeout, SOURCE_REFRESH_TIMEOUT_MS)
   }
-  private fun fullPlayerAndSourceRecovery(instance: ExoPlayer, source: PlaybackSource?) {
+  private fun fullPlayerAndSourceRecovery(instance: ExoPlayer, source: PlaybackSource?, resumePositionMs: Long?) {
     if (source == null) throw IllegalStateException("No active playback source")
     if (CharmMemoryCoordinator.budgets().lowRam) {
       CharmMemoryCoordinator.trimNonEssentialForPlaybackRecovery()
@@ -727,17 +875,19 @@ object NativePlaybackManager {
     }
     val video = playerViewFor(owner) ?: throw IllegalStateException("Playback surface is unavailable")
     try { video.player = null } catch (_: Throwable) {}
-    try { instance.release() } catch (_: Throwable) {}
-    player = null
+    check(releaseDecoder(instance)) { "Previous decoder release failed" }
     firstFrameRendered = false
-    resetBufferingWatchdogState()
     val rebuilt = ensurePlayer()
     video.player = rebuilt
-    rebuildMediaSource(rebuilt, source, "full-player-source-recovery")
+    rebuildMediaSource(rebuilt, source, "full-player-source-recovery", resumePositionMs)
   }
 
   private fun startOrRouteMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
-    if (source.sourceType != "unknown" || !isHttpOrHttps(source.uri)) {
+    val opaqueUri = isOpaqueHttpUri(source.uri)
+    // Extensionless live IPTV must always stay on the opaque candidate ladder.
+    // A wrong locked hls/dash/transport hint used to skip rotation and hang
+    // black for the full start timeout (TiViMate-class panels still deliver).
+    if (!opaqueUri && (source.sourceType != "unknown" || !isHttpOrHttps(source.uri))) {
       resetOpaqueRoutingState()
       val routed = if (source.sourceType == "unknown") source.copy(sourceType = "progressive") else source
       activeSource = routed
@@ -745,19 +895,28 @@ object NativePlaybackManager {
       rebuildMediaSource(instance, routed, event)
       return
     }
-
-    val cacheKey = detectedTypeCacheKey(source)
-    readDetectedType(cacheKey)?.let { cachedType ->
-      probeReason = "cache:$cachedType"
-      recordDiagnostic("opaque-cache-hit", lastPlaybackError, instance)
-      startOpaqueCandidate(instance, source, cacheKey, cachedType, "$event-opaque-cache-$cachedType", fromCache = true)
+    if (!isHttpOrHttps(source.uri)) {
+      resetOpaqueRoutingState()
+      val routed = source.copy(sourceType = if (source.sourceType == "unknown") "progressive" else source.sourceType)
+      activeSource = routed
+      seedKnownContainerMime(routed)
+      rebuildMediaSource(instance, routed, event)
       return
     }
 
-    probeReason = "direct:transport"
+    val cacheKey = detectedTypeCacheKey(source)
+    val cachedType = readDetectedType(cacheKey)
+
+    val firstType = when {
+      cachedType != null && isPersistableDetectedType(cachedType) -> cachedType
+      isPersistableDetectedType(source.sourceType) -> source.sourceType
+      else -> "progressive"
+    }
+    val fromCache = cachedType != null
+    probeReason = "direct:$firstType"
     resolvedUri = redactUriForDiagnostics(source.uri)
     recordDiagnostic("opaque-direct-start", lastPlaybackError, instance)
-    startOpaqueCandidate(instance, source, cacheKey, "transport", "$event-opaque-transport", fromCache = false)
+    startOpaqueCandidate(instance, source, cacheKey, firstType, "$event-opaque-$firstType", fromCache = fromCache)
   }
 
   private fun startOpaqueCandidate(instance: ExoPlayer, source: PlaybackSource, cacheKey: String, firstType: String, event: String, fromCache: Boolean) {
@@ -765,16 +924,31 @@ object NativePlaybackManager {
     opaqueRouteSource = source
     opaqueRouteCacheKey = cacheKey
     opaqueRouteWasCached = fromCache
-    opaqueRouteCandidates = orderedOpaqueCandidates(firstType)
+    opaqueRouteCandidates = buildOpaqueAttempts(source, firstType)
     opaqueRouteIndex = 0
-    val routed = source.copy(sourceType = opaqueRouteCandidates.first())
+    val first = opaqueRouteCandidates.first()
+    val routed = source.copy(uri = first.uri, sourceType = first.sourceType)
     activeSource = routed
-    detectedMimeType = detectedMimeType ?: knownMimeForSource(routed)
+    detectedMimeType = knownMimeForSource(routed)
+    resolvedUri = redactUriForDiagnostics(routed.uri)
     rebuildMediaSource(instance, routed, event)
   }
 
   private fun tryNextOpaqueCandidate(instance: ExoPlayer, error: PlaybackException): Boolean {
     if (!isContainerMismatch(error)) return false
+    return advanceOpaqueCandidate(instance, "parser", error)
+  }
+
+  /** Advance the MediaSource type on startup hang without changing the provider URL. */
+  private fun advanceOpaqueCandidateOnStall(instance: ExoPlayer, reason: String): Boolean =
+    advanceOpaqueCandidate(instance, "stall:$reason", lastPlaybackError)
+
+  private fun advanceOpaqueCandidate(instance: ExoPlayer, reason: String, error: PlaybackException?): Boolean {
+    // Once this live source has played, a damaged packet/segment is not evidence
+    // that its container changed. Retry the known source, not another factory.
+    // A fresh authentication URL still starts with no frame/network-retry flag
+    // and may need its own initial container routing.
+    if (hasPlayedThisTune && (firstFrameRendered || recoveringNetwork)) return false
     val original = opaqueRouteSource ?: return false
     if (opaqueRouteIndex < 0 || opaqueRouteCandidates.isEmpty()) return false
     main.removeCallbacks(opaqueTypeConfirmation)
@@ -787,15 +961,17 @@ object NativePlaybackManager {
     val nextIndex = opaqueRouteIndex + 1
     if (nextIndex >= opaqueRouteCandidates.size) return false
     opaqueRouteIndex = nextIndex
-    val nextType = opaqueRouteCandidates[nextIndex]
-    val routed = original.copy(sourceType = nextType)
+    val next = opaqueRouteCandidates[nextIndex]
+    val routed = original.copy(uri = next.uri, sourceType = next.sourceType)
     activeSource = routed
     detectedMimeType = knownMimeForSource(routed)
-    probeReason = "${probeReason ?: "opaque"};parser-retry:$nextType"
-    recordDiagnostic("opaque-type-retry-$nextType", error, instance)
+    resolvedUri = redactUriForDiagnostics(routed.uri)
+    probeReason = "${probeReason ?: "opaque"};$reason-retry:${next.sourceType}:${redactUriForDiagnostics(next.uri)}"
+    // Container classification is bounded by the candidate list, not a lifetime network budget.
     lastPlaybackError = null
+    recordDiagnostic("opaque-type-retry-${next.sourceType}", error, instance)
     return try {
-      rebuildMediaSource(instance, routed, "opaque-type-retry-$nextType")
+      rebuildMediaSource(instance, routed, "opaque-type-retry-${next.sourceType}")
       true
     } catch (failure: Throwable) {
       recordDiagnostic("opaque-type-retry-failed:${failure.javaClass.simpleName}", error, instance)
@@ -803,23 +979,29 @@ object NativePlaybackManager {
     }
   }
 
-  private fun rebuildMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String) {
+  /** Keep the exact URL supplied by the playlist; only the demuxer changes. */
+  private fun buildOpaqueAttempts(source: PlaybackSource, firstType: String): List<OpaqueAttempt> {
+    return orderedOpaqueCandidates(firstType).map { type -> OpaqueAttempt(source.uri, type) }
+  }
+
+  private fun rebuildMediaSource(instance: ExoPlayer, source: PlaybackSource, event: String, resumePositionMs: Long? = null) {
+    playbackRevision += 1
     markPlaybackStarting(event)
     val item = buildMediaItem(source)
     val mediaSource = buildMediaSource(item, source)
     firstFrameRendered = false
-    main.removeCallbacks(bufferingWatchdog)
-    resetBufferingWatchdogState()
     try { instance.stop() } catch (_: Throwable) {}
     try { instance.clearMediaItems() } catch (_: Throwable) {}
-    instance.setMediaSource(mediaSource, true)
+    bindPlaybackCallbacks(instance)
+    if (resumePositionMs == null) instance.setMediaSource(mediaSource, true)
+    else instance.setMediaSource(mediaSource, resumePositionMs)
     instance.prepare()
-    instance.playWhenReady = true
+    instance.playWhenReady = !userPaused
     armStartupTimeout()
     recordDiagnostic(event, lastPlaybackError, instance)
   }
   private fun buildMediaItem(source: PlaybackSource): MediaItem {
-    val builder = MediaItem.Builder().setUri(Uri.parse(source.uri))
+    val builder = MediaItem.Builder().setMediaId("charm:$playbackRevision").setUri(Uri.parse(source.uri))
     when (source.sourceType) {
       "hls" -> builder.setMimeType(MimeTypes.APPLICATION_M3U8)
       "dash" -> builder.setMimeType(MimeTypes.APPLICATION_MPD)
@@ -828,6 +1010,12 @@ object NativePlaybackManager {
     return builder.build()
   }
   private fun buildMediaSource(item: MediaItem, source: PlaybackSource): MediaSource {
+    if (Uri.parse(source.uri).scheme.equals("rtsp", ignoreCase = true)) {
+      // RTSP has its own transport and does not use the OkHttp factory.
+      require(source.headers.keys.all { it.equals("User-Agent", ignoreCase = true) }) { "RTSP custom headers are unsupported" }
+      val userAgent = source.headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value ?: DEFAULT_STREAM_USER_AGENT
+      return RtspMediaSource.Factory().setUserAgent(userAgent).createMediaSource(item)
+    }
     val dataSource = createDataSourceFactory(source.headers)
     val liveTsFlags =
       DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
@@ -841,6 +1029,16 @@ object NativePlaybackManager {
         .createMediaSource(item)
       "dash" -> DashMediaSource.Factory(dataSource).createMediaSource(item)
       "transport" -> ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
+      // Opaque last-resort "progressive" is often still live MPEG-TS without a
+      // file extension. Keep the live-TS flags so this candidate is not a
+      // guaranteed black/silent dead end.
+      "progressive" -> {
+        if (opaqueRouteCacheKey != null || isOpaqueHttpUri(source.uri)) {
+          ProgressiveMediaSource.Factory(dataSource, createLiveTsExtractorsFactory()).createMediaSource(item)
+        } else {
+          DefaultMediaSourceFactory(dataSource).createMediaSource(item)
+        }
+      }
       else -> DefaultMediaSourceFactory(dataSource).createMediaSource(item)
     }
   }
@@ -852,31 +1050,42 @@ object NativePlaybackManager {
 
   private fun createDataSourceFactory(headers: Map<String, String>): DefaultDataSource.Factory {
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
-    return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient).setDefaultRequestProperties(headers))
+    val properties = LinkedHashMap<String, String>(headers.size + 2)
+    if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+      properties["User-Agent"] = DEFAULT_STREAM_USER_AGENT
+    }
+    // Match ordinary IPTV clients / playlist fetch: panels that inspect Accept
+    // often reject bare OkHttp defaults.
+    if (headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
+      properties["Accept"] = "*/*"
+    }
+    properties.putAll(headers)
+    val client = CharmHttpClients.mediaClientForHeaders(httpClient, properties)
+    return DefaultDataSource.Factory(context, OkHttpDataSource.Factory(client).setDefaultRequestProperties(properties))
   }
   private fun finishWithError(reason: String, instance: ExoPlayer? = player) {
+    if (instance != null && player !== instance) return
+    playbackRevision += 1
+    pendingPrepare = null
     cancelRecoveryCallbacks()
     recordDiagnostic("definitive-$reason", lastPlaybackError, instance)
     CharmMemoryCoordinator.setPlaybackStarting(false)
-    if (instance != null) {
-      main.post {
-        if (player === instance) {
-          try { playerViewFor(owner)?.player = null } catch (_: Throwable) {}
-          try { instance.release() } catch (_: Throwable) {}
-          player = null
-        }
-      }
+    if (instance != null && player === instance) {
+      try { playerViewFor(owner)?.player = null } catch (_: Throwable) {}
+      releaseDecoder(instance)
     }
     publishState("error", reason)
+    if (decoderReleaseFailure == null) owner = Owner.NONE
+    activeSource = null
+    firstFrameRendered = false
   }
   private fun cancelRecoveryCallbacks() {
+    pendingRecovery = null
     main.removeCallbacks(startupTimeout)
-    main.removeCallbacks(bufferingWatchdog)
     main.removeCallbacks(delayedRecovery)
     main.removeCallbacks(sourceRefreshTimeout)
     main.removeCallbacks(opaqueTypeConfirmation)
     pendingSourceRefresh = null
-    resetBufferingWatchdogState()
   }
   private fun resetOpaqueRoutingState() {
     main.removeCallbacks(opaqueTypeConfirmation)
@@ -886,7 +1095,6 @@ object NativePlaybackManager {
     opaqueRouteCacheKey = null
     opaqueRouteWasCached = false
   }
-  private fun resetBufferingWatchdogState() { bufferingSinceMs = 0L; bufferingLastBufferedPositionMs = 0L; bufferingLastPositionMs = 0L }
   private fun resetMediaDiagnostics() {
     detectedMimeType = null
     resolvedUri = null
@@ -945,26 +1153,23 @@ object NativePlaybackManager {
     val dashUri = Regex("\\.mpd(?:$|[?#])").containsMatchIn(lowerUri) || Regex("[?&](?:format|type|output)=(?:dash|mpd)(?:&|$)").containsMatchIn(lowerUri) || lowerUri.contains("/dash/")
     val transportUri = Regex("\\.(?:ts|m2ts)(?:$|[?#])").containsMatchIn(lowerUri) || lowerUri.contains("mpegts") || lowerUri.contains("mpeg-ts") || Regex("[?&](?:format|type|output)=(?:ts|mpegts|mpeg-ts)(?:&|$)").containsMatchIn(lowerUri)
     val progressiveUri = Regex("\\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)(?:$|[?#])").containsMatchIn(lowerUri)
+    val opaque = isOpaqueHttpUri(uri)
     return when {
       hint == "hls" || hint == "m3u8" || hint == MimeTypes.APPLICATION_M3U8 || hint == "application/x-mpegurl" || hint == "application/vnd.apple.mpegurl" || hlsUri -> "hls"
       hint == "dash" || hint == "mpd" || hint == MimeTypes.APPLICATION_MPD || hint == "application/dash+xml" || dashUri -> "dash"
       hint == "transport" || hint == "ts" || hint == MimeTypes.VIDEO_MP2T || transportUri -> "transport"
-      hint == "progressive" || progressiveUri -> "progressive"
+      // Extensionless live IPTV (Xtream-style) must stay unknown so the opaque
+      // generic progressive/TS sniffing → HLS → DASH router runs. A stale
+      // forced type can skip the correct source factory and yield black+silent.
+      progressiveUri -> "progressive"
+      hint == "progressive" && !opaque -> "progressive"
       hint == "unknown" && isHttpOrHttps(uri) -> "unknown"
-      hint.isEmpty() && isOpaqueHttpUri(uri) -> "unknown"
+      opaque || (hint.isEmpty() && isHttpOrHttps(uri)) -> "unknown"
       else -> "progressive"
     }
   }
-  private fun isHttpOrHttps(uri: String): Boolean {
-    val scheme = try { Uri.parse(uri).scheme?.lowercase(Locale.US) } catch (_: Throwable) { null }
-    return scheme == "http" || scheme == "https"
-  }
-  private fun isOpaqueHttpUri(uri: String): Boolean {
-    if (!isHttpOrHttps(uri)) return false
-    val lower = uri.lowercase(Locale.US)
-    if (lower.contains("format=") || lower.contains("type=") || lower.contains("output=") || lower.contains("/hls/") || lower.contains("/dash/")) return false
-    return !Regex("\\.[a-z0-9]{2,5}(?:$|[?#])").containsMatchIn(lower)
-  }
+  private fun isHttpOrHttps(uri: String): Boolean = CharmStreamUrls.isHttpOrHttps(uri)
+  private fun isOpaqueHttpUri(uri: String): Boolean = CharmStreamUrls.isOpaqueHttpUri(uri)
   private fun detectedTypeCacheKey(source: PlaybackSource): String =
     source.channelKey.takeIf { it.isNotBlank() }?.let { "channel:$it" } ?: "url:${source.uri.substringBefore('?').substringBefore('#')}"
   private fun orderedOpaqueCandidates(firstType: String): List<String> =
@@ -1038,8 +1243,8 @@ object NativePlaybackManager {
       val parsed = Uri.parse(raw)
       val scheme = parsed.scheme ?: return "<opaque>"
       val host = parsed.host ?: return "$scheme://<opaque>"
-      val last = parsed.lastPathSegment?.take(48)?.takeIf { it.isNotBlank() }
-      if (last == null) "$scheme://$host/…" else "$scheme://$host/…/$last"
+      // Even a final path segment can be a provider password or signed token.
+      "$scheme://$host/…"
     } catch (_: Throwable) {
       "<opaque>"
     }
@@ -1108,25 +1313,30 @@ object NativePlaybackManager {
     val existing = player ?: return
     try { previewPlayerView?.player = null } catch (_: Throwable) {}
     try { fullscreenPlayerView?.player = null } catch (_: Throwable) {}
-    try { existing.release() } catch (_: Throwable) {}
-    player = null
+    releaseDecoder(existing)
   }
 
-  /** TiViMate Small / Medium / Large → Onn-safe ExoPlayer LoadControl durations. */
-  private fun tivimateBufferDurationsMs(profile: String, lowRam: Boolean): IntArray {
+  /** Small / Medium / Large -> bounded live-TV LoadControl durations. */
+  private fun media3BufferDurationsMs(profile: String, lowRam: Boolean): IntArray {
     val durations = when (profile) {
-      "low_latency" -> intArrayOf(8_000, 30_000, 2_000, 5_000)
-      "balanced" -> intArrayOf(15_000, 60_000, 3_000, 8_000)
-      // Stable = last known-good Onn profile that painted video with audio.
-      else -> intArrayOf(20_000, 90_000, 5_000, 12_000)
+      "low_latency" -> intArrayOf(1_000, 5_000, 500, 1_000)
+      "balanced" -> intArrayOf(3_000, 15_000, 1_000, 2_000)
+      else -> intArrayOf(10_000, 30_000, 1_500, 3_000)
     }
-    if (lowRam) durations[1] = minOf(durations[1], if (profile == "stable") 60_000 else 30_000)
+    if (lowRam) durations[1] = minOf(durations[1], 15_000)
     return durations
   }
 
   private fun armStartupTimeout() {
     main.removeCallbacks(startupTimeout)
-    if (owner != Owner.NONE) main.postDelayed(startupTimeout, START_TIMEOUT_MS)
+    if (userPaused || firstFrameRendered || pendingRecovery != null || pendingSourceRefresh != null) return
+    if (owner == Owner.NONE && pendingPrepare == null) return
+    val opaqueFirst =
+      opaqueRouteCacheKey != null &&
+        opaqueRouteIndex == 0 &&
+        opaqueRouteCandidates.size > 1
+    val delayMs = if (opaqueFirst) OPAQUE_FIRST_CANDIDATE_TIMEOUT_MS else START_TIMEOUT_MS
+    main.postDelayed(startupTimeout, delayMs)
   }
   private fun publishTracks(tracks: Tracks) {
     val audio = ArrayList<AudioTrackInfo>()
@@ -1141,6 +1351,31 @@ object NativePlaybackManager {
       }
     }
     listener?.onTracks(audio, subtitles)
+  }
+  private fun markAudioOnlyReady(instance: ExoPlayer) {
+    if (firstFrameRendered || instance.playbackState != Player.STATE_READY) return
+    val groups = instance.currentTracks.groups
+    val hasVideo = groups.any { it.type == C.TRACK_TYPE_VIDEO && it.length > 0 }
+    val hasSelectedAudio = groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+    if (hasVideo || !hasSelectedAudio) return
+    // Radio/audio-only playlist entries never render a video frame. Treat a
+    // selected, READY audio track as startup success without masking a broken
+    // or unsupported video track.
+    firstFrameRendered = true
+    hasPlayedThisTune = true
+    recoveringNetwork = false
+    pendingRecovery = null
+    main.removeCallbacks(startupTimeout)
+    main.removeCallbacks(delayedRecovery)
+    main.removeCallbacks(opaqueTypeConfirmation)
+    if (opaqueRouteCacheKey != null) main.postDelayed(opaqueTypeConfirmation, OPAQUE_CONFIRM_MS)
+    CharmMemoryCoordinator.setPlaybackStarting(false)
+    recordDiagnostic("audio-only-ready", lastPlaybackError, instance)
+    if (instance.isPlaying && !userPaused) {
+      recoveryPolicy.onPlaying(SystemClock.elapsedRealtime())
+      lastPlaybackError = null
+      publishState("playing", null)
+    }
   }
   private fun fillParent() = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
   private fun runOnMain(block: () -> Unit) { if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block) }

@@ -3,7 +3,7 @@ import { storage } from "@/src/utils/storage";
 
 export type PlaybackBufferProfile = "low_latency" | "balanced" | "stable";
 
-/** TiViMate Buffer size labels (Small / Medium / Large). */
+/** Charm buffer size labels (Small / Medium / Large). */
 export function playbackBufferProfileLabel(profile: PlaybackBufferProfile): string {
   switch (profile) {
     case "low_latency":

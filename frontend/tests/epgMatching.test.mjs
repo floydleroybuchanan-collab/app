@@ -16,9 +16,11 @@ import { inferMissingStopsFromNextProgram } from "../src/core/sourceParsing.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-test("normalizeGuideKey strips punctuation and case", () => {
-  assert.equal(normalizeGuideKey("ESPN-HD"), "espnhd");
+test("normalizeGuideKey strips punctuation, case, and quality tags", () => {
+  assert.equal(normalizeGuideKey("ESPN-HD"), "espn");
+  assert.equal(normalizeGuideKey("ESPN HD"), "espn");
   assert.equal(normalizeGuideKey("  Foo.Bar "), "foobar");
+  assert.equal(normalizeGuideKey("CNN (src1)"), "cnn");
 });
 
 test("playlist→XMLTV matching prefers programme-bearing ids then name", () => {

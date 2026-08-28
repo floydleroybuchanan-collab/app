@@ -1,3 +1,7 @@
+
+# Historical code is preserved below but must never modify current playback.
+raise SystemExit("Retired player repair: Media3-only playback supersedes this historical mutation/validator.")
+
 from pathlib import Path
 
 path = Path("frontend/src/components/StreamPlayer.tsx")

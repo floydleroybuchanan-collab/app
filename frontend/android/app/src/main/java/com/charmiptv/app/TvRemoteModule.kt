@@ -104,7 +104,7 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
           mimeTypes.add(mime)
           if (mime.startsWith("video/")) {
             try {
-              val video = info.getCapabilitiesForType(type).videoCapabilities
+              val video = info.getCapabilitiesForType(type).videoCapabilities ?: continue
               val advertisedWidth = video.supportedWidths.upper
               val advertisedHeight = video.supportedHeights.upper
               // Some vendor codecs publish Integer.MAX_VALUE-like ranges.
@@ -127,12 +127,23 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
         putBoolean("aac", mimeTypes.contains("audio/mp4a-latm"))
         putBoolean("ac3", mimeTypes.contains("audio/ac3"))
         putBoolean("eac3", mimeTypes.contains("audio/eac3") || mimeTypes.contains("audio/eac3-joc"))
+        putBoolean("ffmpegAudio", ffmpegAudioAvailable())
         putInt("maxWidth", maxWidth)
         putInt("maxHeight", maxHeight)
       }
       promise.resolve(result)
     } catch (t: Throwable) {
       promise.reject("CODEC_REPORT_FAILED", t.message ?: "Codec report unavailable", t)
+    }
+  }
+
+  private fun ffmpegAudioAvailable(): Boolean {
+    return try {
+      Class.forName("androidx.media3.decoder.ffmpeg.FfmpegLibrary")
+        .getMethod("isAvailable")
+        .invoke(null) as? Boolean == true
+    } catch (_: Throwable) {
+      false
     }
   }
 

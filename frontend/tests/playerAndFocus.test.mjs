@@ -10,23 +10,58 @@ import { evaluateDrawerBack } from "../src/core/drawerNavigationPolicy.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("stream classification preserves probing while automatic playback remains Media3-only", () => {
+test("stream classification uses Media3 and rejects unsupported protocols", () => {
   assert.equal(detectStreamKind("https://x/live.m3u8?token=1"), "hls");
   assert.equal(detectStreamKind("https://x/manifest.mpd"), "dash");
   assert.equal(detectStreamKind("https://cdn/hls/playlist.m3u8"), "hls");
   assert.equal(detectStreamKind("srt://contribute:9000"), "srt");
   assert.equal(detectStreamKind("rtsp://x/live"), "rtsp");
   assert.equal(detectStreamKind("http://provider.example/live/user/pass/1234"), "unknown");
-  for (const kind of ["hls", "dash", "progressive", "transport", "unknown", "srt", "rtmp", "webrtc", "rtsp"]) {
-    assert.equal(preferredEngine(kind), "media3");
-  }
+  assert.equal(preferredEngine("hls"), "media3");
+  assert.equal(preferredEngine("dash"), "media3");
+  assert.equal(preferredEngine("progressive"), "media3");
+  assert.equal(preferredEngine("transport"), "media3");
+  assert.equal(preferredEngine("unknown"), "media3");
+  assert.equal(preferredEngine("srt"), null);
+  assert.equal(preferredEngine("rtmp"), null);
+  assert.equal(preferredEngine("rtsp"), "media3");
 });
 
 test("pipe headers decode valid values and never throw on malformed percent encoding", () => {
-  const parsed = parsePipeHeaders("https://x/live|Referer=https%3A%2F%2Fexample.com&X-Bad=%E0%A4%A");
+  const parsed = parsePipeHeaders("https://x/live|Referer=https%3A%2F%2Fexample.com&User-Agent=Provider%20Box&X-Bad=%E0%A4%A");
   assert.equal(parsed.uri, "https://x/live");
   assert.equal(parsed.headers.Referer, "https://example.com");
+  assert.equal(parsed.headers["User-Agent"], "Provider Box");
   assert.equal(parsed.headers["X-Bad"], "%E0%A4%A");
+});
+
+test("pipe headers cannot inject an invalid native HTTP request", () => {
+  const parsed = parsePipeHeaders("  https://x/live  |Good-Header=ok&Bad%20Name=no&X-Injection=one%0D%0ATwo&X-Nul=one%00two");
+  assert.equal(parsed.uri, "https://x/live");
+  assert.equal(parsed.headers["Good-Header"], "ok");
+  assert.equal(parsed.headers["Bad Name"], undefined);
+  assert.equal(parsed.headers["X-Injection"], undefined);
+  assert.equal(parsed.headers["X-Nul"], undefined);
+});
+
+test("pipe metadata preserves opaque tokens, literal plus signs and case-insensitive overrides", () => {
+  const url = "https://provider.invalid/live/A+b?token=x%2By&signature=a+b";
+  const parsed = parsePipeHeaders(`${url}|Cookie=session=a+b%2Bc&User-Agent=C%2B%2B%20TV&user-agent=Final+UA&X-Empty=&__proto__=plain`);
+  assert.equal(parsed.uri, url);
+  assert.equal(parsed.headers.Cookie, "session=a+b+c");
+  assert.equal(parsed.headers["User-Agent"], undefined);
+  assert.equal(parsed.headers["user-agent"], "Final+UA");
+  assert.equal(parsed.headers["X-Empty"], "");
+  assert.equal(Object.hasOwn(parsed.headers, "__proto__"), true);
+  assert.equal(parsed.headers.__proto__, "plain");
+});
+
+test("all OkHttp-invalid value characters are rejected before the native bridge", () => {
+  for (const code of [0, 1, 8, 10, 13, 31, 127, 128, 256]) {
+    const value = encodeURIComponent(`a${String.fromCharCode(code)}b`);
+    assert.equal(parsePipeHeaders(`https://x/live|X-Test=${value}`).headers["X-Test"], undefined);
+  }
+  assert.equal(parsePipeHeaders("https://x/live|X-Test=a%09b").headers["X-Test"], "a\tb");
 });
 
 test("drawer edge is a typed remote owner and stale blur cleanup cannot clobber main drawer", async () => {
@@ -159,21 +194,21 @@ test("player delegates More to the single global Quick Actions owner", async () 
   assert.doesNotMatch(player, /playerOverlay.*"more"/);
 });
 
-test("Media3 recovery is one bounded native post-first-frame watchdog", async () => {
+test("Media3 recovery is event-driven, paced, and has no healthy-playback watchdog", async () => {
   const [adapter, native] = await Promise.all([
     source("src/components/StreamPlayer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt"),
   ]);
-  assert.match(native, /RECONNECT_STALL_MS = 50_000L/);
-  assert.match(native, /if \(!firstFrameRendered\) return@Runnable/);
-  assert.match(native, /instance\.isPlaying/);
-  assert.match(native, /MAX_AUTO_RECOVERIES = 4/);
-  assert.match(native, /RECOVERY_BACKOFF_MS = longArrayOf\(0L, 1_000L, 3_000L, 6_000L\)/);
-  assert.match(native, /if \(recoveryAttempts >= MAX_AUTO_RECOVERIES\)[\s\S]*?finishWithError\("stream-error", instance\)/);
-  assert.match(native, /recoveryAttempts \+= 1[\s\S]*?performRecovery\(instance\)/);
-  assert.match(native, /main\.postDelayed\(bufferingWatchdog, WATCHDOG_POLL_MS\)/);
+  assert.match(native, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);
+  assert.match(native, /main\.postDelayed\(delayedRecovery, decision\.delayMs\)/);
+  assert.match(native, /if \(decision\.action == Action\.STOP\)[\s\S]*?finishWithError\("stream-error", instance\)/);
+  assert.match(native, /override fun onPlayerError[\s\S]*?scheduleRecovery\(/);
+  assert.match(native, /Player\.STATE_ENDED -> \{[\s\S]*?scheduleRecovery\(/);
+  assert.doesNotMatch(native, /RECONNECT_STALL_MS|bufferingWatchdog|WATCHDOG_POLL_MS|MAX_AUTO_RECOVERIES|RECOVERY_BACKOFF_MS|silentAudioCheck/);
   assert.match(native, /override fun onRenderedFirstFrame\(\)[\s\S]*?firstFrameRendered = true[\s\S]*?removeCallbacks\(delayedRecovery\)[\s\S]*?publishState\("playing", null\)/);
-  assert.doesNotMatch(adapter, /player\.currentTime|MEDIA3_FROZEN_CLOCK_MS|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
+  assert.doesNotMatch(adapter, /tryAutomaticVlcFallback|NativeVlcPlayback/);
+  assert.match(adapter, /activateNativePlaybackEngine/);
+  assert.doesNotMatch(adapter, /player\.currentTime|setInterval|MEDIA3_FROZEN_CLOCK_MS|REBUFFER_REPREPARE_MS|silentResyncCountRef/);
 });
 
 test("fullscreen keeps recovery inside the native player and never refreshes sources", async () => {

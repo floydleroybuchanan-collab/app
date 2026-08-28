@@ -14,6 +14,7 @@ import com.facebook.react.common.ReleaseLevel
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.modules.network.OkHttpClientProvider
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
@@ -27,7 +28,6 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               add(TvRemotePackage())
               add(NativePlaybackPackage())
-              add(NativeVlcPlaybackPackage())
               add(EpgNativePackage())
               add(EpgRamPackage())
               add(NativeGuidePackage())
@@ -49,6 +49,11 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    // Install before React Native constructs the JS fetch client. The provider's
+    // playlist/redirect cookies must also be available to native Media3.
+    OkHttpClientProvider.setOkHttpClientFactory {
+      CharmHttpClients.bridgeReactNativeCookies(OkHttpClientProvider.createClientBuilder().build())
+    }
     CharmMemoryCoordinator.initialize(this)
     CharmGlideConfig.initialize(this)
     DefaultNewArchitectureEntryPoint.releaseLevel = try {

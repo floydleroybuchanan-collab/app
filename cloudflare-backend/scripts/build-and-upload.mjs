@@ -11,7 +11,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
 
 const NOW = Date.now();
-const GUIDE_WINDOW_HOURS = readGuideWindowHours(process.env.GUIDE_WINDOW_HOURS, 12);
+const GUIDE_WINDOW_HOURS = readGuideWindowHours(process.env.GUIDE_WINDOW_HOURS, 6);
 const GUIDE_START = NOW - 6 * 3600 * 1000;
 const GUIDE_END = NOW + GUIDE_WINDOW_HOURS * 3600 * 1000;
 const WIN_START = NOW - 1 * 3600 * 1000;
@@ -44,7 +44,7 @@ function requireEnv(name) {
   return v;
 }
 
-export function readGuideWindowHours(value, fallback = 12) {
+export function readGuideWindowHours(value, fallback = 6) {
   const n = Number(value || fallback);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(72, Math.max(6, Math.round(n)));
@@ -144,6 +144,7 @@ export function parseM3UWithMeta(text) {
   const epgUrls = [];
   const seen = new Set();
   let pending = null;
+  let pendingHeaders = {};
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -161,6 +162,12 @@ export function parseM3UWithMeta(text) {
         logo: https(attr(line, "tvg-logo")),
         group: attr(line, "group-title") || "Uncategorized",
       };
+      pendingHeaders = {};
+      continue;
+    }
+
+    if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:")) {
+      if (pending) applyExtHttpOption(pendingHeaders, line);
       continue;
     }
 
@@ -171,18 +178,114 @@ export function parseM3UWithMeta(text) {
     let n = 2;
     while (seen.has(id)) id = `${base}-${n++}`;
     seen.add(id);
+    const url = appendPipeHeaders(line, pendingHeaders);
     channels.push({
       id,
       tvgId: pending.tvgId || id,
       name: pending.name,
       logo: pending.logo || "",
       category: pending.group,
-      url: line,
+      url,
+      stream_type: streamType(url),
+      catalog_kind: catalogKind(url),
     });
     pending = null;
+    pendingHeaders = {};
   }
 
   return { channels, epgUrls: [...new Set(epgUrls)] };
+}
+
+function applyExtHttpOption(headers, line) {
+  const payload = line.slice(line.indexOf(":") + 1).trim();
+  if (!payload) return;
+  const lower = payload.toLowerCase();
+  if (lower.startsWith("http-user-agent=")) headers["User-Agent"] = payload.slice(payload.indexOf("=") + 1).trim();
+  else if (lower.startsWith("http-referrer=") || lower.startsWith("http-referer=")) {
+    headers.Referer = payload.slice(payload.indexOf("=") + 1).trim();
+  } else if (lower.startsWith("http-cookie=")) {
+    headers.Cookie = payload.slice(payload.indexOf("=") + 1).trim();
+  } else if (lower.startsWith("http-header=")) {
+    const header = payload.slice(payload.indexOf("=") + 1).trim();
+    const colon = header.indexOf(":");
+    if (colon > 0) {
+      const key = header.slice(0, colon).trim();
+      const value = header.slice(colon + 1).trim();
+      if (key && value) headers[key] = value;
+    }
+  }
+  // EXTVLCOPT is provider metadata, not an engine choice. Keep its HTTP headers
+  // for Media3, but never apply VLC-only player options such as network-caching.
+}
+
+function appendPipeHeaders(url, headers) {
+  const entries = Object.entries(headers || {});
+  if (!entries.length) return url;
+  const encoded = entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+  return url.includes("|") ? `${url}&${encoded}` : `${url}|${encoded}`;
+}
+
+function streamIdentityUrl(url) {
+  return String(url || "").split("|")[0].trim().toLowerCase();
+}
+
+export function streamType(url) {
+  const clean = streamIdentityUrl(url);
+  const path = clean.split("?")[0];
+  const query = clean.includes("?") ? clean.slice(clean.indexOf("?") + 1) : "";
+  const paddedQuery = query ? `&${query}&` : "";
+  if (
+    path.endsWith(".m3u8") ||
+    clean.includes("/hls/") ||
+    paddedQuery.includes("&format=m3u8&") ||
+    paddedQuery.includes("&type=hls&") ||
+    paddedQuery.includes("&output=hls&") ||
+    paddedQuery.includes("&format=hls&") ||
+    paddedQuery.includes("&type=m3u8&") ||
+    paddedQuery.includes("&output=m3u8&")
+  ) {
+    return "hls";
+  }
+  if (
+    path.endsWith(".mpd") ||
+    clean.includes("/dash/") ||
+    paddedQuery.includes("&format=mpd&") ||
+    paddedQuery.includes("&type=dash&") ||
+    paddedQuery.includes("&output=dash&") ||
+    paddedQuery.includes("&format=dash&") ||
+    paddedQuery.includes("&type=mpd&") ||
+    paddedQuery.includes("&output=mpd&")
+  ) {
+    return "dash";
+  }
+  if (
+    path.endsWith(".ts") ||
+    path.endsWith(".m2ts") ||
+    clean.includes("mpegts") ||
+    clean.includes("mpeg-ts") ||
+    paddedQuery.includes("&format=ts&") ||
+    paddedQuery.includes("&type=ts&") ||
+    paddedQuery.includes("&output=ts&") ||
+    paddedQuery.includes("&format=mpegts&") ||
+    paddedQuery.includes("&type=mpegts&") ||
+    paddedQuery.includes("&output=mpegts&")
+  ) {
+    return "ts";
+  }
+  if (/\.(?:mp4|m4v|m4a|m4s|mov|webm|mkv|avi|flv|mpg|mpeg|vob|mp3|aac|ogg|wav|flac|amr|cmfv|cmfa)$/.test(path)) {
+    return "progressive";
+  }
+  return "unknown";
+}
+
+export function catalogKind(url) {
+  const path = streamIdentityUrl(url).split("?")[0];
+  if (/\/series\//i.test(path)) return "series";
+  if (/\/movie\//i.test(path) || /\/movies\//i.test(path) || /\/vod\//i.test(path)) return "movie";
+  if (/\/live\//i.test(path) || /\/timeshift\//i.test(path)) return "live";
+  return "unknown";
 }
 
 export function parseM3U(text) {

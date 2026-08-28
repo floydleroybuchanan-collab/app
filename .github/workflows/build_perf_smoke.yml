@@ -8,6 +8,8 @@ permissions:
 
 jobs:
   build:
+    # Retired publisher: use build-media3-sideload-now.yml with current secrets and owner encryption.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     defaults:

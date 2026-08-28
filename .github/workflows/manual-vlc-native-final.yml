@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: manual-vlc-final-native-${{ github.ref }}
@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   validate:
+    # Retired: Media3-only playback; kept for historical reference.
+    if: ${{ false }}
     name: Full JS scan and native compile no APK
     runs-on: ubuntu-latest
     timeout-minutes: 70
@@ -123,12 +125,12 @@ jobs:
           grep -q 'activeGeneration' "$MODULE"
           grep -q 'indexDeclaredStreamTypes(channels)' "$SOURCE"
           grep -q 'mutationRevision' "$PROFILE"
-          grep -q 'VLC compatibility' "$SETTINGS"
+          grep -q 'VLC (recommended for live)' "$SETTINGS"
           grep -q 'fun tivimateBufferDurationsMs' "$PLAYER"
           grep -q 'else -> intArrayOf(20_000, 90_000, 5_000, 12_000)' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024' "$PLAYER"
           grep -q 'TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024' "$PLAYER"
-          grep -q 'readTimeout(0, TimeUnit.SECONDS)' "$PLAYER"
+          grep -q 'readTimeout(0, TimeUnit.SECONDS)' frontend/android/app/src/main/java/com/charmiptv/app/CharmHttpClients.kt
           grep -q 'RECONNECT_STALL_MS = 50_000L' "$PLAYER"
           grep -q 'START_TIMEOUT_MS = 60_000L' "$PLAYER"
           ! grep -q 'HUNG_BUFFER_REPREPARE_MS\|TRANSPORT_HUNG_BUFFER_REPREPARE_MS\|HARD_STALL_RECOVERY_MS\|STABLE_REARM_MS\|MIN_BUFFER_MS_LOW_RAM\|MIN_BUFFER_MS_NORMAL' "$PLAYER"

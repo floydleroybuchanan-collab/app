@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   allocateChannelId,
+  catalogKind,
   enforcePlaylistTextLimit,
   fingerprintKey,
   isAllowedPlaylistUrl,
@@ -14,6 +15,7 @@ import {
   parseXmltvTime,
   resolveXmltvStop,
   streamIdentityUrl,
+  streamType,
 } from "../src/core/sourceParsing.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +69,42 @@ test("M3U parser rejects disallowed protocols and reports stats", async () => {
 
 test("playlist text limit refuses oversized payloads", () => {
   assert.throws(() => enforcePlaylistTextLimit("x".repeat(MAX_PLAYLIST_BYTES + 1)), /size limit/);
+});
+
+test("M3U streamType matches native TiViMate Media3 hints for provider URLs", () => {
+  assert.equal(streamType("https://cdn.example/live/news.m3u8"), "hls");
+  assert.equal(streamType("https://cdn.example/hls/channel?token=1"), "hls");
+  assert.equal(streamType("https://provider.example/live/1?format=hls"), "hls");
+  assert.equal(streamType("https://cdn.example/dash/manifest.mpd"), "dash");
+  assert.equal(streamType("https://provider.example/live/2?output=mpd"), "dash");
+  assert.equal(streamType("https://cdn.example/live/sports.ts?token=x"), "ts");
+  assert.equal(streamType("https://cdn.example/live/sports.m2ts"), "ts");
+  assert.equal(streamType("https://provider.example/live/3?type=mpegts"), "ts");
+  assert.equal(streamType("https://vod.example/movie.mp4"), "progressive");
+  assert.equal(streamType("https://provider.example/live/opaque|User-Agent=Charm"), "unknown");
+});
+
+test("M3U EXTVLCOPT lines remain provider header metadata for Media3", () => {
+  const text = `#EXTM3U
+#EXTINF:-1 tvg-id="ua.1" group-title="News",UA Channel
+#EXTVLCOPT:http-user-agent=ProviderBox/1.0
+#EXTVLCOPT:http-referrer=https://provider.example/
+#EXTVLCOPT:network-caching=1000
+https://provider.example/live/1
+`;
+  const channels = parseM3U(text);
+  assert.equal(channels.length, 1);
+  assert.match(channels[0].url, /\|/);
+  assert.match(channels[0].url, /User-Agent=ProviderBox%2F1\.0/);
+  assert.match(channels[0].url, /Referer=https%3A%2F%2Fprovider\.example%2F/);
+  assert.doesNotMatch(channels[0].url, /network-caching/);
+});
+
+test("catalogKind maps Xtream path buckets without changing streamType", () => {
+  assert.equal(catalogKind("http://panel.example:25461/live/user/pass/1"), "live");
+  assert.equal(catalogKind("http://panel.example/movie/user/pass/9"), "movie");
+  assert.equal(catalogKind("http://panel.example/series/user/pass/3"), "series");
+  assert.equal(streamType("http://panel.example:25461/live/user/pass/1"), "unknown");
 });
 
 test("allocateChannelId stays deterministic for the same URL", () => {

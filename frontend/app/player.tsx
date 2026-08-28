@@ -31,6 +31,7 @@ import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/cor
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
+import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
@@ -50,10 +51,8 @@ type PlayerViewMode = "fit" | "fill" | "zoom" | "stretch";
 
 const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
   "start-timeout": "start timeout",
-  "engine-swap": "playback reset",
-  "circuit-open": "temporarily paused",
   "stream-error": "stream error",
-  "silent-audio": "no supported audio track",
+  "unsupported-protocol": "This stream protocol is not supported by this build. Ask your provider for an HTTP(S) HLS, DASH, or MPEG-TS URL for Media3.",
   "user-stop": "stopped",
   superseded: "replaced",
   crashed: "player crash",
@@ -281,9 +280,9 @@ export default function PlayerScreen() {
   }, [cycleScaleMode, isTV, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
 
   const restartStream = useCallback(() => {
-    if (!hasStream || exitInFlightRef.current) return;
+    if (!hasStream || exitInFlightRef.current || failReason === "unsupported-protocol") return;
     generationRef.current += 1; setStatus("loading"); setFailReason(null); showNotice(`Reconnecting ${channel?.name || "stream"}`); setRetryToken((value) => value + 1);
-  }, [channel?.name, hasStream, showNotice]);
+  }, [channel?.name, failReason, hasStream, showNotice]);
   const retryNow = useCallback(() => restartStream(), [restartStream]);
 
   useEffect(() => { controlsRef.current = controls; }, [controls]);
@@ -363,7 +362,13 @@ export default function PlayerScreen() {
   const handleStreamStatus = useCallback((nextStatus: StreamStatus, reason?: SessionFailReason | null) => {
     setStatus(nextStatus);
     if (reason !== undefined) setFailReason(reason);
-    if (nextStatus === "playing") setFailReason(null);
+    const channelKey = channelIdRef.current;
+    if (nextStatus === "playing") {
+      setFailReason(null);
+      if (channelKey) clearStreamFailure(channelKey);
+    } else if (nextStatus === "error" && channelKey) {
+      noteStreamFailure(channelKey);
+    }
   }, []);
 
   const saveAudioReport = useCallback(async () => {
@@ -442,7 +447,7 @@ export default function PlayerScreen() {
     return () => sub.remove();
   }, [channelsOpen, closeOverlayAndRestoreFocus, revealControls, scheduleHide, stopAndExit, tracksOpen]);
 
-  const engineScaleMode: PlayerScaleMode = scaleMode === "fill" ? "zoom" : scaleMode === "stretch" ? "stretch" : "fit";
+  const engineScaleMode: PlayerScaleMode = scaleMode;
 
   return (
     <View style={styles.root}>
@@ -514,9 +519,9 @@ export default function PlayerScreen() {
       {(!hasStream || status === "error") ? (
         <View style={styles.errorOverlay} pointerEvents="box-none">
           <Ionicons name="warning-outline" size={32} color={tvColors.purpleSoft} />
-          <Text style={styles.errorTitle}>{hasStream ? "Stream unavailable" : "No stream available"}</Text>
+          <Text style={styles.errorTitle}>{failReason === "unsupported-protocol" ? "Unsupported stream protocol" : hasStream ? "Stream unavailable" : "No stream available"}</Text>
           {hasStream ? <Text style={styles.errorText}>{failReason ? FAIL_REASON_LABEL[failReason] : "Use Retry Now to re-prepare this stream."}</Text> : null}
-          {hasStream ? (
+          {hasStream && failReason !== "unsupported-protocol" ? (
             <Pressable hasTVPreferredFocus={!controls} onPress={retryNow} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
               <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>Retry Now</Text>
             </Pressable>
