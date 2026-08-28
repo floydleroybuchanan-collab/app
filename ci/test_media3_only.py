@@ -129,5 +129,38 @@ class Media3ApkGuardTests(unittest.TestCase):
                 apk.verify_archive(archive)
 
 
+class OwnerWorkflowGuardTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.publisher = (guard.ROOT / guard.OWNER_PUBLISHER).read_text(encoding="utf-8")
+
+    def test_current_encrypted_publisher_passes(self):
+        self.assertEqual([], guard.active_workflow_findings(guard.OWNER_PUBLISHER, self.publisher))
+
+    def test_an_alternate_artifact_uploader_is_rejected(self):
+        self.assertTrue(guard.active_workflow_findings("old-build.yml", self.publisher))
+
+    def test_plaintext_or_wildcard_upload_paths_are_rejected(self):
+        for replacement in ["frontend/artifacts/*.apk", "frontend/protected-artifacts/*", "frontend"]:
+            source = self.publisher.replace(guard.ENCRYPTED_UPLOAD_PATHS[0] + "\n", replacement + "\n")
+            with self.subTest(path=replacement):
+                self.assertTrue(guard.active_workflow_findings(guard.OWNER_PUBLISHER, source))
+
+    def test_old_provider_fallback_and_dotenv_are_rejected(self):
+        for source in [
+            self.publisher.replace("secrets.M3U_URL", "secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL"),
+            self.publisher.replace('EXPO_NO_DOTENV: "1"', 'EXPO_NO_DOTENV: "0"'),
+            self.publisher.replace("secrets.EPG_URL", "vars.EXPO_PUBLIC_EPG_URL"),
+        ]:
+            self.assertTrue(guard.active_workflow_findings(guard.OWNER_PUBLISHER, source))
+
+    def test_missing_encryption_or_duplicate_uploader_is_rejected(self):
+        for source in [
+            self.publisher.replace("protect-sideload-artifact.mjs encrypt", "protect-sideload-artifact.mjs decrypt"),
+            self.publisher + "\n      - uses: actions/upload-artifact@unreviewed\n",
+        ]:
+            self.assertTrue(guard.active_workflow_findings(guard.OWNER_PUBLISHER, source))
+
+
 if __name__ == "__main__":
     unittest.main()

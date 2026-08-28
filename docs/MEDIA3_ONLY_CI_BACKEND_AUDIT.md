@@ -12,13 +12,19 @@ player changes and their regression tests.
 - The current sideload workflow previously required VLC classes, both ARM VLC
   libraries, the removed fallback menu, and a one-recovery lifetime limit.
   Those checks could force the old behavior back into the app.
-- Twenty-eight historical player repair/validation/build workflows are now
+- Thirty-seven historical player repair/validation/build workflows are now
   disabled at every job with a literal false condition. Seventeen old mutation
   or validation scripts now exit before any imports or writes can execute.
   Their original bodies remain as history. The exact inventory is
   `ci/retired-player-automation.json`; the new guard verifies the job conditions
   and the first executable Python statement. Old VLC/watchdog patches must not
   be run to repair a failing current test.
+- The final publisher sweep retired nine additional legacy APK workflows
+  whose upload paths were plaintext or accepted stale provider variables.
+  RAM/Guide validation remains enabled, but no longer builds or uploads an
+  APK and receives no provider credentials. It and the architecture-only
+  validator explicitly disable dotenv. This changes the feature branch;
+  existing copies on main or other branches were not modified.
 - `ci/verify-media3-only.py` scans runtime source, Android/config plugins, patches,
   dependency manifests and lockfile for the removed runtime. Negative test
   fixtures and historical docs are not treated as shipped engines.
@@ -72,9 +78,17 @@ fail the build. Provider-bearing artifacts are still encrypted before upload;
 the public key and encryption procedure were not changed. Secret values were
 not read, printed or modified during this audit.
 
+The source guard now also rejects unreviewed artifact-upload workflows,
+old provider-variable fallbacks and a missing dotenv lock. The approved
+publisher must have one upload containing only the encrypted envelope and
+its metadata. Regression tests reject plaintext/wildcard upload paths,
+missing encryption, duplicate uploaders and stale input wiring. This guard
+checks the repository's canonical YAML layout; YAML is parsed independently.
+
 ## Verification and limits
 
-- Release-gate/transport-contract unit tests: 16 passed, using deliberately synthetic ZIP/DEX/ELF
+- Release-gate/transport-contract unit tests: 21 passed after final publisher
+  hardening (16 at Build 128), using deliberately synthetic ZIP/DEX/ELF
   fixtures to verify accept/reject decisions. These are not APK builds.
 - Cloudflare builder and Worker tests: 17 passed, including provider-header
   preservation and existing CORS/error redaction regressions.

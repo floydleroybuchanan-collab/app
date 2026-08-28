@@ -1,6 +1,9 @@
 {
-  "reason": "Retired by Media3-only playback. Historical VLC/watchdog mutations and obsolete validators must not execute or publish builds.",
+  "reason": "Retired by Media3-only playback. Historical VLC/watchdog mutations, obsolete validators and unencrypted alternate APK publishers must not execute or publish builds.",
   "workflows": [
+    ".github/workflows/build-phoenix-apk.yml",
+    ".github/workflows/build8-final-sideload.yml",
+    ".github/workflows/build_perf_smoke.yml",
     ".github/workflows/charm-final-owner-handoff-fix.yml",
     ".github/workflows/charm-media3-surface-handoff-fix.yml",
     ".github/workflows/charm-one-shot-fix-build-v2.yml",
@@ -10,10 +13,15 @@
     ".github/workflows/code-interaction-audit-player-freeze.yml",
     ".github/workflows/code-interaction-audit-player-stability.yml",
     ".github/workflows/code-interaction-audit-vlc-watchdog.yml",
+    ".github/workflows/code-interaction-audit-final-sideload.yml",
+    ".github/workflows/code-interaction-audit-sideload.yml",
+    ".github/workflows/code-interaction-audit-validation.yml",
+    ".github/workflows/experimental-v3-apk.yml",
     ".github/workflows/manual-vlc-final-validation.yml",
     ".github/workflows/manual-vlc-native-final.yml",
     ".github/workflows/media3-player-core-validation.yml",
     ".github/workflows/media3-working-validation-only.yml",
+    ".github/workflows/native-guide-ram-apk.yml",
     ".github/workflows/phase9-deep-player-validation.yml",
     ".github/workflows/phase9-final-sideload.yml",
     ".github/workflows/phase9-live-tv-repair-pr.yml",
@@ -28,7 +36,8 @@
     ".github/workflows/phase9-player-rc1-baseline-repair.yml",
     ".github/workflows/phase9-tivimate-player-network.yml",
     ".github/workflows/phase9-tivimate-player-stalled-ready.yml",
-    ".github/workflows/purple-tv-ui.yml"
+    ".github/workflows/purple-tv-ui.yml",
+    ".github/workflows/purple-next-ci.yml"
   ],
   "scripts": [
     ".github/apply_manual_vlc_patch.py",

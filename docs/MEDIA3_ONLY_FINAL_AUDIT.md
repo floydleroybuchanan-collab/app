@@ -53,7 +53,7 @@ downgraded to plaintext.
 7. **VLC remnants:** native implementation, JS bridge, fallback/manual selection,
    settings and Gradle dependency removed. Old preferences and source confirmations
    migrate to Media3. Unsupported channels cannot repeatedly mount preview decoders.
-8. **Automation:** 28 obsolete player workflows are disabled at every job and
+8. **Automation:** 37 obsolete player/build workflows are disabled at every job and
    17 old scripts stop before executable patch code. APK gates reject VLC
    libraries, DEX classes and JS bridges.
 9. **Malformed live segments:** after live playback has been established, a
@@ -65,6 +65,11 @@ downgraded to plaintext.
     could change React prepare-effect inputs after a successful frame. Routing
     now snapshots learned metadata for the selected source identity. Saving a
     confirmation cannot restart an active tune; later explicit tunes can use it.
+11. **Alternate publishers:** nine older APK workflows with plaintext upload
+    paths are retired. RAM/Guide validation keeps its tests/native compile
+    but no longer accepts provider credentials or publishes an APK. Active
+    validation inputs no longer fall back to old provider variables, and
+    release guards reject unreviewed artifact uploaders or plaintext paths.
 
 The source-refresh repair initially tripped the exact-transport gate. It now
 recognizes only the exact reviewed helper replacement. Tests ensure changed
@@ -111,7 +116,7 @@ not delivered.
 | UI/failure history | Loading does not add failed channels; playing clears failure history. No error overlay on ordinary loading and no Guide buffering watchdog. |
 | Teardown | Failed release blocks replacement allocation. Departed-session callbacks cannot resume old playback. |
 | Web | StreamPlayer is a placeholder; no browser playback or codec capability is claimed. |
-| CI/backend | Servers serve metadata, not native stream bytes. Only M3U_URL and EPG_URL secrets feed sideload builds with dotenv disabled. Public artifacts remain encrypted. |
+| CI/backend | Servers serve metadata, not native stream bytes. On this feature branch, only the approved owner builder publishes artifacts, uses M3U_URL and EPG_URL secrets with dotenv disabled, and encrypts before upload. Other branches/main were not changed. |
 
 The [numeric inventory](MEDIA3_ONLY_PLAYBACK_AUDIT.md) records explicit buffer,
 HTTP, FFmpeg, memory and UI values. Android driver internals and every upstream
@@ -130,7 +135,8 @@ not copied from unverified TiviMate reports or replaced with guessed values.
 - TypeScript, Expo lint, native configuration and native Guide checks: **passed**.
 - Android debug Kotlin compilation/JVM tests: **passed**; **10** recovery-policy
   tests and **5** real local HTTP/cookie tests.
-- Release-gate/transport-contract tests: **16 passed**. Synthetic APK fixtures
+- Release-gate/transport-contract tests: **21 passed** after final publisher
+  hardening (**16** at Build 128). Synthetic APK fixtures
   test gate decisions; they are not installable-build evidence.
 - Cloudflare builder/Worker: **17 tests passed**.
 - Second whole-repository scan: **221 files**, **1,265 function declarations**,
@@ -166,8 +172,9 @@ Builds 126 and 128, not playback failures; action-version maintenance remains se
 ## APK verification
 
 **Build 128 passed**: [sideload workflow run 33135657276](https://github.com/floydleroybuchanan-collab/app/actions/runs/33135657276).
-Its exact application source is e0c7e04aabde97d03b52d7e2dbd1961162cc64c9; later documentation-only
-commits do not change this binary.
+Its exact application source is e0c7e04aabde97d03b52d7e2dbd1961162cc64c9.
+Later documentation and CI-hardening commits do not modify this verified APK
+or its application source.
 
 | Artifact property | Verified result |
 | --- | --- |
