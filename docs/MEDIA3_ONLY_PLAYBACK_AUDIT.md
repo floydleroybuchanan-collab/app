@@ -131,6 +131,8 @@ These important controls are **not explicitly overridden by Charm** in the audit
 
 Those values must be traced in the pinned public Media3 source or observed on the target device before any change. Changing them indiscriminately to numbers attributed to a different application can break synchronization, hardware compatibility, or VOD handling. No claim is made that this source audit enumerates every constant inside Android drivers or upstream codec libraries.
 
+The final review traced additional inherited constants directly in the pinned upstream source. See [Media3 1.8.0 timing and parser reference](MEDIA3_1_8_TIMING_REFERENCE.md) for verified frame-release, live-speed, audio-clock, allocator, manifest and TS timestamp values. They remain separate from the explicit Charm settings above and from unverified TiviMate claims.
+
 ## Related memory and UI numbers
 
 These can affect perceived startup or memory pressure, but they are not media clocks or stall watchdogs.

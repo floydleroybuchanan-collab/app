@@ -9,7 +9,7 @@ It does not substitute for reproducing the reported freeze on the user's TV.
 ## TiviMate reference recheck before this audit
 
 A fresh clone and a second fetch of [TiVIMate Analysis](https://github.com/Eliminater74/TiVIMate_Analysis/tree/eab124bb2cf19d0512fa729c30e3328177db434c)
-both resolved to eab124bb2cf19d0512fa729c30e3328177db434c: 53 Markdown reports,
+both resolved to eab124bb2cf19d0512fa729c30e3328177db434c: 53 Markdown files,
 not the underlying application source or APK. Buffer, network, freeze, controls,
 subtitle and memory reports were revisited.
 
@@ -117,6 +117,13 @@ The [numeric inventory](MEDIA3_ONLY_PLAYBACK_AUDIT.md) records explicit buffer,
 HTTP, FFmpeg, memory and UI values. Android driver internals and every upstream
 constant are not claimed to be measured TiviMate settings.
 
+The [pinned Media3 timing reference](MEDIA3_1_8_TIMING_REFERENCE.md) additionally
+traces library load control, live-speed correction, late-frame thresholds,
+vsync, AudioTrack clocks/buffers, manifest reloads, TS parsing and timestamp
+wraparound to AndroidX Media 1.8.0 commit
+b7bbc6e2bc3e45ff3ed99884c114c50f03bba5c9. Those inherited values were inspected,
+not copied from unverified TiviMate reports or replaced with guessed values.
+
 ## Verification
 
 - Frontend: **288 tests passed**, no failures or skipped tests.
@@ -129,8 +136,9 @@ constant are not claimed to be measured TiviMate settings.
 - Second whole-repository scan: **221 files**, **1,265 function declarations**,
   **72 timer sites**, **36 listener sites**, **18 fetch sites**, **zero candidate
   critical findings**. Counts are a source census, not all possible executions.
-- The two origin/main reference findings remain outside this feature branch.
-  Main was not edited, merged or pushed.
+- The scanner also prints two reference-only heuristic flags for origin/main;
+  these are not current-branch critical findings or proof of two reproduced
+  failures on main. Main was not edited, merged or pushed.
 - Recovery tests include 100 successive network decisions without cutoff.
   These are policy tests, not 100 induced outages on a TV.
 
@@ -153,9 +161,49 @@ the owner's intended current URLs. No secret was printed, replaced or uploaded.
 
 GitHub reports deprecation notices for pinned Node 20-era actions (forced to
 Node 24 by the runner) and setup-java v4. These were warnings on the successful
-Build 126, not playback failures; action-version maintenance remains separate.
+Builds 126 and 128, not playback failures; action-version maintenance remains separate.
 
 ## APK verification
 
-The new encrypted sideload build and real-artifact checks are the next step.
-Record the actual run, source commit and checksum here before claiming delivery.
+**Build 128 passed**: [sideload workflow run 33135657276](https://github.com/floydleroybuchanan-collab/app/actions/runs/33135657276).
+Its exact application source is e0c7e04aabde97d03b52d7e2dbd1961162cc64c9; later documentation-only
+commits do not change this binary.
+
+| Artifact property | Verified result |
+| --- | --- |
+| File | CharmIPTV-Media3-Sideload-128.apk |
+| Size | 59,741,159 bytes (59.7 MB; 57.0 MiB) |
+| SHA-256 | fe10e648d008042f926af50d4706e887b15e1d40a3e78681d70ac44e78352431 |
+| Package | com.charmiptv.app.purple.next.sideload |
+| Android version | 2.1.0-rc.5-sideload; versionCode 8 |
+| Android API levels | Minimum 26 (Android 8.0); target 36 |
+| Engines | Media3/RTSP and FFmpeg audio present; VLC libraries, classes and JS bridges absent |
+| Native libraries | 23 for ARM32 and 23 for ARM64 |
+| Signature and ZIP alignment | Passed local Android-tool verification; 16 KiB ZIP alignment |
+| ARM64 ELF load segments | All 23 libraries independently passed 16 KiB alignment/congruence checks |
+| Signing continuity | Same certificate as Build 125 |
+
+Certificate SHA-256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c.
+The APK is non-debuggable but uses the existing Android debug/test certificate;
+this is an owner sideload test candidate, not a production-store signing claim.
+The package version has not been bumped per workflow run; identify this binary
+by Build 128's filename, source and checksum.
+
+The encrypted artifact is **CharmIPTV-Media3-Sideload-Encrypted-128**, GitHub
+artifact ID 9672232932. It was downloaded and authenticated with the owner's
+existing local key, without printing or uploading that key. Local inspection
+matches the embedded CI report, checksum file and build metadata. Plaintext
+provider-bearing APKs were not uploaded to a public release.
+
+Also passed for this source: [native push check](https://github.com/floydleroybuchanan-collab/app/actions/runs/33135657323),
+[native PR check](https://github.com/floydleroybuchanan-collab/app/actions/runs/33135659238),
+[frontend CI](https://github.com/floydleroybuchanan-collab/app/actions/runs/33135659210),
+and [Guide/RAM validation](https://github.com/floydleroybuchanan-collab/app/actions/runs/33135659248).
+Six obsolete repair jobs were intentionally skipped. Build 127 was superseded
+and automatically canceled when the final metadata-feedback fix was pushed.
+
+Owner files include the APK, SHA256SUMS.txt, BUILD_INFO.txt,
+APK_VERIFICATION.json, LOCAL_APK_VERIFICATION.json and DELIVERY_VERIFICATION.json.
+The [release notes](MEDIA3_ONLY_RELEASE_NOTES_BUILD_128.md) and
+[25-item tester guide](MEDIA3_ONLY_TESTERS_GUIDE_BUILD_128.md) are ready to copy.
+No connected-TV installation or actual provider-stall reproduction is claimed.

@@ -1,5 +1,9 @@
 # Playback audit continuation — 2026-08-27
 
+> Historical Build 125 audit, before complete VLC removal. The current Media3-only
+> implementation and verification are in [the final playback audit](MEDIA3_ONLY_FINAL_AUDIT.md).
+> VLC and lifetime-recovery descriptions below document the earlier artifact.
+
 ## Scope and source control
 
 Continued the remote checkpoint `ddabea81899fb390daee54a74f5a9577f575f473` on **`fix/tivimate-m3u-epg-ci-align`**. The pre-checkpoint baseline is `cd3c6bb2b60713674d997070b135c4a8902633ff`. The existing Windows checkout had unrelated changes and a different branch, so the audit used a separate worktree. No main commit, merge or push was performed. The read-only main reference inspected was `2a68d296894687e6168efe2e156339c77d706bcf`.

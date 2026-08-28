@@ -1,6 +1,6 @@
 # Media3-only CI and backend audit
 
-Date: 2026-08-27. This documents working-tree changes, not a published or device-tested release.
+Date: 2026-08-27. This records the CI/backend source review. Published build evidence is in the final audit; device playback is not claimed tested here.
 
 ## Scope and findings
 
@@ -60,6 +60,12 @@ Use **Android Native Compile** and **Build CharmIPTV Media3 Sideload APK** on
 `CharmIPTV-Media3-Sideload-<run>.apk` inside the encrypted owner artifact.
 Both gates run the new source/retirement checks and their unit tests.
 
+On application commit e0c7e04, the PR shows six intentionally skipped old
+repair jobs. Current unit, compile, frontend and Guide checks still run.
+GitHub's "1 of 3 tasks" label came from the old PR-description checklist,
+not the number of CI tests passed. That public description has not been
+edited; changing it requires explicit user authorization.
+
 The sideload builder still uses only `secrets.M3U_URL` and `secrets.EPG_URL`, with
 `EXPO_NO_DOTENV=1`. It has no fallback to old provider variables. Missing inputs
 fail the build. Provider-bearing artifacts are still encrypted before upload;
@@ -76,8 +82,9 @@ not read, printed or modified during this audit.
 - The legacy FastAPI integration suite was not executed: it targets a remote
   service and includes refresh mutations. No deployment or provider request was
   needed for these changes.
-- A fresh real APK, TV installation and repeated provider-stall playback test
-  remain necessary before claiming the device freeze is fixed. Static scans
-  cannot prove runtime decoder or network behavior.
+- Real APK verification is recorded separately in the final audit. TV
+  installation and repeated provider-stall playback tests remain necessary
+  before claiming the device freeze is fixed. Static scans cannot prove
+  runtime decoder or network behavior.
 
 Final recovery, cookie-path and full source review: [Final Media3 playback audit](MEDIA3_ONLY_FINAL_AUDIT.md).
