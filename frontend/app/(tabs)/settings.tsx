@@ -78,6 +78,7 @@ type Section =
   | "general"
   | "player"
   | "remote"
+  | "playlists"
   | "epg"
   | "appearance"
   | "health"
@@ -97,6 +98,7 @@ const TILES: Tile[] = [
   { id: "general", label: "General", icon: "settings-outline" },
   { id: "player", label: "Player", icon: "play-circle-outline" },
   { id: "remote", label: "Remote Control", icon: "game-controller-outline" },
+  { id: "playlists", label: "Playlists", icon: "list-outline" },
   { id: "epg", label: "EPG", icon: "calendar-outline" },
   { id: "appearance", label: "Appearance", icon: "color-palette-outline" },
   { id: "health", label: "Health", icon: "pulse-outline" },
@@ -259,6 +261,7 @@ function SettingsScreenContent() {
     void Haptics.selectionAsync().catch(() => undefined);
     setBackupStatus(null);
     setClearFavoritesArmed(false);
+    if (id === "playlists") { router.push("/playlists" as any); return; }
     if (id === "epg") {
       router.push("/epg-sources" as any);
       return;

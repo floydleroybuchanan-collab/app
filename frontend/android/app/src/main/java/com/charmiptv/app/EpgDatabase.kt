@@ -329,6 +329,14 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     }
   }
 
+  fun guideDirectoryIds(): Set<String> {
+    val ids = HashSet<String>()
+    readableDatabase.rawQuery("SELECT DISTINCT channel_id FROM $ALIAS_TABLE WHERE alias_kind = 'display_name' LIMIT 100000", null).use { cursor ->
+      while (cursor.moveToNext()) ids.add(cursor.getString(0))
+    }
+    return ids
+  }
+
   fun listDisplayNameAliases(query: String, offset: Int, limit: Int): EpgAliasPage {
     val safeLimit = limit.coerceIn(1, 100)
     val safeOffset = offset.coerceAtLeast(0)

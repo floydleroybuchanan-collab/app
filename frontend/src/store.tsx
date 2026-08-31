@@ -698,12 +698,15 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
           prev.length > 0 &&
           prev.every((channel, index) => {
             const next = nextChannels[index];
-            return channel.id === next.id && channel.tvg_id === next.tvg_id && channel.name === next.name &&
+            return channel.playlist_name === next.playlist_name && channel.raw_tvg_id === next.raw_tvg_id && channel.id === next.id && channel.tvg_id === next.tvg_id && channel.name === next.name &&
               channel.logo === next.logo && channel.group === next.group && channel.url === next.url;
           })
         ) return prev;
         return nextChannels.map((channel) => ({
           id: channel.id,
+          playlist_id: channel.playlist_id, playlist_name: channel.playlist_name,
+          source_group: channel.source_group, source_channel_id: channel.source_channel_id,
+          raw_tvg_id: channel.raw_tvg_id,
           tvg_id: channel.tvg_id,
           name: channel.name,
           logo: channel.logo,

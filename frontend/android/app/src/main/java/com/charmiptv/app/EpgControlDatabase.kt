@@ -48,6 +48,13 @@ internal data class EpgChannelBindingEntity(
   val xmltvId: String,
 )
 
+@Entity(tableName = "epg_automatic_bindings", indices = [Index("playlistId")])
+internal data class EpgAutomaticBindingEntity(
+  @PrimaryKey val channelId: String,
+  val playlistId: String,
+  val xmltvId: String,
+)
+
 @Entity(tableName = "epg_import_state")
 internal data class EpgImportStateEntity(
   @PrimaryKey val playlistId: String,
@@ -88,6 +95,24 @@ internal interface EpgControlDao {
 
   @Query("SELECT * FROM epg_channel_bindings WHERE playlistId = :playlistId")
   fun allChannelBindings(playlistId: String): List<EpgChannelBindingEntity>
+
+  @Query("SELECT playlistId, channelId, xmltvId FROM epg_channel_bindings WHERE playlistId = :playlistId UNION ALL SELECT playlistId, channelId, xmltvId FROM epg_automatic_bindings a WHERE a.playlistId = :playlistId AND NOT EXISTS (SELECT 1 FROM epg_channel_bindings m WHERE m.channelId = a.channelId)")
+  fun effectiveBindings(playlistId: String): List<EpgChannelBindingEntity>
+
+  @Query("SELECT playlistId, channelId, xmltvId FROM epg_channel_bindings WHERE playlistId = :playlistId AND channelId IN (:channelIds) UNION ALL SELECT playlistId, channelId, xmltvId FROM epg_automatic_bindings a WHERE a.playlistId = :playlistId AND a.channelId IN (:channelIds) AND NOT EXISTS (SELECT 1 FROM epg_channel_bindings m WHERE m.channelId = a.channelId)")
+  fun effectiveBindingsForChannels(playlistId: String, channelIds: List<String>): List<EpgChannelBindingEntity>
+
+  @Query("DELETE FROM epg_automatic_bindings")
+  fun clearAutomaticBindings()
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  fun putAutomaticBindings(rows: List<EpgAutomaticBindingEntity>)
+
+  @Transaction
+  fun replaceAutomaticBindings(rows: List<EpgAutomaticBindingEntity>) {
+    clearAutomaticBindings()
+    if (rows.isNotEmpty()) putAutomaticBindings(rows)
+  }
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   fun putChannelBindings(bindings: List<EpgChannelBindingEntity>)
@@ -168,8 +193,8 @@ internal interface EpgControlDao {
 }
 
 @Database(
-  entities = [EpgSourceEntity::class, EpgChannelOffsetEntity::class, EpgChannelBindingEntity::class, EpgImportStateEntity::class],
-  version = 3,
+  entities = [EpgSourceEntity::class, EpgChannelOffsetEntity::class, EpgChannelBindingEntity::class, EpgImportStateEntity::class, EpgAutomaticBindingEntity::class],
+  version = 4,
   exportSchema = true,
 )
 internal abstract class EpgControlDatabase : RoomDatabase() {
@@ -183,7 +208,14 @@ internal abstract class EpgControlDatabase : RoomDatabase() {
         context.applicationContext,
         EpgControlDatabase::class.java,
         "charm_epg_control.db",
-      ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+      ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+    }
+
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS epg_automatic_bindings (channelId TEXT NOT NULL, playlistId TEXT NOT NULL, xmltvId TEXT NOT NULL, PRIMARY KEY(channelId))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_epg_automatic_bindings_playlistId ON epg_automatic_bindings(playlistId)")
+      }
     }
 
     private val MIGRATION_1_2 = object : Migration(1, 2) {

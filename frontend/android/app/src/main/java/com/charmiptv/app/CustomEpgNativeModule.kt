@@ -3,6 +3,7 @@ package com.charmiptv.app
 import android.content.Context
 import android.util.Xml
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -24,6 +25,32 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
   private val policyPrefs = reactContext.getSharedPreferences(POLICY_PREFS, Context.MODE_PRIVATE)
 
   override fun getName(): String = "CharmCustomEpg"
+
+  @ReactMethod fun replaceAutomaticBindings(rows: ReadableArray, promise: Promise) { executor.execute {
+    try {
+      require(rows.size() <= 25000) { "Too many automatic Guide bindings" }
+      val bindings = ArrayList<EpgAutomaticBindingEntity>(rows.size())
+      val directories = HashMap<String, Set<String>>()
+      for (index in 0 until rows.size()) {
+        val row = rows.getMap(index) ?: continue
+        val channel = row.getString("channelId").orEmpty()
+        val xmltv = row.getString("xmltvId").orEmpty()
+        val candidates = row.getArray("sourceIds") ?: continue
+        var selected: String? = null
+        var pending: String? = null
+        for (at in 0 until candidates.size()) {
+          val source = CustomEpgStoreRegistry.normalizeSourceId(candidates.getString(at).orEmpty())
+          val ids = directories.getOrPut(source) { CustomEpgStoreRegistry.database(reactContext, source).guideDirectoryIds() }
+          if (xmltv in ids) { selected = source; break }
+          if (ids.isEmpty() && pending == null) pending = source
+        }
+        val source = selected ?: pending
+        if (source != null && channel.isNotBlank() && xmltv.isNotBlank()) bindings.add(EpgAutomaticBindingEntity(channel, source, xmltv))
+      }
+      controlDao.replaceAutomaticBindings(bindings)
+      promise.resolve(true)
+    } catch (_: Throwable) { promise.reject("AUTOMATIC_BINDINGS_FAILED", "Could not save playlist Guide associations") }
+  }}
 
   @ReactMethod fun setRetentionDays(pastDays: Double, promise: Promise) {
     try {
@@ -60,7 +87,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     try {
       val source = CustomEpgStoreRegistry.normalizeSourceId(sourceId)
       val safeLimit = limit.toInt().coerceIn(1, 80)
-      val bindings = controlDao.allChannelBindings(source)
+      val bindings = controlDao.effectiveBindings(source)
       val result = Arguments.createArray()
       if (bindings.isNotEmpty()) {
         val playlistIdsByXmltv = HashMap<String, MutableList<String>>()
@@ -89,6 +116,12 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (t: Throwable) { promise.reject("CUSTOM_EPG_BINDING_FAILED", t.message ?: "Could not update custom Guide assignment", t) }
   }}
 
+  @ReactMethod fun refreshAssociatedSourceGuide(sourceId: String, url: String, ids: ReadableArray, promise: Promise) { executor.execute {
+    val candidates = LinkedHashSet<String>()
+    for (index in 0 until minOf(ids.size(), 25000)) ids.getString(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
+    refreshSourceGuideInternal(sourceId, url, promise, candidates)
+  }}
+
   @ReactMethod fun refreshUserGuide(url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(USER_SOURCE_ID, url, promise) } }
   @ReactMethod fun refreshSourceGuide(sourceId: String, url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(sourceId, url, promise) } }
 
@@ -99,12 +132,12 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     putDouble("startMs", program.startMs.toDouble()); putDouble("endMs", program.endMs.toDouble())
   }
 
-  private fun refreshSourceGuideInternal(rawSourceId: String, url: String, promise: Promise) {
+  private fun refreshSourceGuideInternal(rawSourceId: String, url: String, promise: Promise, candidates: Set<String> = emptySet()) {
     try {
       val sourceId = CustomEpgStoreRegistry.normalizeSourceId(rawSourceId); val targetDatabase = CustomEpgStoreRegistry.database(reactContext, sourceId)
       val sourceUrl = url.trim(); if (sourceUrl.isEmpty()) throw IllegalArgumentException("Custom EPG URL is empty")
       if (!targetDatabase.ensureHealthy()) throw IllegalStateException("Custom Guide database integrity check failed"); targetDatabase.assertRefreshStorageAvailable()
-      val activeXmltvIds = LinkedHashSet<String>(); for (binding in controlDao.allChannelBindings(sourceId)) binding.xmltvId.trim().takeIf { it.isNotEmpty() }?.let(activeXmltvIds::add)
+      val activeXmltvIds = LinkedHashSet<String>(candidates); for (binding in controlDao.effectiveBindings(sourceId)) binding.xmltvId.trim().takeIf { it.isNotEmpty() }?.let(activeXmltvIds::add)
       val now = System.currentTimeMillis(); val minStop = now - retentionDays().toLong() * DAY_MS; val maxStart = now + GUIDE_WINDOW_MS
       val channelNames = LinkedHashMap<String, String>(); val channelIcons = LinkedHashMap<String, String>(); var acceptedProgrammeCount = 0L; var programmeSwapSucceeded = false
       val batches = streamFilteredXmltv(sourceUrl, activeXmltvIds, minStop, maxStart, channelNames, channelIcons, targetDatabase) { acceptedProgrammeCount += 1L }

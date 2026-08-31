@@ -246,6 +246,8 @@ export function applyXmltvMatchesToChannels(
   const changedById = new Map<string, Channel>();
 
   const process = (channel: Channel) => {
+    // Additional playlist IDs never implicitly match the supplied primary EPG.
+    if (channel.id.startsWith("pl:")) return;
     const result = matchPlaylistChannelToXmltv(channel, indexes, logos, { preferTvgIdOnly });
     if (result.ambiguous && !result.sourceId) ambiguous++;
     else if (result.sourceId) matched++;

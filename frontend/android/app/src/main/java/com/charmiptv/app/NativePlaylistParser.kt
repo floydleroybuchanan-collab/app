@@ -56,21 +56,21 @@ internal object NativePlaylistParser {
     val headers: LinkedHashMap<String, String> = LinkedHashMap(),
   )
 
-  fun fetch(urlString: String): NativePlaylistResult {
+  fun fetch(urlString: String, documentStream: InputStream? = null): NativePlaylistResult {
     val rawEntries = ArrayList<RawEntry>(4096)
     val tvgCounts = HashMap<String, Int>()
     var rejected = 0
     var truncated = false
     var pending: Pending? = null
 
-    openPlaylist(urlString).use { stream ->
+    (documentStream?.let { BoundedInputStream(it, MAX_PLAYLIST_BYTES) } ?: openPlaylist(urlString)).use { stream ->
       BufferedReader(InputStreamReader(stream, Charsets.UTF_8), NETWORK_BUFFER_SIZE).use { reader ->
         var firstLine = true
         var rawLineCount = 0L
         while (true) {
           val rawLine = reader.readLine() ?: break
           rawLineCount += 1L
-          if ((rawLineCount and 0xffL) == 0L) {
+          if (documentStream == null && (rawLineCount and 0xffL) == 0L) {
             val owner = TvRemoteModule.remoteContext
             if (owner == "guide" || owner == "player" || owner == "modal") {
               throw IllegalStateException("Playlist refresh deferred for active TV interaction")

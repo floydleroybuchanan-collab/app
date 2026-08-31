@@ -107,6 +107,7 @@ export function useParentalPin() {
   }, []);
 
   return {
+    ready: loaded,
     hasPin: !!value.pin,
     lockedGroups: value.lockedGroups,
     isGroupLocked: useCallback(

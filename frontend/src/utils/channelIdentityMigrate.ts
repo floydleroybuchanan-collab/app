@@ -15,6 +15,7 @@ export function remapStoredChannelIds(
   const byName = new Map<string, Channel[]>();
   for (const channel of channels) {
     byId.set(channel.id, channel);
+    if (channel.id.startsWith("pl:")) continue;
     const tvg = (channel.tvg_id || "").trim();
     if (tvg) {
       const list = byTvg.get(tvg) || [];
@@ -43,6 +44,8 @@ export function remapStoredChannelIds(
       }
       continue;
     }
+
+    if (id.startsWith("pl:")) { if (!seen.has(id)) { seen.add(id); out.push(id); } continue; }
 
     // Legacy collision suffix: base#index → try base as tvg-id / slug.
     const base = id.includes("#") ? id.slice(0, id.indexOf("#")) : id.includes("~") ? id.slice(0, id.indexOf("~")) : id;

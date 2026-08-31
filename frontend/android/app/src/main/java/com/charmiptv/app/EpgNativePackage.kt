@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class EpgNativePackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-    listOf(EpgNativeModule(reactContext))
+    listOf(EpgNativeModule(reactContext), PlaylistDocumentModule(reactContext))
 
   override fun createViewManagers(
     reactContext: ReactApplicationContext,

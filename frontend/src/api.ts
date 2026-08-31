@@ -10,6 +10,10 @@ export type Program = {
 
 export type Channel = {
   id: string;
+  playlist_id?: string;
+  playlist_name?: string;
+  source_channel_id?: string;
+  source_group?: string;
   /** Provider playlist id before XMLTV matching rewrites `tvg_id`. */
   raw_tvg_id?: string;
   tvg_id: string;

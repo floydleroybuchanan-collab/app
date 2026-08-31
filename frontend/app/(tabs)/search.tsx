@@ -117,7 +117,7 @@ function SearchScreenContent() {
     // which materialized every matching channel before discarding the tail.
     const channelMatches: Channel[] = [];
     for (const channel of channels) {
-      const haystack = `${channel.name || ""} ${channel.group || ""}`.toLowerCase();
+      const haystack = `${channel.name || ""} ${channel.group || ""} ${channel.playlist_name || ""}`.toLowerCase();
       if (!haystack.includes(q)) continue;
       channelMatches.push(channel);
       if (channelMatches.length >= 18) break;
@@ -357,7 +357,7 @@ function SearchScreenContent() {
                       style={({ focused }: any) => [styles.resultRow, focused && styles.focused]}
                     >
                       <ChannelLogo name={channel.name} logo={channel.logo} disabled={!isFocused || !channelLogos} size={28} />
-                      <Text numberOfLines={1} style={styles.resultName}>{channel.name}</Text>
+                      <Text numberOfLines={1} style={styles.resultName}>{channel.name}{channel.playlist_name ? ` · ${channel.playlist_name}` : ""}</Text>
                       <Ionicons name="play" size={13} color={tvColors.purpleSoft} />
                     </Pressable>
                     <Pressable
@@ -385,7 +385,7 @@ function SearchScreenContent() {
                       <ChannelLogo name={channel.name} logo={channel.logo} disabled={!isFocused || !channelLogos} size={28} />
                       <View style={{ flex: 1 }}>
                         <Text numberOfLines={1} style={styles.resultName}>{program.title}</Text>
-                        <Text numberOfLines={1} style={styles.resultSub}>{channel.name}</Text>
+                        <Text numberOfLines={1} style={styles.resultSub}>{channel.name}{channel.playlist_name ? ` · ${channel.playlist_name}` : ""}</Text>
                       </View>
                       <Ionicons name="grid-outline" size={13} color={tvColors.purpleSoft} />
                     </Pressable>

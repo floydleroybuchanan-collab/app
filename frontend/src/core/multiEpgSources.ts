@@ -17,6 +17,8 @@ const KEY = "gs_custom_epg_sources_v2";
 // Native supports eight user/custom sources total. The legacy `user` source
 // occupies one slot, so the additional-source registry must stop at seven.
 const MAX_SOURCES = 7;
+export const OWNER_EPG_ID = "owner-secondary";
+const OWNER_EPG_URL = (process.env.EXPO_PUBLIC_EPG_URL_2 || "").trim();
 let cached: CustomEpgSourceRecord[] = [];
 let loaded = false;
 let loading: Promise<CustomEpgSourceRecord[]> | null = null;
@@ -62,7 +64,13 @@ function normalize(raw: unknown): CustomEpgSourceRecord[] {
     const source = normalizeRecord(item || {});
     if (!source || seen.has(source.id)) continue;
     seen.add(source.id); out.push(source);
-    if (out.length >= MAX_SOURCES) break;
+    if (out.filter((item) => item.id !== OWNER_EPG_ID).length >= MAX_SOURCES) break;
+  }
+  if (OWNER_EPG_URL) {
+    const existing = out.find((item) => item.id === OWNER_EPG_ID);
+    const owner: CustomEpgSourceRecord = { id: OWNER_EPG_ID, name: "CharmIPTV 2 EPG", url: OWNER_EPG_URL, enabled: true, refreshHours: 12, lastRefreshAt: 0, lastStatus: "Not updated", overrides: {}, ...existing };
+    owner.url = OWNER_EPG_URL;
+    return [owner, ...out.filter((item) => item.id !== OWNER_EPG_ID)];
   }
   return out;
 }
@@ -117,6 +125,7 @@ export function saveMultiEpgSource(source: CustomEpgSourceRecord) {
 }
 export function removeMultiEpgSource(id: string) {
   const clean = cleanId(id);
+  if (clean === OWNER_EPG_ID) return;
   afterHydration(() => commit(cached.filter((item) => item.id !== clean)));
 }
 export function clearMultiEpgChannelAssignments(channelId: string) {
@@ -155,5 +164,5 @@ export function useMultiEpgSources() {
     saveMultiEpgSource(source); setSources(cached);
   }, []);
   const remove = useCallback((id: string) => { removeMultiEpgSource(id); setSources(cached); }, []);
-  return { sources, save, remove, canAdd: sources.length < MAX_SOURCES };
+  return { sources, save, remove, canAdd: sources.filter((item) => item.id !== OWNER_EPG_ID).length < MAX_SOURCES };
 }

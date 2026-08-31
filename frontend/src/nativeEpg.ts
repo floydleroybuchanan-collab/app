@@ -36,6 +36,8 @@ type CharmEpgModule = {
 };
 
 type CharmCustomEpgModule = {
+  refreshAssociatedSourceGuide?(sourceId: string, url: string, ids: string[]): Promise<{ count: number; programmeSwapSucceeded?: boolean }>;
+  replaceAutomaticBindings?(rows: { channelId: string; xmltvId: string; sourceIds: string[] }[]): Promise<boolean>;
   setGuideChannelBinding?(channelId: string, xmltvId: string): Promise<number>;
   listUserGuideChannels?(query: string, offset: number, limit: number): Promise<{ total: number; rows: { id: string; name: string }[] }>;
   refreshUserGuide?(url: string): Promise<{ count: number; directoryCount?: number; bindingCount?: number; guideEpoch?: number; guideRefreshedAt?: number; programmeSwapSucceeded?: boolean }>;
@@ -85,6 +87,10 @@ function convertSearchRows(rows: NativeProgramme[]): { channelId: string; progra
 export async function fetchNativePlaylist(url: string): Promise<NativePlaylistResult> {
   const cleanUrl = (url || "").trim();
   if (!cleanUrl) throw new Error("Playlist URL is empty");
+  if (cleanUrl.startsWith("content://")) {
+    if (!nativeModule?.fetchPlaylist) throw new Error("Local playlist files need the Android app.");
+    return nativeModule.fetchPlaylist(cleanUrl);
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PLAYLIST_FETCH_TIMEOUT_MS);
   try {
@@ -183,7 +189,7 @@ export async function configureNativeGuideOwnership(primaryEnabled: boolean, use
 }
 export type NativeUserGuideSource = { id: string; url: string; enabled: boolean; refreshHours: number };
 export async function configureNativeUserGuideSources(primaryEnabled: boolean, sources: NativeUserGuideSource[], options?: { clearRam?: boolean }): Promise<void> {
-  if (nativeModule?.configureUserGuideSources) await nativeModule.configureUserGuideSources(primaryEnabled, sources.slice(0, 8));
+  if (nativeModule?.configureUserGuideSources) await nativeModule.configureUserGuideSources(primaryEnabled, sources.slice(0, 9));
   primaryGuideEnabled = primaryEnabled; ownershipRequiresSqlite = sources.some((source) => source.enabled && !!source.url);
   if (options?.clearRam !== false && ramModule) await ramModule.clearMemory().catch(() => undefined);
 }
@@ -200,3 +206,15 @@ export async function setNativeGuideChannelBinding(channelId: string, xmltvId: s
 export async function listNativeUserGuideChannels(query = "", offset = 0, limit = 50): Promise<{ total: number; rows: { id: string; name: string }[] }> { const directoryModule = customEpgModule?.listUserGuideChannels ? customEpgModule : nativeModule; if (!directoryModule?.listUserGuideChannels) return { total: 0, rows: [] }; return directoryModule.listUserGuideChannels(query, Math.max(0, offset), Math.max(1, Math.min(100, limit))); }
 export async function refreshNativeUserGuide(url: string): Promise<{ count: number; channelNames?: Record<string, string>; channelIdsWithPrograms?: string[]; directoryCount?: number; bindingCount?: number; guideEpoch?: number; guideRefreshedAt?: number; programmeSwapSucceeded?: boolean }> { const refreshModule = customEpgModule?.refreshUserGuide ? customEpgModule : nativeModule; if (!refreshModule?.refreshUserGuide) throw new Error("Custom native EPG engine is unavailable"); return refreshModule.refreshUserGuide(url); }
 export async function clearNativeEpg(): Promise<void> { if (ramModule) await ramModule.clearMemory(); if (nativeModule) await nativeModule.clear(); }
+
+export async function replaceAutomaticPlaylistBindings(rows: { channelId: string; xmltvId: string; sourceIds: string[] }[]): Promise<void> {
+  if (!customEpgModule?.replaceAutomaticBindings) throw new Error("Playlist EPG associations require the updated native app.");
+  await customEpgModule.replaceAutomaticBindings(rows);
+  ownershipRequiresSqlite = true;
+  if (ramModule) await ramModule.clearMemory();
+}
+
+export async function refreshAssociatedPlaylistGuide(sourceId: string, url: string, ids: string[]) {
+  if (!customEpgModule?.refreshAssociatedSourceGuide) throw new Error("Playlist Guide associations require the updated Android app.");
+  return customEpgModule.refreshAssociatedSourceGuide(sourceId, url, Array.from(new Set(ids)));
+}

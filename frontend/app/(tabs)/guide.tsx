@@ -1,3 +1,6 @@
+import { usePlaylists } from "@/src/core/playlistRegistry";
+import { playlistOwner } from "@/src/core/playlistCatalog";
+import { selectPlaylist, useSelectedPlaylist } from "@/src/core/playlistSelection";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import {
@@ -215,6 +218,9 @@ function GuideSelectionPreview({
 }
 
 function PurpleGuideScreenContent() {
+  const playlists = usePlaylists();
+  const selectedPlaylist = useSelectedPlaylist();
+  const activePlaylist = playlists.some((item) => item.id === selectedPlaylist && item.enabled) ? selectedPlaylist : "all";
   const router = useRouter();
   const isFocused = useIsFocused();
   const { drawerOpen, openDrawer, closeDrawer } = usePurpleTvDrawer();
@@ -521,6 +527,7 @@ function PurpleGuideScreenContent() {
     }, [channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache]),
   );
 
+  const visiblePlaylistChannels = useMemo(() => activePlaylist === "all" ? channels : channels.filter((channel) => playlistOwner(channel) === activePlaylist), [activePlaylist, channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const recentIdSet = useMemo(() => new Set(recentIds), [recentIds]);
   const failedCount = failedStreamCount();
@@ -528,7 +535,7 @@ function PurpleGuideScreenContent() {
   const groupCounts = useMemo(
     () => {
       void failedCount;
-      return buildGroupCounts(channels, {
+      return buildGroupCounts(visiblePlaylistChannels, {
         favoriteSet,
         recentIds: recentIdSet,
         hasEpgMatch: hasOwnedEpgMatch,
@@ -538,12 +545,12 @@ function PurpleGuideScreenContent() {
         includeProviderGroups: showProviderGroups,
       });
     },
-    [channels, favoriteSet, recentIdSet, hasOwnedEpgMatch, hiddenIdSet, failedCount, customGuideGroups.byName, showProviderGroups],
+    [visiblePlaylistChannels, favoriteSet, recentIdSet, hasOwnedEpgMatch, hiddenIdSet, failedCount, customGuideGroups.byName, showProviderGroups],
   );
 
   const playlistGroups = useMemo(
-    () => showProviderGroups ? listPlaylistGroupNames(channels, hiddenIdSet) : [],
-    [channels, hiddenIdSet, showProviderGroups],
+    () => showProviderGroups ? listPlaylistGroupNames(visiblePlaylistChannels, hiddenIdSet) : [],
+    [visiblePlaylistChannels, hiddenIdSet, showProviderGroups],
   );
 
   const { tabs: groups, overflow: overflowGroups } = useMemo(
@@ -583,7 +590,7 @@ function PurpleGuideScreenContent() {
   }, [channels.length, group, groups, isFocused, overflowGroups, startGroup]);
 
   const filteredMeta = useMemo(() => {
-    let list = filterChannelsByGroup(channels, group, {
+    let list = filterChannelsByGroup(visiblePlaylistChannels, group, {
       favoriteSet,
       recent,
       recentIds: recentIdSet,
@@ -605,7 +612,7 @@ function PurpleGuideScreenContent() {
     const visibleIds = new Set(filteredList.map((channel) => channel.id));
     visibleIds.add(target.id);
     return list.filter((channel) => visibleIds.has(channel.id));
-  }, [channels, customGuideGroups.byName, customOrder, epgGuideFilter, favoriteSet, group, hasOwnedEpgMatch, hiddenIdSet, jumpFilterBypassId, recent, recentIdSet]);
+  }, [visiblePlaylistChannels, customGuideGroups.byName, customOrder, epgGuideFilter, favoriteSet, group, hasOwnedEpgMatch, hiddenIdSet, jumpFilterBypassId, recent, recentIdSet]);
 
   const filtered = filteredMeta;
 
@@ -981,6 +988,7 @@ function PurpleGuideScreenContent() {
     useCallback(() => {
       const jump = consumeGuideJump();
       if (!jump) return;
+      selectPlaylist("all");
       startPreferenceAppliedRef.current = true;
       const nextGroup = jump.group || guideSessionGroup || "All";
       if (hasPin && isGroupLocked(nextGroup)) {
@@ -1042,6 +1050,15 @@ function PurpleGuideScreenContent() {
             openDrawer();
           }}
         />
+        <Pressable accessibilityRole="button" focusable onPress={() => {
+          quiesceGuideForTransition(true);
+          const ids = ["all", ...playlists.filter((item) => item.enabled).map((item) => item.id)];
+          selectPlaylist(ids[(ids.indexOf(activePlaylist) + 1) % ids.length]);
+          setGroup("All"); guideSessionGroup = "All"; guideSessionChannelId = null;
+          setRestoreTimeMs(null); setResetToken((value) => value + 1);
+        }} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>
+          <Text style={styles.retryText}>Playlist: {activePlaylist === "all" ? "All Playlists" : playlists.find((item) => item.id === activePlaylist)?.name} · Select to change</Text>
+        </Pressable>
         <EpgProgressBar />
         {loading && channels.length === 0 ? (
           <View style={styles.center}>

@@ -1,10 +1,11 @@
+import { readCombinedPlaylists, refreshPlaylists, seedLegacyPlaylist, fetchPlaybackPlaylist, listPlaylists } from "@/src/core/playlistRegistry";
+import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import dayjs from "dayjs";
 import * as FileSystem from "expo-file-system/legacy";
 import type { Channel, GuideResponse, Program, SourceStatus } from "@/src/api";
 import { clearGuidePrograms } from "@/src/core/guideProgramsStore";
 import {
   clearNativeEpg,
-  fetchNativePlaylist,
   readNativeStoredPlaylist,
   loadNativeEpgWindow,
   nativeEpgAvailable,
@@ -39,7 +40,7 @@ import { getLogoPriority, type LogoPriority } from "@/src/core/logoPreferences";
 import { getEpgSourcePreferences, type EpgSourcePreferences } from "@/src/core/epgSourcePreferences";
 import { getMultiEpgSources } from "@/src/core/multiEpgSources";
 import { indexDeclaredStreamTypes } from "@/src/core/playbackProfileIndex";
-import { createPlaybackSourceRefresher } from "@/src/core/playbackSourceRefresh";
+import { createPlaylistPlaybackRefresher } from "@/src/core/playlistPlaybackRefresh";
 
 export const API_BASE = "";
 /** Playlist URL — set via EXPO_PUBLIC_M3U_URL at build time. Never hardcode provider URLs. */
@@ -83,6 +84,7 @@ type NativeMeta = {
 let MEM: NativeMeta | null = null;
 let refreshPromise: Promise<NativeMeta> | null = null;
 let playlistOnlyRefreshPromise: Promise<SourceStatus> | null = null;
+let catalogPublishPromise: Promise<void> | null = null;
 let lastSourceError: string | null = null;
 const listeners = new Set<() => void>();
 let sourceEmitScheduled = false;
@@ -221,7 +223,7 @@ async function applyPersistedGuideOwnership(): Promise<EffectiveGuideOwnership> 
   );
 
   const legacyUserOverrideIds = new Set<string>();
-  const customOwnedChannelIds = new Set<string>();
+  const customOwnedChannelIds = new Set<string>((MEM?.channels || []).filter((channel) => channel.id.startsWith("pl:")).map((channel) => channel.id));
   if (prefs.userEnabled && prefs.userUrl) {
     for (const channelId of Object.keys(prefs.userOverrides)) {
       legacyUserOverrideIds.add(channelId);
@@ -752,14 +754,10 @@ async function persistMeta(meta: NativeMeta): Promise<void> {
 }
 
 async function fetchPlaylist(): Promise<Channel[]> {
-  if (!SOURCE_M3U) {
-    throw new Error("Playlist is not configured for this build (missing EXPO_PUBLIC_M3U_URL).");
-  }
   setProgress({ phase: "channels", ratio: 0.06, etaSeconds: null });
-  const parsed = await fetchNativePlaylist(sourceUrl(SOURCE_M3U));
+  await seedLegacyPlaylist(MEM?.channels || (await readChannelCache())?.channels || []);
+  const channels = await refreshPlaylists();
   setProgress({ phase: "channels", ratio: 0.17, etaSeconds: null });
-  const channels = Array.isArray(parsed.channels) ? parsed.channels : [];
-  if (!channels.length) throw new Error("Playlist contained no playable channels");
   return channels;
 }
 
@@ -774,7 +772,14 @@ async function ensureLoaded(): Promise<NativeMeta> {
     if (cached.channels.length === 0) {
       return refreshInternal(true);
     }
+    await seedLegacyPlaylist(cached.channels);
+    const combined = await readCombinedPlaylists();
+    const old = new Map(cached.channels.map((channel) => [channel.id, channel]));
+    cached.channels = combined.map((channel) => ({ ...channel, tvg_id: channel.id.startsWith("pl:") ? "" : old.get(channel.id)?.tvg_id || channel.tvg_id }));
     MEM = cached;
+    await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
+    await syncMatchesToNative(cached.channels, cached.guideEpoch || 0);
+    await syncPlaylistEpg(cached.channels);
     void applyPersistedGuideOwnership().catch(() => undefined);
     if (cached.epgError) {
       lastSourceError = cached.epgError;
@@ -787,6 +792,10 @@ async function ensureLoaded(): Promise<NativeMeta> {
         .then(() => syncMatchesToNative(cached.channels, cached.guideEpoch || 0))
         .catch(() => undefined);
     }
+    // Existing guide paints from cache while newly supplied slots bootstrap independently.
+    void listPlaylists().then(async (sources) => {
+      for (const source of sources) if (source.enabled && !source.revision) await reloadPlaylistCatalog(source.id);
+    }).catch(() => undefined);
     return cached;
   }
 
@@ -805,6 +814,7 @@ async function ensureLoaded(): Promise<NativeMeta> {
 }
 
 async function refreshInternal(force: boolean): Promise<NativeMeta> {
+  if (catalogPublishPromise) await catalogPublishPromise;
   if (refreshPromise) return refreshPromise;
   // Playlist-only refresh owns the same provider/cache/SQLite resources. Join
   // it before claiming the full-refresh slot, then re-check because another
@@ -855,6 +865,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       emit();
 
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
+      await syncPlaylistEpg(channels, true);
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
       // The custom source manager performs a deliberate full XMLTV index when
@@ -1223,6 +1234,7 @@ export async function refreshSource(force = false): Promise<SourceStatus> {
  * Existing logical EPG matches are retained for stable playlist channel ids.
  */
 export async function refreshPlaylistOnly(): Promise<SourceStatus> {
+  if (catalogPublishPromise) await catalogPublishPromise;
   if (playlistOnlyRefreshPromise) return playlistOnlyRefreshPromise;
   playlistOnlyRefreshPromise = (async () => {
     if (refreshPromise) await refreshPromise;
@@ -1269,11 +1281,34 @@ export async function refreshPlaylistOnly(): Promise<SourceStatus> {
 // Authentication recovery must not wait for a full EPG refresh or SQLite/cache
 // writes. The existing bounded playlist fetch preserves the provider URL/headers;
 // only the selected source is returned, without emitting a Guide refresh/retune.
-export const refreshPlaybackChannel = createPlaybackSourceRefresher<Channel>(async () => {
-  if (!SOURCE_M3U) throw new Error("Playlist is not configured for this build");
-  const parsed = await fetchNativePlaylist(sourceUrl(SOURCE_M3U));
-  return parsed.channels;
-});
+export const refreshPlaybackChannel = createPlaylistPlaybackRefresher<Channel>(fetchPlaybackPlaylist);
+
+/** Publish the complete enabled catalog, never an individual playlist, into the native guide projection. */
+export async function reloadPlaylistCatalog(refreshId?: string): Promise<void> {
+  const prior = catalogPublishPromise;
+  const next = (prior || Promise.resolve()).catch(() => undefined).then(() => publishPlaylistCatalog(refreshId));
+  catalogPublishPromise = next;
+  try { await next; } finally { if (catalogPublishPromise === next) catalogPublishPromise = null; }
+}
+
+async function publishPlaylistCatalog(refreshId?: string): Promise<void> {
+  if (refreshPromise) await refreshPromise;
+  if (playlistOnlyRefreshPromise) await playlistOnlyRefreshPromise;
+  const cached = MEM || await readChannelCache();
+  await seedLegacyPlaylist(cached?.channels || []);
+  const channels = refreshId ? await refreshPlaylists(refreshId) : await readCombinedPlaylists();
+  const previous = new Map((cached?.channels || []).map((channel) => [channel.id, channel]));
+  for (const channel of channels) {
+    if (!channel.id.startsWith("pl:")) channel.tvg_id = previous.get(channel.id)?.tvg_id || channel.tvg_id;
+  }
+  const meta: NativeMeta = { ...(cached || { ts: 0, epgProgramCount: 0, epgChannelCount: 0 }), channels,
+    playlistEpoch: (cached?.playlistEpoch || 0) + 1, guideEpoch: (cached?.guideEpoch || 0) + 1 };
+  await syncPlaylistToNative(channels, meta.playlistEpoch || 0);
+  await syncMatchesToNative(channels, meta.guideEpoch || 0);
+  await persistMeta(meta); MEM = meta;
+  await syncPlaylistEpg(channels, !!refreshId);
+  clearProgrammeWindowCache(); clearGuidePrograms(); emit();
+}
 
 /** Check persisted independent playlist/EPG clocks and refresh only what is due. */
 export async function refreshSourcesIfDue(): Promise<SourceStatus> {
@@ -1285,17 +1320,10 @@ export async function refreshSourcesIfDue(): Promise<SourceStatus> {
   const cached = MEM || (await readChannelCache());
   if (!cached?.channels?.length) return sourceStatus();
   MEM = cached;
+  await refreshPlaylists(undefined, true);
+  await reloadPlaylistCatalog();
   const prefs = await getSourceRefreshPreferences();
   const now = Date.now();
-  const playlistLast = cached.playlistRefreshedAt != null ? cached.playlistRefreshedAt : cached.ts;
-  if (isRefreshDue(playlistLast, prefs.playlistHours, now)) {
-    if (!cached.epgError) {
-      setProgress({ phase: "update_available", ratio: 0, etaSeconds: null, message: null }, true);
-    }
-    if (prefs.updateEpgOnPlaylistChange) await refreshInternal(true);
-    else await refreshPlaylistOnly();
-    return sourceStatus();
-  }
   const guideLast = cached.guideRefreshedAt != null ? cached.guideRefreshedAt : cached.ts;
   if (isRefreshDue(guideLast, prefs.epgHours, now)) {
     return refreshEpgOnly();
@@ -1305,6 +1333,7 @@ export async function refreshSourcesIfDue(): Promise<SourceStatus> {
 
 /** Refresh XMLTV only — keep current playlist rows (independent epochs). */
 export async function refreshEpgOnly(): Promise<SourceStatus> {
+  if (catalogPublishPromise) await catalogPublishPromise;
   // TiviMate-style single refresh owner: if a full/EPG refresh is already doing
   // the provider work, join it. Do not queue an immediate duplicate XMLTV pass.
   if (refreshPromise) {

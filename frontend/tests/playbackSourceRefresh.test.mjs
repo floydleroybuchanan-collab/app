@@ -43,9 +43,13 @@ test("missing channel never silently substitutes another stream", async () => {
 test("playback URL refresh is isolated from Guide refresh locks, cache writes and UI emissions", async () => {
   const source = await readFile(new URL("../src/source.native.ts", import.meta.url), "utf8");
   const start = source.indexOf("export const refreshPlaybackChannel =");
-  const refresh = source.slice(start, source.indexOf("/** Check persisted", start));
-  assert.match(refresh, /createPlaybackSourceRefresher<Channel>/);
-  assert.match(refresh, /fetchNativePlaylist\(sourceUrl\(SOURCE_M3U\)\)/);
+  const refresh = source.slice(start, source.indexOf("/** Publish the complete", start));
+  assert.match(refresh, /createPlaylistPlaybackRefresher<Channel>/);
+  assert.match(refresh, /fetchPlaybackPlaylist/);
+  const registry = await readFile(new URL("../src/core/playlistRegistry.ts", import.meta.url), "utf8");
+  const isolated = registry.slice(registry.indexOf("export async function fetchPlaybackPlaylist"), registry.indexOf("export function usePlaylists"));
+  assert.doesNotMatch(isolated, /exclusive|commit\(|writeCatalog|refreshPlaylists/);
+  assert.match(isolated, /current/);
   assert.doesNotMatch(refresh, /refreshPlaylistOnly|refreshPromise|syncPlaylistToNative|persistMeta|setProgress|emit\(/);
 });
 

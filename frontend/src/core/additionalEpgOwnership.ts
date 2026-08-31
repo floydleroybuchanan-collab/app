@@ -1,5 +1,9 @@
 let ownedChannelIds = new Set<string>();
 let revision = 0;
+let automaticChannelIds = new Set<string>();
+export function replaceAutomaticEpgOwners(ids: Iterable<string>): void {
+  automaticChannelIds = new Set(ids); revision++;
+}
 
 export function replaceAdditionalEpgOwners(ids: Iterable<string>): number {
   const next = new Set(Array.from(ids).map((id) => String(id || "").trim()).filter(Boolean));
@@ -17,7 +21,7 @@ export function replaceAdditionalEpgOwners(ids: Iterable<string>): number {
 }
 
 export function additionalEpgOwnsChannel(channelId: string): boolean {
-  return ownedChannelIds.has(String(channelId || "").trim());
+  return ownedChannelIds.has(String(channelId || "").trim()) || automaticChannelIds.has(String(channelId || "").trim());
 }
 
 export function additionalEpgOwnershipRevision(): number {

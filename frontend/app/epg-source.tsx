@@ -60,6 +60,9 @@ export default function EpgSourceScreen() {
   ], [primary.userEnabled, primary.userUrl]);
 
   const persist = useCallback(async (next: CustomEpgSourceRecord, status: string) => {
+    if (registry.sources.some((item) => item.id !== next.id && item.url.trim() === next.url.trim())) {
+      throw new Error("This EPG address is already saved. Associate its existing entry with your playlist instead of adding it again.");
+    }
     const extras = registry.sources.filter((item) => item.id !== next.id).concat(next);
     registry.save(next);
     await configureNativeUserGuideSources(primary.primaryEnabled, nativeSources(extras));
@@ -144,11 +147,11 @@ export default function EpgSourceScreen() {
       <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
       <View style={styles.card}><Text style={styles.cardTitle}>Source settings</Text>
         <TextInput value={draft.name} onChangeText={(name) => setDraft((value) => ({ ...value, name }))} placeholder="Source name" placeholderTextColor={tvColors.textMuted} style={styles.input} />
-        <TextInput value={draft.url} onChangeText={(url) => setDraft((value) => ({ ...value, url }))} placeholder="https://server/guide.xml.gz" placeholderTextColor={tvColors.textMuted} autoCapitalize="none" autoCorrect={false} style={styles.input} />
+        <TextInput secureTextEntry editable={sourceId !== "owner-secondary"} value={sourceId === "owner-secondary" ? "Supplied by CharmIPTV" : draft.url} onChangeText={(url) => setDraft((value) => ({ ...value, url }))} placeholder="https://server/guide.xml.gz" placeholderTextColor={tvColors.textMuted} autoCapitalize="none" autoCorrect={false} style={styles.input} />
         <Row label="Enabled" value={draft.enabled ? "On" : "Off"} onPress={() => setDraft((value) => ({ ...value, enabled: !value.enabled }))} />
         <Row label="Update interval" value={draft.refreshHours === 0 ? "Manual only" : `${draft.refreshHours} hours`} onPress={() => setDraft((value) => ({ ...value, refreshHours: REFRESH_VALUES[(refreshIndex + 1) % REFRESH_VALUES.length] }))} />
         <Text style={styles.help}>Latest update: {draft.lastRefreshAt ? formatRelativeAge(draft.lastRefreshAt) : "Never"} · {draft.lastStatus}</Text>
-        <View style={styles.actions}><Button label="Save" onPress={save} disabled={busy} /><Button label="Update EPG" onPress={refresh} disabled={busy} /><Button label="Clear EPG data" onPress={clearData} disabled={busy} /><Button label="Remove source" onPress={remove} disabled={busy} /></View>
+        <View style={styles.actions}><Button label="Save" onPress={save} disabled={busy} /><Button label="Update EPG" onPress={refresh} disabled={busy} /><Button label="Clear EPG data" onPress={clearData} disabled={busy} /><Button label="Remove source" onPress={remove} disabled={busy || sourceId === "owner-secondary"} /></View>
       </View>
       <View style={styles.card}><Text style={styles.cardTitle}>Assign channels</Text><Text style={styles.help}>A channel can have one custom EPG owner. Assigning it here automatically removes an older custom-source assignment.</Text>
         <TextInput value={channelQuery} onChangeText={setChannelQuery} placeholder="Search playlist channels" placeholderTextColor={tvColors.textMuted} style={styles.input} />

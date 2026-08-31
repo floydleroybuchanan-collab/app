@@ -11,7 +11,10 @@ assert.match(nativeBridge, /enforcePlaylistByteLimit/);
 assert.match(nativeBridge, /enforcePlaylistTextLimit/);
 assert.match(nativeBridge, /Playlist request timed out before channels could be loaded/);
 assert.doesNotMatch(nativeBridge, /return nativeModule\.fetchPlaylist\(url\)/);
-assert.match(source, /sourceUrl\(SOURCE_M3U\)/);
+assert.match(source, /refreshPlaylists\(/);
+const registry = fs.readFileSync(new URL("../src/core/playlistRegistry.ts", import.meta.url), "utf8");
+assert.match(registry, /EXPO_PUBLIC_M3U_URL/);
+assert.match(registry, /seedLegacyPlaylist/);
 assert.match(source, /Preserve provider protocol exactly/);
 
 console.log("startup playlist acquisition regression: ok");

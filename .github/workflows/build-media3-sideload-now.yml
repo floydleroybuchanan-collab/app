@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - vod/charmiptv-test-1
+      - feature/multiple-playlists-test-1
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
@@ -49,6 +49,8 @@ jobs:
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
       EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL }}
       EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL }}
+      EXPO_PUBLIC_M3U_URL_2: ${{ secrets.M3U_URL_2 }}
+      EXPO_PUBLIC_EPG_URL_2: ${{ secrets.EPG_URL_2 }}
       EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
 
     steps:
