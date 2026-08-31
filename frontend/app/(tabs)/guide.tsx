@@ -1039,7 +1039,6 @@ function PurpleGuideScreenContent() {
   return (
     <PurpleTvShell
       active="/guide"
-      guideGroups={playlistDrawerRows}
       watchingChannelId={lastChannelId}
       footerAction={{
         label: "Guide Sources",
