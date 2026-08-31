@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - agent/media3-player-core-rebuild
-      - fix/tivimate-m3u-epg-ci-align
+      - vod/charmiptv-test-1
     paths:
       - ".github/workflows/build-vod-test-1.yml"
       - "frontend/.media3-sideload-build-trigger"
