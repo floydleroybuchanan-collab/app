@@ -120,7 +120,7 @@ export function PurpleGuideGroupDrawer({
               ]}
               testID={`phase9-group-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              <Text numberOfLines={1} style={[styles.name, item.active && styles.activeName]}>{item.kind === "playlist" ? "▸ " : ""}{item.label || item.name}</Text>
+              <Text numberOfLines={1} style={[styles.name, item.active && styles.activeName]}>{item.kind === "playlist" ? (item.expanded ? "▾ " : "▸ ") : "    "}{item.label || item.name}</Text>
               {item.count != null ? <Text style={styles.count}>{item.count}</Text> : null}
             </Pressable>
           ))}

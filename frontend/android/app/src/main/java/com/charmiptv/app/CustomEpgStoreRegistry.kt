@@ -11,19 +11,33 @@ internal object CustomEpgStoreRegistry {
   private val stores = ConcurrentHashMap<String, EpgDatabase>()
 
   fun normalizeSourceId(raw: String): String {
-    val clean = raw.trim().lowercase().replace(Regex("[^a-z0-9_-]"), "").take(48)
+    val value = raw.trim().lowercase()
+    if (value == LEGACY_SOURCE_ID) return LEGACY_SOURCE_ID
+    val clean = value.removePrefix("user:").replace(Regex("[^a-z0-9_-]"), "").take(48)
     require(clean.isNotEmpty()) { "Custom EPG source id is empty" }
-    return if (clean == LEGACY_SOURCE_ID || clean.startsWith("user:")) clean else "user:$clean"
+    return "user:$clean"
+  }
+
+  private fun hashedDatabaseName(sourceId: String): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(sourceId.toByteArray())
+      .take(12).joinToString("") { "%02x".format(it) }
+    return "charm_epg_user_${digest}.db"
+  }
+
+  internal fun databaseFileName(rawSourceId: String, exists: (String) -> Boolean): String {
+    val sourceId = normalizeSourceId(rawSourceId)
+    if (sourceId == LEGACY_SOURCE_ID) return "charm_epg_user_v1.db"
+    // Older refresh/query paths normalized twice, while the channel picker only
+    // normalized once. Prefer that existing programme DB without moving SQLite
+    // files or their WAL; every new caller now resolves the same stable handle.
+    val legacyName = hashedDatabaseName("user:" + sourceId.replace(":", ""))
+    return if (exists(legacyName)) legacyName else hashedDatabaseName(sourceId)
   }
 
   fun database(context: Context, rawSourceId: String): EpgDatabase {
     val sourceId = normalizeSourceId(rawSourceId)
     return stores.getOrPut(sourceId) {
-      val name = if (sourceId == LEGACY_SOURCE_ID) "charm_epg_user_v1.db" else {
-        val digest = MessageDigest.getInstance("SHA-256").digest(sourceId.toByteArray())
-          .take(12).joinToString("") { "%02x".format(it) }
-        "charm_epg_user_${digest}.db"
-      }
+      val name = databaseFileName(sourceId) { context.getDatabasePath(it).exists() }
       EpgDatabase(context.applicationContext, name)
     }
   }

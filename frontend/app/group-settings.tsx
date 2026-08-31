@@ -15,7 +15,6 @@ import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 
 const PAGE_SIZE = 100;
 const BUILT_INS = ["Favorites", ...SMART_GROUPS, ...CURATED_GROUPS] as string[];
-const BUILT_IN_SET = new Set(["All", ...BUILT_INS]);
 
 function cleanGroupName(raw: string): string {
   return String(raw || "").replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim().slice(0, 48);
@@ -83,7 +82,7 @@ export default function GroupSettingsScreen() {
     const out: string[] = [];
     for (const channel of channels) {
       const raw = String(channel.group || "").trim();
-      if (!raw || BUILT_IN_SET.has(raw) || seen.has(raw)) continue;
+      if (!raw || seen.has(raw)) continue;
       seen.add(raw);
       out.push(raw);
     }
@@ -123,12 +122,6 @@ export default function GroupSettingsScreen() {
     setPage((current) => Math.max(0, Math.min(maxPage, current)));
   }, [maxPage]);
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-  const toggleBuiltIn = (name: string) => {
-    const hidden = new Set(guideUi.hiddenGroups);
-    if (hidden.has(name)) hidden.delete(name); else hidden.add(name);
-    guideUi.setHiddenGroups(Array.from(hidden));
-  };
 
   const toggleCustomVisible = (groupId: string) => {
     tabPrefs.setVisible(groupId, tabPrefs.hiddenSet.has(groupId));
@@ -185,7 +178,7 @@ export default function GroupSettingsScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>PHASE 9</Text>
-            <Text style={styles.title}>Guide Groups & Tabs</Text>
+            <Text style={styles.title}>Playlist & Custom Groups</Text>
           </View>
           <Pressable hasTVPreferredFocus={preferBackFocus} onFocus={() => setPreferBackFocus(false)} onPress={returnToSettings} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" />
@@ -196,12 +189,8 @@ export default function GroupSettingsScreen() {
         <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}>
           <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Provider group tabs</Text>
+            <Text style={styles.cardTitle}>Playlist groups</Text>
             <Text style={styles.help}>TiViMate-style metadata: provider names stay untouched for playlist matching while your display name, visibility, and order are saved separately.</Text>
-            <Pressable onPress={() => guideUi.setShowProviderGroups(!guideUi.showProviderGroups)} style={({ focused }: any) => [styles.row, focused && styles.focused]}>
-              <Text style={styles.rowText}>Show provider groups in Guide</Text>
-              <Text style={styles.value}>{guideUi.showProviderGroups ? "On" : "Off"}</Text>
-            </Pressable>
             {orderedProviderGroups.map((groupId) => {
               const visible = !tabPrefs.hiddenSet.has(groupId);
               const display = getGuideGroupDisplayName(groupId, tabPrefs.aliases);
@@ -230,20 +219,6 @@ export default function GroupSettingsScreen() {
                     </View>
                   ) : null}
                 </View>
-              );
-            })}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Built-in tabs</Text>
-            <Text style={styles.help}>Hide any built-in tab you do not want. All remains the permanent safety fallback.</Text>
-            {BUILT_INS.map((name) => {
-              const visible = !guideUi.hiddenGroups.includes(name);
-              return (
-                <Pressable key={name} onPress={() => toggleBuiltIn(name)} style={({ focused }: any) => [styles.row, focused && styles.focused]}>
-                  <Text style={styles.rowText}>{name}</Text>
-                  <Text style={styles.value}>{visible ? "Visible" : "Hidden"}</Text>
-                </Pressable>
               );
             })}
           </View>

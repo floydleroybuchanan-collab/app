@@ -229,6 +229,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           putArray("channels", channels)
           putInt("rejected", parsed.rejected)
           putBoolean("truncated", parsed.truncated)
+          putString("epgHeader", parsed.epgHeader)
         })
       } catch (t: Throwable) {
         promise.reject("PLAYLIST_FETCH_FAILED", t.message ?: "Native playlist refresh failed", t)

@@ -1,3 +1,4 @@
+import { isProviderGroupKey, providerGroupIdentity } from "./playlistGuideMenu.ts";
 import type { Channel } from "@/src/api";
 import {
   applyGuideGroupOrder,
@@ -100,6 +101,7 @@ export function channelInGroup(
     customGroups?: ReadonlyMap<string, ReadonlySet<string>>;
   },
 ): boolean {
+  if (isProviderGroupKey(group)) return (channel.group || "") === providerGroupIdentity(group);
   const sourceGroup = resolveGuideGroupIdentity(group);
   if (sourceGroup === "All") return true;
   if (sourceGroup === "Favorites") return opts.favoriteSet.has(channel.id);

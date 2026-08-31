@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from media3_source_contract import normalize_audited_playback_refresh
+from playlist_source_contract import is_reviewed_playlist_transport
 from pathlib import Path
 import re
 import subprocess
@@ -187,6 +188,8 @@ for rel in (
         baseline = git_show(BASELINE_REF, rel)
     except Exception as exc:
         critical.append(f"repair-entry baseline unavailable for {rel}: {exc}")
+        continue
+    if is_reviewed_playlist_transport(rel, current):
         continue
     # Panel User-Agent identity may track the TiViMate-style Android TV string used
     # by the cloud builder. That is request identity only — not a change to M3U/XMLTV

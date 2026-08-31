@@ -37,6 +37,26 @@ New behavioral tests cover duplicate IDs/groups, legacy favorites, migration see
 
 The original live Media3 player and VOD implementation are retained. The upstream VOD integrity check still protects 190 provider/extractor/player/model/database files. No Xtream account adapter, Stalker adapter, catch-up, recording or multiview was added.
 
-This test does not implement a TiviMate-compatible full settings backup, automatic discovery of XMLTV URLs from M3U headers, provider account information, or additional playlist-specific time-offset controls. Existing favorites backup and EPG controls remain. The local M3U parser handles the same stream entries as the host's existing parser; this is not an Xtream movie/series catalog adapter.
+This test does not implement a TiviMate-compatible full settings backup, provider account information, or additional playlist-specific time-offset controls. Existing favorites backup and EPG controls remain. The local M3U parser handles the same stream entries as the host's existing parser; this is not an Xtream movie/series catalog adapter.
 
 Before production use, test on an actual TV: install over build 139 without clearing data, verify existing favorites, both supplied services and user lists, duplicate station IDs, DPAD focus, guide search jumps, fullscreen Back, file removal, offline startup, refresh failure, PIN locks and memory under real feed sizes. No connected TV/emulator was available during development; successful compilation and APK verification do not establish device playback or DPAD behavior.
+
+
+## Expandable playlist drawer revision
+
+Both guide drawers show expandable playlist headers. Each source contains All Channels, Favorites and its original M3U groups; the optional All Playlists section aggregates only when chosen. The existing app navigation and VOD remain. Raw provider groups use an encoded UI identity so a provider group called Sports or Favorites cannot accidentally invoke an app-generated category. Group labels, order, hidden metadata and custom group membership remain separate from parsed stream records. The obsolete curated-tab and global provider-tab controls are removed; startup choices are Last used, All Channels, Favorites and custom groups.
+
+Choosing a PIN-protected group defers source selection until the PIN succeeds. Source changes discard a remembered focus target belonging to another playlist. Disabling or removing the last usable playlist is refused until another catalog is available.
+
+The custom EPG source normalizer is now idempotent. Existing double-normalized programme database filenames are reused when present, without moving SQLite/WAL files. Three Android unit tests cover normalization and legacy database selection.
+
+The previous player-interaction gate pinned transport to a single-playlist snapshot. Its reviewed snapshot contract now includes the three authorized multi-source integration files by exact SHA-256; unknown changes still fail, and all other player checks remain active. This is an explicit audit-baseline update, not a playback-code change or blanket gate exemption. The contract itself is tested.
+
+
+## Playlist-header EPG discovery
+
+Downloaded and local M3U files now recognize `url-tvg`, `x-tvg-url`, and `tvg-url` in the EXTM3U header. Discovery accepts HTTP(S), resolves relative links for remote playlists, deduplicates URLs and caps discovery at eight feeds. Header URLs are not exposed in status messages. Detected URLs/EPG records are stored in private app preferences, like the existing custom EPG manager; this storage is not a claim of protection from a rooted device.
+
+The validation preview reports the count but changes no EPG configuration. Saving or refreshing a valid playlist records its header, reuses existing feeds and creates available custom EPG slots. Existing configured owner EPGs are retained. Manual playlist association choices turn automatic association off; manual channel assignments always win. A per-playlist detection switch can re-enable discovery. Disabled shared feeds stay disabled. Capacity errors retain previous associations and display a corrective message. Removing a playlist does not delete shared feeds.
+
+TiviMate auto-detection is documented by the playlist-producing project's integration guide: https://ersatztv.org/docs/clients/tivimate/ . This is evidence of supported integration behavior, not access to proprietary TiviMate source.

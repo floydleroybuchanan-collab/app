@@ -127,3 +127,27 @@ test("managed slots cannot be deleted and personal source limit fails explicitly
   for (let at = 0; at < 5; at++) await h.api.savePersonalPlaylist(`List ${at}`, `https://mine.invalid/${at}`, [channel()]);
   await assert.rejects(h.api.savePersonalPlaylist("Overflow", "https://mine.invalid/extra", [channel()]), /five personal/);
 });
+
+
+test("removing the last usable personal playlist preserves its catalog", async () => {
+  const h = registryHarness(); await h.api.seedLegacyPlaylist([channel("existing")]);
+  const id = await h.api.savePersonalPlaylist("My list", "https://mine.invalid/list", [channel("mine")]);
+  await h.api.updatePlaylist(primary.id, { enabled: false });
+  await assert.rejects(h.api.removePlaylist(id), /another playlist|at least one/);
+  assert.ok((await h.api.listPlaylists()).some(row => row.id === id));
+  assert.equal((await h.api.readCombinedPlaylists()).length, 1);
+});
+
+
+test("EPG headers activate only on save, and a later manual choice defeats in-flight discovery", async () => {
+  const h = registryHarness(); await h.api.seedLegacyPlaylist([channel()]);
+  h.fetch(async () => ({ channels: [channel("mine")], rejected: 0, truncated: false, epgUrls: ["https://epg.invalid/xml"] }));
+  const preview = await h.api.previewPlaylist("https://mine.invalid/list");
+  assert.ok(!(await h.api.listPlaylists()).some(row => row.discoveredEpgUrls?.length));
+  const id = await h.api.savePersonalPlaylist("My list", "https://mine.invalid/list", preview);
+  const expected = (await h.api.listPlaylists()).find(row => row.id === id);
+  assert.equal(expected.discoveredEpgUrls[0], "https://epg.invalid/xml");
+  await h.api.updatePlaylist(id, { autoEpg: false, epgSourceIds: ["manual"] });
+  await h.api.applyDiscoveredPlaylistEpg(expected, ["detected"], ["detected"], "Detected");
+  assert.equal((await h.api.listPlaylists()).find(row => row.id === id).epgSourceIds[0], "manual");
+});

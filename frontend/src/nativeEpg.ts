@@ -1,3 +1,4 @@
+import { playlistEpgUrls } from "@/src/core/playlistEpgHeader";
 import { DeviceEventEmitter, NativeModules, Platform } from "react-native";
 import type { Channel, Program } from "@/src/api";
 import { getMultiEpgSources } from "@/src/core/multiEpgSources";
@@ -6,7 +7,7 @@ import { enforcePlaylistByteLimit, enforcePlaylistTextLimit, parseM3UWithStats }
 type NativeProgramme = { channelId: string; title: string; description?: string | null; category?: string | null; startMs: number; endMs: number };
 type NativeWindow = Record<string, NativeProgramme[]>;
 const EMPTY_NATIVE_PROGRAMS: Program[] = [];
-type NativePlaylistResult = { channels: Channel[]; rejected: number; truncated: boolean };
+type NativePlaylistResult = { channels: Channel[]; rejected: number; truncated: boolean; epgUrls?: string[]; epgHeader?: string };
 type NativeRefreshResult = { count: number; windowStartMs: number; windowEndMs: number; guideEpoch?: number; notModified?: boolean; channelLogos?: Record<string, string>; channelNames?: Record<string, string>; channelIdsWithPrograms?: string[] };
 export type NativePlaylistChannelRow = { playlistId: string; rawTvgId?: string; name?: string; logo?: string; group?: string; url?: string; streamType?: string; position?: number };
 export type NativePlaylistEpgMatchRow = { playlistId: string; xmltvId?: string; logoXmltvId?: string; ambiguous?: boolean; matchPolicy?: string; manual?: boolean };
@@ -89,7 +90,8 @@ export async function fetchNativePlaylist(url: string): Promise<NativePlaylistRe
   if (!cleanUrl) throw new Error("Playlist URL is empty");
   if (cleanUrl.startsWith("content://")) {
     if (!nativeModule?.fetchPlaylist) throw new Error("Local playlist files need the Android app.");
-    return nativeModule.fetchPlaylist(cleanUrl);
+    const parsed = await nativeModule.fetchPlaylist(cleanUrl);
+    return { ...parsed, epgUrls: playlistEpgUrls(parsed.epgHeader || "", cleanUrl) };
   }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PLAYLIST_FETCH_TIMEOUT_MS);
@@ -103,7 +105,7 @@ export async function fetchNativePlaylist(url: string): Promise<NativePlaylistRe
     if (Number.isFinite(contentLength) && contentLength > 0) enforcePlaylistByteLimit(contentLength);
     const text = await response.text();
     enforcePlaylistTextLimit(text);
-    return parseM3UWithStats(text, (value) => value);
+    return { ...parseM3UWithStats(text, (value) => value), epgUrls: playlistEpgUrls(text, cleanUrl) };
   } catch (error) {
     if (controller.signal.aborted) throw new Error("Playlist request timed out before channels could be loaded");
     throw error;

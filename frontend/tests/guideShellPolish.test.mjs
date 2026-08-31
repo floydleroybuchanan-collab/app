@@ -301,7 +301,7 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   assert.match(guide, /MAX_REMEMBERED_GUIDE_GROUPS = 128/);
   assert.match(guide, /retainGuideSlidingCache/);
   assert.doesNotMatch(guide, /focusPurpleIconRail/);
-  assert.match(guide, /buildVisibleGroups/);
+  assert.match(guide, /buildPlaylistMenu/);
   assert.doesNotMatch(guide, /NowPlayingBar/);
   assert.match(preview, /width: 138/);
   assert.match(preview, /actionColumn: \{ flex: 1, minWidth: 0, gap: 3 \}/);
@@ -319,7 +319,7 @@ test("custom XMLTV ownership and user tabs stay isolated from provider parser ro
   ]);
   assert.match(settings, /router\.push\("\/epg-sources"/);
   assert.match(epg, /Custom EPG & channel assignments/);
-  assert.match(epg, /Manage Guide groups & custom tabs/);
+  assert.match(epg, /Manage custom channel groups/);
   assert.match(epg, /Guide opens on/);
   assert.match(customEpg, /Custom XMLTV URL/);
   assert.match(customEpg, /refreshNativeUserGuide\(url\)/);

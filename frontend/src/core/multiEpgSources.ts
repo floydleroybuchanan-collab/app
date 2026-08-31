@@ -166,3 +166,17 @@ export function useMultiEpgSources() {
   const remove = useCallback((id: string) => { removeMultiEpgSource(id); setSources(cached); }, []);
   return { sources, save, remove, canAdd: sources.filter((item) => item.id !== OWNER_EPG_ID).length < MAX_SOURCES };
 }
+
+
+/** Reuse shared sources; never replace a feed or consume more than the existing slot limit. */
+export async function ensureDiscoveredEpgSource(url: string, name: string): Promise<string | null> {
+  await load();
+  const existing = cached.find((source) => source.url === url);
+  if (existing) return existing.id;
+  if (cached.filter((source) => source.id !== OWNER_EPG_ID).length >= MAX_SOURCES) return null;
+  const id = createCustomEpgSourceId();
+  commit([...cached, { id, name: `${name} · detected EPG`.slice(0, 60), url, enabled: true,
+    refreshHours: 12, lastRefreshAt: 0, lastStatus: "Detected from playlist", overrides: {} }]);
+  await writeChain;
+  return id;
+}

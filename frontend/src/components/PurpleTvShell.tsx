@@ -62,6 +62,7 @@ export type PurpleGuideGroup = {
   name: string;
   label?: string;
   kind?: "playlist" | "group";
+  expanded?: boolean;
   count?: number;
   active?: boolean;
   pinned?: boolean;
@@ -459,7 +460,7 @@ export function PurpleTvShell({
                     ]}
                     testID={`purple-guide-group-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
                   >
-                    <Text numberOfLines={1} style={[styles.guideGroupText, item.active && styles.guideGroupTextActive]}>{item.label || item.name}</Text>
+                    <Text numberOfLines={1} style={[styles.guideGroupText, item.active && styles.guideGroupTextActive]}>{item.kind === "playlist" ? (item.expanded ? "▾ " : "▸ ") : "    "}{item.label || item.name}</Text>
                     {item.count ? <Text style={styles.guideGroupCount}>{item.count}</Text> : null}
                   </Pressable>
                 ))}

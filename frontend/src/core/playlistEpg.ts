@@ -1,3 +1,4 @@
+import { discoverPlaylistEpg } from "./playlistEpgDiscovery";
 import { replaceAutomaticEpgOwners } from "./additionalEpgOwnership";
 import type { Channel } from "@/src/api";
 import { listPlaylists } from "./playlistRegistry";
@@ -8,6 +9,7 @@ import { configureNativeUserGuideSources, refreshAssociatedPlaylistGuide, replac
 
 /** Associations are independent of feeds. Manual Room bindings always override these derived exact-ID bindings. */
 export async function syncPlaylistEpg(channels: Channel[], refresh = false): Promise<void> {
+  await discoverPlaylistEpg();
   const [playlists, extras, prefs] = await Promise.all([listPlaylists(), getMultiEpgSources(), getEpgSourcePreferences()]);
   const sources = [
     { id: "user", name: prefs.userName, url: prefs.userUrl, enabled: prefs.userEnabled, refreshHours: 12 },

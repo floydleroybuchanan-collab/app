@@ -7,6 +7,8 @@ import { fetchNativePlaylist } from "@/src/nativeEpg";
 import { combinePlaylistCatalogs, MAX_PERSONAL_PLAYLISTS, PRIMARY_PLAYLIST, SECOND_PLAYLIST,
   scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
+export type PlaylistPreview = Channel[] & { epgUrls?: string[] };
+
 const KEY = "charm_playlist_registry_v1";
 const ROOT = `${FileSystem.documentDirectory}playlists/`;
 const managedUrls: Record<string, string> = {
@@ -64,8 +66,8 @@ async function allCatalogs(rows: PlaylistRecord[]) {
   for (const row of rows) catalogs.set(row.id, row.enabled ? await readCatalog(row) : []);
   return catalogs;
 }
-async function writeCatalog(row: PlaylistRecord, channels: Channel[]): Promise<PlaylistRecord> {
-  const next = { ...row, previousRevision: row.revision, revision: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+async function writeCatalog(row: PlaylistRecord, channels: PlaylistPreview): Promise<PlaylistRecord> {
+  const next = { ...row, discoveredEpgUrls: channels.epgUrls || row.discoveredEpgUrls || [], previousRevision: row.revision, revision: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     count: channels.length, refreshedAt: Date.now(), status: `${channels.length.toLocaleString()} channels ready` };
   await FileSystem.writeAsStringAsync(pathFor(next), JSON.stringify(channels));
   const check = await FileSystem.getInfoAsync(pathFor(next));
@@ -82,7 +84,7 @@ export function validatePlaylistUrl(url: string) {
 }
 export async function previewPlaylist(url: string) {
   validatePlaylistUrl(url.trim());
-  try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return parsed.channels; }
+  try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return Object.assign(parsed.channels, { epgUrls: parsed.epgUrls || [] }); }
   catch (error) {
     // Never surface provider URLs/credentials from fetch/transport exceptions.
     const message = error instanceof Error ? error.message : "";
@@ -169,7 +171,7 @@ export function savePersonalPlaylist(name: string, url: string, preview: Channel
     return row.id;
   });
 }
-export function updatePlaylist(id: string, change: Partial<Pick<PlaylistRecord, "name" | "enabled" | "refreshHours" | "epgSourceIds">>): Promise<void> {
+export function updatePlaylist(id: string, change: Partial<Pick<PlaylistRecord, "name" | "enabled" | "refreshHours" | "epgSourceIds" | "autoEpg" | "autoEpgSourceIds" | "epgDiscoveryStatus">>): Promise<void> {
   return exclusive(async () => {
     const rows = await load(); const next = rows.map((row) => row.id === id ? { ...row, ...change } : row);
     if (!next.some((row) => row.enabled)) throw new Error("Keep at least one playlist enabled.");
@@ -185,8 +187,23 @@ export function movePlaylist(id: string, direction: -1 | 1): Promise<void> {
 export function removePlaylist(id: string): Promise<void> {
   return exclusive(async () => { const rows = await load(); const row = rows.find((item) => item.id === id);
     if (!row || row.managed) throw new Error("Supplied playlists can be disabled, but cannot be removed.");
-    await commit(rows.filter((item) => item.id !== id)); await SecureStore.deleteItemAsync(`playlist-${id}`);
+    const next = rows.filter((item) => item.id !== id);
+    if (!next.some((item) => item.enabled)) throw new Error("Keep at least one playlist enabled.");
+    if (row.enabled && row.count > 0 && !combinePlaylistCatalogs(next, await allCatalogs(next)).length) throw new Error("Download channels for another playlist before removing this one.");
+    await commit(next); await SecureStore.deleteItemAsync(`playlist-${id}`);
     const files = await FileSystem.readDirectoryAsync(ROOT);
     for (const file of files.filter((name) => name.startsWith(`${id}-`))) await FileSystem.deleteAsync(`${ROOT}${file}`, { idempotent: true });
+  });
+}
+
+
+export function applyDiscoveredPlaylistEpg(expected: PlaylistRecord, ids: string[], automaticIds: string[], status: string): Promise<void> {
+  return exclusive(async () => {
+    const rows = await load();
+    const current = rows.find((row) => row.id === expected.id);
+    // A manual edit, removal or newer import wins over a discovery already in flight.
+    if (!current || current.autoEpg === false || current.revision !== expected.revision || JSON.stringify(current.epgSourceIds) !== JSON.stringify(expected.epgSourceIds)) return;
+    if (JSON.stringify(ids) === JSON.stringify(current.epgSourceIds) && current.epgDiscoveryStatus === status) return;
+    await commit(rows.map((row) => row.id === expected.id ? { ...row, epgSourceIds: ids, autoEpgSourceIds: automaticIds, autoEpg: true, epgDiscoveryStatus: status } : row));
   });
 }

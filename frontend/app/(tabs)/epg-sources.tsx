@@ -28,7 +28,6 @@ const REFRESH_OPTIONS: { label: string; value: SourceRefreshIntervalHours }[] = 
   { label: "6h", value: 6 }, { label: "12h", value: 12 }, { label: "24h", value: 24 },
 ];
 
-const STANDARD_GUIDE_GROUPS = ["All", "Favorites", "Sports", "News", "Movies", "Kids", "Music"] as const;
 type ActiveAction = "refresh-all" | "refresh-epg" | "rebuild" | "logo" | null;
 
 function EpgSourcesScreenContent() {
@@ -135,27 +134,12 @@ function EpgSourcesScreenContent() {
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)).slice(0, 6);
   }, [channels, epgMatchOwnership]);
 
-  const guideStartOptions = useMemo(() => {
-    const actualGroups = new Set<string>();
-    for (const channel of channels) {
-      const name = String(channel.group || "").trim();
-      if (name) actualGroups.add(name);
-    }
-    const names = Array.from(new Set<string>([
-      ...STANDARD_GUIDE_GROUPS,
-      ...guideUi.pinnedGroups,
-      ...customGuideGroups.groups.map((item) => item.name),
-      guideUi.startGroup !== GUIDE_START_LAST_USED ? guideUi.startGroup : "",
-    ])).filter((name) =>
-      !!name &&
-      !guideUi.hiddenGroups.includes(name) &&
-      (name === "All" || name === "Favorites" || customGuideGroups.byName.has(name) || actualGroups.has(name) || STANDARD_GUIDE_GROUPS.includes(name as any)),
-    );
-    return [
-      { label: "Last used", value: GUIDE_START_LAST_USED },
-      ...names.map((name) => ({ label: name, value: name })),
-    ];
-  }, [channels, customGuideGroups.byName, customGuideGroups.groups, guideUi.hiddenGroups, guideUi.pinnedGroups, guideUi.startGroup]);
+  const guideStartOptions = [
+    { label: "Last used", value: GUIDE_START_LAST_USED },
+    { label: "All Channels", value: "All" },
+    { label: "Favorites", value: "Favorites" },
+    ...customGuideGroups.groups.map((item) => ({ label: item.name, value: item.name })),
+  ];
 
   const timeFormat = clock24h ? "MMM D, HH:mm" : "MMM D, h:mm A";
 
@@ -195,9 +179,8 @@ function EpgSourcesScreenContent() {
                 onChange={guideUi.setStartGroup}
               />
               <Text style={styles.help}>Choose which Guide group opens first on a normal Guide entry. Last used keeps your previous Guide tab. Search and returning from fullscreen always open on the requested/current channel instead.</Text>
-              <ToggleRow label="Show raw provider/M3U groups" value={guideUi.showProviderGroups} onChange={guideUi.setShowProviderGroups} />
               <Text style={styles.help}>Off keeps provider categories hidden while Charm still uses their names internally to classify channels into Sports, News, Movies, Kids, Entertainment and Miscellaneous.</Text>
-              <Action label="Manage Guide groups & custom tabs" icon="albums-outline" onPress={() => router.push("/group-settings" as any)} />
+              <Action label="Manage custom channel groups" icon="albums-outline" onPress={() => router.push("/group-settings" as any)} />
               <Action label="Custom EPG & channel assignments" icon="git-compare-outline" onPress={() => router.push("/epg-custom" as any)} />
               <ChoiceRow<EpgGuideFilter> label="Guide EPG filter" value={epgGuideFilter} options={[{ label: "All", value: "all" }, { label: "Matched", value: "matched" }, { label: "Unmatched", value: "unmatched" }]} onChange={setEpgGuideFilter} />
               <ChoiceRow<GuideWindowHours> label="Guide window" value={guideWindowHours} options={[{ label: "6h", value: 6 }, { label: "8h", value: 8 }, { label: "12h", value: 12 }, { label: "24h", value: 24 }]} onChange={setGuideWindowHours} />

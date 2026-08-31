@@ -10,7 +10,7 @@ import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
 import { getPlaylistUrl, movePlaylist, previewPlaylist, removePlaylist, savePersonalPlaylist, updatePlaylist, usePlaylists, readCombinedPlaylists } from "@/src/core/playlistRegistry";
 import { reloadPlaylistCatalog } from "@/src/source.native";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
-import type { Channel } from "@/src/api";
+import type { PlaylistPreview } from "@/src/core/playlistRegistry";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
   return <Pressable accessibilityRole="button" focusable={!disabled} disabled={disabled} onPress={onPress}
@@ -28,7 +28,7 @@ export default function PlaylistsScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [preview, setPreview] = useState<Channel[] | null>(null);
+  const [preview, setPreview] = useState<PlaylistPreview | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [removeArmed, setRemoveArmed] = useState("");
@@ -56,7 +56,7 @@ export default function PlaylistsScreen() {
         <TextInput accessibilityLabel="M3U URL" placeholder="https://provider.example/playlist.m3u" placeholderTextColor="#a99cbc" value={url} onChangeText={(value) => { setUrl(value); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry style={styles.input} editable={!busy} />
         {!!editing && <Action label="Save name only (no download)" disabled={busy} onPress={() => void run(async () => {
           await updatePlaylist(editing, { name: name.trim().slice(0, 60) || "My playlist" });
-          await reloadPlaylistCatalog(); setEditing(null); setPreview(null); setUrl("");
+          await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setPreview(null); setUrl("");
         })} />}
         <Action label="Choose local M3U file / USB" disabled={busy} onPress={() => void run(async () => {
           if (!NativeModules.CharmPlaylistDocument?.pick) throw new Error("Local file picker requires the updated Android app.");
@@ -65,8 +65,9 @@ export default function PlaylistsScreen() {
         })} />
         <Action label="Validate playlist" disabled={busy} onPress={() => void run(async () => { const rows = await previewPlaylist(url.trim()); setPreview(rows); })} />
         {preview && <><Text style={styles.text}>{preview.length.toLocaleString()} channels found. Nothing changes until you choose Save.</Text>
+          <Text style={styles.help}>{preview.epgUrls?.length || 0} EPG URL(s) detected in the playlist header. Save will associate available feeds without replacing manual settings.</Text>
           <Text style={styles.help}>{preview.slice(0, 5).map((channel) => channel.name).join(" · ")}</Text>
-          <Action label="Save validated playlist" disabled={busy} onPress={() => void run(async () => { await savePersonalPlaylist(name, url.trim(), preview, editing || undefined); await reloadPlaylistCatalog(); setEditing(null); setUrl(""); setPreview(null); })} /></>}
+          <Action label="Save validated playlist" disabled={busy} onPress={() => void run(async () => { await savePersonalPlaylist(name, url.trim(), preview, editing || undefined); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setUrl(""); setPreview(null); })} /></>}
       </View> : <>
         <Action label="Add M3U playlist" disabled={busy} onPress={() => { setEditing(""); setName("My playlist"); setUrl(""); setPreview(null); }} />
         <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => router.push("/epg-sources" as any)} />
@@ -74,6 +75,8 @@ export default function PlaylistsScreen() {
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
           <Text style={styles.help}>{source.enabled ? "Enabled" : "Disabled — saved channels retained"} · {source.count.toLocaleString()} channels · {source.status}</Text>
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
+          {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
+          <Action label={`Playlist EPG detection: ${source.autoEpg === false ? "Off — manual" : "On"}`} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { autoEpg: source.autoEpg === false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
           <View style={styles.row}>
             <Action label={source.enabled ? "Disable" : "Enable"} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { enabled: !source.enabled }); await reloadPlaylistCatalog(); })} />
             <Action label="Refresh this playlist + EPG" disabled={busy || !source.enabled} onPress={() => void run(() => reloadPlaylistCatalog(source.id))} />
@@ -89,7 +92,7 @@ export default function PlaylistsScreen() {
             <Text style={styles.text}>Associated EPG feeds — select in priority order. Manual channel assignments take priority. Match by exact TVG ID; no guessed stations.</Text>
             <View style={styles.row}>{availableEpg.map((epg) => <Action key={epg.id}
               label={`${source.epgSourceIds.includes(epg.id) ? `${source.epgSourceIds.indexOf(epg.id) + 1}. ` : "+ "}${epg.name}${epg.enabled ? "" : " (disabled)"}`}
-              disabled={busy} onPress={() => void run(async () => { const ids = source.epgSourceIds.includes(epg.id) ? source.epgSourceIds.filter((id) => id !== epg.id) : [...source.epgSourceIds, epg.id]; await updatePlaylist(source.id, { epgSourceIds: ids }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />)}</View>
+              disabled={busy} onPress={() => void run(async () => { const ids = source.epgSourceIds.includes(epg.id) ? source.epgSourceIds.filter((id) => id !== epg.id) : [...source.epgSourceIds, epg.id]; await updatePlaylist(source.id, { epgSourceIds: ids, autoEpg: false, epgDiscoveryStatus: "Manual EPG choices are preserved; automatic association is off." }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />)}</View>
           </>}
         </View>)}
       </>}

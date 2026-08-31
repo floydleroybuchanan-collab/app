@@ -18,6 +18,10 @@ export type PlaylistRecord = {
   refreshHours: number;
   status: string;
   epgSourceIds: string[];
+  discoveredEpgUrls?: string[];
+  autoEpg?: boolean;
+  autoEpgSourceIds?: string[];
+  epgDiscoveryStatus?: string;
 };
 
 export function playlistOwner(channel: Pick<Channel, "id" | "playlist_id">): string {

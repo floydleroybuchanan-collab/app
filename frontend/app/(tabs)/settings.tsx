@@ -672,7 +672,7 @@ function SettingsScreenContent() {
                 <Text style={styles.help}>
                   All channels are available in 100-row pages so very large playlists stay memory-safe. Focus a channel, then Hide, Move, or set a custom number.
                 </Text>
-                <Action label="Manage Guide groups & tabs" icon="albums-outline" onPress={() => router.push("/group-settings" as any)} />
+                <Action label="Manage custom channel groups" icon="albums-outline" onPress={() => router.push("/group-settings" as any)} />
                 <View style={styles.backupActions}>
                   <Action label="Previous 100" icon="chevron-up-outline" disabled={channelEditPage <= 0} onPress={() => { setFocusedCustomizeId(null); setChannelEditPage((value) => Math.max(0, value - 1)); }} />
                   <InfoRow label="Channel page" value={`${channelEditPage + 1} / ${channelEditPageCount}`} />

@@ -1,3 +1,6 @@
+import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
+import { applyGuideGroupOrder } from "@/src/core/guideGroupTabPreferences";
+import { buildPlaylistMenu, providerGroupIdentity } from "@/src/core/playlistGuideMenu";
 import { usePlaylists } from "@/src/core/playlistRegistry";
 import { playlistOwner } from "@/src/core/playlistCatalog";
 import { selectPlaylist, useSelectedPlaylist } from "@/src/core/playlistSelection";
@@ -50,10 +53,7 @@ import { shouldUseLowRamTuning, useDeviceMemoryProfile } from "@/src/core/device
 import { channelHasOwnedEpgMatch } from "@/src/core/epgUserOverrides";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
 import {
-  buildGroupCounts,
-  buildVisibleGroups,
   filterChannelsByGroup,
-  listPlaylistGroupNames,
   pinGroup,
   unpinGroup,
 } from "@/src/core/guideGroups";
@@ -62,7 +62,6 @@ import { useCustomGuideGroups } from "@/src/core/customGuideGroups";
 import { resolveChannelNumber, useChannelCustomize } from "@/src/core/channelCustomize";
 import { useParentalPin } from "@/src/core/parentalPin";
 import {
-  failedStreamCount,
   isFailedChannel,
 } from "@/src/core/streamFailureRegistry";
 import { consumeGuideJump, peekGuideJump } from "@/src/core/guideSearchJump";
@@ -220,6 +219,7 @@ function GuideSelectionPreview({
 function PurpleGuideScreenContent() {
   const playlists = usePlaylists();
   const selectedPlaylist = useSelectedPlaylist();
+  const [expandedPlaylists, setExpandedPlaylists] = useState(() => new Set([selectedPlaylist]));
   const activePlaylist = playlists.some((item) => item.id === selectedPlaylist && item.enabled) ? selectedPlaylist : "all";
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -276,7 +276,6 @@ function PurpleGuideScreenContent() {
     setPinnedGroups,
     setHidePreview,
     setMutePreview,
-    showProviderGroups,
     hiddenGroups,
   } = useGuideUiPreferences();
   const customGuideGroups = useCustomGuideGroups();
@@ -530,42 +529,23 @@ function PurpleGuideScreenContent() {
   const visiblePlaylistChannels = useMemo(() => activePlaylist === "all" ? channels : channels.filter((channel) => playlistOwner(channel) === activePlaylist), [activePlaylist, channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const recentIdSet = useMemo(() => new Set(recentIds), [recentIds]);
-  const failedCount = failedStreamCount();
+  const tabPrefs = useGuideGroupTabPreferences();
+  const playlistMenu = useMemo(() => buildPlaylistMenu(playlists, channels, favoriteSet, hiddenIdSet, new Set([...hiddenGroups, ...tabPrefs.hidden])).map((section) => {
+    const fixed = section.groups.slice(0, 2);
+    const providers = section.groups.slice(2);
+    const byId = new Map(providers.map((item) => [providerGroupIdentity(item.key), item]));
+    return { ...section, groups: [...fixed, ...applyGuideGroupOrder(Array.from(byId.keys()), tabPrefs.order).map((id) => ({ ...byId.get(id)!, label: tabPrefs.aliases[id] || byId.get(id)!.label }))] };
+  }), [playlists, channels, favoriteSet, hiddenIdSet, hiddenGroups, tabPrefs.hidden, tabPrefs.order, tabPrefs.aliases]);
+  const groups = useMemo(() => [
+    ...(playlistMenu.find((section) => section.id === activePlaylist)?.groups.map((item) => item.key) || ["All", "Favorites"]),
+    ...customGuideGroups.groups.map((item) => item.name),
+  ], [activePlaylist, customGuideGroups.groups, playlistMenu]);
+  const overflowGroups = useMemo<string[]>(() => [], []);
 
-  const groupCounts = useMemo(
-    () => {
-      void failedCount;
-      return buildGroupCounts(visiblePlaylistChannels, {
-        favoriteSet,
-        recentIds: recentIdSet,
-        hasEpgMatch: hasOwnedEpgMatch,
-        isFailed: isFailedChannel,
-        hiddenIds: hiddenIdSet,
-        customGroups: customGuideGroups.byName,
-        includeProviderGroups: showProviderGroups,
-      });
-    },
-    [visiblePlaylistChannels, favoriteSet, recentIdSet, hasOwnedEpgMatch, hiddenIdSet, failedCount, customGuideGroups.byName, showProviderGroups],
-  );
-
-  const playlistGroups = useMemo(
-    () => showProviderGroups ? listPlaylistGroupNames(visiblePlaylistChannels, hiddenIdSet) : [],
-    [visiblePlaylistChannels, hiddenIdSet, showProviderGroups],
-  );
-
-  const { tabs: groups, overflow: overflowGroups } = useMemo(
-    () =>
-      buildVisibleGroups({
-        counts: groupCounts,
-        pinned: pinnedGroups,
-        playlistGroups,
-        customGroups: customGuideGroups.groups.map((item) => item.name),
-        hiddenGroups: new Set(hiddenGroups),
-        showProviderGroups,
-        maxPlaylistTabs: 10,
-      }),
-    [customGuideGroups.groups, groupCounts, hiddenGroups, pinnedGroups, playlistGroups, showProviderGroups],
-  );
+  useEffect(() => {
+    if (!drawerOpen && !groupDrawerOpen) return;
+    setExpandedPlaylists((previous) => previous.has(activePlaylist) ? previous : new Set([...previous, activePlaylist]));
+  }, [activePlaylist, drawerOpen, groupDrawerOpen]);
 
   useEffect(() => {
     if (startPreferenceAppliedRef.current || !isFocused || !channels.length) return;
@@ -877,13 +857,18 @@ function PurpleGuideScreenContent() {
     [addRecent, group, quiesceGuideForTransition, router],
   );
 
+  const pendingPlaylistRef = useRef<string | null>(null);
   const applyGroup = useCallback((next: string) => {
+    const targetPlaylist = pendingPlaylistRef.current || activePlaylist;
+    if (pendingPlaylistRef.current) selectPlaylist(targetPlaylist);
+    pendingPlaylistRef.current = null;
     void Haptics.selectionAsync().catch(() => undefined);
     if (next !== group) quiesceGuideForTransition(true);
     else cancelGuideTransientTimers();
     groupChangedAt.current = Date.now();
     if (guideSessionChannelId) rememberGuideGroupChannel(group, guideSessionChannelId);
-    const rememberedChannelId = guideSessionChannelByGroup.get(next) || null;
+    const remembered = guideSessionChannelByGroup.get(next) || null;
+    const rememberedChannelId = remembered && (targetPlaylist === "all" || playlistOwner({ id: remembered }) === targetPlaylist) ? remembered : null;
     guideSessionGroup = next;
     guideSessionChannelId = rememberedChannelId;
     setGroup(next);
@@ -894,7 +879,7 @@ function PurpleGuideScreenContent() {
     setResetToken((value) => value + 1);
     setGroupDrawerOpen(false);
     closeDrawer();
-  }, [cancelGuideTransientTimers, closeDrawer, group, quiesceGuideForTransition]);
+  }, [activePlaylist, cancelGuideTransientTimers, closeDrawer, group, quiesceGuideForTransition]);
 
   const openPinPrompt = useCallback((next: string, returnToGroups: boolean) => {
     pinModalOwnedRef.current = true;
@@ -912,6 +897,7 @@ function PurpleGuideScreenContent() {
   }, [cancelGuideTransientTimers]);
 
   const closePinPrompt = useCallback((restoreGroups: boolean) => {
+    if (restoreGroups) pendingPlaylistRef.current = null;
     const returnToGroups = restoreGroups && pinReturnToGroupsRef.current;
     pinReturnToGroupsRef.current = false;
     pinModalOwnedRef.current = false;
@@ -939,7 +925,7 @@ function PurpleGuideScreenContent() {
 
   const chooseGroup = useCallback(
     (next: string) => {
-      if (hasPin && isGroupLocked(next)) {
+      if (hasPin && isGroupLocked(providerGroupIdentity(next))) {
         openPinPrompt(next, groupDrawerOpen);
         return;
       }
@@ -955,7 +941,7 @@ function PurpleGuideScreenContent() {
       setPinDigits("");
       return;
     }
-    unlockGroup(pinPromptGroup);
+    unlockGroup(providerGroupIdentity(pinPromptGroup));
     const next = pinPromptGroup;
     closePinPrompt(false);
     applyGroup(next);
@@ -991,7 +977,7 @@ function PurpleGuideScreenContent() {
       selectPlaylist(playlistOwner({ id: jump.channelId }));
       startPreferenceAppliedRef.current = true;
       const nextGroup = jump.group || guideSessionGroup || "All";
-      if (hasPin && isGroupLocked(nextGroup)) {
+      if (hasPin && isGroupLocked(providerGroupIdentity(nextGroup))) {
         openPinPrompt(nextGroup, false);
         guideSessionChannelId = jump.channelId;
         return;
@@ -1017,37 +1003,38 @@ function PurpleGuideScreenContent() {
     setPreviewStatus(status);
   }, []);
 
-  const choosePlaylist = useCallback((id: string) => {
+  const choosePlaylistGroup = useCallback((id: string, next: string) => {
     quiesceGuideForTransition(true);
-    selectPlaylist(id);
-    applyGroup("All");
-    guideSessionChannelId = null;
-    resetGuideSelection(null);
-  }, [applyGroup, quiesceGuideForTransition]);
+    pendingPlaylistRef.current = id;
+    chooseGroup(next);
+  }, [chooseGroup, quiesceGuideForTransition]);
 
-  const playlistDrawerRows = useMemo<PurpleGuideGroup[]>(() => [
-    ...playlists.filter((source) => source.enabled).map((source) => ({
-      name: `playlist:${source.id}`, label: source.name, kind: "playlist" as const,
-      count: source.count, active: activePlaylist === source.id,
-      onPress: () => choosePlaylist(source.id),
-    })),
-    { name: "playlist:all", label: "All Playlists", kind: "playlist" as const,
-      count: channels.length, active: activePlaylist === "all", onPress: () => choosePlaylist("all") },
-  ], [activePlaylist, channels.length, choosePlaylist, playlists]);
-
-  const drawerGroups = useMemo<PurpleGuideGroup[]>(() => {
-    const names = Array.from(new Set([...groups, ...overflowGroups]));
-    return names.map((name) => ({
-      name,
-      label: name.replace(/ \[.*?\]$/, ""),
-      kind: "group" as const,
-      count: groupCounts[name] || 0,
-      active: group === name,
-      pinned: pinnedGroups.includes(name),
-      onPress: () => chooseGroup(name),
-      onLongPress: () => togglePinGroup(name),
-    }));
-  }, [chooseGroup, group, groupCounts, groups, overflowGroups, pinnedGroups, togglePinGroup]);
+  const playlistDrawerRows = useMemo<PurpleGuideGroup[]>(() => playlistMenu.flatMap((section) => {
+    const expanded = expandedPlaylists.has(section.id);
+    const rows: PurpleGuideGroup[] = [{
+      name: `playlist:${section.id}`, label: section.label, kind: "playlist", expanded,
+      count: section.count, active: activePlaylist === section.id && !expanded,
+      onPress: () => setExpandedPlaylists((previous) => {
+        const next = new Set(previous); if (next.has(section.id)) next.delete(section.id); else next.add(section.id); return next;
+      }),
+    }];
+    if (expanded) {
+      for (const item of section.groups) rows.push({
+        name: `playlist:${section.id}:${item.key}`, label: item.label, kind: "group", count: item.count,
+        active: activePlaylist === section.id && group === item.key, pinned: pinnedGroups.includes(item.key),
+        onPress: () => choosePlaylistGroup(section.id, item.key),
+        onLongPress: () => togglePinGroup(item.key),
+      });
+      for (const custom of customGuideGroups.groups) {
+        if (tabPrefs.hiddenSet.has(custom.id) || hiddenGroups.includes(custom.name)) continue;
+        const members = customGuideGroups.byName.get(custom.name);
+        const count = channels.filter((channel) => !hiddenIdSet.has(channel.id) && (section.id === "all" || playlistOwner(channel) === section.id) && members?.has(channel.id)).length;
+        if (count) rows.push({ name: `playlist:${section.id}:custom:${custom.id}`, label: custom.name, kind: "group", count,
+          active: activePlaylist === section.id && group === custom.name, onPress: () => choosePlaylistGroup(section.id, custom.name) });
+      }
+    }
+    return rows;
+  }), [activePlaylist, channels, choosePlaylistGroup, customGuideGroups.byName, customGuideGroups.groups, expandedPlaylists, group, hiddenIdSet, hiddenGroups, tabPrefs.hiddenSet, pinnedGroups, playlistMenu, togglePinGroup]);
 
   return (
     <PurpleTvShell
@@ -1064,7 +1051,7 @@ function PurpleGuideScreenContent() {
       <View style={styles.page}>
         <PurpleGuideGroupDrawer
           open={groupDrawerOpen}
-          groups={[...playlistDrawerRows, ...drawerGroups]}
+          groups={playlistDrawerRows}
           onCloseToGuide={() => setGroupDrawerOpen(false)}
           onOpenMainDrawer={() => {
             setGroupDrawerOpen(false);
@@ -1170,7 +1157,7 @@ function PurpleGuideScreenContent() {
             <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
               <View style={styles.pinCard}>
                 <Text style={styles.overlayTitle}>Enter PIN</Text>
-                <Text style={styles.pinHint}>Unlock “{pinPromptGroup}”</Text>
+                <Text style={styles.pinHint}>Unlock “{providerGroupIdentity(pinPromptGroup)}”</Text>
                 <Text style={styles.pinDigits}>{pinDigits.padEnd(4, "•").slice(0, 4)}</Text>
                 {pinError ? <Text style={styles.pinError}>Incorrect PIN</Text> : null}
                 <View style={styles.pinPad}>

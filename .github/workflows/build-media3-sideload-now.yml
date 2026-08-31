@@ -17,6 +17,8 @@ on:
       - "ci/verify-android-apk.py"
       - "ci/verify-media3-only.py"
       - "ci/media3_source_contract.py"
+      - "ci/playlist_source_contract.py"
+      - "ci/tivimate-whole-repo-player-interaction-scan.py"
       - "ci/test_*.py"
       - "ci/retired-player-automation.json"
       - "ci/protect-sideload-artifact.mjs"

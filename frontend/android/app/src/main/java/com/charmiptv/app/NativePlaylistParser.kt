@@ -26,6 +26,7 @@ internal data class NativePlaylistResult(
   val channels: List<NativePlaylistChannel>,
   val rejected: Int,
   val truncated: Boolean,
+  val epgHeader: String = "",
 )
 
 /**
@@ -62,6 +63,7 @@ internal object NativePlaylistParser {
     var rejected = 0
     var truncated = false
     var pending: Pending? = null
+    var epgHeader = ""
 
     (documentStream?.let { BoundedInputStream(it, MAX_PLAYLIST_BYTES) } ?: openPlaylist(urlString)).use { stream ->
       BufferedReader(InputStreamReader(stream, Charsets.UTF_8), NETWORK_BUFFER_SIZE).use { reader ->
@@ -81,6 +83,7 @@ internal object NativePlaylistParser {
             firstLine = false
             if (line.startsWith('\uFEFF')) line = line.substring(1).trim()
           }
+          if (rawEntries.isEmpty() && pending == null && line.startsWith("#EXTM3U", ignoreCase = true) && epgHeader.isEmpty()) epgHeader = line.take(16_384)
           if (line.startsWith("#EXTINF")) {
             if (pending != null) rejected += 1
             val tvgId = attribute(line, "tvg-id").trim()
@@ -159,7 +162,7 @@ internal object NativePlaylistParser {
       )
     }
 
-    return NativePlaylistResult(channels, rejected, truncated)
+    return NativePlaylistResult(channels, rejected, truncated, epgHeader)
   }
 
   private fun openPlaylist(urlString: String): InputStream {
