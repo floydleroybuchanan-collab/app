@@ -209,7 +209,7 @@ export async function listNativeUserGuideChannels(query = "", offset = 0, limit 
 export async function refreshNativeUserGuide(url: string): Promise<{ count: number; channelNames?: Record<string, string>; channelIdsWithPrograms?: string[]; directoryCount?: number; bindingCount?: number; guideEpoch?: number; guideRefreshedAt?: number; programmeSwapSucceeded?: boolean }> { const refreshModule = customEpgModule?.refreshUserGuide ? customEpgModule : nativeModule; if (!refreshModule?.refreshUserGuide) throw new Error("Custom native EPG engine is unavailable"); return refreshModule.refreshUserGuide(url); }
 export async function clearNativeEpg(): Promise<void> { if (ramModule) await ramModule.clearMemory(); if (nativeModule) await nativeModule.clear(); }
 
-export async function replaceAutomaticPlaylistBindings(rows: { channelId: string; channelName?: string; xmltvId: string; sourceIds: string[] }[]): Promise<void> {
+export async function replaceAutomaticPlaylistBindings(rows: { channelId: string; xmltvId: string; sourceIds: string[] }[]): Promise<void> {
   if (!customEpgModule?.replaceAutomaticBindings) throw new Error("Playlist EPG associations require the updated native app.");
   await customEpgModule.replaceAutomaticBindings(rows);
   ownershipRequiresSqlite = true;
