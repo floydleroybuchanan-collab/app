@@ -14,7 +14,6 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.navOptions
-import com.bumptech.glide.Glide
 import com.tanasi.navigation.widget.setupWithNavController
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.R
@@ -64,15 +63,8 @@ class MainTvActivity : FragmentActivity() {
 
         _binding = ActivityMainTvBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        window.setBackgroundDrawableResource(R.color.charm_vod_canvas)
         applyThemeNavigationChrome()
-
-        binding.ivSplashOverlay.animate()
-            .alpha(0f)
-            .setDuration(800)
-            .setStartDelay(400)
-            .withEndAction {
-                binding.ivSplashOverlay.visibility = View.GONE
-            }
 
         val navHostFragment = this.supportFragmentManager
             .findFragmentById(binding.navMainFragment.id) as NavHostFragment
@@ -103,11 +95,9 @@ class MainTvActivity : FragmentActivity() {
             binding.navMain.headerView?.apply {
                 val header = ContentHeaderMenuMainTvBinding.bind(this)
 
-                Glide.with(context)
-                    .load(UserPreferences.currentProvider?.logo?.takeIf { it.isNotEmpty() } ?: R.drawable.ic_provider_default_logo)
-                    .error(R.drawable.ic_provider_default_logo)
-                    .into(header.ivNavigationHeaderIcon)
-                header.tvNavigationHeaderTitle.text = UserPreferences.currentProvider?.name
+                header.ivNavigationHeaderIcon.setImageResource(R.drawable.charm_vod_brand)
+                header.tvNavigationHeaderTitle.text = getString(R.string.app_name)
+                contentDescription = getString(R.string.charm_vod_provider_access)
                 header.tvNavigationHeaderSubtitle.text = getString(R.string.main_menu_change_provider)
                 val palette = ThemeManager.palette(UserPreferences.selectedTheme)
                 header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
@@ -165,6 +155,10 @@ class MainTvActivity : FragmentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (binding.ivSplashOverlay.visibility == View.VISIBLE) {
+                    binding.ivSplashOverlay.dismiss()
+                    return
+                }
                 when (navController.currentDestination?.id) {
                     R.id.home -> if (binding.navMain.hasFocus()) finish() else binding.navMain.requestFocus()
                     R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
@@ -178,6 +172,18 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
         })
+        if (savedInstanceState == null) {
+            binding.ivSplashOverlay.play {
+                binding.navMainFragment.requestFocus()
+            }
+        } else {
+            binding.ivSplashOverlay.visibility = View.GONE
+        }
+    }
+
+    override fun onStop() {
+        binding.ivSplashOverlay.dismiss()
+        super.onStop()
     }
 
     override fun onResume() {

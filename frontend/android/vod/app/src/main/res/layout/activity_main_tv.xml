@@ -37,12 +37,11 @@
         app:layout_constraintTop_toTopOf="parent"
         app:navGraph="@navigation/nav_main_graph_tv" />
 
-    <!-- Overlay per mostrare la "S" del logo durante il caricamento -->
-    <ImageView
+    <!-- Finite, skippable CharmIPTV welcome; catalog loads underneath. -->
+    <com.streamflixreborn.streamflix.charm.CharmVodWelcomeView
         android:id="@+id/iv_splash_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="?android:attr/windowBackground"
         android:clickable="true"
         android:focusable="true"
         android:visibility="visible"

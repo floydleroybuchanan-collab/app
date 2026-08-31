@@ -1,0 +1,8 @@
+<resources>
+    <string name="charm_vod_welcome">Welcome to your</string>
+    <string name="charm_vod_control_center">Video On Demand Control Center</string>
+    <string name="charm_vod_welcome_caption">Movies. Series. Your next great watch.</string>
+    <string name="charm_vod_skip">Press OK to enter</string>
+    <string name="charm_vod_provider_access">CharmIPTV — choose a provider</string>
+    <string name="charm_vod_telegram_pending">Coming soon</string>
+</resources>

@@ -12,7 +12,7 @@
         <package android:name="com.google.android.youtube" /><package android:name="com.google.android.tv.youtube" />
     </queries>
     <application>
-        <activity android:name="com.streamflixreborn.streamflix.activities.main.MainTvActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Tv" />
+        <activity android:name="com.streamflixreborn.streamflix.activities.main.MainTvActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.CharmVodEntrance" />
         <activity android:name="com.streamflixreborn.streamflix.activities.main.MainMobileActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Mobile" android:supportsPictureInPicture="true" />
         <activity android:name="com.streamflixreborn.streamflix.activities.tools.QrScannerActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Mobile" />
         <activity android:name="com.streamflixreborn.streamflix.activities.tools.BypassWebViewActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Mobile" />

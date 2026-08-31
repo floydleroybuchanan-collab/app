@@ -12,8 +12,8 @@
 
     <ImageView
         android:id="@+id/iv_navigation_header_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:duplicateParentState="true"
         android:foreground="@drawable/fg_navigation_header_icon_tv"
         android:padding="2dp"

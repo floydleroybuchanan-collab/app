@@ -411,26 +411,18 @@
     <PreferenceCategory
         android:title="@string/miscelaneous_title">
 
-        <SwitchPreference
-            android:key="UPDATE_CHECK_ENABLED"
-            android:title="@string/settings_update_check"
-            android:summary="@string/settings_update_check_summary"
-            android:defaultValue="true" />
-
         <Preference
             android:icon="@drawable/ic_telegram"
             android:key="p_settings_telegram"
-            android:title="@string/settings_telegram" />
+            android:title="@string/settings_telegram"
+            android:summary="@string/charm_vod_telegram_pending"
+            android:enabled="false"
+            android:selectable="false" />
 
         <Preference
             android:icon="@drawable/ic_settings_about"
             android:key="p_settings_about"
             android:title="@string/settings_about" />
-
-        <Preference
-            android:icon="@drawable/ic_settings_help"
-            android:key="p_settings_help"
-            android:title="@string/settings_help" />
     </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>
