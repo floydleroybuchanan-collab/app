@@ -31,7 +31,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     @ReactMethod
     fun open(promise: Promise) {
         context.runOnUiQueueThread {
-            val activity = currentActivity
+            val activity = context.currentActivity
             if (activity == null || activity.isFinishing) {
                 promise.reject("E_VOD_ACTIVITY", "CharmIPTV is not ready to open Video OnDemand.")
                 return@runOnUiQueueThread
