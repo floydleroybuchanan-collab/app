@@ -60,6 +60,8 @@ export type PurpleContextAction = {
 
 export type PurpleGuideGroup = {
   name: string;
+  label?: string;
+  kind?: "playlist" | "group";
   count?: number;
   active?: boolean;
   pinned?: boolean;
@@ -431,7 +433,7 @@ export function PurpleTvShell({
 
           {active === "/guide" && guideGroups?.length ? (
             <View style={styles.guideGroupSection}>
-              <Text style={styles.guideGroupLabel}>Groups</Text>
+              <Text style={styles.guideGroupLabel}>{guideGroups.some((item) => item.kind === "playlist") ? "Playlists" : "Groups"}</Text>
               <ScrollView
                 style={styles.guideGroupList}
                 contentContainerStyle={styles.guideGroupListContent}
@@ -457,7 +459,7 @@ export function PurpleTvShell({
                     ]}
                     testID={`purple-guide-group-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
                   >
-                    <Text numberOfLines={1} style={[styles.guideGroupText, item.active && styles.guideGroupTextActive]}>{item.name}</Text>
+                    <Text numberOfLines={1} style={[styles.guideGroupText, item.active && styles.guideGroupTextActive]}>{item.label || item.name}</Text>
                     {item.count ? <Text style={styles.guideGroupCount}>{item.count}</Text> : null}
                   </Pressable>
                 ))}

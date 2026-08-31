@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
+import { PRIMARY_PLAYLIST } from "./playlistCatalog";
 
-let selected = "all";
+let selected: string = PRIMARY_PLAYLIST;
 let loaded = false;
 let generation = 0;
 const listeners = new Set<() => void>();
@@ -16,9 +17,9 @@ export function useSelectedPlaylist(): string {
     const listener = () => setValue(selected); listeners.add(listener);
     if (!loaded) {
       const epoch = generation;
-      void storage.getItem("charm_selected_playlist_v1", "all").then((id) => {
+      void storage.getItem("charm_selected_playlist_v1", PRIMARY_PLAYLIST).then((id) => {
         if (generation !== epoch) return;
-        selected = id || "all"; loaded = true; listeners.forEach((fn) => fn());
+        selected = id || PRIMARY_PLAYLIST; loaded = true; listeners.forEach((fn) => fn());
       });
     }
     return () => { listeners.delete(listener); };

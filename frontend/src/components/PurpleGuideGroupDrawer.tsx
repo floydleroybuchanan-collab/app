@@ -94,7 +94,7 @@ export function PurpleGuideGroupDrawer({
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
         <View style={styles.header}>
           <Ionicons name="albums-outline" size={16} color={tvColors.purpleSoft} />
-          <Text style={styles.title}>Channel Groups</Text>
+          <Text style={styles.title}>Playlists & Groups</Text>
         </View>
         <Text style={styles.hint}>Left: main menu · Right: guide</Text>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
@@ -115,11 +115,12 @@ export function PurpleGuideGroupDrawer({
                 styles.row,
                 item.active && styles.activeRow,
                 item.pinned && styles.pinnedRow,
+                item.kind === "playlist" && styles.playlistRow,
                 focused && styles.focused,
               ]}
               testID={`phase9-group-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              <Text numberOfLines={1} style={[styles.name, item.active && styles.activeName]}>{item.name}</Text>
+              <Text numberOfLines={1} style={[styles.name, item.active && styles.activeName]}>{item.kind === "playlist" ? "▸ " : ""}{item.label || item.name}</Text>
               {item.count != null ? <Text style={styles.count}>{item.count}</Text> : null}
             </Pressable>
           ))}
@@ -156,6 +157,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
+  playlistRow: { borderBottomColor: tvColors.line, marginBottom: 4 },
   activeRow: { backgroundColor: "rgba(115,70,195,0.23)" },
   pinnedRow: { borderColor: "rgba(168,132,245,0.22)" },
   focused: { borderColor: tvColors.purpleBright, backgroundColor: "rgba(126,84,218,0.36)" },

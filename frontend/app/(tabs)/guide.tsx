@@ -988,7 +988,7 @@ function PurpleGuideScreenContent() {
     useCallback(() => {
       const jump = consumeGuideJump();
       if (!jump) return;
-      selectPlaylist("all");
+      selectPlaylist(playlistOwner({ id: jump.channelId }));
       startPreferenceAppliedRef.current = true;
       const nextGroup = jump.group || guideSessionGroup || "All";
       if (hasPin && isGroupLocked(nextGroup)) {
@@ -1017,10 +1017,30 @@ function PurpleGuideScreenContent() {
     setPreviewStatus(status);
   }, []);
 
+  const choosePlaylist = useCallback((id: string) => {
+    quiesceGuideForTransition(true);
+    selectPlaylist(id);
+    applyGroup("All");
+    guideSessionChannelId = null;
+    resetGuideSelection(null);
+  }, [applyGroup, quiesceGuideForTransition]);
+
+  const playlistDrawerRows = useMemo<PurpleGuideGroup[]>(() => [
+    ...playlists.filter((source) => source.enabled).map((source) => ({
+      name: `playlist:${source.id}`, label: source.name, kind: "playlist" as const,
+      count: source.count, active: activePlaylist === source.id,
+      onPress: () => choosePlaylist(source.id),
+    })),
+    { name: "playlist:all", label: "All Playlists", kind: "playlist" as const,
+      count: channels.length, active: activePlaylist === "all", onPress: () => choosePlaylist("all") },
+  ], [activePlaylist, channels.length, choosePlaylist, playlists]);
+
   const drawerGroups = useMemo<PurpleGuideGroup[]>(() => {
     const names = Array.from(new Set([...groups, ...overflowGroups]));
     return names.map((name) => ({
       name,
+      label: name.replace(/ \[.*?\]$/, ""),
+      kind: "group" as const,
       count: groupCounts[name] || 0,
       active: group === name,
       pinned: pinnedGroups.includes(name),
@@ -1032,6 +1052,7 @@ function PurpleGuideScreenContent() {
   return (
     <PurpleTvShell
       active="/guide"
+      guideGroups={playlistDrawerRows}
       watchingChannelId={lastChannelId}
       footerAction={{
         label: "Guide Sources",
@@ -1043,7 +1064,7 @@ function PurpleGuideScreenContent() {
       <View style={styles.page}>
         <PurpleGuideGroupDrawer
           open={groupDrawerOpen}
-          groups={drawerGroups}
+          groups={[...playlistDrawerRows, ...drawerGroups]}
           onCloseToGuide={() => setGroupDrawerOpen(false)}
           onOpenMainDrawer={() => {
             setGroupDrawerOpen(false);
@@ -1052,14 +1073,17 @@ function PurpleGuideScreenContent() {
         />
         <Pressable accessibilityRole="button" focusable onPress={() => {
           quiesceGuideForTransition(true);
-          const ids = ["all", ...playlists.filter((item) => item.enabled).map((item) => item.id)];
-          selectPlaylist(ids[(ids.indexOf(activePlaylist) + 1) % ids.length]);
-          setGroup("All"); guideSessionGroup = "All"; guideSessionChannelId = null;
-          setRestoreTimeMs(null); setResetToken((value) => value + 1);
+          setGroupDrawerOpen(true);
         }} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>
-          <Text style={styles.retryText}>Playlist: {activePlaylist === "all" ? "All Playlists" : playlists.find((item) => item.id === activePlaylist)?.name} · Select to change</Text>
+          <Text style={styles.retryText}>{activePlaylist === "all" ? "All Playlists" : playlists.find((item) => item.id === activePlaylist)?.name} · Open playlists & groups</Text>
         </Pressable>
         <EpgProgressBar />
+        {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
+          <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>
+          <Pressable focusable onPress={() => router.push("/playlists" as any)} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>
+            <Text style={styles.retryText}>Open playlist status / refresh</Text>
+          </Pressable>
+        </View>}
         {loading && channels.length === 0 ? (
           <View style={styles.center}>
             <ActivityIndicator color={tvColors.purpleBright} size="large" />

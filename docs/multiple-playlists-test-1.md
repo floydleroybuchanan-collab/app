@@ -13,7 +13,7 @@ The behavioral reference is [Eliminater74/TiVIMate_Analysis](https://github.com/
 | `tivimate_playlist_management_analysis.md` | Independent playlist identity, enable/disable, order and customization preservation | `playlistRegistry.ts`, `playlistCatalog.ts`; primary channel IDs unchanged, additional IDs scoped to immutable source IDs |
 | `tivimate_playlist_update_safety_analysis.md` | Last-good data; never replace unrelated sources or user customizations | Immutable per-source revisions, persisted revision pointers, previous-revision recovery; complete aggregate native projection; behavioral failure/concurrency tests |
 | `tivimate_playlist_epg_update_analysis.md` | Independent playlist and EPG refresh clocks and associations | Per-playlist update settings; shared EPG records; ordered source associations and exact TVG-ID matching |
-| `tivimate_search_architecture_analysis.md` | Browse/search distinguish sources | All Playlists / per-playlist guide selector; source labels in search; source-scoped provider groups |
+| `tivimate_search_architecture_analysis.md` | Browse/search distinguish sources | Drawer playlist entries, defaulting to the first supplied service and remembering selection; optional All Playlists; source labels in search; source-scoped provider groups |
 
 The existing native SQLite catalog is retained as the guide's combined, indexed projection. It is **never** given an individual source as though that source were the whole catalog. Source-owned snapshots are staged in private app storage. This avoids a destructive migration of existing channel IDs and Room customizations. It is a bounded test implementation, not the reference reports' claimed 100,000-channel architecture.
 
