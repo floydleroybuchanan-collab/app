@@ -52,7 +52,7 @@ Preserving provider code cannot guarantee availability of third-party services.
 From `frontend`: run `npm ci --legacy-peer-deps`, `npm test`, `npm run typecheck`,
 `npm run lint`, `npm run verify:native-config`, and `npm run verify:native-guide`.
 Android needs SDK 36, NDK 27.1.12297006, CMake 3.22.1, and the original pinned
-FFmpeg build. The dedicated `build-vod-test-1.yml` workflow builds both ARM ABIs,
+FFmpeg build. The existing protected `build-media3-sideload-now.yml` workflow on this branch builds both ARM ABIs,
 checks the APK, signs it for sideloading, and encrypts the provider-bearing
 artifact for the experiment owner. It does not modify main or publish plaintext
 provider credentials. Shared Kotlin, Glide, Room, and navigation dependencies

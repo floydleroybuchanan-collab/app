@@ -773,7 +773,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
 
         findPreference<Preference>("key_backup_export_tv")?.setOnPreferenceClickListener {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "streamflix_tv_backup_$timestamp.json"
+            val fileName = "charmiptv_vod_tv_backup_$timestamp.json"
             showBackupExportOptions(fileName)
             true
         }
@@ -879,7 +879,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
 
         findPreference<Preference>("key_backup_export_db_tv")?.setOnPreferenceClickListener {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "streamflix_tv_db_backup_$timestamp.zip"
+            val fileName = "charmiptv_vod_tv_db_backup_$timestamp.zip"
             showDatabaseBackupExportOptions(fileName)
             true
         }

@@ -779,7 +779,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
 
         findPreference<Preference>("key_backup_export_mobile")?.setOnPreferenceClickListener {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "streamflix_mobile_backup_$timestamp.json"
+            val fileName = "charmiptv_vod_mobile_backup_$timestamp.json"
             exportBackupLauncher.launch(fileName)
             true
         }
@@ -823,7 +823,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
 
         findPreference<Preference>("key_backup_export_db_mobile")?.setOnPreferenceClickListener {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val fileName = "streamflix_mobile_db_backup_$timestamp.zip"
+            val fileName = "charmiptv_vod_mobile_db_backup_$timestamp.zip"
             exportDbBackupLauncher.launch(fileName)
             true
         }

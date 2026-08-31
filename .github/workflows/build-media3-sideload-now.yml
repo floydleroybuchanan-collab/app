@@ -1,11 +1,10 @@
-name: Build CharmIPTV Media3 Sideload APK
+name: Build CharmIPTV VOD Test 1 Sideload APK
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - agent/media3-player-core-rebuild
-      - fix/tivimate-m3u-epg-ci-align
+      - vod/charmiptv-test-1
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
@@ -27,12 +26,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: media3-sideload-now-${{ github.ref }}
+  group: vod-test-1-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Media3 universal sideload APK
+    name: Build combined CharmIPTV VOD sideload APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -40,6 +39,12 @@ jobs:
         working-directory: frontend
     env:
       CI: "1"
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
+      RABBITSTREAM_SOURCE_API: ${{ secrets.RABBITSTREAM_SOURCE_API }}
+      UPROT_MSFI_API_BASE: ${{ secrets.UPROT_MSFI_API_BASE }}
+      UPROT_MSE_API_BASE: ${{ secrets.UPROT_MSE_API_BASE }}
+      UPROT_API_KEY: ${{ secrets.UPROT_API_KEY }}
       EXPO_NO_DOTENV: "1"
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
       EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL }}
@@ -77,6 +82,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Verify preserved VOD source
+        run: node scripts/verify-vod-source.mjs
 
       - name: Verify locked build sources
         run: |
@@ -143,8 +151,8 @@ jobs:
           grep -Eq 'libffmpeg|ffmpeg' apk-contents.txt
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/CharmIPTV-Media3-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/CharmIPTV-Media3-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/CharmIPTV-VOD-Test-1-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV-VOD-Test-1-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -156,7 +164,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: CharmIPTV-Media3-Sideload-Encrypted-${{ github.run_number }}
+          name: CharmIPTV-VOD-Test-1-Sideload-Encrypted-${{ github.run_number }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json
