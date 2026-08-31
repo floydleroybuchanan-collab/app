@@ -27,5 +27,20 @@ allprojects {
 // Expo explicitly supports this opt-out for applications supplying their own module.
 ext.excludeAppGlideModule = true
 
+subprojects { subproject ->
+  if (subproject.name == 'expo-image') {
+    subproject.plugins.withId('org.jetbrains.kotlin.android') {
+      // Expo's Java-source exclusion does not exclude Kotlin sources on Kotlin 2.2.
+      subproject.kotlin.sourceSets.configureEach {
+        kotlin.exclude('**/ExpoImageAppGlideModule.kt')
+      }
+      // Kotlin's Android compilation also adds the Java directories directly.
+      subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        exclude('**/ExpoImageAppGlideModule.kt')
+      }
+    }
+  }
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
