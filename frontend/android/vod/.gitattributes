@@ -1,0 +1,2 @@
+# Preserve vendored source bytes exactly; preservation checks use upstream SHA-256.
+* -text

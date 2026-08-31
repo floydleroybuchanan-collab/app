@@ -15,7 +15,7 @@
       },
       "edgeToEdgeEnabled": true,
       "allowBackup": false,
-      "package": "com.charmiptv.app.purple.next",
+      "package": "com.charmiptv.app.purple.next.vodtest1",
       "versionCode": 8,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",

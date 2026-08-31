@@ -1,0 +1,7 @@
+# Keep real values in ignored vod.properties or CI secrets. Never commit credentials.
+TMDB_API_KEY=
+SUBDL_API_KEY=
+RABBITSTREAM_SOURCE_API=
+UPROT_MSFI_API_BASE=
+UPROT_MSE_API_BASE=
+UPROT_API_KEY=

@@ -28,6 +28,7 @@ import { addTvKeyListener, resetRemoteContextIfOwned, setGuideNavigationActive, 
 type Route =
   | "/"
   | "/guide"
+  | "/vod"
   | "/channels"
   | "/movies"
   | "/series"
@@ -69,6 +70,7 @@ export type PurpleGuideGroup = {
 const NAV: NavItem[] = [
   { route: "/", label: "Live TV", icon: "tv-outline" },
   { route: "/guide", label: "TV Guide", icon: "calendar-outline" },
+  { route: "/vod", label: "Video OnDemand", icon: "play-circle-outline" },
   { route: "/favorites", label: "Favorites", icon: "heart-outline" },
   { route: "/reminders", label: "My Reminders", icon: "notifications-outline" },
   { route: "/channels", label: "Channels", icon: "list-outline" },

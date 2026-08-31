@@ -92,3 +92,6 @@ work/
 
 # Local validation dependency cache
 /frontend/.npm-cache/
+
+# Local VOD service configuration
+frontend/android/vod.properties

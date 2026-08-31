@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="video/*" /></intent>
+        <package android:name="org.smarttube.stable" /><package android:name="org.smarttube.beta" />
+        <package android:name="com.google.android.youtube" /><package android:name="com.google.android.tv.youtube" />
+    </queries>
+    <application>
+        <activity android:name="com.streamflixreborn.streamflix.activities.main.MainTvActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Tv" />
+        <activity android:name="com.streamflixreborn.streamflix.activities.main.MainMobileActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Mobile" android:supportsPictureInPicture="true" />
+        <activity android:name="com.streamflixreborn.streamflix.activities.tools.QrScannerActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Mobile" />
+        <activity android:name="com.streamflixreborn.streamflix.activities.tools.BypassWebViewActivity" android:exported="false" android:process=":vod" android:theme="@style/AppTheme.Mobile" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.provider" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/provider_paths" />
+        </provider>
+    </application>
+</manifest>

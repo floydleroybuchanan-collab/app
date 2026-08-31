@@ -39,3 +39,9 @@ include ':app'
 include ':ffmpeg-audio'
 project(':ffmpeg-audio').projectDir = new File(rootDir, 'ffmpeg-audio')
 includeBuild(expoAutolinking.reactNativeGradlePlugin)
+
+// Native VOD screens are compiled into the host app, not installed separately.
+include ':vod', ':vod-navigation', ':vod-jsoup'
+project(':vod').projectDir = new File(rootDir, 'vod/app')
+project(':vod-navigation').projectDir = new File(rootDir, 'vod/navigation')
+project(':vod-jsoup').projectDir = new File(rootDir, 'vod/retrofit-jsoup-converter')

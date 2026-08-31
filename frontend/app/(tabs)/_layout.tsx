@@ -12,6 +12,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Live TV" }} />
       <Tabs.Screen name="guide" options={{ title: "TV Guide" }} />
+      <Tabs.Screen name="vod" options={{ title: "Video OnDemand" }} />
       <Tabs.Screen name="channels" options={{ title: "Channels" }} />
       <Tabs.Screen name="movies" options={{ title: "Movies" }} />
       <Tabs.Screen name="series" options={{ title: "Series" }} />
