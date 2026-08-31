@@ -337,6 +337,23 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     return ids
   }
 
+  /** Unique normalized display names only; ambiguous station names never auto-bind. */
+  fun guideDirectoryByUniqueName(): Map<String, String> {
+    val found = LinkedHashMap<String, String>()
+    val ambiguous = HashSet<String>()
+    readableDatabase.rawQuery("SELECT channel_id, alias_value FROM $ALIAS_TABLE WHERE alias_kind = 'display_name' LIMIT 100000", null).use { cursor ->
+      while (cursor.moveToNext()) {
+        val id = cursor.getString(0)
+        val key = normalizeKey(cursor.getString(1))
+        if (key.isEmpty() || key in ambiguous) continue
+        val previous = found[key]
+        if (previous == null || previous == id) found[key] = id
+        else { found.remove(key); ambiguous.add(key) }
+      }
+    }
+    return found
+  }
+
   fun listDisplayNameAliases(query: String, offset: Int, limit: Int): EpgAliasPage {
     val safeLimit = limit.coerceIn(1, 100)
     val safeOffset = offset.coerceAtLeast(0)

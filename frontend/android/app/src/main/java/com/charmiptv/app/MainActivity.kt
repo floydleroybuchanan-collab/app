@@ -7,6 +7,10 @@ import android.os.Handler
 import android.os.Looper
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.content.Context
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -38,6 +42,24 @@ class MainActivity : ReactActivity() {
   }
 
   override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    // Android TV EditText consumes D-pad Up/Down as cursor movement. Settings
+    // fields are single-line controls, so move focus to the adjacent control and
+    // dismiss the keyboard instead of trapping the user inside the field.
+    if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 && currentFocus is EditText) {
+      val direction = when (event.keyCode) {
+        android.view.KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
+        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
+        else -> 0
+      }
+      if (direction != 0) {
+        val field = currentFocus as EditText
+        val next = field.focusSearch(direction)
+        field.clearFocus()
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(field.windowToken, 0)
+        next?.requestFocus()
+        return true
+      }
+    }
     // TiViMate-style central action router: hardware media/channel buttons are
     // semantic events only while the fullscreen player owns remote input.
     if (

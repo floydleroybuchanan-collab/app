@@ -31,10 +31,12 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
       require(rows.size() <= 25000) { "Too many automatic Guide bindings" }
       val bindings = ArrayList<EpgAutomaticBindingEntity>(rows.size())
       val directories = HashMap<String, Set<String>>()
+      val names = HashMap<String, Map<String, String>>()
       for (index in 0 until rows.size()) {
         val row = rows.getMap(index) ?: continue
         val channel = row.getString("channelId").orEmpty()
         val xmltv = row.getString("xmltvId").orEmpty()
+        val channelName = if (row.hasKey("channelName")) row.getString("channelName").orEmpty() else ""
         val candidates = row.getArray("sourceIds") ?: continue
         var selected: String? = null
         var pending: String? = null
@@ -42,10 +44,17 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
           val source = CustomEpgStoreRegistry.normalizeSourceId(candidates.getString(at).orEmpty())
           val ids = directories.getOrPut(source) { CustomEpgStoreRegistry.database(reactContext, source).guideDirectoryIds() }
           if (xmltv in ids) { selected = source; break }
+          val nameKey = EpgDatabase.normalizeKey(channelName)
+          val nameMatch = if (nameKey.isNotEmpty()) names.getOrPut(source) { CustomEpgStoreRegistry.database(reactContext, source).guideDirectoryByUniqueName() }[nameKey] else null
+          if (!nameMatch.isNullOrBlank()) {
+            selected = source
+            bindings.add(EpgAutomaticBindingEntity(channel, source, nameMatch))
+            break
+          }
           if (ids.isEmpty() && pending == null) pending = source
         }
         val source = selected ?: pending
-        if (source != null && channel.isNotBlank() && xmltv.isNotBlank()) bindings.add(EpgAutomaticBindingEntity(channel, source, xmltv))
+        if (source != null && channel.isNotBlank() && xmltv.isNotBlank() && bindings.none { it.channelId == channel }) bindings.add(EpgAutomaticBindingEntity(channel, source, xmltv))
       }
       controlDao.replaceAutomaticBindings(bindings)
       promise.resolve(true)

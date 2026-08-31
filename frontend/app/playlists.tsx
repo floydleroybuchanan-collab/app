@@ -11,6 +11,8 @@ import { getPlaylistUrl, movePlaylist, previewPlaylist, removePlaylist, savePers
 import { reloadPlaylistCatalog } from "@/src/source.native";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import type { PlaylistPreview } from "@/src/core/playlistRegistry";
+import { fonts, radius, tvColors } from "@/src/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
   return <Pressable accessibilityRole="button" focusable={!disabled} disabled={disabled} onPress={onPress}
@@ -41,11 +43,12 @@ export default function PlaylistsScreen() {
     finally { setBusy(false); }
   };
   const availableEpg = [{ id: "user", name: legacy.userName || "Custom EPG", enabled: legacy.userEnabled }, ...epgs.sources];
-  return <PurpleTvShell active="/settings"><FocusGuide trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.page}>
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Playlists</Text>
+  return <PurpleTvShell active="/settings"><View style={styles.page}>
+    <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><Text style={styles.title}>Playlists</Text></View>
+      <Pressable onPress={back} disabled={busy} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
+    </View>
+    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
       <Text style={styles.help}>Your supplied CharmIPTV services and personal M3U playlists, together in one guide. Five personal playlists; 25,000 enabled channels total in this test build.</Text>
-      <Action label={editing === null ? "Back to Settings" : "Cancel — keep current playlist"} onPress={back} disabled={busy} />
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
         <Text style={styles.text}>Enter your parental PIN to manage playlists.</Text>
         <TextInput accessibilityLabel="Parental PIN" secureTextEntry keyboardType="number-pad" value={pin} onChangeText={setPin} style={styles.input} />
@@ -97,17 +100,22 @@ export default function PlaylistsScreen() {
         </View>)}
       </>}
       {!!message && <Text accessibilityLiveRegion="polite" style={styles.message}>{message}</Text>}
-    </ScrollView>
-  </FocusGuide></PurpleTvShell>;
+    </ScrollView></FocusGuide>
+  </View></PurpleTvShell>;
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#100919" }, content: { padding: 28, paddingBottom: 60, gap: 12 },
-  title: { fontSize: 28, fontWeight: "700", color: "#fff" }, heading: { fontSize: 20, fontWeight: "600", color: "#fff" },
-  text: { color: "#eee7f8", fontSize: 16, lineHeight: 24 }, help: { color: "#bdb0cd", fontSize: 14, lineHeight: 22 },
-  card: { backgroundColor: "#20132e", borderRadius: 12, padding: 18, gap: 12 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  button: { alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8, borderWidth: 2, borderColor: "#65427e", backgroundColor: "#342044" },
-  focused: { borderColor: "#f6cf70", backgroundColor: "#653997" }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontSize: 15 },
-  input: { color: "#fff", fontSize: 18, padding: 14, borderWidth: 2, borderColor: "#826298", borderRadius: 8, minWidth: 300 },
-  message: { color: "#f6cf70", fontSize: 16, lineHeight: 24 },
+  page: { flex: 1, paddingHorizontal: 14, paddingTop: 8 },
+  header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
+  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
+  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
+  back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
+  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 }, scrollWrap: { flex: 1 }, content: { paddingVertical: 12, paddingBottom: 40, gap: 10 },
+  heading: { fontFamily: fonts.semibold, fontSize: 10.5, color: "#fff" },
+  text: { color: tvColors.text, fontFamily: fonts.regular, fontSize: 8.5, lineHeight: 13 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 11 },
+  card: { backgroundColor: tvColors.panelRaised, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, padding: 11, gap: 7 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  button: { alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: tvColors.line, backgroundColor: tvColors.panel },
+  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
+  input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.sm },
+  message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },
 });

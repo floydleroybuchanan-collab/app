@@ -70,6 +70,9 @@ function normalize(raw: unknown): CustomEpgSourceRecord[] {
     const existing = out.find((item) => item.id === OWNER_EPG_ID);
     const owner: CustomEpgSourceRecord = { id: OWNER_EPG_ID, name: "CharmIPTV 2 EPG", url: OWNER_EPG_URL, enabled: true, refreshHours: 12, lastRefreshAt: 0, lastStatus: "Not updated", overrides: {}, ...existing };
     owner.url = OWNER_EPG_URL;
+    // A supplied build-time feed must recover from an older saved disabled
+    // record when it is reintroduced or its URL changes between test builds.
+    owner.enabled = true;
     return [owner, ...out.filter((item) => item.id !== OWNER_EPG_ID)];
   }
   return out;
