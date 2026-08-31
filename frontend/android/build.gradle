@@ -23,5 +23,9 @@ allprojects {
   }
 }
 
+// The host generates the single Glide app module after seeing both libraries.
+// Expo explicitly supports this opt-out for applications supplying their own module.
+ext.excludeAppGlideModule = true
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"

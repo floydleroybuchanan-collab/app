@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.drawable.PictureDrawable
 import android.webkit.CookieManager
 import com.bumptech.glide.Glide
-import com.bumptech.glide.annotation.GlideModule
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.module.AppGlideModule
 import com.caverock.androidsvg.SVG
@@ -22,8 +21,8 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-@GlideModule
-class GlideCustomModule : AppGlideModule() {
+// The host's annotated module delegates here and generates one app-wide registry.
+open class GlideCustomModule : AppGlideModule() {
 
     private fun getOkHttpClient(context: Context): OkHttpClient {
         val appCache = Cache(File(context.cacheDir, "vod/glide-okhttp-cache"), 10 * 1024 * 1024)

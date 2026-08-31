@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "org.jetbrains.kotlin.kapt"
+apply plugin: "com.google.devtools.ksp"
 apply plugin: "com.facebook.react"
 
 kapt {
@@ -179,6 +180,7 @@ android {
 }
 
 dependencies {
+    ksp 'com.github.bumptech.glide:ksp:5.0.0-rc01'
     implementation project(':vod')
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation("com.facebook.react:react-android")
