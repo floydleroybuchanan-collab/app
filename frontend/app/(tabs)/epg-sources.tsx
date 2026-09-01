@@ -9,7 +9,7 @@ import { PurpleTvShell } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { clearChannelLogoCache } from "@/src/components/ChannelLogo";
 import { useStore, type EpgGuideFilter, type GuideWindowHours } from "@/src/store";
-import { clearGuideCache, refreshEpgOnly, refreshSource, sourceDiagnostics, sourceStatus, subscribeSource, type SourceDiagnostics } from "@/src/source";
+import { clearGuideCache, refreshSource, sourceDiagnostics, sourceStatus, subscribeSource, type SourceDiagnostics } from "@/src/source";
 import type { SourceStatus } from "@/src/api";
 import { type SourceRefreshIntervalHours, useSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { type LogoPriority, useLogoPriority } from "@/src/core/logoPreferences";
@@ -22,13 +22,14 @@ import { formatRelativeAge } from "@/src/utils/time";
 import { createCustomEpgSourceId, useMultiEpgSources } from "@/src/core/multiEpgSources";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
+import { readPlaylistGuideHealth, refreshEveryGuide, refreshEveryPlaylistAndGuide, refreshEveryPlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 
 const REFRESH_OPTIONS: { label: string; value: SourceRefreshIntervalHours }[] = [
   { label: "Manual only", value: 0 }, { label: "2h", value: 2 }, { label: "4h", value: 4 },
   { label: "6h", value: 6 }, { label: "12h", value: 12 }, { label: "24h", value: 24 },
 ];
 
-type ActiveAction = "refresh-all" | "refresh-epg" | "rebuild" | "logo" | null;
+type ActiveAction = "refresh-all" | "refresh-playlist" | "refresh-epg" | "rebuild" | "logo" | null;
 
 function EpgSourcesScreenContent() {
   const router = useRouter();
@@ -44,6 +45,7 @@ function EpgSourcesScreenContent() {
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [preferTopFocus, setPreferTopFocus] = useState(true);
+  const [playlistHealth, setPlaylistHealth] = useState<PlaylistGuideHealth[]>([]);
   const operationInFlight = useRef(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const busy = activeAction !== null;
@@ -73,6 +75,7 @@ function EpgSourcesScreenContent() {
     load();
     return subscribeSource(load);
   }, [load]);
+  useEffect(() => { void readPlaylistGuideHealth(channels).then(setPlaylistHealth).catch(() => setPlaylistHealth([])); }, [channels, status.last_refresh]);
 
   const runAction = useCallback(async (kind: Exclude<ActiveAction, null>, message: string, action: () => Promise<string>) => {
     if (operationInFlight.current) return;
@@ -92,14 +95,19 @@ function EpgSourcesScreenContent() {
   }, [load]);
 
   const refreshAll = useCallback(() => void runAction("refresh-all", "Refreshing playlist and EPG…", async () => {
-    setStatus(await refreshSource(true));
+    setStatus(await refreshEveryPlaylistAndGuide());
     await refresh(true);
     return "Playlist and EPG refreshed.";
   }), [refresh, runAction]);
-  const refreshGuide = useCallback(() => void runAction("refresh-epg", "Refreshing EPG only…", async () => {
-    setStatus(await refreshEpgOnly());
+  const refreshPlaylist = useCallback(() => void runAction("refresh-playlist", "Refreshing playlists only…", async () => {
+    await refreshEveryPlaylistOnly();
     await refresh(true);
-    return "EPG refreshed. Playlist was left unchanged.";
+    return "Playlists refreshed. Existing EPG data was kept.";
+  }), [refresh, runAction]);
+  const refreshGuide = useCallback(() => void runAction("refresh-epg", "Refreshing EPG only…", async () => {
+    setStatus(await refreshEveryGuide());
+    await refresh(true);
+    return "Every associated EPG refreshed. Playlists were left unchanged.";
   }), [refresh, runAction]);
   const rebuildGuide = useCallback(() => void runAction("rebuild", "Clearing and rebuilding guide cache…", async () => {
     await clearGuideCache();
@@ -199,6 +207,7 @@ function EpgSourcesScreenContent() {
               <ToggleRow label="Update EPG on app start" value={sourceRefresh.updateEpgOnAppStart} onChange={sourceRefresh.setUpdateEpgOnAppStart} />
               <ToggleRow label="Update EPG when playlist changes" value={sourceRefresh.updateEpgOnPlaylistChange} onChange={sourceRefresh.setUpdateEpgOnPlaylistChange} />
               <Text style={styles.help}>Playlist and EPG refresh independently. Only the operation you start runs; repeat OK presses are ignored until it finishes.</Text>
+              <Action label={activeAction === "refresh-playlist" ? "Working…" : "Refresh playlists only now"} icon="list-outline" onPress={refreshPlaylist} disabled={busy} />
               <Action label={activeAction === "refresh-all" ? "Working…" : "Refresh playlist & EPG now"} icon="refresh" onPress={refreshAll} disabled={busy} />
               <Action label={activeAction === "refresh-epg" ? "Working…" : "Refresh EPG only now"} icon="calendar-outline" onPress={refreshGuide} disabled={busy} />
             </Card>
@@ -219,6 +228,15 @@ function EpgSourcesScreenContent() {
               <Info label="Playlist refreshed" value={diagnostics?.playlistRefreshedAt ? `${formatRelativeAge(diagnostics.playlistRefreshedAt)} · ${dayjs(diagnostics.playlistRefreshedAt).format(timeFormat)}` : "—"} />
               <Info label="EPG refreshed" value={diagnostics?.guideRefreshedAt ? `${formatRelativeAge(diagnostics.guideRefreshedAt)} · ${dayjs(diagnostics.guideRefreshedAt).format(timeFormat)}` : "—"} />
               <Info label="Cache age" value={diagnostics?.cacheAgeMinutes != null ? `${diagnostics.cacheAgeMinutes} min` : "—"} />
+              {playlistHealth.map((item) => <View key={item.playlistId} style={styles.playlistHealth}>
+                <Text style={styles.sourceTitle}>{item.name}</Text>
+                <Info label="Channels" value={String(item.channels)} />
+                <Info label="Matched" value={String(item.matched)} />
+                <Info label="Unmatched" value={String(item.unmatched)} />
+                <Info label="Built-in guide matches" value={String(item.primaryMatched)} />
+                <Info label="Independent guide matches" value={String(item.customMatched)} />
+                <Info label="Active guide sources" value={item.sourceIds.length ? item.sourceIds.join(", ") : "None"} />
+              </View>)}
               {groupMatches.map((item) => <Info key={item.name} label={item.name} value={`${item.matched} matched / ${item.unmatched} unmatched`} />)}
               {diagnostics?.epgError || status.error ? <Text style={styles.error} testID="epg-sources-error">{diagnostics?.epgError || status.error}</Text> : null}
             </Card>
@@ -287,6 +305,7 @@ const styles = StyleSheet.create({
   infoValue: { color: "#fff", fontFamily: fonts.medium, fontSize: 8, textAlign: "right" },
   error: { color: "#FCA5A5", fontFamily: fonts.regular, fontSize: 7.5, marginTop: 4 },
   actionStatus: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, textAlign: "center" },
+  playlistHealth: { gap: 3, padding: 8, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, backgroundColor: tvColors.panel },
   disabled: { opacity: 0.55 }, focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
 });
 

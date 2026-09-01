@@ -7,6 +7,9 @@ import { getMultiEpgSources, saveMultiEpgSource } from "@/src/core/multiEpgSourc
 import { isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { getSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { syncNativeCustomEpgPolicy } from "@/src/core/customEpgPolicy";
+import { readCombinedPlaylists } from "@/src/core/playlistRegistry";
+import { syncPlaylistEpg } from "@/src/core/playlistEpg";
+import { reloadPlaylistCatalog } from "@/src/source.native";
 
 let schedulerGeneration = 0;
 
@@ -64,6 +67,7 @@ export function SourceRefreshScheduler() {
         // Independent XMLTV stores refresh serially under this same owner. The
         // native custom parser also yields if Guide/player takes foreground.
         const customSources = await getMultiEpgSources();
+        let customGuideChanged = false;
         for (const source of customSources) {
           if (!screenIsSafe()) return;
           if (!source.enabled || !source.url || source.refreshHours === 0) continue;
@@ -72,6 +76,7 @@ export function SourceRefreshScheduler() {
             const result = await refreshNativeSourceGuide(source.id, source.url);
             if (!stillOwner()) return;
             const swapped = result.programmeSwapSucceeded !== false;
+            customGuideChanged = customGuideChanged || swapped;
             saveMultiEpgSource({ ...source,
               lastRefreshAt: swapped ? Date.now() : source.lastRefreshAt,
               lastStatus: swapped ? `Indexed ${Math.max(0, Math.round(result.count || 0))} programmes.` : "No usable new rows; kept last-good data.",
@@ -80,6 +85,11 @@ export function SourceRefreshScheduler() {
             if (!stillOwner()) return;
             saveMultiEpgSource({ ...source, lastStatus: error instanceof Error ? error.message : "Automatic EPG refresh failed." });
           }
+        }
+        if (customGuideChanged && screenIsSafe()) {
+          const channels = await readCombinedPlaylists();
+          await syncPlaylistEpg(channels, false);
+          await reloadPlaylistCatalog();
         }
       } catch {
         // Last-good playlist/guide remains authoritative; normal source UI surfaces errors.

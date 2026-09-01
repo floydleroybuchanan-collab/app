@@ -33,7 +33,7 @@ function discoveryHarness(rows, env = {}) {
   return { run: exports.discoverPlaylistEpg, calls, updates };
 }
 
-test("detection preserves explicit supplied guides, disabled playlists and manual choices", async () => {
+test("detection keeps supplied guides and also associates a different M3U-header guide", async () => {
   const base = { name: "List", enabled: true, epgSourceIds: [], discoveredEpgUrls: ["https://epg.invalid/xml"] };
   const h = discoveryHarness([
     { ...base, id: "charm-primary", managed: true, epgSourceIds: ["primary"] },
@@ -41,8 +41,19 @@ test("detection preserves explicit supplied guides, disabled playlists and manua
     { ...base, id: "old-manual", epgSourceIds: ["existing"] },
     { ...base, id: "disabled", enabled: false },
   ], { EXPO_PUBLIC_EPG_URL: "https://owner.invalid/xml" });
-  await h.run(); assert.equal(h.calls.length, 0); assert.equal(h.updates.length, 1);
-  assert.equal(h.updates[0][1][0], "primary");
+  await h.run(); assert.equal(h.calls.length, 1); assert.equal(h.updates.length, 1);
+  assert.deepEqual(Array.from(h.updates[0][1]), ["primary", "detected"]);
+});
+
+test("a playlist header matching the supplied secondary guide reuses its owner slot", async () => {
+  const h = discoveryHarness([{ id: "charm-secondary", name: "List 2", enabled: true, managed: true, autoEpg: true, epgSourceIds: ["owner-secondary"], discoveredEpgUrls: ["https://owner.invalid/guide.xml"] }], { EXPO_PUBLIC_EPG_URL_2: "https://owner.invalid/guide.xml" });
+  await h.run(); assert.equal(h.calls.length, 0); assert.deepEqual(Array.from(h.updates[0][1]), ["owner-secondary"]);
+});
+
+test("removing a supplied guide also removes its stale reserved owner association", async () => {
+  const h = discoveryHarness([{ id: "charm-secondary", name: "List 2", enabled: true, managed: true, autoEpg: true, epgSourceIds: ["owner-secondary", "chosen"], autoEpgSourceIds: [], discoveredEpgUrls: ["https://epg.invalid/new.xml"] }]);
+  await h.run();
+  assert.deepEqual(Array.from(h.updates[0][1]), ["chosen", "detected"]);
 });
 
 test("detected EPG reuses legacy feeds and preserves last-good associations when slots are full", async () => {

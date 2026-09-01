@@ -354,6 +354,25 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     return found
   }
 
+  fun uniquePlaylistNames(channelIds: Collection<String>): Set<String> {
+    if (channelIds.isEmpty()) return emptySet()
+    val names = LinkedHashMap<String, String>()
+    val ambiguous = HashSet<String>()
+    for (chunk in channelIds.chunked(IN_CLAUSE_CHUNK)) {
+      val placeholders = chunk.joinToString(",") { "?" }
+      readableDatabase.rawQuery("SELECT playlist_id, name FROM $PLAYLIST_TABLE WHERE deleted_at=0 AND playlist_id IN ($placeholders)", chunk.toTypedArray()).use { cursor ->
+        while (cursor.moveToNext()) {
+          val key = normalizeKey(cursor.getString(1))
+          if (key.isEmpty() || key in ambiguous) continue
+          val previous = names[key]
+          if (previous == null || previous == cursor.getString(0)) names[key] = cursor.getString(0)
+          else { names.remove(key); ambiguous.add(key) }
+        }
+      }
+    }
+    return names.keys
+  }
+
   fun listDisplayNameAliases(query: String, offset: Int, limit: Int): EpgAliasPage {
     val safeLimit = limit.coerceIn(1, 100)
     val safeOffset = offset.coerceAtLeast(0)

@@ -8,7 +8,7 @@ import { getEpgSourcePreferences } from "./epgSourcePreferences";
 import { configureNativeUserGuideSources, refreshAssociatedPlaylistGuide, replaceAutomaticPlaylistBindings } from "@/src/nativeEpg";
 
 /** Associations are independent of feeds. Manual Room bindings always override these derived exact-ID bindings. */
-export async function syncPlaylistEpg(channels: Channel[], refresh = false): Promise<void> {
+export async function syncPlaylistEpg(channels: Channel[], refresh = false, onlyPlaylistId?: string): Promise<void> {
   await discoverPlaylistEpg();
   const [playlists, extras, prefs] = await Promise.all([listPlaylists(), getMultiEpgSources(), getEpgSourcePreferences()]);
   const sources = [
@@ -26,7 +26,9 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false): Pro
   await replaceAutomaticPlaylistBindings(bindings);
   replaceAutomaticEpgOwners(bindings.map((binding) => binding.channelId));
   if (!refresh) return;
-  const used = new Set(bindings.flatMap((binding) => binding.sourceIds));
+  const ownerByChannel = new Map(channels.map((channel) => [channel.id, playlistOwner(channel)]));
+  const refreshBindings = onlyPlaylistId ? bindings.filter((binding) => ownerByChannel.get(binding.channelId) === onlyPlaylistId) : bindings;
+  const used = new Set(refreshBindings.flatMap((binding) => binding.sourceIds));
   const downloaded = new Set<string>();
   for (const source of sources) {
     if (!source.enabled || !used.has(source.id)) continue;
@@ -34,7 +36,7 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false): Pro
     if (downloaded.has(source.id)) continue;
     downloaded.add(source.id);
     try {
-      const result = await refreshAssociatedPlaylistGuide(source.id, source.url, bindings.filter((binding) => binding.sourceIds.includes(source.id)).map((binding) => binding.xmltvId));
+      const result = await refreshAssociatedPlaylistGuide(source.id, source.url, refreshBindings.filter((binding) => binding.sourceIds.includes(source.id)).map((binding) => binding.xmltvId));
       const extra = extras.find((item) => item.id === source.id);
       if (extra) saveMultiEpgSource({ ...extra, lastRefreshAt: result.programmeSwapSucceeded === false ? extra.lastRefreshAt : Date.now(),
         lastStatus: result.programmeSwapSucceeded === false ? "No new programmes; previous guide kept." : `Indexed ${result.count} programmes.` });

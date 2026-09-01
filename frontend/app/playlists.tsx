@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { PurpleTvShell } from "@/src/components/PurpleTvShell";
@@ -13,6 +13,7 @@ import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import type { PlaylistPreview } from "@/src/core/playlistRegistry";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { readPlaylistGuideHealth, refreshOnePlaylistAndGuide, refreshOnePlaylistGuide, refreshOnePlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
   return <Pressable accessibilityRole="button" focusable={!disabled} disabled={disabled} onPress={onPress}
@@ -34,13 +35,19 @@ export default function PlaylistsScreen() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [removeArmed, setRemoveArmed] = useState("");
+  const [health, setHealth] = useState<Record<string, PlaylistGuideHealth>>({});
+  const loadHealth = useCallback(async () => {
+    const rows = await readPlaylistGuideHealth(await readCombinedPlaylists());
+    setHealth(Object.fromEntries(rows.map((row) => [row.playlistId, row])));
+  }, []);
+  useEffect(() => { void loadHealth(); }, [loadHealth, playlists]);
   const back = useCallback(() => { if (editing !== null) { setEditing(null); setPreview(null); setUrl(""); } else router.replace("/settings" as any); return true; }, [editing, router]);
   useTvBackHandler(back);
   const run = async (action: () => Promise<void>) => {
     if (busy) return; setBusy(true); setMessage("Working…");
     try { await action(); setMessage("Done."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Operation failed; check your source."); }
-    finally { setBusy(false); }
+    finally { await loadHealth().catch(() => undefined); setBusy(false); }
   };
   const availableEpg = [{ id: "user", name: legacy.userName || "Custom EPG", enabled: legacy.userEnabled }, ...epgs.sources];
   return <PurpleTvShell active="/settings"><View style={styles.page}>
@@ -79,10 +86,13 @@ export default function PlaylistsScreen() {
           <Text style={styles.help}>{source.enabled ? "Enabled" : "Disabled — saved channels retained"} · {source.count.toLocaleString()} channels · {source.status}</Text>
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
           {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
+          <Text style={styles.health}>{health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
           <Action label={`Playlist EPG detection: ${source.autoEpg === false ? "Off — manual" : "On"}`} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { autoEpg: source.autoEpg === false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
           <View style={styles.row}>
             <Action label={source.enabled ? "Disable" : "Enable"} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { enabled: !source.enabled }); await reloadPlaylistCatalog(); })} />
-            <Action label="Refresh this playlist + EPG" disabled={busy || !source.enabled} onPress={() => void run(() => reloadPlaylistCatalog(source.id))} />
+            <Action label="Refresh playlist only" disabled={busy || !source.enabled} onPress={() => void run(() => refreshOnePlaylistOnly(source.id))} />
+            <Action label="Refresh EPG only" disabled={busy || !source.enabled} onPress={() => void run(() => refreshOnePlaylistGuide(source.id))} />
+            <Action label="Refresh playlist + EPG" disabled={busy || !source.enabled} onPress={() => void run(() => refreshOnePlaylistAndGuide(source.id))} />
             <Action label={`Auto update: ${source.refreshHours ? `${source.refreshHours}h` : "Manual"}`} disabled={busy} onPress={() => void run(async () => { const options = [0, 2, 4, 6, 12, 24]; await updatePlaylist(source.id, { refreshHours: options[(options.indexOf(source.refreshHours) + 1) % options.length] }); })} />
             <Action label="Move up" disabled={busy} onPress={() => void run(async () => { await movePlaylist(source.id, -1); await reloadPlaylistCatalog(); })} />
             <Action label="Move down" disabled={busy} onPress={() => void run(async () => { await movePlaylist(source.id, 1); await reloadPlaylistCatalog(); })} />
@@ -118,4 +128,5 @@ const styles = StyleSheet.create({
   focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.sm },
   message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },
+  health: { color: "#D8C4FF", fontFamily: fonts.semibold, fontSize: 8.5, lineHeight: 13 },
 });

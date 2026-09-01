@@ -134,6 +134,49 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod fun refreshUserGuide(url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(USER_SOURCE_ID, url, promise) } }
   @ReactMethod fun refreshSourceGuide(sourceId: String, url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(sourceId, url, promise) } }
 
+  @ReactMethod fun getPlaylistGuideHealth(groups: ReadableArray, promise: Promise) { executor.execute {
+    try {
+      val primaryEnabled = controlDao.source("primary")?.enabled ?: true
+      val primaryMatches = EpgDatabase.shared(reactContext).activePlaylistChannels().associate { it.playlistId to it.matchedXmltvId }
+      val sources = ArrayList<String>().apply {
+        controlDao.source(USER_SOURCE_ID)?.takeIf { it.enabled && it.url.isNotBlank() }?.let { add(USER_SOURCE_ID) }
+        addAll(controlDao.userSources().filter { it.enabled && it.url.isNotBlank() }.map { it.playlistId })
+      }
+      val result = Arguments.createArray()
+      for (index in 0 until groups.size()) {
+        val group = groups.getMap(index) ?: continue
+        val playlistId = group.getString("playlistId").orEmpty()
+        val name = group.getString("name").orEmpty()
+        val input = group.getArray("channelIds")
+        val ids = ArrayList<String>()
+        if (input != null) for (at in 0 until input.size()) input.getString(at)?.takeIf { it.isNotBlank() }?.let(ids::add)
+        val custom = HashMap<String, EpgChannelBindingEntity>()
+        for (source in sources) for (chunk in ids.chunked(400)) {
+          for (binding in controlDao.effectiveBindingsForChannels(source, chunk)) custom.putIfAbsent(binding.channelId, binding)
+        }
+        var matched = 0
+        var customMatched = 0
+        var primaryMatched = 0
+        val sourceIds = LinkedHashSet<String>()
+        for (id in ids) {
+          val binding = custom[id]
+          if (binding != null && binding.xmltvId.isNotBlank()) {
+            matched += 1; customMatched += 1; sourceIds.add(binding.playlistId)
+          } else if (primaryEnabled && !primaryMatches[id].isNullOrBlank()) {
+            matched += 1; primaryMatched += 1; sourceIds.add("primary")
+          }
+        }
+        result.pushMap(Arguments.createMap().apply {
+          putString("playlistId", playlistId); putString("name", name); putInt("channels", ids.size)
+          putInt("matched", matched); putInt("unmatched", (ids.size - matched).coerceAtLeast(0))
+          putInt("primaryMatched", primaryMatched); putInt("customMatched", customMatched)
+          putArray("sourceIds", Arguments.createArray().apply { sourceIds.forEach(::pushString) })
+        })
+      }
+      promise.resolve(result)
+    } catch (t: Throwable) { promise.reject("PLAYLIST_GUIDE_HEALTH_FAILED", t.message ?: "Could not read per-playlist Guide health", t) }
+  }}
+
   private fun programToMap(program: NativeEpgProgram) = Arguments.createMap().apply {
     putString("channelId", program.channelId); putString("title", program.title)
     if (program.description != null) putString("description", program.description) else putNull("description")
@@ -146,10 +189,15 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
       val sourceId = CustomEpgStoreRegistry.normalizeSourceId(rawSourceId); val targetDatabase = CustomEpgStoreRegistry.database(reactContext, sourceId)
       val sourceUrl = url.trim(); if (sourceUrl.isEmpty()) throw IllegalArgumentException("Custom EPG URL is empty")
       if (!targetDatabase.ensureHealthy()) throw IllegalStateException("Custom Guide database integrity check failed"); targetDatabase.assertRefreshStorageAvailable()
-      val activeXmltvIds = LinkedHashSet<String>(candidates); for (binding in controlDao.effectiveBindings(sourceId)) binding.xmltvId.trim().takeIf { it.isNotEmpty() }?.let(activeXmltvIds::add)
+      val effectiveBindings = controlDao.effectiveBindings(sourceId)
+      val activeXmltvIds = LinkedHashSet<String>(candidates); for (binding in effectiveBindings) binding.xmltvId.trim().takeIf { it.isNotEmpty() }?.let(activeXmltvIds::add)
+      // The first import may begin before an XMLTV directory exists. Learn
+      // unique playlist-name matches while streaming the <channel> directory so
+      // their <programme> rows are retained in this same transaction.
+      val activePlaylistNames = EpgDatabase.shared(reactContext).uniquePlaylistNames(effectiveBindings.map { it.channelId })
       val now = System.currentTimeMillis(); val minStop = now - retentionDays().toLong() * DAY_MS; val maxStart = now + GUIDE_WINDOW_MS
       val channelNames = LinkedHashMap<String, String>(); val channelIcons = LinkedHashMap<String, String>(); var acceptedProgrammeCount = 0L; var programmeSwapSucceeded = false
-      val batches = streamFilteredXmltv(sourceUrl, activeXmltvIds, minStop, maxStart, channelNames, channelIcons, targetDatabase) { acceptedProgrammeCount += 1L }
+      val batches = streamFilteredXmltv(sourceUrl, activeXmltvIds, activePlaylistNames, minStop, maxStart, channelNames, channelIcons, targetDatabase) { acceptedProgrammeCount += 1L }
       if (activeXmltvIds.isEmpty()) { for (ignored in batches) Unit } else {
         try { targetDatabase.replaceBatches(batches); programmeSwapSucceeded = true }
         catch (t: IllegalStateException) {
@@ -168,7 +216,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (t: Throwable) { promise.reject("CUSTOM_EPG_REFRESH_FAILED", t.message ?: "Custom Guide refresh failed", t) }
   }
 
-  private fun streamFilteredXmltv(sourceUrl: String, activeXmltvIds: Set<String>, minStop: Long, maxStart: Long, channelNames: MutableMap<String, String>, channelIcons: MutableMap<String, String>, targetDatabase: EpgDatabase, onAcceptedProgramme: () -> Unit): Sequence<List<NativeEpgProgram>> = sequence {
+  private fun streamFilteredXmltv(sourceUrl: String, activeXmltvIds: MutableSet<String>, activePlaylistNames: Set<String>, minStop: Long, maxStart: Long, channelNames: MutableMap<String, String>, channelIcons: MutableMap<String, String>, targetDatabase: EpgDatabase, onAcceptedProgramme: () -> Unit): Sequence<List<NativeEpgProgram>> = sequence {
     openPossiblyGzipped(sourceUrl, targetDatabase).use { input ->
       val parser = Xml.newPullParser(); parser.setInput(input, "UTF-8"); val batch = ArrayList<NativeEpgProgram>(BATCH_SIZE)
       var event = parser.eventType; var metadataChannelId: String? = null; var channelId: String? = null; var startMs = 0L; var endMs = 0L; var keepProgram = false; var title = ""; var description: String? = null; var category: String? = null; var rawProgrammeCount = 0L
@@ -176,7 +224,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
         when (event) {
           XmlPullParser.START_TAG -> when (parser.name) {
             "channel" -> metadataChannelId = parser.getAttributeValue(null, "id")?.trim()?.takeIf { it.isNotEmpty() }
-            "display-name" -> { val id = metadataChannelId; if (!id.isNullOrBlank()) { val displayName = parser.nextText().trim(); if (displayName.isNotEmpty() && !channelNames.containsKey(id)) channelNames[id] = displayName } }
+            "display-name" -> { val id = metadataChannelId; if (!id.isNullOrBlank()) { val displayName = parser.nextText().trim(); if (displayName.isNotEmpty() && !channelNames.containsKey(id)) channelNames[id] = displayName; if (EpgDatabase.normalizeKey(displayName) in activePlaylistNames) activeXmltvIds.add(id) } }
             "icon" -> { val id = metadataChannelId; val src = parser.getAttributeValue(null, "src")?.trim().orEmpty(); if (!id.isNullOrBlank() && src.isNotEmpty() && !channelIcons.containsKey(id)) channelIcons[id] = src }
             "programme" -> {
               rawProgrammeCount += 1L; if (rawProgrammeCount > MAX_PROGRAMME_COUNT) throw IllegalStateException("Custom EPG exceeds programme safety limit")

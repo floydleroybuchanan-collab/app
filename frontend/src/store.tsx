@@ -6,7 +6,6 @@ import { Channel, Program } from "@/src/api";
 import {
   loadGuide,
   loadGuideProgramsForChannelIds,
-  refreshEpgOnly,
   refreshSource,
   retainProgrammeWindowCache,
   setManualEpgRemaps,
@@ -15,6 +14,7 @@ import {
   trimProgrammeWindowCacheForMemoryPressure,
   subscribeSource,
 } from "@/src/source";
+import { refreshEveryGuide } from "@/src/core/playlistGuideOperations";
 import { isGuideScreenActive, isGuideSurfing, onGuideSurfSettled } from "@/src/utils/guideSurfGate";
 import {
   applyGuidePrograms,
@@ -388,7 +388,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     storage.setItem(PREFER_TVG_ID_ONLY_KEY, v);
     void (async () => {
       try {
-        await refreshEpgOnly();
+        await refreshEveryGuide();
         await refreshSilentRef.current(true);
       } catch (error) {
         console.warn("preferTvgIdOnly rematch failed", error);
