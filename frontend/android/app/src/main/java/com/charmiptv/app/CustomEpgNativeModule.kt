@@ -136,7 +136,9 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod fun getPlaylistGuideHealth(groups: ReadableArray, promise: Promise) { executor.execute {
     try {
-      val primaryEnabled = controlDao.source("primary")?.enabled ?: true
+      // EpgNativeModule stores the managed source under `default`. Keep health
+      // reporting on the same identifier used by imports and Guide queries.
+      val primaryEnabled = controlDao.source("default")?.enabled ?: true
       val primaryMatches = EpgDatabase.shared(reactContext).activePlaylistChannels().associate { it.playlistId to it.matchedXmltvId }
       val sources = ArrayList<String>().apply {
         controlDao.source(USER_SOURCE_ID)?.takeIf { it.enabled && it.url.isNotBlank() }?.let { add(USER_SOURCE_ID) }

@@ -51,6 +51,20 @@ test("manual EPG assignments persist through the authoritative native binding st
   assert.match(database, /fun setChannelBinding\(playlistId: String, channelId: String, xmltvId: String\)/);
 });
 
+test("native Guide canvas reads primary and independent EPG stores through one binding-aware repository", async () => {
+  const [canvas, bridge, combined] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CombinedGuideRepository.kt"),
+  ]);
+  assert.match(canvas, /combinedGuide\.queryGuideWindow\(request\.startMs, request\.endMs, request\.ids\)/);
+  assert.doesNotMatch(canvas, /database\.queryGuideWindow\(request\.startMs/);
+  assert.match(bridge, /combinedGuide\.queryGuideWindow\(start, end, ids\)/);
+  assert.match(combined, /effectiveBindingsForChannels/);
+  assert.match(combined, /CustomEpgStoreRegistry\.database/);
+  assert.match(combined, /program\.copy\(channelId = playlistId\)/);
+});
+
 test("EPG low-storage refusal closes already-open provider connections", async () => {
   const modules = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt"),

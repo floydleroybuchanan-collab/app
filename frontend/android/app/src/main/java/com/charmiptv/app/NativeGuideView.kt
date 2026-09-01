@@ -32,10 +32,9 @@ class NativeGuideView(context: Context) : View(context) {
   private data class ChannelRow(val id: String, val name: String, val number: String, val label: String)
   private data class GuideQuery(val token: Int, val startMs: Long, val endMs: Long, val ids: List<String>)
 
-  // Shared across every owner of the primary EPG store (EpgNativeModule,
-  // EpgRamModule, and every NativeGuideView instance) — see EpgDatabase.shared().
-  // Never closed here: a new Guide screen mount must find it still open.
-  private val database = EpgDatabase.shared(context.applicationContext)
+  // Reads every enabled guide store through the same binding-aware repository
+  // as the React bridge; the canvas must never fall back to primary-only SQL.
+  private val combinedGuide = CombinedGuideRepository(context.applicationContext)
   private val io = Executors.newSingleThreadExecutor { task -> Thread(task, "CharmGuideRead").apply { isDaemon = true } }
   private val rows = ArrayList<ChannelRow>()
   @Volatile private var programs = emptyMap<String, Array<NativeEpgProgram>>()
@@ -336,7 +335,7 @@ class NativeGuideView(context: Context) : View(context) {
           // A table swap during EPG refresh can briefly make a read fail. Keep
           // the last-good painted rows instead of replacing the canvas with an
           // empty map (the reported black-guide failure).
-          val loaded = try { database.queryGuideWindow(request.startMs, request.endMs, request.ids) } catch (_: Throwable) { null }
+          val loaded = try { combinedGuide.queryGuideWindow(request.startMs, request.endMs, request.ids) } catch (_: Throwable) { null }
           if (loaded == null) continue
           val grouped = LinkedHashMap<String, MutableList<NativeEpgProgram>>()
           for (program in loaded) grouped.getOrPut(program.channelId) { ArrayList() }.add(program)
@@ -406,8 +405,7 @@ class NativeGuideView(context: Context) : View(context) {
     programs = emptyMap()
     unregisterMemoryListener()
     io.shutdownNow()
-    // `database` is the shared primary EpgDatabase instance (EpgNativeModule and
-    // EpgRamModule may still be using it, and Guide may remount) — never close it here.
+    // Shared EPG databases remain process-owned; Guide disposal only stops its reader.
   }
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

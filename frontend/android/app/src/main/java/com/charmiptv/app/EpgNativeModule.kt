@@ -34,6 +34,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   // independent transactional database per additional custom EPG source.
   private val userDatabase = CustomEpgStoreRegistry.database(reactContext, USER_SOURCE_ID)
   private val controlDao = EpgControlDatabase.get(reactContext).dao()
+  private val combinedGuide = CombinedGuideRepository(reactContext)
 
   // Refresh/network/XML work is intentionally isolated from guide reads. A slow
   // EPG download must never queue bounded Guide reads behind it; WAL lets the
@@ -444,40 +445,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           val id = playlistChannelIds.getString(i)?.trim()
           if (!id.isNullOrEmpty()) ids.add(id)
         }
-        val primaryEnabled = controlDao.source(DEFAULT_PLAYLIST_ID)?.enabled ?: true
-        val userSources = ArrayList<EpgSourceEntity>(MAX_USER_SOURCES).apply {
-          controlDao.source(USER_SOURCE_ID)?.takeIf { it.enabled && it.url.isNotBlank() }?.let(::add)
-          addAll(controlDao.userSources().filter { it.enabled && it.url.isNotBlank() }.take(MAX_USER_SOURCES - size))
-        }
-        val bindingsBySource = LinkedHashMap<String, List<EpgChannelBindingEntity>>()
-        val customOwnedChannels = LinkedHashSet<String>()
-        for (source in userSources) {
-          val rows = if (ids.isNotEmpty()) controlDao.effectiveBindingsForChannels(source.playlistId, ids) else emptyList()
-          bindingsBySource[source.playlistId] = rows
-          rows.forEach { customOwnedChannels.add(it.channelId) }
-        }
-        val combined = ArrayList<NativeEpgProgram>()
-
-        if (primaryEnabled) {
-          val primaryIds = ids.filterNot { it in customOwnedChannels }
-          if (primaryIds.isNotEmpty()) combined.addAll(database.queryGuideWindow(start, end, primaryIds))
-        }
-
-        for ((sourceId, bindingRows) in bindingsBySource) {
-          if (bindingRows.isEmpty()) continue
-          val bindingByChannel = bindingRows.associate { it.channelId to it.xmltvId }
-          val xmltvIds = bindingByChannel.values.toSet()
-          val userRows = CustomEpgStoreRegistry.database(reactContext, sourceId).queryWindow(start, end, xmltvIds)
-          val playlistIdsByXmltv = HashMap<String, MutableList<String>>()
-          for ((playlistId, xmltvId) in bindingByChannel) {
-            playlistIdsByXmltv.getOrPut(xmltvId) { ArrayList() }.add(playlistId)
-          }
-          for (program in userRows) {
-            val playlistIds = playlistIdsByXmltv[program.channelId] ?: continue
-            for (playlistId in playlistIds) combined.add(program.copy(channelId = playlistId))
-          }
-        }
-        promise.resolve(groupPrograms(combined))
+        promise.resolve(groupPrograms(combinedGuide.queryGuideWindow(start, end, ids)))
       } catch (t: Throwable) {
         promise.reject("EPG_GUIDE_WINDOW_FAILED", t.message ?: "Could not read joined EPG window", t)
       }
