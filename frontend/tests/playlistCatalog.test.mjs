@@ -62,7 +62,11 @@ function registryHarness() {
     react: { useState: () => {}, useEffect: () => {} },
     "@/src/utils/storage": { storage: { getItem: async (key, fallback) => prefs.has(key) ? JSON.parse(prefs.get(key)) : fallback, setItem: async (key, value) => { if (failCommit) return false; prefs.set(key, JSON.stringify(value)); return true; } } },
     "@react-native-async-storage/async-storage": { default: { getItem: async key => prefs.get(key) || null, setItem: async (key, value) => { if (failCommit) throw Error("Disk write failed"); prefs.set(key, value); } } },
-    "@/src/nativeEpg": { fetchNativePlaylist: (...args) => fetcher(...args) },
+    "@/src/nativeEpg": {
+      fetchNativePlaylist: (...args) => fetcher(...args),
+      startNativeUpdateJob: async () => 1,
+      finishNativeUpdateJob: async () => {},
+    },
     "./playlistCatalog": catalog,
   };
   const exports = {};

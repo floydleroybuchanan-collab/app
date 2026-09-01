@@ -53,6 +53,7 @@ internal data class EpgAutomaticBindingEntity(
   @PrimaryKey val channelId: String,
   val playlistId: String,
   val xmltvId: String,
+  val matchReason: String = "exact_id",
 )
 
 @Entity(tableName = "epg_import_state")
@@ -62,6 +63,29 @@ internal data class EpgImportStateEntity(
   val lastSuccessSeconds: Long = 0,
   val blackoutUntilSeconds: Long = 0,
   val lastError: String = "",
+  val state: String = "idle",
+  val attemptCount: Int = 0,
+  val nextRetrySeconds: Long = 0,
+  val lastDurationMs: Long = 0,
+  val lastProgrammeCount: Long = 0,
+  val lastTrigger: String = "",
+)
+
+@Entity(
+  tableName = "epg_update_history",
+  indices = [Index("sourceId"), Index("startedAtSeconds")],
+)
+internal data class EpgUpdateHistoryEntity(
+  @PrimaryKey(autoGenerate = true) val id: Long = 0,
+  val sourceId: String,
+  val kind: String,
+  val state: String,
+  val trigger: String,
+  val attempt: Int,
+  val startedAtSeconds: Long,
+  val finishedAtSeconds: Long = 0,
+  val rowCount: Long = 0,
+  val error: String = "",
 )
 
 @Dao
@@ -107,6 +131,9 @@ internal interface EpgControlDao {
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   fun putAutomaticBindings(rows: List<EpgAutomaticBindingEntity>)
+
+  @Query("SELECT * FROM epg_automatic_bindings WHERE channelId IN (:channelIds)")
+  fun automaticBindingsForChannels(channelIds: List<String>): List<EpgAutomaticBindingEntity>
 
   @Transaction
   fun replaceAutomaticBindings(rows: List<EpgAutomaticBindingEntity>) {
@@ -190,11 +217,26 @@ internal interface EpgControlDao {
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   fun putImportState(state: EpgImportStateEntity)
+
+  @Query("SELECT * FROM epg_import_state ORDER BY playlistId")
+  fun allImportStates(): List<EpgImportStateEntity>
+
+  @Insert
+  fun addUpdateHistory(row: EpgUpdateHistoryEntity): Long
+
+  @Query("UPDATE epg_update_history SET state = :state, finishedAtSeconds = :finishedAt, rowCount = :rowCount, error = :error WHERE id = :id")
+  fun finishUpdateHistory(id: Long, state: String, finishedAt: Long, rowCount: Long, error: String)
+
+  @Query("SELECT * FROM epg_update_history ORDER BY startedAtSeconds DESC, id DESC LIMIT :limit")
+  fun recentUpdateHistory(limit: Int): List<EpgUpdateHistoryEntity>
+
+  @Query("DELETE FROM epg_update_history WHERE id NOT IN (SELECT id FROM epg_update_history ORDER BY startedAtSeconds DESC, id DESC LIMIT :keep)")
+  fun trimUpdateHistory(keep: Int)
 }
 
 @Database(
-  entities = [EpgSourceEntity::class, EpgChannelOffsetEntity::class, EpgChannelBindingEntity::class, EpgImportStateEntity::class, EpgAutomaticBindingEntity::class],
-  version = 4,
+  entities = [EpgSourceEntity::class, EpgChannelOffsetEntity::class, EpgChannelBindingEntity::class, EpgImportStateEntity::class, EpgAutomaticBindingEntity::class, EpgUpdateHistoryEntity::class],
+  version = 5,
   exportSchema = true,
 )
 internal abstract class EpgControlDatabase : RoomDatabase() {
@@ -208,7 +250,22 @@ internal abstract class EpgControlDatabase : RoomDatabase() {
         context.applicationContext,
         EpgControlDatabase::class.java,
         "charm_epg_control.db",
-      ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+      ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+    }
+
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE epg_import_state ADD COLUMN state TEXT NOT NULL DEFAULT 'idle'")
+        db.execSQL("ALTER TABLE epg_import_state ADD COLUMN attemptCount INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE epg_import_state ADD COLUMN nextRetrySeconds INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE epg_import_state ADD COLUMN lastDurationMs INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE epg_import_state ADD COLUMN lastProgrammeCount INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE epg_import_state ADD COLUMN lastTrigger TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE epg_automatic_bindings ADD COLUMN matchReason TEXT NOT NULL DEFAULT 'exact_id'")
+        db.execSQL("CREATE TABLE IF NOT EXISTS epg_update_history (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sourceId TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, attempt INTEGER NOT NULL, startedAtSeconds INTEGER NOT NULL, finishedAtSeconds INTEGER NOT NULL, rowCount INTEGER NOT NULL, error TEXT NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_epg_update_history_sourceId ON epg_update_history(sourceId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_epg_update_history_startedAtSeconds ON epg_update_history(startedAtSeconds)")
+      }
     }
 
     private val MIGRATION_3_4 = object : Migration(3, 4) {

@@ -23,6 +23,8 @@ import { createCustomEpgSourceId, useMultiEpgSources } from "@/src/core/multiEpg
 import { fonts, radius, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { readPlaylistGuideHealth, refreshEveryGuide, refreshEveryPlaylistAndGuide, refreshEveryPlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
+import { readNativeUpdateDiagnostics, type NativeUpdateDiagnostics } from "@/src/nativeEpg";
+import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
 
 const REFRESH_OPTIONS: { label: string; value: SourceRefreshIntervalHours }[] = [
   { label: "Manual only", value: 0 }, { label: "2h", value: 2 }, { label: "4h", value: 4 },
@@ -35,6 +37,7 @@ function EpgSourcesScreenContent() {
   const router = useRouter();
   const { refresh, channels, clock24h, epgGuideFilter, setEpgGuideFilter, guideWindowHours, setGuideWindowHours, preferTvgIdOnly, setPreferTvgIdOnly } = useStore();
   const sourceRefresh = useSourceRefreshPreferences();
+  const guideTiming = useGuideTimingPreferences("default");
   const guideUi = useGuideUiPreferences();
   const epgOwnership = useEpgSourcePreferences();
   const multiEpg = useMultiEpgSources();
@@ -46,6 +49,7 @@ function EpgSourcesScreenContent() {
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [preferTopFocus, setPreferTopFocus] = useState(true);
   const [playlistHealth, setPlaylistHealth] = useState<PlaylistGuideHealth[]>([]);
+  const [updateDiagnostics, setUpdateDiagnostics] = useState<NativeUpdateDiagnostics>({ states: [], history: [] });
   const operationInFlight = useRef(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const busy = activeAction !== null;
@@ -76,6 +80,7 @@ function EpgSourcesScreenContent() {
     return subscribeSource(load);
   }, [load]);
   useEffect(() => { void readPlaylistGuideHealth(channels).then(setPlaylistHealth).catch(() => setPlaylistHealth([])); }, [channels, status.last_refresh]);
+  useEffect(() => { void readNativeUpdateDiagnostics().then(setUpdateDiagnostics).catch(() => setUpdateDiagnostics({ states: [], history: [] })); }, [status.last_refresh, actionStatus]);
 
   const runAction = useCallback(async (kind: Exclude<ActiveAction, null>, message: string, action: () => Promise<string>) => {
     if (operationInFlight.current) return;
@@ -206,13 +211,23 @@ function EpgSourcesScreenContent() {
               />
               <ToggleRow label="Update EPG on app start" value={sourceRefresh.updateEpgOnAppStart} onChange={sourceRefresh.setUpdateEpgOnAppStart} />
               <ToggleRow label="Update EPG when playlist changes" value={sourceRefresh.updateEpgOnPlaylistChange} onChange={sourceRefresh.setUpdateEpgOnPlaylistChange} />
+              <ToggleRow label="Background updates require unmetered network" value={sourceRefresh.backgroundUnmeteredOnly} onChange={sourceRefresh.setBackgroundUnmeteredOnly} />
+              <ToggleRow label="Background updates require charging" value={sourceRefresh.backgroundChargingOnly} onChange={sourceRefresh.setBackgroundChargingOnly} />
+              <ToggleRow label="Background updates require device idle" value={sourceRefresh.backgroundIdleOnly} onChange={sourceRefresh.setBackgroundIdleOnly} />
+              <Text style={styles.help}>Android schedules each enabled guide source durably. Failed downloads keep last-good data and retry later with increasing delays, even after the app closes or the TV restarts.</Text>
               <Text style={styles.help}>Playlist and EPG refresh independently. Only the operation you start runs; repeat OK presses are ignored until it finishes.</Text>
               <Action label={activeAction === "refresh-playlist" ? "Working…" : "Refresh playlists only now"} icon="list-outline" onPress={refreshPlaylist} disabled={busy} />
               <Action label={activeAction === "refresh-all" ? "Working…" : "Refresh playlist & EPG now"} icon="refresh" onPress={refreshAll} disabled={busy} />
               <Action label={activeAction === "refresh-epg" ? "Working…" : "Refresh EPG only now"} icon="calendar-outline" onPress={refreshGuide} disabled={busy} />
             </Card>
+            <Card title="Guide Time Correction" icon="time-outline">
+              <ChoiceRow<number> label="Global offset" value={guideTiming.globalOffsetMinutes} options={[-120, -60, -30, 0, 30, 60, 120].map((value) => ({ label: value === 0 ? "0" : `${value > 0 ? "+" : ""}${value}m`, value }))} onChange={guideTiming.setGlobalOffsetMinutes} />
+              <ChoiceRow<number> label="Primary source / server offset" value={guideTiming.source.serverOffsetMinutes} options={[-120, -60, -30, 0, 30, 60, 120].map((value) => ({ label: value === 0 ? "0" : `${value > 0 ? "+" : ""}${value}m`, value }))} onChange={guideTiming.setServerOffsetMinutes} />
+              <ChoiceRow<number> label="Primary playlist offset" value={guideTiming.source.playlistOffsetMinutes} options={[-120, -60, -30, 0, 30, 60, 120].map((value) => ({ label: value === 0 ? "0" : `${value > 0 ? "+" : ""}${value}m`, value }))} onChange={guideTiming.setPlaylistOffsetMinutes} />
+              <Text style={styles.help}>Programme time is corrected in four layers: global, source/server, playlist, then any per-channel override. Corrections apply on the next EPG update.</Text>
+            </Card>
             <Card title="Channel Logo Sources" icon="image-outline">
-              <ChoiceRow<LogoPriority> label="Channel logos priority" value={logoPriority} options={[{ label: "Prefer playlist", value: "playlist" }, { label: "Prefer EPG", value: "epg" }]} onChange={setLogoPriority} />
+              <ChoiceRow<LogoPriority> label="Channel logos priority" value={logoPriority} options={[{ label: "Prefer playlist", value: "playlist" }, { label: "Prefer EPG", value: "epg" }, { label: "Prefer local folder", value: "local" }]} onChange={setLogoPriority} />
               <Text style={styles.help}>The preferred source wins; the other URL remains available as fallback.</Text>
               <Action label={activeAction === "logo" ? "Working…" : "Choose local / USB / network logo folder"} icon="folder-open-outline" onPress={() => logoAction("Opening logo folder picker…", "Logo folder selection finished.", chooseLocalLogoFolder)} disabled={busy} />
               <Action label="Stop using local logo folder" icon="folder-outline" onPress={() => logoAction("Removing local logo folder…", "Local logo folder removed.", clearLocalLogoFolder)} disabled={busy} />
@@ -235,8 +250,21 @@ function EpgSourcesScreenContent() {
                 <Info label="Unmatched" value={String(item.unmatched)} />
                 <Info label="Built-in guide matches" value={String(item.primaryMatched)} />
                 <Info label="Independent guide matches" value={String(item.customMatched)} />
+                <Info label="Matched channels with indexed programmes" value={String(item.indexedChannels)} />
                 <Info label="Active guide sources" value={item.sourceIds.length ? item.sourceIds.join(", ") : "None"} />
+                <Info label="How channels matched" value={Object.entries(item.matchMethods || {}).map(([reason, count]) => `${reason.replace(/_/g, " ")} ${count}`).join(" · ") || "No matches"} />
+                {!!item.unmatchedChannelIds?.length && <Info label="Unmatched sample" value={item.unmatchedChannelIds.slice(0, 8).map((id) => channels.find((channel) => channel.id === id)?.name || id).join(" · ")} />}
               </View>)}
+              {updateDiagnostics.states.map((item) => <View key={`job-${item.sourceId}`} style={styles.playlistHealth}>
+                <Text style={styles.sourceTitle}>Update job · {item.sourceId === "default" ? "Primary guide" : item.sourceId}</Text>
+                <Info label="State" value={item.state || "idle"} />
+                <Info label="Last indexed programmes" value={Math.max(0, Number(item.lastProgrammeCount || 0)).toLocaleString()} />
+                <Info label="Attempts" value={String(item.attemptCount || 0)} />
+                <Info label="Last trigger" value={item.lastTrigger || "—"} />
+                <Info label="Next retry" value={item.nextRetrySeconds ? new Date(item.nextRetrySeconds * 1000).toLocaleString() : "—"} />
+                {item.lastError ? <Text style={styles.error}>{item.lastError}</Text> : null}
+              </View>)}
+              {updateDiagnostics.history.slice(0, 6).map((item) => <Info key={`history-${item.id}`} label={`${item.sourceId} · ${item.state}`} value={`${item.rowCount.toLocaleString()} rows · attempt ${item.attempt}`} />)}
               {groupMatches.map((item) => <Info key={item.name} label={item.name} value={`${item.matched} matched / ${item.unmatched} unmatched`} />)}
               {diagnostics?.epgError || status.error ? <Text style={styles.error} testID="epg-sources-error">{diagnostics?.epgError || status.error}</Text> : null}
             </Card>

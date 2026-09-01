@@ -19,7 +19,7 @@ test("Guide is a single native logical canvas with predictive prefetch", async (
   assert.match(view, /override fun onDraw\(canvas: Canvas\)/);
   assert.match(view, /override fun onKeyDown/);
   assert.match(view, /moveVelocity/);
-  assert.match(view, /database\.queryGuideWindow/);
+  assert.match(view, /combinedGuide\.queryGuideWindow/);
   assert.match(view, /rows\.subList\(from, to\)\.map \{ it\.id \}/);
   assert.match(view, /val ahead = 8 \+ min\(28, moveVelocity \* 2\)/);
   assert.doesNotMatch(view, /val ids = rows\.map \{ it\.id \}/);

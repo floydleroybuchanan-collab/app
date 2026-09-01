@@ -14,6 +14,7 @@ import {
 } from "@/src/nativeEpg";
 import { invalidateGuideOwnershipCaches } from "@/src/source";
 import { formatRelativeAge } from "@/src/utils/time";
+import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
 import { fonts, radius, tvColors } from "@/src/theme";
 
 const PAGE = 50;
@@ -27,6 +28,7 @@ export default function EpgSourceScreen() {
   const { channels } = useStore();
   const primary = useEpgSourcePreferences();
   const registry = useMultiEpgSources();
+  const timing = useGuideTimingPreferences(`user:${sourceId}`);
   const saved = registry.sources.find((item) => item.id === sourceId);
   const [draft, setDraft] = useState<CustomEpgSourceRecord>(() => saved || {
     id: sourceId, name: "Custom EPG", url: "", enabled: false, refreshHours: 12,
@@ -141,6 +143,10 @@ export default function EpgSourceScreen() {
   }, [busy, nativeSources, primary.primaryEnabled, registry, router, sourceId]);
 
   const refreshIndex = Math.max(0, REFRESH_VALUES.indexOf(draft.refreshHours));
+  const cycleOffset = (value: number) => {
+    const choices = [-120, -60, -30, 0, 30, 60, 120];
+    return choices[(Math.max(0, choices.indexOf(value)) + 1) % choices.length];
+  };
   return <PurpleTvShell active="/settings"><View style={styles.page}>
     <View style={styles.header}><Text style={styles.title}>Saved EPG source</Text><Pressable hasTVPreferredFocus={preferBackFocus} onFocus={() => setPreferBackFocus(false)} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
     <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}>
@@ -150,6 +156,8 @@ export default function EpgSourceScreen() {
         <TextInput secureTextEntry editable={sourceId !== "owner-secondary"} value={sourceId === "owner-secondary" ? "Supplied by CharmIPTV" : draft.url} onChangeText={(url) => setDraft((value) => ({ ...value, url }))} placeholder="https://server/guide.xml.gz" placeholderTextColor={tvColors.textMuted} autoCapitalize="none" autoCorrect={false} style={styles.input} />
         <Row label="Enabled" value={draft.enabled ? "On" : "Off"} onPress={() => setDraft((value) => ({ ...value, enabled: !value.enabled }))} />
         <Row label="Update interval" value={draft.refreshHours === 0 ? "Manual only" : `${draft.refreshHours} hours`} onPress={() => setDraft((value) => ({ ...value, refreshHours: REFRESH_VALUES[(refreshIndex + 1) % REFRESH_VALUES.length] }))} />
+        <Row label="Source / server time offset" value={`${timing.source.serverOffsetMinutes > 0 ? "+" : ""}${timing.source.serverOffsetMinutes} minutes`} onPress={() => timing.setServerOffsetMinutes(cycleOffset(timing.source.serverOffsetMinutes))} />
+        <Row label="Playlist time offset" value={`${timing.source.playlistOffsetMinutes > 0 ? "+" : ""}${timing.source.playlistOffsetMinutes} minutes`} onPress={() => timing.setPlaylistOffsetMinutes(cycleOffset(timing.source.playlistOffsetMinutes))} />
         <Text style={styles.help}>Latest update: {draft.lastRefreshAt ? formatRelativeAge(draft.lastRefreshAt) : "Never"} · {draft.lastStatus}</Text>
         <View style={styles.actions}><Button label="Save" onPress={save} disabled={busy} /><Button label="Update EPG" onPress={refresh} disabled={busy} /><Button label="Clear EPG data" onPress={clearData} disabled={busy} /><Button label="Remove source" onPress={remove} disabled={busy || sourceId === "owner-secondary"} /></View>
       </View>
@@ -159,6 +167,7 @@ export default function EpgSourceScreen() {
       </View>
       {selectedChannel ? <View style={styles.card}><Text style={styles.cardTitle}>EPG channel for {selectedChannel.name}</Text>
         <Text style={styles.help}>Current: {draft.overrides[selectedChannel.id] ? `Assigned · ${draft.overrides[selectedChannel.id]}` : "Not assigned"}</Text>
+        <Row label="Channel time offset" value={`${(timing.source.channelOffsets[selectedChannel.id] || 0) > 0 ? "+" : ""}${timing.source.channelOffsets[selectedChannel.id] || 0} minutes`} onPress={() => timing.setChannelOffsetMinutes(selectedChannel.id, cycleOffset(timing.source.channelOffsets[selectedChannel.id] || 0))} />
         <View style={styles.actions}><Button label={draft.overrides[selectedChannel.id] ? "Change assignment" : "Choose from list"} onPress={() => setAssignDrawerOpen(true)} /></View>
       </View> : null}
       {message ? <Text style={styles.status}>{message}</Text> : null}

@@ -8,7 +8,10 @@ import { syncPlaylistEpg } from "./playlistEpg";
 
 export type PlaylistGuideHealth = {
   playlistId: string; name: string; channels: number; matched: number; unmatched: number;
-  primaryMatched: number; customMatched: number; sourceIds: string[];
+  primaryMatched: number; customMatched: number; sourceIds: string[]; indexedChannels: number;
+  matchMethods: Record<string, number>;
+  matchExplanations: { channelId: string; sourceId: string; xmltvId: string; reason: string; hasPrograms: boolean }[];
+  unmatchedChannelIds: string[];
 };
 
 async function publish(channels: Channel[]): Promise<void> {
@@ -64,7 +67,7 @@ export async function readPlaylistGuideHealth(channels: Channel[]): Promise<Play
     channelIds: channels.filter((channel) => playlistOwner(channel) === row.id).map((channel) => channel.id),
   }));
   const module = NativeModules.CharmCustomEpg;
-  if (typeof module?.getPlaylistGuideHealth !== "function") return groups.map((row) => ({ ...row, channels: row.channelIds.length, matched: 0, unmatched: row.channelIds.length, primaryMatched: 0, customMatched: 0, sourceIds: [] }));
+  if (typeof module?.getPlaylistGuideHealth !== "function") return groups.map((row) => ({ ...row, channels: row.channelIds.length, matched: 0, unmatched: row.channelIds.length, primaryMatched: 0, customMatched: 0, sourceIds: [], indexedChannels: 0, matchMethods: {}, matchExplanations: [], unmatchedChannelIds: row.channelIds.slice(0, 80) }));
   const rows = await module.getPlaylistGuideHealth(groups);
   return Array.isArray(rows) ? rows : [];
 }

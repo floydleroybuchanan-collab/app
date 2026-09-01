@@ -60,6 +60,110 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod fun removeListeners(count: Int) = Unit
 
   @ReactMethod
+  fun configureBackgroundUpdatePolicy(unmetered: Boolean, charging: Boolean, idle: Boolean, promise: Promise) {
+    try {
+      EpgUpdateScheduler.configure(reactContext, unmetered, charging, idle)
+      promise.resolve(true)
+    } catch (t: Throwable) {
+      promise.reject("EPG_BACKGROUND_POLICY_FAILED", t.message ?: "Could not save background update policy", t)
+    }
+  }
+
+  @ReactMethod
+  fun configureSourceTiming(sourceId: String, serverMinutes: Double, playlistMinutes: Double, globalMinutes: Double, channelOffsets: ReadableMap, promise: Promise) {
+    refreshExecutor.execute {
+      try {
+        val id = if (sourceId.trim() == DEFAULT_PLAYLIST_ID) DEFAULT_PLAYLIST_ID else CustomEpgStoreRegistry.normalizeSourceId(sourceId)
+        val previous = controlDao.source(id)
+        controlDao.putSource(EpgSourceEntity(
+          playlistId = id,
+          url = previous?.url.orEmpty(),
+          enabled = previous?.enabled ?: false,
+          refreshHours = previous?.refreshHours ?: 12,
+          serverOffsetMinutes = serverMinutes.toInt().coerceIn(-1440, 1440),
+          playlistOffsetMinutes = playlistMinutes.toInt().coerceIn(-1440, 1440),
+          updatedAtSeconds = System.currentTimeMillis() / 1000L,
+        ))
+        controlDao.clearChannelOffsets(id)
+        val offsets = ArrayList<EpgChannelOffsetEntity>()
+        val iterator = channelOffsets.keySetIterator()
+        while (iterator.hasNextKey()) {
+          val channelId = iterator.nextKey()
+          if (channelOffsets.getType(channelId) != com.facebook.react.bridge.ReadableType.Number) continue
+          offsets.add(EpgChannelOffsetEntity(id, channelId, channelOffsets.getDouble(channelId).toInt().coerceIn(-1440, 1440)))
+          if (offsets.size >= MAX_USER_BINDINGS) break
+        }
+        if (offsets.isNotEmpty()) controlDao.putChannelOffsets(offsets)
+        GuideTimingPolicy.setGlobalOffsetMinutes(reactContext, globalMinutes.toInt())
+        promise.resolve(true)
+      } catch (t: Throwable) {
+        promise.reject("EPG_TIMING_CONFIG_FAILED", t.message ?: "Could not save Guide timing", t)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun getUpdateDiagnostics(promise: Promise) {
+    queryExecutor.execute {
+      try {
+        val states = Arguments.createArray()
+        for (state in controlDao.allImportStates()) states.pushMap(Arguments.createMap().apply {
+          putString("sourceId", state.playlistId)
+          putString("state", state.state)
+          putInt("attemptCount", state.attemptCount)
+          putDouble("lastAttemptSeconds", state.lastAttemptSeconds.toDouble())
+          putDouble("lastSuccessSeconds", state.lastSuccessSeconds.toDouble())
+          putDouble("nextRetrySeconds", state.nextRetrySeconds.toDouble())
+          putDouble("lastDurationMs", state.lastDurationMs.toDouble())
+          putDouble("lastProgrammeCount", state.lastProgrammeCount.toDouble())
+          putString("lastTrigger", state.lastTrigger)
+          putString("lastError", state.lastError)
+        })
+        val history = Arguments.createArray()
+        for (row in controlDao.recentUpdateHistory(30)) history.pushMap(Arguments.createMap().apply {
+          putDouble("id", row.id.toDouble())
+          putString("sourceId", row.sourceId)
+          putString("kind", row.kind)
+          putString("state", row.state)
+          putString("trigger", row.trigger)
+          putInt("attempt", row.attempt)
+          putDouble("startedAtSeconds", row.startedAtSeconds.toDouble())
+          putDouble("finishedAtSeconds", row.finishedAtSeconds.toDouble())
+          putDouble("rowCount", row.rowCount.toDouble())
+          putString("error", row.error)
+        })
+        promise.resolve(Arguments.createMap().apply {
+          putArray("states", states)
+          putArray("history", history)
+        })
+      } catch (t: Throwable) {
+        promise.reject("EPG_UPDATE_DIAGNOSTICS_FAILED", t.message ?: "Could not read update diagnostics", t)
+      }
+    }
+  }
+
+  @ReactMethod
+  fun startExternalUpdateJob(sourceId: String, kind: String, trigger: String, promise: Promise) {
+    queryExecutor.execute {
+      try {
+        val id = controlDao.addUpdateHistory(EpgUpdateHistoryEntity(sourceId = sourceId.trim().take(80), kind = kind.trim().take(24), state = "running", trigger = trigger.trim().take(24), attempt = 1, startedAtSeconds = System.currentTimeMillis() / 1000L))
+        promise.resolve(id.toDouble())
+      } catch (t: Throwable) { promise.reject("UPDATE_JOB_START_FAILED", t.message ?: "Could not record update job", t) }
+    }
+  }
+
+  @ReactMethod
+  fun finishExternalUpdateJob(id: Double, state: String, rowCount: Double, error: String, promise: Promise) {
+    queryExecutor.execute {
+      try {
+        controlDao.finishUpdateHistory(id.toLong(), state.trim().take(32), System.currentTimeMillis() / 1000L, rowCount.toLong().coerceAtLeast(0), error.trim().take(500))
+        controlDao.trimUpdateHistory(100)
+        promise.resolve(true)
+      } catch (t: Throwable) { promise.reject("UPDATE_JOB_FINISH_FAILED", t.message ?: "Could not finish update job", t) }
+    }
+  }
+
+  @ReactMethod
   fun configureSource(
     playlistId: String,
     url: String,
@@ -78,8 +182,11 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           EpgSourceEntity(
             playlistId = id,
             url = url.trim(),
-            enabled = refreshHours > 0.0,
-            refreshHours = refreshHours.toInt().coerceIn(1, 168),
+            // Guide visibility and automatic scheduling are separate choices.
+            // A zero-hour interval means manual updates; it must not hide an
+            // already downloaded Guide from the canvas.
+            enabled = controlDao.source(id)?.enabled ?: url.isNotBlank(),
+            refreshHours = refreshHours.toInt().coerceIn(0, 168),
             serverOffsetMinutes = serverOffsetMinutes.toInt().coerceIn(-1440, 1440),
             playlistOffsetMinutes = playlistOffsetMinutes.toInt().coerceIn(-1440, 1440),
             updatedAtSeconds = System.currentTimeMillis() / 1000L,
@@ -119,6 +226,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
       try {
         val now = System.currentTimeMillis() / 1000L
         val primary = controlDao.source(DEFAULT_PLAYLIST_ID)
+        val primaryUnchanged = primary != null && primary.enabled == primaryEnabled
         controlDao.putSource(
           EpgSourceEntity(
             playlistId = DEFAULT_PLAYLIST_ID,
@@ -127,19 +235,22 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
             refreshHours = primary?.refreshHours ?: 12,
             serverOffsetMinutes = primary?.serverOffsetMinutes ?: 0,
             playlistOffsetMinutes = primary?.playlistOffsetMinutes ?: 0,
-            updatedAtSeconds = now,
+            updatedAtSeconds = if (primaryUnchanged) primary?.updatedAtSeconds ?: now else now,
           )
         )
         val previousUser = controlDao.source(USER_SOURCE_ID)
+        val cleanUserUrl = userUrl.trim()
+        val userSourceEnabled = userEnabled && cleanUserUrl.isNotEmpty()
+        val userUnchanged = previousUser != null && previousUser.url == cleanUserUrl && previousUser.enabled == userSourceEnabled
         controlDao.putSource(
           EpgSourceEntity(
             playlistId = USER_SOURCE_ID,
-            url = userUrl.trim(),
-            enabled = userEnabled && userUrl.trim().isNotEmpty(),
+            url = cleanUserUrl,
+            enabled = userSourceEnabled,
             refreshHours = previousUser?.refreshHours ?: 12,
             serverOffsetMinutes = previousUser?.serverOffsetMinutes ?: 0,
             playlistOffsetMinutes = previousUser?.playlistOffsetMinutes ?: 0,
-            updatedAtSeconds = now,
+            updatedAtSeconds = if (userUnchanged) previousUser?.updatedAtSeconds ?: now else now,
           )
         )
         val bindings = ArrayList<EpgChannelBindingEntity>()
@@ -165,12 +276,13 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
       try {
         val now = System.currentTimeMillis() / 1000L
         val primary = controlDao.source(DEFAULT_PLAYLIST_ID)
+        val primaryUpdatedAt = if (primary != null && primary.enabled == primaryEnabled) primary.updatedAtSeconds else now
         controlDao.putSource(EpgSourceEntity(
           playlistId = DEFAULT_PLAYLIST_ID, url = primary?.url.orEmpty(), enabled = primaryEnabled,
           refreshHours = primary?.refreshHours ?: 12,
           serverOffsetMinutes = primary?.serverOffsetMinutes ?: 0,
           playlistOffsetMinutes = primary?.playlistOffsetMinutes ?: 0,
-          updatedAtSeconds = now,
+          updatedAtSeconds = primaryUpdatedAt,
         ))
         val keep = LinkedHashSet<String>()
         for (index in 0 until minOf(sources.size(), MAX_USER_SOURCES)) {
@@ -179,12 +291,14 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           val url = row.getString("url").orEmpty().trim()
           val enabled = row.hasKey("enabled") && row.getBoolean("enabled") && url.isNotEmpty()
           val previous = controlDao.source(sourceId)
+          val refreshHours = if (row.hasKey("refreshHours")) row.getInt("refreshHours").coerceIn(0, 24) else previous?.refreshHours ?: 12
+          val unchanged = previous != null && previous.url == url && previous.enabled == enabled && previous.refreshHours == refreshHours
           controlDao.putSource(EpgSourceEntity(
             playlistId = sourceId, url = url, enabled = enabled,
-            refreshHours = if (row.hasKey("refreshHours")) row.getInt("refreshHours").coerceIn(0, 24) else previous?.refreshHours ?: 12,
+            refreshHours = refreshHours,
             serverOffsetMinutes = previous?.serverOffsetMinutes ?: 0,
             playlistOffsetMinutes = previous?.playlistOffsetMinutes ?: 0,
-            updatedAtSeconds = now,
+            updatedAtSeconds = if (unchanged) previous.updatedAtSeconds else now,
           ))
           keep.add(sourceId)
         }
@@ -255,6 +369,11 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
       activeChannelNames.getString(i)?.let(::normalizeGuideKey)?.takeIf { it.isNotEmpty() }?.let(activeNames::add)
     }
     refreshExecutor.execute {
+      val startedMs = System.currentTimeMillis()
+      val previousState = runCatching { controlDao.importState(DEFAULT_PLAYLIST_ID) }.getOrNull()
+      val attempt = (previousState?.attemptCount ?: 0) + 1
+      val historyId = runCatching { controlDao.addUpdateHistory(EpgUpdateHistoryEntity(sourceId = DEFAULT_PLAYLIST_ID, kind = "epg", state = "running", trigger = "manual", attempt = attempt, startedAtSeconds = startedMs / 1000L)) }.getOrDefault(0L)
+      runCatching { controlDao.putImportState(EpgImportStateEntity(playlistId = DEFAULT_PLAYLIST_ID, lastAttemptSeconds = startedMs / 1000L, lastSuccessSeconds = previousState?.lastSuccessSeconds ?: 0L, state = "running", attemptCount = attempt, lastProgrammeCount = previousState?.lastProgrammeCount ?: 0L, lastTrigger = "manual")) }
       try {
         val fallbackBlackout = reactContext.getSharedPreferences(DB_RECOVERY_PREFS, 0)
           .getLong(DB_BLACKOUT_UNTIL_KEY, 0L)
@@ -275,9 +394,10 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         val now = System.currentTimeMillis()
         val sourceConfig = controlDao.source(DEFAULT_PLAYLIST_ID)
         val baseOffsetMs = ((sourceConfig?.serverOffsetMinutes ?: 0) +
-          (sourceConfig?.playlistOffsetMinutes ?: 0)).toLong() * 60_000L
-        val channelOffsetMs = controlDao.channelOffsets(DEFAULT_PLAYLIST_ID)
-          .associate { it.channelId to it.offsetMinutes.toLong() * 60_000L }
+          (sourceConfig?.playlistOffsetMinutes ?: 0) + GuideTimingPolicy.globalOffsetMinutes(reactContext)).toLong() * 60_000L
+        val configuredOffsets = controlDao.channelOffsets(DEFAULT_PLAYLIST_ID).associate { it.channelId to it.offsetMinutes.toLong() * 60_000L }
+        val channelOffsetMs = HashMap<String, Long>(configuredOffsets)
+        for (row in database.activePlaylistChannels()) configuredOffsets[row.playlistId]?.let { channelOffsetMs[row.matchedXmltvId] = it }
         val minStop = now - guideHistoryMs
         val maxStart = now + GUIDE_WINDOW_MS
         val channelLogos = LinkedHashMap<String, String>()
@@ -303,8 +423,12 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           emitImportProgress("indexing", 0.9)
         } catch (_: EpgNotModifiedException) {
           val guideEpoch = database.getMeta("guide_epoch")?.toLongOrNull() ?: 0L
+          val count = database.count()
+          val finishedMs = System.currentTimeMillis()
+          controlDao.putImportState(EpgImportStateEntity(playlistId = DEFAULT_PLAYLIST_ID, lastAttemptSeconds = startedMs / 1000L, lastSuccessSeconds = finishedMs / 1000L, state = "not_modified", attemptCount = 0, lastDurationMs = finishedMs - startedMs, lastProgrammeCount = count, lastTrigger = "manual"))
+          if (historyId > 0L) controlDao.finishUpdateHistory(historyId, "not_modified", finishedMs / 1000L, count, "")
           val result = Arguments.createMap().apply {
-            putDouble("count", database.count().toDouble())
+            putDouble("count", count.toDouble())
             putDouble("windowStartMs", (now - guideHistoryMs).toDouble())
             putDouble("windowEndMs", maxStart.toDouble())
             putDouble("guideEpoch", guideEpoch.toDouble())
@@ -347,8 +471,14 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
             playlistId = DEFAULT_PLAYLIST_ID,
             lastAttemptSeconds = now / 1000L,
             lastSuccessSeconds = now / 1000L,
+            state = "succeeded",
+            attemptCount = 0,
+            lastDurationMs = System.currentTimeMillis() - startedMs,
+            lastProgrammeCount = database.count(),
+            lastTrigger = "manual",
           )
         )
+        if (historyId > 0L) controlDao.finishUpdateHistory(historyId, "succeeded", System.currentTimeMillis() / 1000L, database.count(), "")
 
         val deleted = database.deleteExpired(now - guideHistoryMs)
         // Rare idle reclaim only after a large expiry — never every refresh.
@@ -386,9 +516,16 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
               lastSuccessSeconds = previous?.lastSuccessSeconds ?: 0L,
               blackoutUntilSeconds = if (isCatastrophicDatabaseFailure(t))
                 System.currentTimeMillis() / 1000L + 3600L else previous?.blackoutUntilSeconds ?: 0L,
-              lastError = t.message.orEmpty().take(500),
+              lastError = EpgDiagnosticSafety.message(t),
+              state = "failed",
+              attemptCount = attempt,
+              lastDurationMs = System.currentTimeMillis() - startedMs,
+              lastProgrammeCount = previous?.lastProgrammeCount ?: 0L,
+              lastTrigger = "manual",
             )
           )
+          if (historyId > 0L) controlDao.finishUpdateHistory(historyId, "failed", System.currentTimeMillis() / 1000L, 0L, EpgDiagnosticSafety.message(t))
+          controlDao.trimUpdateHistory(100)
         } catch (_: Throwable) {}
         if (isCatastrophicDatabaseFailure(t)) {
           try {

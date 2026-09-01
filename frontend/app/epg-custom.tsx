@@ -20,6 +20,7 @@ import { invalidateGuideOwnershipCaches } from "@/src/source";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { type SourceRefreshIntervalHours, useSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { formatRelativeAge } from "@/src/utils/time";
+import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
 
 const PLAYLIST_PAGE_SIZE = 60;
 const XMLTV_PAGE_SIZE = 60;
@@ -35,6 +36,7 @@ export default function CustomEpgScreen() {
   const { channels } = useStore();
   const prefs = useEpgSourcePreferences();
   const refreshPrefs = useSourceRefreshPreferences();
+  const timing = useGuideTimingPreferences("user");
   const [nameDraft, setNameDraft] = useState(prefs.userName);
   const [urlDraft, setUrlDraft] = useState(prefs.userUrl);
   const [urlTouched, setUrlTouched] = useState(false);
@@ -328,6 +330,8 @@ export default function CustomEpgScreen() {
               <Text style={styles.help}>These controls use the same single background refresh owner as the provided guide, so custom and provided EPG updates cannot overlap or fight for SQLite/RAM.</Text>
               <CycleSetting<SourceRefreshIntervalHours> label="Update interval" value={refreshPrefs.epgHours} values={[0, 2, 4, 6, 12, 24]} format={(value) => value === 0 ? "Manual only" : `${value} hours`} onChange={refreshPrefs.setEpgHours} />
               <CycleSetting<1 | 3 | 7 | 14> label="Past days to keep EPG" value={refreshPrefs.epgPastDays} values={[1, 3, 7, 14]} format={(value) => `${value} day${value === 1 ? "" : "s"}`} onChange={refreshPrefs.setEpgPastDays} />
+              <CycleSetting<number> label="Source / server time offset" value={timing.source.serverOffsetMinutes} values={[-120, -60, -30, 0, 30, 60, 120]} format={(value) => `${value > 0 ? "+" : ""}${value} minutes`} onChange={timing.setServerOffsetMinutes} />
+              <CycleSetting<number> label="Playlist time offset" value={timing.source.playlistOffsetMinutes} values={[-120, -60, -30, 0, 30, 60, 120]} format={(value) => `${value > 0 ? "+" : ""}${value} minutes`} onChange={timing.setPlaylistOffsetMinutes} />
               <Pressable onPress={() => refreshPrefs.setUpdateEpgOnAppStart(!refreshPrefs.updateEpgOnAppStart)} style={({ focused }: any) => [styles.row, focused && styles.focused]}><Text style={styles.rowText}>Update on app start</Text><Text style={styles.value}>{refreshPrefs.updateEpgOnAppStart ? "On" : "Off"}</Text></Pressable>
               <Pressable onPress={() => refreshPrefs.setUpdateEpgOnPlaylistChange(!refreshPrefs.updateEpgOnPlaylistChange)} style={({ focused }: any) => [styles.row, focused && styles.focused]}><Text style={styles.rowText}>Update on playlist change</Text><Text style={styles.value}>{refreshPrefs.updateEpgOnPlaylistChange ? "On" : "Off"}</Text></Pressable>
               <Text style={styles.help}>Latest update: {prefs.userLastRefreshAt ? formatRelativeAge(prefs.userLastRefreshAt) : "Never"}</Text>
@@ -363,6 +367,7 @@ export default function CustomEpgScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>2 · EPG channel for {selectedChannel.name}</Text>
                 <Text style={styles.help}>Current owner: {currentOverride ? `Custom EPG · ${currentOverride}` : prefs.primaryEnabled ? "Charm EPG" : "No EPG"}</Text>
+                <CycleSetting<number> label="This channel time offset" value={timing.source.channelOffsets[selectedChannel.id] || 0} values={[-120, -60, -30, 0, 30, 60, 120]} format={(value) => `${value > 0 ? "+" : ""}${value} minutes`} onChange={(value) => timing.setChannelOffsetMinutes(selectedChannel.id, value)} />
                 <View style={styles.actions}>
                   <Pressable onPress={() => setAssignDrawerOpen(true)} style={({ focused }: any) => [styles.action, focused && styles.focused]} testID="epg-custom-open-picker">
                     <Text style={styles.actionText}>{currentOverride ? "Change assignment" : "Choose from list"}</Text>

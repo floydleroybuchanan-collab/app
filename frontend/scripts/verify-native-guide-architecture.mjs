@@ -9,7 +9,7 @@ require(!guide.includes("TimelineGrid") && !guide.includes("BoxGrid"), "retired 
 require(!existsSync(new URL("../src/components/TimelineGrid.tsx", import.meta.url)), "retired TimelineGrid still exists");
 require(!existsSync(new URL("../src/components/BoxGrid.tsx", import.meta.url)), "retired BoxGrid still exists");
 require(!existsSync(new URL("../src/utils/tvGuideFocusLock.ts", import.meta.url)), "retired focus registry still exists");
-require(nativeView.includes("database.queryGuideWindow"), "native Guide is not backed by SQLite");
+require(nativeView.includes("combinedGuide.queryGuideWindow"), "native Guide is not backed by the combined SQLite guide repository");
 require(nativeView.includes("moveVelocity"), "velocity-aware runway is missing");
 if (failures.length) { failures.forEach(value => console.error(`ARCHITECTURE ERROR: ${value}`)); process.exit(1); }
 console.log("Native Guide architecture verified");

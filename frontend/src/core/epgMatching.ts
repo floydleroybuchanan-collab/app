@@ -18,9 +18,13 @@ export function channelMatchIdentity(channel: Pick<Channel, "id" | "raw_tvg_id" 
 export type XmltvMatchIndexes = {
   idByNormalizedId: Map<string, string>;
   idByNormalizedName: Map<string, string>;
+  idByCallsign: Map<string, string>;
+  idByFuzzySignature: Map<string, string>;
   /** Normalized keys that map to more than one XMLTV channel — never invent a winner. */
   ambiguousNormalizedIds: Set<string>;
   ambiguousNormalizedNames: Set<string>;
+  ambiguousCallsigns: Set<string>;
+  ambiguousFuzzySignatures: Set<string>;
   idsWithPrograms: Set<string>;
   /** Stable compact fingerprint of programme-bearing ids + names (not logos). */
   fingerprint: string;
@@ -30,7 +34,7 @@ export type EpgMatchOptions = {
   /** Messy providers: only exact/normalized tvg-id (and playlist id) — never name. */
   preferTvgIdOnly?: boolean;
   /** Which available logo source wins; the other remains as fallback. */
-  logoPriority?: "playlist" | "epg";
+  logoPriority?: "playlist" | "epg" | "local";
 };
 
 export type PlaylistXmltvMatch = {
@@ -47,6 +51,22 @@ export type EpgMatchQuality = {
 };
 
 const AMBIGUOUS_SENTINEL = "\0ambiguous";
+const MAX_FUZZY_SIGNATURES = 120_000;
+
+function callsignKey(value: string): string {
+  const key = normalizeGuideKey(value)
+    .replace(/^(us|ca)/, "")
+    .replace(/(tv|east|west)$/, "");
+  return key.length >= 3 && key.length <= 10 && /[a-z]/.test(key) ? key : "";
+}
+
+function fuzzySignatures(value: string): string[] {
+  const key = normalizeGuideKey(value);
+  if (key.length < 6) return [];
+  const result = new Set([key]);
+  for (let index = 0; index < key.length; index += 1) result.add(key.slice(0, index) + key.slice(index + 1));
+  return Array.from(result);
+}
 
 function setUniqueOrAmbiguous(map: Map<string, string>, key: string, id: string): void {
   if (!key) return;
@@ -100,7 +120,10 @@ export function buildXmltvMatchIndexes(input: {
 }): XmltvMatchIndexes {
   const idByNormalizedId = new Map<string, string>();
   const idByNormalizedName = new Map<string, string>();
+  const idByCallsign = new Map<string, string>();
+  const idByFuzzySignature = new Map<string, string>();
   const idsWithPrograms = new Set<string>();
+  let fuzzySignatureCount = 0;
   for (const id of input.idsWithPrograms || []) {
     if (typeof id !== "string") continue;
     const value = id.trim();
@@ -115,27 +138,43 @@ export function buildXmltvMatchIndexes(input: {
     if (!id.trim()) continue;
     setUniqueOrAmbiguous(idByNormalizedId, normalizeGuideKey(id), id);
     setUniqueOrAmbiguous(idByNormalizedName, normalizeGuideKey(name), id);
+    setUniqueOrAmbiguous(idByCallsign, callsignKey(name), id);
+    for (const signature of fuzzySignatures(name)) {
+      if (fuzzySignatureCount >= MAX_FUZZY_SIGNATURES) break;
+      setUniqueOrAmbiguous(idByFuzzySignature, signature, id);
+      fuzzySignatureCount += 1;
+    }
   }
 
   const ambiguousNormalizedIds = new Set<string>();
   const ambiguousNormalizedNames = new Set<string>();
+  const ambiguousCallsigns = new Set<string>();
+  const ambiguousFuzzySignatures = new Set<string>();
   for (const [key, value] of idByNormalizedId) {
     if (value === AMBIGUOUS_SENTINEL) ambiguousNormalizedIds.add(key);
   }
   for (const [key, value] of idByNormalizedName) {
     if (value === AMBIGUOUS_SENTINEL) ambiguousNormalizedNames.add(key);
   }
+  for (const [key, value] of idByCallsign) if (value === AMBIGUOUS_SENTINEL) ambiguousCallsigns.add(key);
+  for (const [key, value] of idByFuzzySignature) if (value === AMBIGUOUS_SENTINEL) ambiguousFuzzySignatures.add(key);
   // Drop sentinels so lookups never return a fake channel id.
   for (const key of ambiguousNormalizedIds) idByNormalizedId.delete(key);
   for (const key of ambiguousNormalizedNames) idByNormalizedName.delete(key);
+  for (const key of ambiguousCallsigns) idByCallsign.delete(key);
+  for (const key of ambiguousFuzzySignatures) idByFuzzySignature.delete(key);
 
   const fingerprint = compactIndexFingerprint(idsWithPrograms, input.channelNames || {});
 
   return {
     idByNormalizedId,
     idByNormalizedName,
+    idByCallsign,
+    idByFuzzySignature,
     ambiguousNormalizedIds,
     ambiguousNormalizedNames,
+    ambiguousCallsigns,
+    ambiguousFuzzySignatures,
     idsWithPrograms,
     fingerprint,
   };
@@ -168,8 +207,12 @@ export function matchPlaylistChannelToXmltv(
   const {
     idByNormalizedId,
     idByNormalizedName,
+    idByCallsign,
+    idByFuzzySignature,
     ambiguousNormalizedIds,
     ambiguousNormalizedNames,
+    ambiguousCallsigns,
+    ambiguousFuzzySignatures,
     idsWithPrograms,
   } = indexes;
   const preferTvgIdOnly = !!options.preferTvgIdOnly;
@@ -193,10 +236,19 @@ export function matchPlaylistChannelToXmltv(
   const nameNorm = preferTvgIdOnly
     ? { id: "", ambiguous: false }
     : resolveNormalizedId(normalizeGuideKey(channel.name), idByNormalizedName, ambiguousNormalizedNames);
+  const callsign = preferTvgIdOnly
+    ? { id: "", ambiguous: false }
+    : resolveNormalizedId(callsignKey(channel.name), idByCallsign, ambiguousCallsigns);
+  const fuzzyHits = preferTvgIdOnly
+    ? []
+    : fuzzySignatures(channel.name).map((key) => resolveNormalizedId(key, idByFuzzySignature, ambiguousFuzzySignatures));
+  const fuzzyIds = Array.from(new Set(fuzzyHits.map((hit) => hit.id).filter(Boolean)));
+  const fuzzyAmbiguous = fuzzyIds.length > 1 || fuzzyHits.some((hit) => hit.ambiguous);
+  const fuzzy = { id: fuzzyIds.length === 1 && !fuzzyAmbiguous ? fuzzyIds[0] : "", ambiguous: fuzzyAmbiguous };
 
   const normalizedIdMatch = tvgNorm.id || idNorm.id || tvgTail.id || "";
   const nameMatch = nameNorm.id || "";
-  const hitAmbiguous = tvgNorm.ambiguous || idNorm.ambiguous || tvgTail.ambiguous || nameNorm.ambiguous;
+  const hitAmbiguous = tvgNorm.ambiguous || idNorm.ambiguous || tvgTail.ambiguous || nameNorm.ambiguous || callsign.ambiguous || fuzzy.ambiguous;
 
   let sourceId = "";
   let ambiguous = false;
@@ -210,6 +262,10 @@ export function matchPlaylistChannelToXmltv(
     sourceId = normalizedIdMatch;
   } else if (nameMatch && idsWithPrograms.has(nameMatch)) {
     sourceId = nameMatch;
+  } else if (callsign.id && idsWithPrograms.has(callsign.id)) {
+    sourceId = callsign.id;
+  } else if (fuzzy.id && idsWithPrograms.has(fuzzy.id)) {
+    sourceId = fuzzy.id;
   } else if (hitAmbiguous) {
     ambiguous = true;
   }
@@ -303,7 +359,7 @@ export function applyLogoOnlyUpdates(
   logos: Record<string, string>,
   previousFingerprint: string | undefined,
   nextFingerprint: string,
-  logoPriority: "playlist" | "epg" = "playlist",
+  logoPriority: "playlist" | "epg" | "local" = "playlist",
 ): Channel[] | null {
   if (!previousFingerprint || previousFingerprint !== nextFingerprint) return null;
   let changed = false;

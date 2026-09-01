@@ -7,7 +7,7 @@ import { getMultiEpgSources, saveMultiEpgSource } from "@/src/core/multiEpgSourc
 import { isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { getSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { syncNativeCustomEpgPolicy } from "@/src/core/customEpgPolicy";
-import { readCombinedPlaylists } from "@/src/core/playlistRegistry";
+import { readCombinedPlaylists, refreshPlaylists } from "@/src/core/playlistRegistry";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import { reloadPlaylistCatalog } from "@/src/source.native";
 
@@ -57,6 +57,13 @@ export function SourceRefreshScheduler() {
         if (isInitialCheck) {
           await refreshSource(true);
         } else {
+          // Playlist jobs complete before dependent EPG association/import work.
+          // A failed source keeps its previous revision, so the following EPG
+          // pass never observes a half-written catalog.
+          const scheduledChannels = await refreshPlaylists(undefined, true);
+          if (!screenIsSafe()) return;
+          if (prefs.updateEpgOnPlaylistChange) await syncPlaylistEpg(scheduledChannels, false);
+          await reloadPlaylistCatalog();
           const nativeDue = await consumeNativeScheduledEpgRefresh();
           if (!screenIsSafe()) return;
           if (nativeDue) await refreshEpgOnly();

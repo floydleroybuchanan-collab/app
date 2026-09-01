@@ -19,6 +19,11 @@ type CharmEpgModule = {
   fetchPlaylist?(url: string): Promise<NativePlaylistResult>;
   getStoredPlaylist?(): Promise<{ channels: Channel[]; playlistEpoch?: number; playlistRefreshedAt?: number; guideEpoch?: number; guideRefreshedAt?: number; epgProgramCount?: number; primaryGuideRefreshedAt?: number; userGuideRefreshedAt?: number; primaryEpgProgramCount?: number; userEpgProgramCount?: number }>;
   configureSource?(playlistId: string, url: string, refreshHours: number, serverOffsetMinutes: number, playlistOffsetMinutes: number, channelOffsets: Record<string, number>, pastDays: number): Promise<boolean>;
+  configureBackgroundUpdatePolicy?(unmetered: boolean, charging: boolean, idle: boolean): Promise<boolean>;
+  configureSourceTiming?(sourceId: string, serverMinutes: number, playlistMinutes: number, globalMinutes: number, channelOffsets: Record<string, number>): Promise<boolean>;
+  getUpdateDiagnostics?(): Promise<NativeUpdateDiagnostics>;
+  startExternalUpdateJob?(sourceId: string, kind: string, trigger: string): Promise<number>;
+  finishExternalUpdateJob?(id: number, state: string, rowCount: number, error: string): Promise<boolean>;
   consumeScheduledRefreshDue?(): Promise<boolean>;
   refresh(url: string, allowNotModified: boolean, activeXmltvIds: string[], activeChannelNames: string[]): Promise<NativeRefreshResult>;
   getWindow(startMs: number, endMs: number, channelIds: string[]): Promise<NativeWindow>;
@@ -36,9 +41,13 @@ type CharmEpgModule = {
   clear(): Promise<boolean>;
 };
 
+export type NativeUpdateState = { sourceId: string; state: string; attemptCount: number; lastAttemptSeconds: number; lastSuccessSeconds: number; nextRetrySeconds: number; lastDurationMs: number; lastProgrammeCount: number; lastTrigger: string; lastError: string };
+export type NativeUpdateHistory = { id: number; sourceId: string; kind: string; state: string; trigger: string; attempt: number; startedAtSeconds: number; finishedAtSeconds: number; rowCount: number; error: string };
+export type NativeUpdateDiagnostics = { states: NativeUpdateState[]; history: NativeUpdateHistory[] };
+
 type CharmCustomEpgModule = {
   refreshAssociatedSourceGuide?(sourceId: string, url: string, ids: string[]): Promise<{ count: number; programmeSwapSucceeded?: boolean }>;
-  replaceAutomaticBindings?(rows: { channelId: string; xmltvId: string; sourceIds: string[] }[]): Promise<boolean>;
+  replaceAutomaticBindings?(rows: { channelId: string; channelName?: string; channelLogo?: string; xmltvId: string; sourceIds: string[] }[]): Promise<boolean>;
   setGuideChannelBinding?(channelId: string, xmltvId: string): Promise<number>;
   listUserGuideChannels?(query: string, offset: number, limit: number): Promise<{ total: number; rows: { id: string; name: string }[] }>;
   refreshUserGuide?(url: string): Promise<{ count: number; directoryCount?: number; bindingCount?: number; guideEpoch?: number; guideRefreshedAt?: number; programmeSwapSucceeded?: boolean }>;
@@ -125,6 +134,23 @@ export async function refreshNativeEpg(url: string, allowNotModified: boolean, a
 export async function configureNativeEpgSource(url: string, refreshHours: number, serverOffsetMinutes = 0, playlistOffsetMinutes = 0, channelOffsets: Record<string, number> = {}, pastDays = 7): Promise<void> {
   if (!nativeModule?.configureSource) return; await nativeModule.configureSource("default", url, refreshHours, serverOffsetMinutes, playlistOffsetMinutes, channelOffsets, pastDays);
 }
+export async function configureNativeBackgroundUpdatePolicy(unmetered: boolean, charging: boolean, idle: boolean): Promise<void> {
+  if (nativeModule?.configureBackgroundUpdatePolicy) await nativeModule.configureBackgroundUpdatePolicy(unmetered, charging, idle);
+}
+export async function configureNativeSourceTiming(sourceId: string, serverMinutes: number, playlistMinutes: number, globalMinutes: number, channelOffsets: Record<string, number>): Promise<void> {
+  if (nativeModule?.configureSourceTiming) await nativeModule.configureSourceTiming(sourceId, serverMinutes, playlistMinutes, globalMinutes, channelOffsets);
+}
+export async function readNativeUpdateDiagnostics(): Promise<NativeUpdateDiagnostics> {
+  if (!nativeModule?.getUpdateDiagnostics) return { states: [], history: [] };
+  const value = await nativeModule.getUpdateDiagnostics();
+  return { states: Array.isArray(value?.states) ? value.states : [], history: Array.isArray(value?.history) ? value.history : [] };
+}
+export async function startNativeUpdateJob(sourceId: string, kind: "playlist" | "epg", trigger = "manual"): Promise<number> {
+  return nativeModule?.startExternalUpdateJob ? Number(await nativeModule.startExternalUpdateJob(sourceId, kind, trigger)) || 0 : 0;
+}
+export async function finishNativeUpdateJob(id: number, state: string, rowCount = 0, error = ""): Promise<void> {
+  if (id > 0 && nativeModule?.finishExternalUpdateJob) await nativeModule.finishExternalUpdateJob(id, state, rowCount, error);
+}
 export async function consumeNativeScheduledEpgRefresh(): Promise<boolean> { return nativeModule?.consumeScheduledRefreshDue?.() ?? false; }
 
 export async function searchNativeEpg(query: string, limit = 24): Promise<{ channelId: string; program: Program }[]> {
@@ -209,7 +235,7 @@ export async function listNativeUserGuideChannels(query = "", offset = 0, limit 
 export async function refreshNativeUserGuide(url: string): Promise<{ count: number; channelNames?: Record<string, string>; channelIdsWithPrograms?: string[]; directoryCount?: number; bindingCount?: number; guideEpoch?: number; guideRefreshedAt?: number; programmeSwapSucceeded?: boolean }> { const refreshModule = customEpgModule?.refreshUserGuide ? customEpgModule : nativeModule; if (!refreshModule?.refreshUserGuide) throw new Error("Custom native EPG engine is unavailable"); return refreshModule.refreshUserGuide(url); }
 export async function clearNativeEpg(): Promise<void> { if (ramModule) await ramModule.clearMemory(); if (nativeModule) await nativeModule.clear(); }
 
-export async function replaceAutomaticPlaylistBindings(rows: { channelId: string; xmltvId: string; sourceIds: string[] }[]): Promise<void> {
+export async function replaceAutomaticPlaylistBindings(rows: { channelId: string; channelName?: string; channelLogo?: string; xmltvId: string; sourceIds: string[] }[]): Promise<void> {
   if (!customEpgModule?.replaceAutomaticBindings) throw new Error("Playlist EPG associations require the updated native app.");
   await customEpgModule.replaceAutomaticBindings(rows);
   ownershipRequiresSqlite = true;

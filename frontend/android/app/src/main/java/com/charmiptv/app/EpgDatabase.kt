@@ -337,6 +337,20 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     return ids
   }
 
+  /** XMLTV channel ids that currently own at least one retained programme row. */
+  fun programmeChannelIds(channelIds: Collection<String>): Set<String> {
+    if (channelIds.isEmpty()) return emptySet()
+    val result = LinkedHashSet<String>()
+    for (chunk in channelIds.chunked(IN_CLAUSE_CHUNK)) {
+      val placeholders = chunk.joinToString(",") { "?" }
+      readableDatabase.rawQuery(
+        "SELECT DISTINCT channel_id FROM $LIVE_TABLE WHERE channel_id IN ($placeholders)",
+        chunk.toTypedArray(),
+      ).use { cursor -> while (cursor.moveToNext()) result.add(cursor.getString(0)) }
+    }
+    return result
+  }
+
   /** Unique normalized display names only; ambiguous station names never auto-bind. */
   fun guideDirectoryByUniqueName(): Map<String, String> {
     val found = LinkedHashMap<String, String>()
@@ -481,7 +495,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     return owner == "guide" || owner == "player" || owner == "modal"
   }
 
-  fun replaceBatches(batches: Sequence<List<NativeEpgProgram>>) {
+  fun replaceBatches(batches: Sequence<List<NativeEpgProgram>>, beforeSwap: (() -> Unit)? = null) {
     val db = writableDatabase
     db.beginTransaction()
     try { db.delete(STAGING_TABLE, null, null); db.setTransactionSuccessful() } finally { db.endTransaction() }
@@ -497,6 +511,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
       val stagingCount = countTable(STAGING_TABLE)
       if (stagingCount <= 0L) throw IllegalStateException("Refusing to replace live EPG with an empty feed")
       inferMissingStopsFromNextProgram(DEFAULT_PROGRAMME_DURATION_MS, MAX_PROGRAMME_DURATION_MS)
+      beforeSwap?.invoke()
       if (interactiveTvOwnsPriority()) throw IllegalStateException("EPG refresh deferred before final swap")
       db.beginTransaction()
       try {

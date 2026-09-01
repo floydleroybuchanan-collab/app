@@ -22,6 +22,7 @@ export type PlaylistRecord = {
   autoEpg?: boolean;
   autoEpgSourceIds?: string[];
   epgDiscoveryStatus?: string;
+  tombstoneCount?: number;
 };
 
 export function playlistOwner(channel: Pick<Channel, "id" | "playlist_id">): string {

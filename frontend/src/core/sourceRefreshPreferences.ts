@@ -10,6 +10,9 @@ export type SourceRefreshPreferences = {
   epgPastDays: 1 | 3 | 7 | 14;
   updateEpgOnAppStart: boolean;
   updateEpgOnPlaylistChange: boolean;
+  backgroundUnmeteredOnly: boolean;
+  backgroundChargingOnly: boolean;
+  backgroundIdleOnly: boolean;
 };
 
 const PLAYLIST_KEY = "gs_playlist_refresh_interval_hours";
@@ -17,6 +20,9 @@ const EPG_KEY = "gs_epg_refresh_interval_hours";
 const EPG_PAST_DAYS_KEY = "gs_epg_past_days";
 const EPG_ON_START_KEY = "gs_epg_update_on_app_start";
 const EPG_ON_PLAYLIST_CHANGE_KEY = "gs_epg_update_on_playlist_change";
+const BACKGROUND_UNMETERED_KEY = "gs_epg_background_unmetered";
+const BACKGROUND_CHARGING_KEY = "gs_epg_background_charging";
+const BACKGROUND_IDLE_KEY = "gs_epg_background_idle";
 
 const DEFAULTS: SourceRefreshPreferences = {
   playlistHours: 24,
@@ -26,6 +32,9 @@ const DEFAULTS: SourceRefreshPreferences = {
   // refresh is opt-in only and may be enabled explicitly from EPG settings.
   updateEpgOnAppStart: false,
   updateEpgOnPlaylistChange: true,
+  backgroundUnmeteredOnly: false,
+  backgroundChargingOnly: false,
+  backgroundIdleOnly: false,
 };
 
 let cached: SourceRefreshPreferences = DEFAULTS;
@@ -61,12 +70,15 @@ async function load(): Promise<SourceRefreshPreferences> {
   if (loadPromise) return loadPromise;
   const loadEpoch = mutationEpoch;
   loadPromise = (async () => {
-    const [playlistHours, epgHours, epgPastDays, updateEpgOnAppStart, updateEpgOnPlaylistChange] = await Promise.all([
+    const [playlistHours, epgHours, epgPastDays, updateEpgOnAppStart, updateEpgOnPlaylistChange, backgroundUnmeteredOnly, backgroundChargingOnly, backgroundIdleOnly] = await Promise.all([
       storage.getItem<SourceRefreshIntervalHours>(PLAYLIST_KEY, DEFAULTS.playlistHours),
       storage.getItem<SourceRefreshIntervalHours>(EPG_KEY, DEFAULTS.epgHours),
       storage.getItem<SourceRefreshPreferences["epgPastDays"]>(EPG_PAST_DAYS_KEY, DEFAULTS.epgPastDays),
       storage.getItem<boolean>(EPG_ON_START_KEY, DEFAULTS.updateEpgOnAppStart),
       storage.getItem<boolean>(EPG_ON_PLAYLIST_CHANGE_KEY, DEFAULTS.updateEpgOnPlaylistChange),
+      storage.getItem<boolean>(BACKGROUND_UNMETERED_KEY, DEFAULTS.backgroundUnmeteredOnly),
+      storage.getItem<boolean>(BACKGROUND_CHARGING_KEY, DEFAULTS.backgroundChargingOnly),
+      storage.getItem<boolean>(BACKGROUND_IDLE_KEY, DEFAULTS.backgroundIdleOnly),
     ]);
     const next: SourceRefreshPreferences = {
       playlistHours: normalize(playlistHours, DEFAULTS.playlistHours),
@@ -76,6 +88,9 @@ async function load(): Promise<SourceRefreshPreferences> {
       // a cold-start force refresh.
       updateEpgOnAppStart: updateEpgOnAppStart === true,
       updateEpgOnPlaylistChange: updateEpgOnPlaylistChange !== false,
+      backgroundUnmeteredOnly: backgroundUnmeteredOnly === true,
+      backgroundChargingOnly: backgroundChargingOnly === true,
+      backgroundIdleOnly: backgroundIdleOnly === true,
     };
     // A user edit made while the initial multi-key storage read was in flight
     // owns the newer scheduling policy. Never reinstall the stale snapshot.
@@ -84,6 +99,9 @@ async function load(): Promise<SourceRefreshPreferences> {
     loaded = true;
     // Keep persisted UI policy and native source rows in lock-step at startup.
     void syncNativeCustomEpgPolicy(cached.epgHours, cached.epgPastDays);
+    void import("@/src/nativeEpg").then(({ configureNativeBackgroundUpdatePolicy }) =>
+      configureNativeBackgroundUpdatePolicy(cached.backgroundUnmeteredOnly, cached.backgroundChargingOnly, cached.backgroundIdleOnly),
+    );
     return cached;
   })();
   try {
@@ -158,12 +176,28 @@ export async function setUpdateEpgOnPlaylistChange(value: boolean): Promise<void
   await storage.setItem(EPG_ON_PLAYLIST_CHANGE_KEY, next);
 }
 
+async function setBackgroundPolicy(patch: Partial<Pick<SourceRefreshPreferences, "backgroundUnmeteredOnly" | "backgroundChargingOnly" | "backgroundIdleOnly">>): Promise<void> {
+  await load();
+  const next = { ...cached, ...patch };
+  commit(next);
+  await Promise.all([
+    storage.setItem(BACKGROUND_UNMETERED_KEY, next.backgroundUnmeteredOnly),
+    storage.setItem(BACKGROUND_CHARGING_KEY, next.backgroundChargingOnly),
+    storage.setItem(BACKGROUND_IDLE_KEY, next.backgroundIdleOnly),
+  ]);
+  const { configureNativeBackgroundUpdatePolicy } = await import("@/src/nativeEpg");
+  await configureNativeBackgroundUpdatePolicy(next.backgroundUnmeteredOnly, next.backgroundChargingOnly, next.backgroundIdleOnly);
+}
+
 export function useSourceRefreshPreferences(): SourceRefreshPreferences & {
   setPlaylistHours: (value: SourceRefreshIntervalHours) => void;
   setEpgHours: (value: SourceRefreshIntervalHours) => void;
   setEpgPastDays: (value: SourceRefreshPreferences["epgPastDays"]) => void;
   setUpdateEpgOnAppStart: (value: boolean) => void;
   setUpdateEpgOnPlaylistChange: (value: boolean) => void;
+  setBackgroundUnmeteredOnly: (value: boolean) => void;
+  setBackgroundChargingOnly: (value: boolean) => void;
+  setBackgroundIdleOnly: (value: boolean) => void;
 } {
   const [value, setValue] = useState(cached);
 
@@ -203,6 +237,18 @@ export function useSourceRefreshPreferences(): SourceRefreshPreferences & {
     setUpdateEpgOnPlaylistChange: useCallback((next: boolean) => {
       setValue((prev) => ({ ...prev, updateEpgOnPlaylistChange: next }));
       void setUpdateEpgOnPlaylistChange(next);
+    }, []),
+    setBackgroundUnmeteredOnly: useCallback((next: boolean) => {
+      setValue((prev) => ({ ...prev, backgroundUnmeteredOnly: next }));
+      void setBackgroundPolicy({ backgroundUnmeteredOnly: next });
+    }, []),
+    setBackgroundChargingOnly: useCallback((next: boolean) => {
+      setValue((prev) => ({ ...prev, backgroundChargingOnly: next }));
+      void setBackgroundPolicy({ backgroundChargingOnly: next });
+    }, []),
+    setBackgroundIdleOnly: useCallback((next: boolean) => {
+      setValue((prev) => ({ ...prev, backgroundIdleOnly: next }));
+      void setBackgroundPolicy({ backgroundIdleOnly: next });
     }, []),
   };
 }

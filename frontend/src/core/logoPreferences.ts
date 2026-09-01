@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
 
-export type LogoPriority = "playlist" | "epg";
+export type LogoPriority = "playlist" | "epg" | "local";
 
 const KEY = "gs_channel_logo_priority";
 const DEFAULT_PRIORITY: LogoPriority = "playlist";
@@ -18,7 +18,7 @@ async function load(): Promise<LogoPriority> {
   loadPromise = (async () => {
     const value = await storage.getItem<LogoPriority>(KEY, DEFAULT_PRIORITY);
     if (loaded || loadEpoch !== mutationEpoch) return cached;
-    cached = value === "epg" ? "epg" : "playlist";
+    cached = value === "epg" || value === "local" ? value : "playlist";
     loaded = true;
     return cached;
   })();
@@ -35,7 +35,7 @@ export async function getLogoPriority(): Promise<LogoPriority> {
 
 export async function setLogoPriority(value: LogoPriority): Promise<void> {
   mutationEpoch += 1;
-  cached = value === "epg" ? "epg" : "playlist";
+  cached = value === "epg" || value === "local" ? value : "playlist";
   loaded = true;
   for (const listener of Array.from(listeners)) {
     try { listener(cached); } catch {}

@@ -85,6 +85,7 @@ export default function PlaylistsScreen() {
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
           <Text style={styles.help}>{source.enabled ? "Enabled" : "Disabled — saved channels retained"} · {source.count.toLocaleString()} channels · {source.status}</Text>
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
+          {!!source.tombstoneCount && <Text style={styles.help}>{source.tombstoneCount.toLocaleString()} temporarily missing channel record(s) retained so favorites, ordering, groups, and EPG assignments can return if the provider restores them.</Text>}
           {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
           <Text style={styles.health}>{health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
           <Action label={`Playlist EPG detection: ${source.autoEpg === false ? "Off — manual" : "On"}`} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { autoEpg: source.autoEpg === false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
@@ -102,10 +103,20 @@ export default function PlaylistsScreen() {
             <Action label={removeArmed === source.id ? "Confirm remove playlist" : "Remove playlist"} disabled={busy} onPress={() => { if (removeArmed !== source.id) { setRemoveArmed(source.id); return; } void run(async () => { await removePlaylist(source.id); await reloadPlaylistCatalog(); setRemoveArmed(""); }); }} />
           </View>}
           {source.id !== "charm-primary" && <>
-            <Text style={styles.text}>Associated EPG feeds — select in priority order. Manual channel assignments take priority. Match by exact TVG ID; no guessed stations.</Text>
-            <View style={styles.row}>{availableEpg.map((epg) => <Action key={epg.id}
-              label={`${source.epgSourceIds.includes(epg.id) ? `${source.epgSourceIds.indexOf(epg.id) + 1}. ` : "+ "}${epg.name}${epg.enabled ? "" : " (disabled)"}`}
-              disabled={busy} onPress={() => void run(async () => { const ids = source.epgSourceIds.includes(epg.id) ? source.epgSourceIds.filter((id) => id !== epg.id) : [...source.epgSourceIds, epg.id]; await updatePlaylist(source.id, { epgSourceIds: ids, autoEpg: false, epgDiscoveryStatus: "Manual EPG choices are preserved; automatic association is off." }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />)}</View>
+            <Text style={styles.text}>Associated EPG feeds — the numbered order is the fallback priority. Manual channel assignments always win. Automatic matching uses exact IDs first, then unique names, guarded callsigns, unique logos, and conservative fuzzy matching.</Text>
+            {source.epgSourceIds.map((epgId, index) => {
+              const epg = availableEpg.find((item) => item.id === epgId);
+              if (!epg) return null;
+              return <View key={epgId} style={styles.priorityRow}>
+                <Text style={styles.priorityLabel}>{index + 1}. {epg.name}{epg.enabled ? "" : " (disabled)"}</Text>
+                <Action label="Higher" disabled={busy || index === 0} onPress={() => void run(async () => { const ids = [...source.epgSourceIds]; [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]; await updatePlaylist(source.id, { epgSourceIds: ids, autoEpg: false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
+                <Action label="Lower" disabled={busy || index === source.epgSourceIds.length - 1} onPress={() => void run(async () => { const ids = [...source.epgSourceIds]; [ids[index + 1], ids[index]] = [ids[index], ids[index + 1]]; await updatePlaylist(source.id, { epgSourceIds: ids, autoEpg: false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
+                <Action label="Remove" disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { epgSourceIds: source.epgSourceIds.filter((id) => id !== epgId), autoEpg: false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
+              </View>;
+            })}
+            <View style={styles.row}>{availableEpg.filter((epg) => !source.epgSourceIds.includes(epg.id)).map((epg) => <Action key={epg.id}
+              label={`Add ${epg.name}${epg.enabled ? "" : " (disabled)"}`}
+              disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { epgSourceIds: [...source.epgSourceIds, epg.id], autoEpg: false, epgDiscoveryStatus: "Manual EPG choices are preserved; automatic association is off." }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />)}</View>
           </>}
         </View>)}
       </>}
@@ -124,6 +135,7 @@ const styles = StyleSheet.create({
   heading: { fontFamily: fonts.semibold, fontSize: 10.5, color: "#fff" },
   text: { color: tvColors.text, fontFamily: fonts.regular, fontSize: 8.5, lineHeight: 13 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 11 },
   card: { backgroundColor: tvColors.panelRaised, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, padding: 11, gap: 7 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  priorityRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7, paddingVertical: 3 }, priorityLabel: { minWidth: 180, flex: 1, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5 },
   button: { alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: tvColors.line, backgroundColor: tvColors.panel },
   focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.sm },

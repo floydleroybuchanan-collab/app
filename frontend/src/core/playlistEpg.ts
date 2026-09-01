@@ -21,7 +21,7 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false, only
   const bindings = channels.flatMap((channel) => {
     const ids = byPlaylist.get(playlistOwner(channel)) || [];
     const xmltvId = channel.raw_tvg_id || (playlistOwner(channel) === PRIMARY_PLAYLIST ? channel.tvg_id : "");
-    return ids.length && xmltvId ? [{ channelId: channel.id, channelName: channel.name || "", xmltvId, sourceIds: ids }] : [];
+    return ids.length && xmltvId ? [{ channelId: channel.id, channelName: channel.name || "", channelLogo: channel.playlist_logo || channel.logo || "", xmltvId, sourceIds: ids }] : [];
   });
   await replaceAutomaticPlaylistBindings(bindings);
   replaceAutomaticEpgOwners(bindings.map((binding) => binding.channelId));

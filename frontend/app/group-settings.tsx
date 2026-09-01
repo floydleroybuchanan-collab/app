@@ -261,6 +261,11 @@ export default function GroupSettingsScreen() {
                 <Pressable onPress={renameSelectedGroup} style={({ focused }: any) => [styles.action, focused && styles.focused]}><Text style={styles.actionText}>Rename</Text></Pressable>
               </View>
               <TextInput value={query} onChangeText={(value) => { setQuery(value); setPage(0); }} placeholder="Search channels" placeholderTextColor={tvColors.textMuted} style={styles.input} />
+              {custom.groups.filter((group) => group.id !== selected.id && group.channelIds.length > 0).map((group) => <View key={`transfer-${group.id}`} style={styles.groupActions}>
+                <Text style={[styles.value, { flex: 1 }]}>{group.name} · {group.channelIds.length} channels</Text>
+                <Pressable onPress={() => custom.copyGroupMembers(group.id, selected.id)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Copy here</Text></Pressable>
+                <Pressable onPress={() => custom.moveGroupMembers(group.id, selected.id)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Move here</Text></Pressable>
+              </View>)}
               <View style={styles.pager}>
                 <Pressable disabled={page <= 0} onPress={() => setPage((value) => Math.max(0, value - 1))} style={({ focused }: any) => [styles.mini, page <= 0 && styles.disabled, focused && styles.focused]}><Text style={styles.actionText}>Previous 100</Text></Pressable>
                 <Text style={styles.value}>Page {page + 1} / {maxPage + 1} · {filtered.length} channels</Text>

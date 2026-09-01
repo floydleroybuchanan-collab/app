@@ -3,7 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import type { Channel } from "@/src/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { fetchNativePlaylist } from "@/src/nativeEpg";
+import { fetchNativePlaylist, finishNativeUpdateJob, startNativeUpdateJob } from "@/src/nativeEpg";
 import { combinePlaylistCatalogs, MAX_PERSONAL_PLAYLISTS, PRIMARY_PLAYLIST, SECOND_PLAYLIST,
   scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
@@ -44,7 +44,7 @@ async function commit(next: PlaylistRecord[]) {
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
   records = next; notify();
   // Keep the current and previous immutable revision only; interrupted staging files are disposable.
-  const keep = new Set(next.flatMap((row) => [row.revision, row.previousRevision].filter(Boolean).map((revision) => `${row.id}-${revision}.json`)));
+  const keep = new Set(next.flatMap((row) => [...[row.revision, row.previousRevision].filter(Boolean).map((revision) => `${row.id}-${revision}.json`), `${row.id}-tombstones.json`]));
   try {
     for (const name of await FileSystem.readDirectoryAsync(ROOT)) if (!keep.has(name)) await FileSystem.deleteAsync(`${ROOT}${name}`, { idempotent: true });
   } catch { /* Cleanup failure must not roll back a committed catalog. */ }
@@ -67,8 +67,18 @@ async function allCatalogs(rows: PlaylistRecord[]) {
   return catalogs;
 }
 async function writeCatalog(row: PlaylistRecord, channels: PlaylistPreview): Promise<PlaylistRecord> {
+  const previous = await readCatalog(row).catch(() => [] as Channel[]);
+  const nextScoped = scopePlaylistChannels(row, channels);
+  const liveIds = new Set(nextScoped.map((channel) => channel.id));
+  const tombstonePath = `${ROOT}${row.id}-tombstones.json`;
+  let priorTombstones: (Channel & { deletedAt: number })[] = [];
+  try { priorTombstones = JSON.parse(await FileSystem.readAsStringAsync(tombstonePath)); } catch {}
+  const byId = new Map(priorTombstones.filter((item) => item?.id && !liveIds.has(item.id)).map((item) => [item.id, item]));
+  for (const channel of previous) if (!liveIds.has(channel.id)) byId.set(channel.id, { ...channel, deletedAt: Date.now() });
+  const tombstones = Array.from(byId.values()).sort((a, b) => b.deletedAt - a.deletedAt).slice(0, 25_000);
+  await FileSystem.writeAsStringAsync(tombstonePath, JSON.stringify(tombstones));
   const next = { ...row, discoveredEpgUrls: channels.epgUrls || row.discoveredEpgUrls || [], previousRevision: row.revision, revision: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    count: channels.length, refreshedAt: Date.now(), status: `${channels.length.toLocaleString()} channels ready` };
+    count: channels.length, tombstoneCount: tombstones.length, refreshedAt: Date.now(), status: `${channels.length.toLocaleString()} channels ready` };
   await FileSystem.writeAsStringAsync(pathFor(next), JSON.stringify(channels));
   const check = await FileSystem.getInfoAsync(pathFor(next));
   if (!check.exists || !check.size) throw new Error("Could not save playlist. Previous catalog kept.");
@@ -133,6 +143,7 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false): Promise<Chan
       if (dueOnly && row.revision && (!row.refreshHours || Date.now() - row.refreshedAt < row.refreshHours * 3_600_000)) continue;
       const previous = catalogs.get(row.id) || [];
       const previousRows = rows;
+      const jobId = await startNativeUpdateJob(row.id, "playlist", dueOnly ? "schedule" : "manual").catch(() => 0);
       try {
         const fresh = await previewPlaylist(await getPlaylistUrl(row));
         catalogs.set(row.id, scopePlaylistChannels(row, fresh));
@@ -140,10 +151,12 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false): Promise<Chan
         const next = await writeCatalog(row, fresh);
         rows = rows.map((item) => item.id === row.id ? next : item);
         await commit(rows);
-      } catch {
+        await finishNativeUpdateJob(jobId, "succeeded", fresh.length).catch(() => undefined);
+      } catch (error) {
         catalogs.set(row.id, previous);
         rows = previousRows.map((item) => item.id === row.id ? { ...item, status: "Refresh failed — previous channels kept. Check source and connection." } : item);
         await commit(rows);
+        await finishNativeUpdateJob(jobId, "failed", 0, error instanceof Error ? error.message : "Playlist refresh failed").catch(() => undefined);
       }
     }
     const combined = combinePlaylistCatalogs(rows, catalogs);

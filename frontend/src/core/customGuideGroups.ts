@@ -202,11 +202,35 @@ export function useCustomGuideGroups() {
     }
   }, []);
 
+  const transferGroupMembers = useCallback((fromGroupId: string, toGroupId: string, move: boolean) => {
+    if (!fromGroupId || !toGroupId || fromGroupId === toGroupId) return false;
+    const from = cached.find((item) => item.id === fromGroupId);
+    const to = cached.find((item) => item.id === toGroupId);
+    if (!from || !to) return false;
+    const channelIds = Array.from(new Set([...to.channelIds, ...from.channelIds]));
+    // Never empty the source of a move when the destination cannot hold every
+    // member. The user can remove channels first and retry the transfer.
+    if (channelIds.length > MAX_CHANNELS_PER_GROUP) return false;
+    commit(cached.map((item) => item.id === toGroupId ? { ...item, channelIds } : move && item.id === fromGroupId ? { ...item, channelIds: [] } : item));
+    if (nativeCustomizationAvailable) {
+      void (async () => {
+        for (const channelId of from.channelIds) {
+          await nativeSetCustomGroupMembership(toGroupId, channelId, true);
+          if (move) await nativeSetCustomGroupMembership(fromGroupId, channelId, false);
+        }
+      })().catch(() => void reloadNativeAfterFailure());
+    }
+    return true;
+  }, []);
+
   const byName = useMemo(() => {
     const map = new Map<string, ReadonlySet<string>>();
     for (const group of groups) map.set(group.name, new Set(group.channelIds));
     return map;
   }, [groups]);
 
-  return { groups, byName, createGroup, renameGroup, deleteGroup, moveGroup, setChannelMembership };
+  return { groups, byName, createGroup, renameGroup, deleteGroup, moveGroup, setChannelMembership,
+    copyGroupMembers: (fromGroupId: string, toGroupId: string) => transferGroupMembers(fromGroupId, toGroupId, false),
+    moveGroupMembers: (fromGroupId: string, toGroupId: string) => transferGroupMembers(fromGroupId, toGroupId, true),
+  };
 }

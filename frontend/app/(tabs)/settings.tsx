@@ -62,6 +62,7 @@ import {
   type DeviceCodecCapabilities,
 } from "@/src/core/deviceCodecCapabilities";
 import * as FileSystem from "expo-file-system/legacy";
+import { restoreFullBackup, writeFullBackup } from "@/src/utils/fullBackup";
 
 const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
   { label: "Previous channel", value: "previous" },
@@ -392,6 +393,26 @@ function SettingsScreenContent() {
       setBusy(false);
     }
   }, [busy, channels, replaceFavorites]);
+
+  const backupEverything = useCallback(async () => {
+    if (busy) return;
+    setBusy(true); setBackupStatus("Creating a complete CharmIPTV backup…");
+    try {
+      const result = await writeFullBackup();
+      setBackupStatus(`${result.portable ? "Exported" : "Saved"} ${result.fileName}. It includes settings, playlists, source addresses, EPG assignments, hidden/order choices, and custom groups. Keep it private.`);
+    } catch (error) { setBackupStatus(error instanceof Error ? error.message : "Full backup failed."); }
+    finally { setBusy(false); }
+  }, [busy]);
+
+  const restoreEverything = useCallback(async () => {
+    if (busy) return;
+    setBusy(true); setBackupStatus("Validating and restoring the newest complete backup…");
+    try {
+      const name = await restoreFullBackup();
+      setBackupStatus(`Restored ${name} with integrity checks and rollback protection. Restart CharmIPTV once so every restored setting is reloaded.`);
+    } catch (error) { setBackupStatus(error instanceof Error ? error.message : "Full restore failed; previous settings were kept."); }
+    finally { setBusy(false); }
+  }, [busy]);
 
   return (
     <PurpleTvShell active="/settings">
@@ -892,6 +913,12 @@ function SettingsScreenContent() {
 
             {section === "backup" ? (
               <SettingsCard title="Backup & Restore" icon="cloud-download-outline">
+                <Text style={styles.help}>Complete backups include source addresses and may contain provider credentials. Keep the file private. Restore validates the file first and rolls back live settings if any write fails.</Text>
+                <View style={styles.backupActions}>
+                  <Action label={busy ? "Working…" : "Back Up Complete App"} icon="archive-outline" onPress={backupEverything} disabled={busy} />
+                  <Action label={busy ? "Working…" : "Restore Complete App"} icon="reload-outline" onPress={restoreEverything} disabled={busy} />
+                </View>
+                <View style={styles.divider} />
                 <Text style={styles.help}>Favorites backups are portable JSON files. Back Up writes a local copy and offers a shared folder (Downloads / USB) via the system picker so you can move the file off this device. They contain channel identity only—never stream URLs. Restore matches the current playlist and uses the current build&apos;s stream, logo and EPG data.</Text>
                 <View style={styles.backupActions}>
                   <Action label={busy ? "Working…" : "Back Up Favorites"} icon="save-outline" onPress={backupFavorites} disabled={busy} />

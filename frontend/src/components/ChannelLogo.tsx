@@ -3,6 +3,7 @@ import { Platform, View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { colors, fonts, radius } from "@/src/theme";
 import { useLocalLogo } from "@/src/core/localLogoFolder";
+import { useLogoPriority } from "@/src/core/logoPreferences";
 
 const MAX_URI_HISTORY = 192;
 const LOAD_SLOT_TIMEOUT_MS = 10000;
@@ -135,25 +136,26 @@ function initials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-function logoCandidates(uri?: string, localUri?: string): string[] {
+function logoCandidates(uri?: string, localUri?: string, localFirst = true): string[] {
   const value = (uri || "").trim();
   const local = (localUri || "").trim();
   if (!value) return local ? [local] : [];
+  const arrange = (network: string[]) => localFirst ? [local, ...network].filter(Boolean) : [...network, local].filter(Boolean);
 
   if (value.startsWith("//")) {
     return Platform.OS === "web"
-      ? [local, `https:${value}`].filter(Boolean)
-      : [local, `https:${value}`, `http:${value}`].filter(Boolean);
+      ? arrange([`https:${value}`])
+      : arrange([`https:${value}`, `http:${value}`]);
   }
 
   if (value.startsWith("http://")) {
     const secure = `https://${value.slice(7)}`;
-    return (Platform.OS === "web" ? [local, secure, value] : [local, value, secure]).filter(Boolean);
+    return arrange(Platform.OS === "web" ? [secure, value] : [value, secure]);
   }
 
   if (value.startsWith("https://")) {
-    if (Platform.OS === "web") return [local, value].filter(Boolean);
-    return [local, value, `http://${value.slice(8)}`].filter(Boolean);
+    if (Platform.OS === "web") return arrange([value]);
+    return arrange([value, `http://${value.slice(8)}`]);
   }
 
   return local ? [local] : [];
@@ -173,7 +175,8 @@ function ChannelLogoComponent({
   visible?: boolean;
 }) {
   const localLogo = useLocalLogo(!disabled && visible ? name : "");
-  const candidates = React.useMemo(() => logoCandidates(logo, localLogo), [localLogo, logo]);
+  const [logoPriority] = useLogoPriority();
+  const candidates = React.useMemo(() => logoCandidates(logo, localLogo, logoPriority === "local"), [localLogo, logo, logoPriority]);
   const [attemptIndex, setAttemptIndex] = React.useState(0);
   const [retryGeneration, setRetryGeneration] = React.useState(0);
   const [allowedToLoad, setAllowedToLoad] = React.useState(false);

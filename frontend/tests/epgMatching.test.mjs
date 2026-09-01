@@ -90,6 +90,20 @@ test("preferTvgIdOnly never matches by display name", () => {
   assert.equal(byName.sourceId, "");
 });
 
+test("full matching uses unique guarded callsign and one-edit fallbacks", () => {
+  const indexes = buildXmltvMatchIndexes({
+    channelIds: ["wabc.us", "discovery.us"],
+    channelNames: { "wabc.us": "WABC", "discovery.us": "Discovery Channel" },
+    idsWithPrograms: ["wabc.us", "discovery.us"],
+  });
+  assert.equal(matchPlaylistChannelToXmltv(
+    { id: "local-one", tvg_id: "", name: "US WABC-TV HD" }, indexes,
+  ).sourceId, "wabc.us");
+  assert.equal(matchPlaylistChannelToXmltv(
+    { id: "local-two", tvg_id: "", name: "Discovery Channe" }, indexes,
+  ).sourceId, "discovery.us");
+});
+
 test("empty idsWithPrograms never invents a programme sourceId", () => {
   const indexes = buildXmltvMatchIndexes({
     channelIds: ["espn.us"],
