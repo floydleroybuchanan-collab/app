@@ -19,6 +19,10 @@
 -dontwarn java.beans.**
 -dontwarn sun.net.spi.nameservice.**
 
+# Keep the Media3 RTSP factory's class name so the release artifact verifier
+# can prove that the native RTSP playback path remains packaged after R8.
+-keepnames class androidx.media3.exoplayer.rtsp.RtspMediaSource
+
 # Keep Parcelable implementations
 -keepclassmembers class * implements android.os.Parcelable {
   public static final android.os.Parcelable$Creator CREATOR;
