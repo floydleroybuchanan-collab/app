@@ -6,7 +6,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore } from "@/src/store";
 import { Channel } from "@/src/api";
@@ -14,6 +14,7 @@ import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
+import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 
 function RecentChannelCard({
   channel,
@@ -25,6 +26,8 @@ function RecentChannelCard({
   onPlay,
   inputRef,
   nextFocusUp,
+  onFocus,
+  onBlur,
 }: {
   channel: Channel;
   now: Date;
@@ -35,6 +38,8 @@ function RecentChannelCard({
   onPlay: (channel: Channel) => void;
   inputRef?: (node: unknown) => void;
   nextFocusUp?: number;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }) {
   const programs = useGuidePrograms(channel.id);
   const current = nowNext(programs, now).current;
@@ -42,6 +47,8 @@ function RecentChannelCard({
     <Pressable
       ref={inputRef as any}
       nextFocusUp={nextFocusUp}
+      onFocus={onFocus}
+      onBlur={onBlur}
       onPress={() => onPlay(channel)}
       style={({ focused }: any) => [styles.channelCard, focused && styles.focused]}
       testID={`home-recent-${channel.id}`}
@@ -64,6 +71,7 @@ function RecentChannelCard({
 function LiveTvHomeScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const { openDrawer } = usePurpleTvDrawer();
   const {
     channels,
     recent,
@@ -86,6 +94,17 @@ function LiveTvHomeScreenContent() {
   const firstRecentRef = useRef<unknown>(null);
   const [heroButtonTag, setHeroButtonTag] = useState<number | undefined>();
   const [firstRecentTag, setFirstRecentTag] = useState<number | undefined>();
+  const leftEdgeFocusRef = useRef<string | null>(null);
+
+  const claimLeftEdge = useCallback((owner: string) => {
+    leftEdgeFocusRef.current = owner;
+    setRemoteContext("drawer_edge");
+  }, []);
+  const releaseLeftEdge = useCallback((owner: string) => {
+    if (leftEdgeFocusRef.current !== owner) return;
+    leftEdgeFocusRef.current = null;
+    resetRemoteContextIfOwned("drawer_edge", "default");
+  }, []);
 
   const bindHeroButtonRef = useCallback((node: unknown) => {
     heroButtonRef.current = node;
@@ -108,9 +127,17 @@ function LiveTvHomeScreenContent() {
   useFocusEffect(
     useCallback(() => {
       setPreferInitialFocus(true);
+      const offKey = addTvKeyListener((key) => {
+        if (key === "LEFT" && leftEdgeFocusRef.current) openDrawer();
+      });
       const timer = setTimeout(() => setPreferInitialFocus(false), 180);
-      return () => clearTimeout(timer);
-    }, []),
+      return () => {
+        clearTimeout(timer);
+        offKey();
+        leftEdgeFocusRef.current = null;
+        resetRemoteContextIfOwned("drawer_edge", "default");
+      };
+    }, [openDrawer]),
   );
 
   const channelNumberById = useMemo(() => {
@@ -211,7 +238,11 @@ function LiveTvHomeScreenContent() {
                 ref={bindHeroButtonRef as any}
                 hasTVPreferredFocus={preferInitialFocus}
                 nextFocusDown={firstRecentTag}
-                onFocus={() => setPreferInitialFocus(false)}
+                onFocus={() => {
+                  setPreferInitialFocus(false);
+                  claimLeftEdge("hero-action");
+                }}
+                onBlur={() => releaseLeftEdge("hero-action")}
                 onPress={() => play(heroChannel)}
                 style={({ focused }: any) => [styles.primaryButton, focused && styles.focused]}
                 testID="home-continue-watching"
@@ -222,7 +253,11 @@ function LiveTvHomeScreenContent() {
             ) : (
               <Pressable
                 hasTVPreferredFocus={preferInitialFocus}
-                onFocus={() => setPreferInitialFocus(false)}
+                onFocus={() => {
+                  setPreferInitialFocus(false);
+                  claimLeftEdge("hero-reload");
+                }}
+                onBlur={() => releaseLeftEdge("hero-reload")}
                 onPress={() => void hardRefresh()}
                 disabled={loading || refreshing}
                 style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
@@ -265,6 +300,8 @@ function LiveTvHomeScreenContent() {
               channel={channel}
               inputRef={index === 0 ? bindFirstRecentRef : undefined}
               nextFocusUp={index === 0 ? heroButtonTag : undefined}
+              onFocus={index === 0 ? () => claimLeftEdge("recent-first") : undefined}
+              onBlur={index === 0 ? () => releaseLeftEdge("recent-first") : undefined}
               now={now}
               isFocused={isFocused}
               channelLogos={channelLogos}

@@ -460,7 +460,7 @@ function PurpleGuideScreenContent() {
   useEffect(() => {
     if (!isFocused) return;
     const sub = DeviceEventEmitter.addListener("CharmGuideGroupsRequestOpen", () => {
-      closeDrawer();
+      closeDrawer({ force: true });
       setGroupDrawerOpen(true);
     });
     return () => sub.remove();
@@ -1040,6 +1040,17 @@ function PurpleGuideScreenContent() {
     <PurpleTvShell
       active="/guide"
       watchingChannelId={lastChannelId}
+      secondaryDrawer={groupDrawerOpen ? (
+        <PurpleGuideGroupDrawer
+          open
+          groups={playlistDrawerRows}
+          onCloseToGuide={() => setGroupDrawerOpen(false)}
+          onOpenMainDrawer={() => {
+            setGroupDrawerOpen(false);
+            openDrawer();
+          }}
+        />
+      ) : null}
       footerAction={{
         label: "Guide Sources",
         icon: "refresh-outline",
@@ -1048,15 +1059,6 @@ function PurpleGuideScreenContent() {
       }}
     >
       <View style={styles.page}>
-        <PurpleGuideGroupDrawer
-          open={groupDrawerOpen}
-          groups={playlistDrawerRows}
-          onCloseToGuide={() => setGroupDrawerOpen(false)}
-          onOpenMainDrawer={() => {
-            setGroupDrawerOpen(false);
-            openDrawer();
-          }}
-        />
         <Pressable accessibilityRole="button" focusable onPress={() => {
           quiesceGuideForTransition(true);
           setGroupDrawerOpen(true);

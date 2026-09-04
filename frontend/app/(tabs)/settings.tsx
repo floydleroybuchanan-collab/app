@@ -62,6 +62,7 @@ import {
   type DeviceCodecCapabilities,
 } from "@/src/core/deviceCodecCapabilities";
 import * as FileSystem from "expo-file-system/legacy";
+import { useAuth } from "@/src/auth/AuthContext";
 import { restoreFullBackup, writeFullBackup } from "@/src/utils/fullBackup";
 
 const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
@@ -112,8 +113,19 @@ const TILES: Tile[] = [
 
 const ADULT_GROUP_RE = /adult|xxx|porn/i;
 
+function formatAccountExpiry(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const numeric = Number(value);
+  const timestamp = Number.isFinite(numeric)
+    ? (numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+    : Date.parse(String(value));
+  if (!Number.isFinite(timestamp)) return "—";
+  return new Date(timestamp).toLocaleDateString();
+}
+
 function SettingsScreenContent() {
   const router = useRouter();
+  const { user: accountUser, signOut } = useAuth();
   const {
     channels,
     favorites,
@@ -946,8 +958,13 @@ function SettingsScreenContent() {
 
             {section === "account" ? (
               <SettingsCard title="Account" icon="person-outline">
-                <InfoRow label="Profile" value="Local CharmIPTV profile" />
-                <Text style={styles.help}>No external account login is exposed in this build. Playlist and EPG details are under EPG Settings.</Text>
+                <InfoRow label="Username" value={accountUser?.username || "—"} />
+                {accountUser?.email ? <InfoRow label="Email" value={accountUser.email} /> : null}
+                <InfoRow label="Status" value={accountUser?.status || "Active"} />
+                <InfoRow label="Account expires" value={formatAccountExpiry(accountUser?.expires_at)} />
+                <InfoRow label="Simultaneous sessions" value={accountUser?.max_sessions != null ? String(accountUser.max_sessions) : "Managed by account"} />
+                <Text style={styles.help}>Session limits and expired or revoked access are enforced by the CharmIPTV account service.</Text>
+                <Action label="Sign Out" icon="log-out-outline" onPress={() => void signOut()} />
               </SettingsCard>
             ) : null}
 

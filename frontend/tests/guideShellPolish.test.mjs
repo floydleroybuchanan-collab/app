@@ -120,15 +120,17 @@ test("parental pin normalize via verify after set", async () => {
   assert.equal(verifyParentalPin("1234"), false);
 });
 
-test("drawer shell boots closed without an icon rail", async () => {
+test("drawer shell boots closed and shows the icon rail only beside the playlist drawer", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   assert.match(shell, /useState\(false\)/);
-  assert.doesNotMatch(shell, /purple-icon-rail|focusPurpleIconRail|PURPLE_ICON_RAIL_WIDTH/);
+  assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
+  assert.match(shell, /testID="purple-icon-rail"/);
+  assert.match(shell, /!drawerOpen && secondaryDrawer/);
   assert.match(shell, /isGuideSurfing/);
   assert.match(shell, /focusable=\{drawerOpen\}/);
   assert.match(shell, /outputRange: \[-PURPLE_SIDEBAR_WIDTH, 0\]/);
   assert.doesNotMatch(shell, /Catch Up|\/catchup/);
-  assert.match(shell, /autoFocus=\{!drawerOpen && active !== "\/guide"\}/);
+  assert.match(shell, /autoFocus=\{!drawerOpen && !secondaryDrawer && active !== "\/guide"\}/);
 });
 
 test("drawer route changes release drawer focus ownership before mounting the next screen", async () => {
@@ -164,12 +166,15 @@ test("shared page focus has a deterministic Left-edge drawer handoff", async () 
   assert.match(shell, /testID="purple-left-edge-drawer-target"/);
   assert.match(shell, /leftEdgeDrawerTarget:[\s\S]{0,300}width: 10/);
   assert.match(shell, /onFocus=\{\(\) => openDrawer\(\)\}/);
-  assert.match(shell, /trapFocusLeft=\{false\}/);
+  assert.match(shell, /trapFocusLeft=\{!drawerOpen && !secondaryDrawer && active === "\/"\}/);
   assert.match(shell, /isGuideScreenActive\(\) && isGuideSurfing\(\)/);
   for (const page of [collection, favorites, reminders, live, channels]) {
     assert.match(page, /preferInitialFocus/);
     assert.match(page, /setPreferInitialFocus\(false\)/);
   }
+  assert.match(live, /setRemoteContext\("drawer_edge"\)/);
+  assert.match(live, /key === "LEFT" && leftEdgeFocusRef\.current/);
+  assert.match(live, /openDrawer\(\)/);
   assert.doesNotMatch(reminders, /hasTVPreferredFocus\s*\n/);
   assert.match(reminders, /hasTVPreferredFocus=\{preferInitialFocus\}/);
 });
@@ -375,7 +380,7 @@ test("Live TV and EPG entry focus bootstrap yields immediately to Android focus"
     source("app/(tabs)/index.tsx"),
     source("app/(tabs)/epg-sources.tsx"),
   ]);
-  assert.match(home, /hasTVPreferredFocus=\{preferInitialFocus\}[\s\S]{0,140}onFocus=\{\(\) => setPreferInitialFocus\(false\)\}/);
+  assert.match(home, /hasTVPreferredFocus=\{preferInitialFocus\}[\s\S]{0,220}setPreferInitialFocus\(false\)/);
   assert.match(epg, /hasTVPreferredFocus=\{preferTopFocus\} onFocus=\{\(\) => setPreferTopFocus\(false\)\}/);
 });
 

@@ -83,7 +83,8 @@ const NAV: NavItem[] = [
   { route: "/settings", label: "Settings", icon: "settings-outline" },
 ];
 
-export const PURPLE_SIDEBAR_WIDTH = 156;
+export const PURPLE_SIDEBAR_WIDTH = 192;
+export const PURPLE_ICON_RAIL_WIDTH = 52;
 export const PURPLE_DRAWER_ANIMATION_MS = 180;
 
 export type OpenDrawerOptions = {
@@ -178,6 +179,7 @@ export function PurpleTvShell({
   contextActions,
   guideGroups,
   watchingChannelId,
+  secondaryDrawer,
 }: {
   active: Route;
   children: React.ReactNode;
@@ -187,6 +189,7 @@ export function PurpleTvShell({
   contextActions?: PurpleContextAction[];
   guideGroups?: PurpleGuideGroup[];
   watchingChannelId?: string | null;
+  secondaryDrawer?: React.ReactNode;
 }) {
   const router = useRouter();
   const { drawerOpen, drawerProgress, openDrawer, closeDrawer, focusDrawerTop, consumeFocusDrawerTop } = usePurpleTvDrawer();
@@ -515,7 +518,32 @@ export function PurpleTvShell({
       </Animated.View>
 
       {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
-      {!drawerOpen && active !== "/guide" ? (
+      {!drawerOpen && secondaryDrawer ? (
+        <View style={styles.iconRail} pointerEvents="none" testID="purple-icon-rail">
+          <View style={styles.iconRailBrand}>
+            <Ionicons name="sparkles" size={18} color={tvColors.purpleSoft} />
+          </View>
+          <View style={styles.iconRailItems}>
+            {NAV.map((item) => {
+              const selected = item.route === active;
+              return (
+                <View key={item.route} style={[styles.iconRailItem, selected && styles.iconRailItemSelected]}>
+                  <Ionicons
+                    name={selected ? (item.icon.replace("-outline", "") as any) : item.icon}
+                    size={17}
+                    color={selected ? "#fff" : tvColors.textMuted}
+                  />
+                </View>
+              );
+            })}
+          </View>
+          <View style={styles.iconRailPower}>
+            <Ionicons name="power-outline" size={17} color={tvColors.textMuted} />
+          </View>
+        </View>
+      ) : null}
+      {!drawerOpen && secondaryDrawer ? secondaryDrawer : null}
+      {!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/" ? (
         <Pressable
           focusable
           onFocus={() => openDrawer()}
@@ -526,11 +554,11 @@ export function PurpleTvShell({
       ) : null}
       <FocusGuide
         style={[styles.content, contentStyle]}
-        autoFocus={!drawerOpen && active !== "/guide"}
-        trapFocusUp={!drawerOpen && active !== "/guide"}
-        trapFocusDown={!drawerOpen && active !== "/guide"}
-        trapFocusLeft={false}
-        trapFocusRight={!drawerOpen && active !== "/guide"}
+        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        trapFocusLeft={!drawerOpen && !secondaryDrawer && active === "/"}
+        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}
       >
         {children}
       </FocusGuide>
@@ -543,6 +571,45 @@ const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", backgroundColor: tvColors.canvas, overflow: "hidden" },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
   sidebarSpacer: { width: PURPLE_SIDEBAR_WIDTH, height: "100%" },
+  iconRail: {
+    width: PURPLE_ICON_RAIL_WIDTH,
+    height: "100%",
+    flexShrink: 0,
+    alignItems: "center",
+    backgroundColor: "#0A0916",
+    borderRightWidth: 1,
+    borderRightColor: tvColors.line,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  iconRailBrand: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: tvColors.purpleDeep,
+    marginBottom: 7,
+  },
+  iconRailItems: { flex: 1, minHeight: 0, alignItems: "center", gap: 2 },
+  iconRailItem: {
+    width: 36,
+    minHeight: 31,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderLeftWidth: 3,
+    borderLeftColor: "transparent",
+  },
+  iconRailItemSelected: { backgroundColor: tvColors.purple, borderLeftColor: tvColors.purpleBright },
+  iconRailPower: {
+    width: 36,
+    minHeight: 31,
+    alignItems: "center",
+    justifyContent: "center",
+    borderTopWidth: 1,
+    borderTopColor: tvColors.line,
+  },
   sidebar: {
     width: PURPLE_SIDEBAR_WIDTH,
     height: "100%",

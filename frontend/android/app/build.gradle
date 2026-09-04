@@ -98,8 +98,8 @@ android {
         applicationId 'com.charmiptv.app.purple.next.vodtest1'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "2.1.0-rc.5"
+        versionCode 9
+        versionName "2.1.0-rc.6"
         // IPTV providers commonly use legacy HTTP stream URLs. Keep cleartext
         // compatibility intentionally enabled for release and sideload builds.
         manifestPlaceholders = [allowCleartextStreams: "true"]

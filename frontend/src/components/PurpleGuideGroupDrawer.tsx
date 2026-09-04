@@ -7,7 +7,7 @@ import { fonts, radius, tvColors } from "@/src/theme";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { addTvKeyListener, addTvLongPressListener, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 
-export const GUIDE_GROUP_DRAWER_WIDTH = 188;
+export const GUIDE_GROUP_DRAWER_WIDTH = 232;
 
 export function PurpleGuideGroupDrawer({
   open,
@@ -92,11 +92,6 @@ export function PurpleGuideGroupDrawer({
   return (
     <View style={styles.overlay} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
-        <View style={styles.header}>
-          <Ionicons name="albums-outline" size={16} color={tvColors.purpleSoft} />
-          <Text style={styles.title}>Playlists & Groups</Text>
-        </View>
-        <Text style={styles.hint}>Left: main menu · Right: guide</Text>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
           {groups.map((item) => (
             <Pressable
@@ -116,11 +111,21 @@ export function PurpleGuideGroupDrawer({
                 item.active && styles.activeRow,
                 item.pinned && styles.pinnedRow,
                 item.kind === "playlist" && styles.playlistRow,
+                item.kind === "group" && styles.groupRow,
                 focused && styles.focused,
               ]}
               testID={`phase9-group-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
             >
-              <Text numberOfLines={1} style={[styles.name, item.active && styles.activeName]}>{item.kind === "playlist" ? (item.expanded ? "▾ " : "▸ ") : "    "}{item.label || item.name}</Text>
+              <View style={styles.rowLabel}>
+                {item.kind === "playlist" ? (
+                  <Ionicons
+                    name={item.expanded ? "chevron-up" : "chevron-down"}
+                    size={15}
+                    color={item.active ? "#fff" : tvColors.purpleSoft}
+                  />
+                ) : null}
+                <Text numberOfLines={1} style={[styles.name, item.active && styles.activeName]}>{item.label || item.name}</Text>
+              </View>
               {item.count != null ? <Text style={styles.count}>{item.count}</Text> : null}
             </Pressable>
           ))}
@@ -132,20 +137,14 @@ export function PurpleGuideGroupDrawer({
 
 const styles = StyleSheet.create({
   overlay: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
     width: GUIDE_GROUP_DRAWER_WIDTH,
-    zIndex: 90,
+    height: "100%",
+    flexShrink: 0,
     backgroundColor: "rgba(12,7,26,0.98)",
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
   },
-  drawer: { flex: 1, paddingHorizontal: 10, paddingVertical: 12 },
-  header: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 3 },
-  title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 15 },
-  hint: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, marginBottom: 8 },
+  drawer: { flex: 1, paddingHorizontal: 12, paddingVertical: 10 },
   list: { gap: 3, paddingBottom: 18 },
   row: {
     minHeight: 34,
@@ -158,9 +157,11 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   playlistRow: { borderBottomColor: tvColors.line, marginBottom: 4 },
+  groupRow: { paddingLeft: 28 },
   activeRow: { backgroundColor: "rgba(115,70,195,0.23)" },
   pinnedRow: { borderColor: "rgba(168,132,245,0.22)" },
   focused: { borderColor: tvColors.purpleBright, backgroundColor: "rgba(126,84,218,0.36)" },
+  rowLabel: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7 },
   name: { flex: 1, color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 11 },
   activeName: { color: "#fff" },
   count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9, marginLeft: 6 },

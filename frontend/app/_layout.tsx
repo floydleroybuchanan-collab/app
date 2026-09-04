@@ -20,6 +20,8 @@ import { TvCalibrationFrame, TvCalibrationProvider } from "@/src/tvCalibration";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { StartupVersion4 } from "@/src/components/StartupVersion4";
 import { storage } from "@/src/utils/storage";
+import { AuthProvider } from "@/src/auth/AuthContext";
+import { AccountGate } from "@/src/components/AccountGate";
 
 const START_SCREEN_KEY = "gs_start_screen";
 
@@ -155,33 +157,37 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, width, height, overflow: "visible", backgroundColor: "transparent" }}>
       <SafeAreaProvider>
-        <TvCalibrationProvider>
-          <TvCalibrationFrame>
-            <GuideProvider>
-              <PurpleTvDrawerProvider>
-                <StatusBar style="light" />
-                <NotificationRouter />
-                <SourceRefreshScheduler />
-                <ReminderCleanup />
-                <StartScreenRedirect />
-                <ErrorBoundary>
-                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#070711" } }}>
-                    <Stack.Screen name="(tabs)" />
-                    <Stack.Screen name="player" options={{ animation: "none", contentStyle: { backgroundColor: "#000" } }} />
-                  </Stack>
-                </ErrorBoundary>
-                <ErrorBoundary>
-                  <ProgramModal />
-                </ErrorBoundary>
-                <ErrorBoundary>
-                  <TvQuickActionsOverlay />
-                </ErrorBoundary>
-                <PointerOverlay />
-                <StartupVersion4 />
-              </PurpleTvDrawerProvider>
-            </GuideProvider>
-          </TvCalibrationFrame>
-        </TvCalibrationProvider>
+        <StatusBar hidden />
+        <AuthProvider>
+          <AccountGate>
+            <TvCalibrationProvider>
+              <TvCalibrationFrame>
+                <GuideProvider>
+                  <PurpleTvDrawerProvider>
+                    <NotificationRouter />
+                    <SourceRefreshScheduler />
+                    <ReminderCleanup />
+                    <StartScreenRedirect />
+                    <ErrorBoundary>
+                      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#070711" } }}>
+                        <Stack.Screen name="(tabs)" />
+                        <Stack.Screen name="player" options={{ animation: "none", contentStyle: { backgroundColor: "#000" } }} />
+                      </Stack>
+                    </ErrorBoundary>
+                    <ErrorBoundary>
+                      <ProgramModal />
+                    </ErrorBoundary>
+                    <ErrorBoundary>
+                      <TvQuickActionsOverlay />
+                    </ErrorBoundary>
+                    <PointerOverlay />
+                    <StartupVersion4 />
+                  </PurpleTvDrawerProvider>
+                </GuideProvider>
+              </TvCalibrationFrame>
+            </TvCalibrationProvider>
+          </AccountGate>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
