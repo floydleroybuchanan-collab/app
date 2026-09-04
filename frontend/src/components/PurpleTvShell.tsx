@@ -3,6 +3,7 @@ import {
   Animated,
   BackHandler,
   DeviceEventEmitter,
+  findNodeHandle,
   Platform,
   Pressable,
   ScrollView,
@@ -96,8 +97,9 @@ type DrawerContextValue = {
   drawerProgress: Animated.Value;
   openDrawer: (options?: OpenDrawerOptions) => void;
   closeDrawer: (options?: { force?: boolean }) => void;
-  focusIconRail: (returnTarget?: unknown) => void;
-  getIconRailReturnTarget: () => unknown;
+  focusIconRail: () => void;
+  iconRailEntryTag?: number;
+  publishIconRailEntryTag: (owner: object, tag?: number) => void;
   iconRailFocusRequest: number;
   focusDrawerTop: boolean;
   consumeFocusDrawerTop: () => void;
@@ -105,11 +107,27 @@ type DrawerContextValue = {
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 
+type IconRailFocusContextValue = {
+  /** Native destination for a single Left press from a page-edge control. */
+  iconRailEntryTag?: number;
+};
+
+/**
+ * Native focus destination published by the currently mounted shell. Pages
+ * render the shell themselves, so this value lives in the root drawer provider
+ * and is available while those pages are constructing their child controls.
+ */
+export function useIconRailFocusBoundary(): IconRailFocusContextValue {
+  const value = useContext(DrawerContext);
+  return { iconRailEntryTag: value?.iconRailEntryTag };
+}
+
 export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [focusDrawerTop, setFocusDrawerTop] = useState(false);
   const [iconRailFocusRequest, setIconRailFocusRequest] = useState(0);
-  const iconRailReturnTargetRef = useRef<unknown>(null);
+  const [iconRailEntryTag, setIconRailEntryTag] = useState<number | undefined>();
+  const iconRailPublisherRef = useRef<object | null>(null);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const drawerOpenRef = useRef(false);
   const openedAtRef = useRef(0);
@@ -132,11 +150,19 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   }, []);
 
   const consumeFocusDrawerTop = useCallback(() => setFocusDrawerTop(false), []);
-  const focusIconRail = useCallback((returnTarget?: unknown) => {
-    if (returnTarget) iconRailReturnTargetRef.current = returnTarget;
-    setIconRailFocusRequest((value) => value + 1);
+  const focusIconRail = useCallback(() => setIconRailFocusRequest((value) => value + 1), []);
+  const publishIconRailEntryTag = useCallback((owner: object, tag?: number) => {
+    if (tag) {
+      iconRailPublisherRef.current = owner;
+      setIconRailEntryTag((current) => current === tag ? current : tag);
+      return;
+    }
+    // A retained/closing route may clean up after the next shell has already
+    // published its rail. Only the shell that owns the current tag can clear it.
+    if (iconRailPublisherRef.current !== owner) return;
+    iconRailPublisherRef.current = null;
+    setIconRailEntryTag(undefined);
   }, []);
-  const getIconRailReturnTarget = useCallback(() => iconRailReturnTargetRef.current, []);
 
   useEffect(() => {
     const animation = Animated.timing(drawerProgress, {
@@ -155,12 +181,13 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       openDrawer,
       closeDrawer,
       focusIconRail,
-      getIconRailReturnTarget,
+      iconRailEntryTag,
+      publishIconRailEntryTag,
       iconRailFocusRequest,
       focusDrawerTop,
       consumeFocusDrawerTop,
     }),
-    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, getIconRailReturnTarget, iconRailFocusRequest, openDrawer],
+    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
@@ -222,13 +249,17 @@ export function PurpleTvShell({
     drawerProgress,
     openDrawer,
     closeDrawer,
+    publishIconRailEntryTag,
     iconRailFocusRequest,
     focusDrawerTop,
     consumeFocusDrawerTop,
-    getIconRailReturnTarget,
   } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
+  // Guide uses its own channel-column → playlist-groups boundary. The compact
+  // menu belongs beside its open groups drawer, not beside the Guide grid.
+  const showIconRail = !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
     const safe = getTvSafeInsets(width, height, deviceLayoutMode);
@@ -238,6 +269,9 @@ export function PurpleTvShell({
   const navRefs = useRef(new Map<Route, unknown>());
   const iconRailRefs = useRef(new Map<Route, unknown>());
   const iconRailFocusOwnerRef = useRef<Route | "power" | null>(null);
+  const shellRef = useRef<View | null>(null);
+  const iconRailPublisher = useRef<object>({}).current;
+  const [contentReturnTag, setContentReturnTag] = useState<number | undefined>();
   const onIconRailNavigateRef = useRef(onIconRailNavigate);
   const onIconRailOpenMainDrawerRef = useRef(onIconRailOpenMainDrawer);
   const guideGroupRefs = useRef(new Map<string, unknown>());
@@ -253,28 +287,48 @@ export function PurpleTvShell({
   onIconRailOpenMainDrawerRef.current = onIconRailOpenMainDrawer;
 
   useEffect(() => {
-    if (!iconRailFocusRequest || drawerOpen) return;
+    if (!showIconRail || iconRailFocusRequest === lastIconRailFocusRequestRef.current) return;
+    lastIconRailFocusRequestRef.current = iconRailFocusRequest;
     const node = iconRailRefs.current.get(active) || iconRailRefs.current.get(NAV[0].route);
-    const cancelFocus = requestNativeFocusWithRetry(node, [0, 70, 150]);
+    const cancelFocus = requestNativeFocusWithRetry(node, [0, 70, 150], () => iconRailFocusOwnerRef.current !== null);
     return () => cancelFocus?.();
-  }, [active, drawerOpen, iconRailFocusRequest]);
+  }, [active, showIconRail, iconRailFocusRequest]);
+
+  useEffect(() => {
+    if (!showIconRail) {
+      publishIconRailEntryTag(iconRailPublisher, undefined);
+      return;
+    }
+    const node = iconRailRefs.current.get(active) || iconRailRefs.current.get(NAV[0].route);
+    const tag = node ? findNodeHandle(node as any) : null;
+    const published = tag || undefined;
+    publishIconRailEntryTag(iconRailPublisher, published);
+    return () => publishIconRailEntryTag(iconRailPublisher, undefined);
+  }, [active, showIconRail, iconRailPublisher, publishIconRailEntryTag]);
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener("CharmIconRailOpenMain", (tag: string) => {
+      if (!shellRef.current || Number(tag) !== findNodeHandle(shellRef.current)) return;
+      iconRailFocusOwnerRef.current = null;
+      resetRemoteContextIfOwned("icon_rail", "default");
+      onIconRailOpenMainDrawerRef.current?.();
+      openDrawer();
+    });
+    return () => subscription.remove();
+  }, [openDrawer]);
 
   useEffect(() => addTvKeyListener((key) => {
     if (!iconRailFocusOwnerRef.current) return;
-    if (key === "RIGHT") {
-      const returnTarget = getIconRailReturnTarget();
-      if (returnTarget) requestNativeFocusWithRetry(returnTarget, [0, 60, 140]);
-      return;
-    }
     // LEFT is the universal rail-to-drawer boundary. BACK remains supported
-    // for the earlier compact-rail shortcut, but neither key is allowed to
-    // fall through to Android's focus search and strand focus off-screen.
+    // for the earlier compact-rail shortcut. RIGHT deliberately remains a
+    // native focus transition, optionally pinned to the last page control via
+    // nextFocusRight below; no stale JavaScript ref can strand focus off-screen.
     if (key !== "LEFT" && key !== "BACK") return;
     iconRailFocusOwnerRef.current = null;
     resetRemoteContextIfOwned("icon_rail", "default");
     onIconRailOpenMainDrawerRef.current?.();
     openDrawer();
-  }), [getIconRailReturnTarget, openDrawer]);
+  }), [openDrawer]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -476,6 +530,9 @@ export function PurpleTvShell({
 
   return (
     <View
+      testID="purple-tv-shell"
+      ref={shellRef}
+      collapsable={false}
       style={[
         styles.root,
         {
@@ -597,7 +654,7 @@ export function PurpleTvShell({
       </Animated.View>
 
       {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
-      {!drawerOpen ? (
+      {showIconRail ? (
         <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
           <View style={styles.iconRailBrand}>
             <Ionicons name="sparkles" size={18} color={tvColors.purpleSoft} />
@@ -614,6 +671,7 @@ export function PurpleTvShell({
                   }}
                   focusable
                   accessibilityLabel={item.label}
+                  nextFocusRight={contentReturnTag}
                   onFocus={() => claimIconRail(item.route)}
                   onBlur={() => releaseIconRail(item.route)}
                   onPress={() => navigate(item.route, "rail")}
@@ -637,6 +695,7 @@ export function PurpleTvShell({
           <Pressable
             focusable
             accessibilityLabel="Exit"
+            nextFocusRight={contentReturnTag}
             onFocus={() => claimIconRail("power")}
             onBlur={() => releaseIconRail("power")}
             onPress={promptHoldToExit}
@@ -651,11 +710,16 @@ export function PurpleTvShell({
       ) : null}
       {!drawerOpen && secondaryDrawer ? secondaryDrawer : null}
       <FocusGuide
+        testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        onFocusCapture={(event: any) => {
+          const tag = Number(event?.nativeEvent?.target || event?.target || 0);
+          if (tag > 0) setContentReturnTag((current) => current === tag ? current : tag);
+        }}
       >
         {children}
       </FocusGuide>

@@ -120,12 +120,13 @@ test("parental pin normalize via verify after set", async () => {
   assert.equal(verifyParentalPin("1234"), false);
 });
 
-test("drawer shell boots closed with a permanent focusable icon rail", async () => {
+test("drawer shell boots closed with an icon rail outside the Guide grid", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   assert.match(shell, /useState\(false\)/);
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
   assert.match(shell, /testID="purple-icon-rail"/);
-  assert.match(shell, /!drawerOpen \? \(/);
+  assert.match(shell, /showIconRail \? \(/);
+  assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(shell, /onPress=\{\(\) => navigate\(item\.route, "rail"\)\}/);
   assert.match(shell, /setRemoteContext\("icon_rail"\)/);
   assert.match(shell, /isGuideSurfing/);
@@ -170,13 +171,14 @@ test("shared page focus has a deterministic Left-edge icon-rail handoff", async 
   assert.match(shell, /trapFocusLeft/);
   assert.doesNotMatch(shell, /purple-left-edge-drawer-target/);
   assert.match(shell, /isGuideScreenActive\(\) && isGuideSurfing\(\)/);
-  for (const page of [collection, favorites, reminders, live, channels]) {
+  for (const page of [collection, favorites, reminders, channels]) {
     assert.match(page, /preferInitialFocus/);
     assert.match(page, /setPreferInitialFocus\(false\)/);
   }
   assert.match(live, /setRemoteContext\("drawer_edge"\)/);
   assert.match(live, /const owner = leftEdgeFocusRef\.current/);
-  assert.match(live, /focusIconRail\(owner === "recent-first" \? firstRecentRef\.current : heroButtonRef\.current\)/);
+  assert.match(live, /focusIconRail\(\)/);
+  assert.match(live, /hasTVPreferredFocus=\{entryFocus.preferredFocus\}/);
   assert.doesNotMatch(reminders, /hasTVPreferredFocus\s*\n/);
   assert.match(reminders, /hasTVPreferredFocus=\{preferInitialFocus\}/);
 });
@@ -239,7 +241,7 @@ test("EPG and playlist controls live only on the dedicated EPG settings page", a
   assert.match(epg, /accessibilityState=\{\{ busy: Boolean\(disabled\) \}\}/);
   assert.match(epg, /<ScrollView/);
   assert.match(epg, /<FocusGuide/);
-  assert.match(epg, /hasTVPreferredFocus=\{preferTopFocus\}/);
+  assert.match(epg, /hasTVPreferredFocus=\{entryFocus.preferredFocus\}/);
   assert.match(epg, /scrollRef\.current\?\.scrollTo\(\{ y: 0, animated: false \}\)/);
   assert.match(epg, /nestedScrollEnabled/);
 });
@@ -366,8 +368,8 @@ test("entry preferred focus disarms as soon as real user focus exists", async ()
   assert.match(collection, /const disarmInitialFocus = useCallback\(\(\) => setPreferInitialFocus\(false\)/);
   assert.match(search, /const noteKeyboardFocus = useCallback\([\s\S]*?setPreferKeyFocus\(false\)/);
   assert.match(search, /const noteResultsFocus = useCallback\([\s\S]*?setPreferKeyFocus\(false\)/);
-  assert.match(settings, /hasTVPreferredFocus=\{preferBackFocus\}[\s\S]{0,100}onFocus=\{\(\) => setPreferBackFocus\(false\)\}/);
-  assert.match(settings, /hasTVPreferredFocus=\{preferTileFocus && index === 0\}[\s\S]{0,100}onFocus=\{\(\) => setPreferTileFocus\(false\)\}/);
+  assert.match(settings, /hasTVPreferredFocus=\{detailEntryFocus.preferredFocus\}[\s\S]{0,160}onFocus=\{detailEntryFocus.onFocus\}/);
+  assert.match(settings, /hasTVPreferredFocus=\{tileEntryFocus.preferredFocus && index === 0\}[\s\S]{0,160}onFocus=\{index === 0 \? tileEntryFocus.onFocus/);
 });
 
 test("Guide preview uses a large channel-logo placeholder while tuning", async () => {
@@ -382,8 +384,8 @@ test("Live TV and EPG entry focus bootstrap yields immediately to Android focus"
     source("app/(tabs)/index.tsx"),
     source("app/(tabs)/epg-sources.tsx"),
   ]);
-  assert.match(home, /hasTVPreferredFocus=\{preferInitialFocus\}[\s\S]{0,220}setPreferInitialFocus\(false\)/);
-  assert.match(epg, /hasTVPreferredFocus=\{preferTopFocus\} onFocus=\{\(\) => setPreferTopFocus\(false\)\}/);
+  assert.match(home, /hasTVPreferredFocus=\{entryFocus.preferredFocus\}[\s\S]{0,280}entryFocus.onFocus\(\)/);
+  assert.match(epg, /hasTVPreferredFocus=\{entryFocus.preferredFocus\} nextFocusLeft=\{iconRailEntryTag\} onFocus=\{entryFocus.onFocus\}/);
 });
 
 test("Phase 9 management screens disarm their preferred Back focus immediately", async () => {
@@ -392,7 +394,7 @@ test("Phase 9 management screens disarm their preferred Back focus immediately",
     source("app/group-settings.tsx"),
   ]);
   for (const body of [customEpg, groups]) {
-    assert.match(body, /hasTVPreferredFocus=\{preferBackFocus\} onFocus=\{\(\) => setPreferBackFocus\(false\)\}/);
+    assert.match(body, /hasTVPreferredFocus=\{entryFocus.preferredFocus\} nextFocusLeft=\{iconRailEntryTag\} onFocus=\{entryFocus.onFocus\}/);
   }
 });
 
@@ -482,7 +484,7 @@ test("Android remote accepts drawer-edge and icon-rail focus ownership", async (
   ]);
   assert.match(nativeRemote, /"main_drawer", "icon_rail", "drawer_edge", "player"/);
   assert.match(activity, /context == "drawer_edge" && boundaryKey == "LEFT"/);
-  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
+  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "BACK"\)/);
   assert.match(bridge, /\| "icon_rail"/);
 });
 

@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { PurpleDrawerButton } from "@/src/components/PurpleDrawerButton";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { TvCalibrationControls } from "@/src/components/TvCalibrationControls";
@@ -65,6 +65,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "@/src/auth/AuthContext";
 import type { ReferralSummary } from "@/src/auth/accountApi";
 import { restoreFullBackup, writeFullBackup } from "@/src/utils/fullBackup";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
 const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
   { label: "Previous channel", value: "previous" },
@@ -150,6 +151,7 @@ function formatTimeRemaining(value: number | string | null | undefined): string 
 
 function SettingsScreenContent() {
   const router = useRouter();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
   const {
     channels,
@@ -204,8 +206,6 @@ function SettingsScreenContent() {
   const [focusedCustomizeId, setFocusedCustomizeId] = useState<string | null>(null);
   const [channelEditPage, setChannelEditPage] = useState(0);
   const clearFavoritesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [preferTileFocus, setPreferTileFocus] = useState(true);
-  const [preferBackFocus, setPreferBackFocus] = useState(false);
   const [referral, setReferral] = useState<ReferralSummary | null>(null);
   const [referralBusy, setReferralBusy] = useState(false);
   const [referralStatus, setReferralStatus] = useState<string | null>(null);
@@ -214,6 +214,8 @@ function SettingsScreenContent() {
   const [cancelPhrase, setCancelPhrase] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelStatus, setCancelStatus] = useState<string | null>(null);
+  const tileEntryFocus = useTvRouteEntryFocus(!section, "settings-tiles");
+  const detailEntryFocus = useTvRouteEntryFocus(!!section, section || "settings-none");
 
   useEffect(() => {
     if (section !== "health" && section !== "about") return;
@@ -283,24 +285,14 @@ function SettingsScreenContent() {
   }, [cancelAccount, cancelBusy, cancelPassword, cancelPhrase]);
 
   useEffect(() => {
-    if (!preferTileFocus) return;
-    const timer = setTimeout(() => setPreferTileFocus(false), 180);
-    return () => clearTimeout(timer);
-  }, [preferTileFocus]);
-
-  useEffect(() => {
     if (!section) return;
     setClearFavoritesArmed(false);
-    setPreferBackFocus(true);
-    const timer = setTimeout(() => setPreferBackFocus(false), 180);
-    return () => clearTimeout(timer);
   }, [section]);
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("CharmShowAllSettings", () => {
       setBackupStatus(null);
       setClearFavoritesArmed(false);
-      setPreferTileFocus(true);
       setSection(null);
     });
     return () => sub.remove();
@@ -318,7 +310,6 @@ function SettingsScreenContent() {
       if (section) {
         setBackupStatus(null);
         setClearFavoritesArmed(false);
-        setPreferTileFocus(true);
         setSection(null);
         return true;
       }
@@ -374,7 +365,6 @@ function SettingsScreenContent() {
       router.push("/epg-sources" as any);
       return;
     }
-    setPreferBackFocus(true);
     setSection(id);
   }, [router]);
 
@@ -529,13 +519,15 @@ function SettingsScreenContent() {
             <PurpleDrawerButton testID="settings-open-drawer" />
             {section ? (
               <Pressable
-                hasTVPreferredFocus={preferBackFocus}
-                onFocus={() => setPreferBackFocus(false)}
+                ref={detailEntryFocus.targetRef as any}
+                hasTVPreferredFocus={detailEntryFocus.preferredFocus}
+                nextFocusLeft={iconRailEntryTag}
+                onFocus={detailEntryFocus.onFocus}
+                onBlur={detailEntryFocus.onBlur}
                 onPress={() => {
                   void Haptics.selectionAsync().catch(() => undefined);
                   setBackupStatus(null);
                   setClearFavoritesArmed(false);
-                  setPreferTileFocus(true);
                   setSection(null);
                 }}
                 style={({ focused }: any) => [styles.backButton, focused && styles.focused]}
@@ -561,8 +553,11 @@ function SettingsScreenContent() {
               {TILES.map((tile, index) => (
                 <Pressable
                   key={tile.id}
-                  hasTVPreferredFocus={preferTileFocus && index === 0}
-                  onFocus={() => setPreferTileFocus(false)}
+                  ref={index === 0 ? tileEntryFocus.targetRef as any : undefined}
+                  hasTVPreferredFocus={tileEntryFocus.preferredFocus && index === 0}
+                  nextFocusLeft={index % 4 === 0 ? iconRailEntryTag : undefined}
+                  onFocus={index === 0 ? tileEntryFocus.onFocus : undefined}
+                  onBlur={index === 0 ? tileEntryFocus.onBlur : undefined}
                   onPress={() => choose(tile.id)}
                   style={({ focused }: any) => [styles.tile, focused && styles.focused]}
                   testID={`settings-tile-${tile.id}`}

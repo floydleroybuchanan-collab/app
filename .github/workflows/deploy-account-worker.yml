@@ -31,10 +31,62 @@ jobs:
       - name: Verify account Worker source and bindings
         run: |
           node --check account-backend/worker.js
-          grep -q 'playlist_url: source(env.M3U_URL)' account-backend/worker.js
-          grep -q 'epg_url: source(env.EPG_URL)' account-backend/worker.js
+          grep -q 'MANAGED_SOURCE_SLOTS' account-backend/worker.js
+          grep -q 'M3U_URL_4' account-backend/worker.js
+          grep -q 'EPG_URL_4' account-backend/worker.js
           ! grep -q 'proxyManagedContent' account-backend/worker.js
           grep -q 'binding = "DB"' account-backend/wrangler.toml
+
+      - name: Verify complete managed source pairs
+        id: managed-source-secrets
+        env:
+          M3U_URL: ${{ secrets.M3U_URL }}
+          EPG_URL: ${{ secrets.EPG_URL }}
+          M3U_URL_2: ${{ secrets.M3U_URL_2 }}
+          EPG_URL_2: ${{ secrets.EPG_URL_2 }}
+          M3U_URL_3: ${{ secrets.M3U_URL_3 }}
+          EPG_URL_3: ${{ secrets.EPG_URL_3 }}
+          M3U_URL_4: ${{ secrets.M3U_URL_4 }}
+          EPG_URL_4: ${{ secrets.EPG_URL_4 }}
+        run: |
+          node --input-type=module - <<'NODE'
+          import { appendFileSync } from "node:fs";
+          const pairs = [
+            { id: "primary", names: ["M3U_URL", "EPG_URL"], required: true },
+            { id: "secondary", names: ["M3U_URL_2", "EPG_URL_2"], required: true },
+            { id: "tertiary", names: ["M3U_URL_3", "EPG_URL_3"], required: false },
+            { id: "quaternary", names: ["M3U_URL_4", "EPG_URL_4"], required: false },
+          ];
+          const presentNames = [];
+          const configured = new Set();
+          for (const pair of pairs) {
+            const values = pair.names.map((name) => String(process.env[name] || "").trim());
+            if (values.every((value) => !value)) {
+              if (pair.required) throw new Error(`${pair.names.join(" and ")} are required`);
+              continue;
+            }
+            if (values.some((value) => !value)) {
+              const missing = pair.names.filter((_name, index) => !values[index]);
+              throw new Error(`${pair.id} source pair is incomplete; add ${missing.join(" and ")}`);
+            }
+            for (let index = 0; index < pair.names.length; index += 1) {
+              let url;
+              try { url = new URL(values[index]); } catch { throw new Error(`${pair.names[index]} is not a complete URL`); }
+              if (url.protocol !== "http:" && url.protocol !== "https:") {
+                throw new Error(`${pair.names[index]} must use HTTP or HTTPS`);
+              }
+            }
+            configured.add(pair.id);
+            presentNames.push(...pair.names);
+          }
+          if (configured.has("quaternary") && !configured.has("tertiary")) {
+            throw new Error("M3U_URL_3 and EPG_URL_3 must be configured before source pair 4");
+          }
+          const output = process.env.GITHUB_OUTPUT;
+          appendFileSync(output, `names<<CHARM_SOURCE_NAMES\n${presentNames.join("\n")}\nCHARM_SOURCE_NAMES\n`);
+          appendFileSync(output, `count=${configured.size}\ntertiary=${configured.has("tertiary")}\nquaternary=${configured.has("quaternary")}\n`);
+          console.log(`${configured.size} complete managed playlist/Guide source pair(s) validated; values remain masked`);
+          NODE
 
       - name: Deploy account Worker and preserve secrets
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
@@ -43,14 +95,33 @@ jobs:
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           workingDirectory: account-backend
           command: deploy --keep-vars
+          secrets: ${{ steps.managed-source-secrets.outputs.names }}
+        env:
+          # The action sends only names emitted for complete pairs, reads their
+          # masked values from this environment, and uses Wrangler secret stdin.
+          M3U_URL: ${{ secrets.M3U_URL }}
+          EPG_URL: ${{ secrets.EPG_URL }}
+          M3U_URL_2: ${{ secrets.M3U_URL_2 }}
+          EPG_URL_2: ${{ secrets.EPG_URL_2 }}
+          M3U_URL_3: ${{ secrets.M3U_URL_3 }}
+          EPG_URL_3: ${{ secrets.EPG_URL_3 }}
+          M3U_URL_4: ${{ secrets.M3U_URL_4 }}
+          EPG_URL_4: ${{ secrets.EPG_URL_4 }}
 
       - name: Verify public health endpoint
+        env:
+          EXPECTED_SOURCE_COUNT: ${{ steps.managed-source-secrets.outputs.count }}
+          EXPECT_TERTIARY: ${{ steps.managed-source-secrets.outputs.tertiary }}
+          EXPECT_QUATERNARY: ${{ steps.managed-source-secrets.outputs.quaternary }}
         run: |
           node --input-type=module - <<'NODE'
           const response = await fetch("https://charmiptv-account-api.agentleakage.workers.dev/health");
           const data = await response.json();
-          if (!response.ok || data.success !== true || data.database !== true) {
+          const expectedCount = Number(process.env.EXPECTED_SOURCE_COUNT || 2);
+          const optionalReady = (process.env.EXPECT_TERTIARY !== "true" || data.content_sources?.tertiary === true) &&
+            (process.env.EXPECT_QUATERNARY !== "true" || data.content_sources?.quaternary === true);
+          if (!response.ok || data.success !== true || data.database !== true || data.content_sources_ready !== true || data.content_sources?.primary !== true || data.content_sources?.secondary !== true || Number(data.configured_source_count || 0) < expectedCount || !optionalReady) {
             throw new Error(`Account Worker health check failed (${response.status})`);
           }
-          console.log("CharmIPTV account Worker health verified");
+          console.log(`CharmIPTV account Worker database and ${data.configured_source_count} managed source pair(s) verified`);
           NODE

@@ -1,9 +1,33 @@
 import type { Channel } from "../api";
+import type { ManagedContentSourceId } from "@/src/auth/managedContentAccess";
 
 export const PRIMARY_PLAYLIST = "charm-primary";
 export const SECOND_PLAYLIST = "charm-secondary";
-export const MAX_COMBINED_CHANNELS = 25_000;
-export const MAX_PERSONAL_PLAYLISTS = 5;
+export const THIRD_PLAYLIST = "charm-tertiary";
+export const FOURTH_PLAYLIST = "charm-quaternary";
+export const MANAGED_PLAYLISTS: readonly {
+  sourceId: ManagedContentSourceId;
+  playlistId: string;
+  name: string;
+  epgSourceId: string;
+}[] = [
+  { sourceId: "primary", playlistId: PRIMARY_PLAYLIST, name: "CharmIPTV", epgSourceId: "primary" },
+  { sourceId: "secondary", playlistId: SECOND_PLAYLIST, name: "CharmIPTV 2", epgSourceId: "owner-secondary" },
+  { sourceId: "tertiary", playlistId: THIRD_PLAYLIST, name: "CharmIPTV 3", epgSourceId: "owner-tertiary" },
+  { sourceId: "quaternary", playlistId: FOURTH_PLAYLIST, name: "CharmIPTV 4", epgSourceId: "owner-quaternary" },
+];
+
+export function managedPlaylistDefinition(playlistId: string) {
+  return MANAGED_PLAYLISTS.find((source) => source.playlistId === playlistId);
+}
+
+export function managedPlaylistForSource(sourceId: ManagedContentSourceId) {
+  return MANAGED_PLAYLISTS.find((source) => source.sourceId === sourceId);
+}
+
+export function managedEpgSourceIds(): ReadonlySet<string> {
+  return new Set(MANAGED_PLAYLISTS.map((source) => source.epgSourceId));
+}
 
 export type PlaylistRecord = {
   id: string;
@@ -72,7 +96,6 @@ export function combinePlaylistCatalogs(sources: PlaylistRecord[], catalogs: Rea
     for (const channel of catalogs.get(source.id) || []) {
       if (seen.has(channel.id)) throw new Error("Channel identity collision; catalog was not replaced.");
       seen.add(channel.id); result.push(channel);
-      if (result.length > MAX_COMBINED_CHANNELS) throw new Error("Enabled playlists exceed 25,000 channels. Disable another playlist first.");
     }
   }
   return result;

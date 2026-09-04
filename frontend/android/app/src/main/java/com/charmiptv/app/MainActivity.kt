@@ -8,6 +8,8 @@ import android.os.Looper
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.View
+import android.view.ViewGroup
+import android.graphics.Rect
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.content.Context
@@ -24,6 +26,80 @@ class MainActivity : ReactActivity() {
   private var lastAcceptedDirectionalRepeatAt = 0L
   private var lastAcceptedDirectionalKeyCode = -1
   private var emittedLongPressKeyCode = -1
+  private var shellBoundaryKeyDown = -1
+  private fun testId(view: View): String =
+    view.getTag(com.facebook.react.R.id.react_test_id) as? String ?: ""
+
+  private fun within(view: View?, ancestor: View): Boolean {
+    var at = view
+    while (at != null) {
+      if (at === ancestor) return true
+      at = at.parent as? View
+    }
+    return false
+  }
+
+  private fun visible(view: View?): Boolean =
+    view != null && view.isAttachedToWindow && view.isShown &&
+      view.alpha > 0f && view.getGlobalVisibleRect(Rect())
+
+  private fun findTagged(view: View, id: String): View? {
+    if (testId(view) == id && visible(view)) return view
+    if (view is ViewGroup) for (index in 0 until view.childCount) {
+      findTagged(view.getChildAt(index), id)?.let { return it }
+    }
+    return null
+  }
+
+  /** Resolve physical page/rail boundaries against this window's live views. */
+  private fun routeShellBoundary(event: android.view.KeyEvent): Boolean {
+    if (event.action != android.view.KeyEvent.ACTION_DOWN || TvRemoteModule.pointerActive) return false
+    val focus = currentFocus ?: return false
+    var shell: View? = focus
+    while (shell != null && testId(shell) != "purple-tv-shell") shell = shell.parent as? View
+    val root = shell ?: return false
+    val key = event.keyCode
+    val rail = findTagged(root, "purple-icon-rail")
+    if (rail == null) {
+      // NativeGuideView handles its own timeline/channel-column boundary.
+      // Preview action controls use the same groups destination at their edge.
+      if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT || focus is NativeGuideView ||
+          focus is EditText || TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "main_drawer") return false
+      val guidePage = findTagged(root, "purple-tv-guide-page") ?: return false
+      if (!within(focus, guidePage)) return false
+      val next = focus.focusSearch(View.FOCUS_LEFT)
+      if (next !== focus && visible(next) && within(next, guidePage)) return false
+      if (event.repeatCount == 0) emitRemoteEvent("CharmGuideGroupsRequestOpen", "")
+      return true
+    }
+    val onRail = within(focus, rail)
+    if (onRail && (key == android.view.KeyEvent.KEYCODE_DPAD_LEFT || key == android.view.KeyEvent.KEYCODE_BACK)) {
+      // Address the shell that actually owns native focus. A generic key event
+      // also reaches an open groups drawer and can start a competing handoff.
+      if (event.repeatCount == 0) emitRemoteEvent("CharmIconRailOpenMain", root.id.toString())
+      return true
+    }
+    if (onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+      val page = findTagged(root, "phase9-guide-groups-drawer") ?: findTagged(root, "purple-tv-page")
+      val next = focus.focusSearch(View.FOCUS_RIGHT)
+      if (page != null && next !== page && visible(next) && within(next, page) && next!!.requestFocus()) return true
+      val target = page?.getFocusables(View.FOCUS_FORWARD)?.firstOrNull { it !== page && visible(it) && it.isEnabled }
+      target?.requestFocus()
+      // Failure leaves focus on the rail, never on a hidden/stale node.
+      return true
+    }
+    if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT || focus is EditText || focus is NativeGuideView) return false
+    if (TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "guide_groups") return false
+    val page = findTagged(root, "purple-tv-page") ?: return false
+    if (!within(focus, page)) return false
+    val next = focus.focusSearch(View.FOCUS_LEFT)
+    if (next !== focus && visible(next) && within(next, page)) return false
+    val destination = if (visible(next) && within(next, rail)) next
+      else rail.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== rail && visible(it) && it.isEnabled }
+    destination?.requestFocus()
+    return true
+  }
+
   private val selectHoldHandler = Handler(Looper.getMainLooper())
   private var selectHoldKeyCode = -1
   private var selectHoldContext: String? = null
@@ -42,6 +118,14 @@ class MainActivity : ReactActivity() {
   }
 
   override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == shellBoundaryKeyDown) {
+      shellBoundaryKeyDown = -1
+      return true
+    }
+    if (routeShellBoundary(event)) {
+      shellBoundaryKeyDown = event.keyCode
+      return true
+    }
     // Android TV EditText consumes D-pad Up/Down as cursor movement. Settings
     // fields are single-line controls, so move focus to the adjacent control and
     // dismiss the keyboard instead of trapping the user inside the field.
@@ -54,9 +138,9 @@ class MainActivity : ReactActivity() {
       if (direction != 0) {
         val field = currentFocus as EditText
         val next = field.focusSearch(direction)
-        field.clearFocus()
         (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(field.windowToken, 0)
-        next?.requestFocus()
+        // Retain the field when no adjacent control can take focus.
+        if (next != null && next !== field) next.requestFocus()
         return true
       }
     }
@@ -197,7 +281,10 @@ class MainActivity : ReactActivity() {
       val owned =
         (context == "guide_groups" && (boundaryKey == "LEFT" || boundaryKey == "RIGHT" || boundaryKey == "BACK")) ||
           (context == "main_drawer" && boundaryKey == "RIGHT") ||
-          (context == "icon_rail" && (boundaryKey == "LEFT" || boundaryKey == "RIGHT" || boundaryKey == "BACK")) ||
+          // RIGHT is native focus traversal back into the visible page. Do not
+          // round-trip it through JS: a screen transition can invalidate the
+          // stored React node before the event arrives and make focus vanish.
+          (context == "icon_rail" && (boundaryKey == "LEFT" || boundaryKey == "BACK")) ||
           (context == "drawer_edge" && boundaryKey == "LEFT")
       if (owned && boundaryKey != null) {
         emitRemoteEvent("TvRemoteKey", boundaryKey)

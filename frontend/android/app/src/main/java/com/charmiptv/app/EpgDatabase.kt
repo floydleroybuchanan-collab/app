@@ -502,17 +502,19 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     try {
       var batchNumber = 0
       for (batch in batches) {
-        if (interactiveTvOwnsPriority()) throw IllegalStateException("EPG refresh deferred for active Guide/player")
+        if (interactiveTvOwnsPriority()) Thread.yield()
         insertBatch(db, STAGING_TABLE, batch)
         batchNumber += 1
         if (batchNumber % STORAGE_RECHECK_BATCHES == 0) assertRefreshStorageAvailable()
       }
-      if (interactiveTvOwnsPriority()) throw IllegalStateException("EPG refresh deferred before final swap")
+      // Foreground navigation does not invalidate a fully downloaded guide.
+      // Keep last-good rows readable until this short atomic swap completes.
+      if (interactiveTvOwnsPriority()) Thread.yield()
       val stagingCount = countTable(STAGING_TABLE)
       if (stagingCount <= 0L) throw IllegalStateException("Refusing to replace live EPG with an empty feed")
       inferMissingStopsFromNextProgram(DEFAULT_PROGRAMME_DURATION_MS, MAX_PROGRAMME_DURATION_MS)
       beforeSwap?.invoke()
-      if (interactiveTvOwnsPriority()) throw IllegalStateException("EPG refresh deferred before final swap")
+      if (interactiveTvOwnsPriority()) Thread.yield()
       db.beginTransaction()
       try {
         db.delete(LIVE_TABLE, null, null)

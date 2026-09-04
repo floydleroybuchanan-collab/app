@@ -4,6 +4,7 @@ import { playlistEpgUrls } from "../src/core/playlistEpgHeader.ts";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import * as catalog from "../src/core/playlistCatalog.ts";
 
 test("M3U header discovery supports both common tags, multiple URLs, BOM and relative HTTP addresses", () => {
   const header = `\uFEFF#EXTM3U url-tvg="https://epg.invalid/a.xml,https://epg.invalid/b.xml" x-tvg-url='../guide.xml' tvg-url="https://epg.invalid/a.xml"\n#EXTINF:-1 tvg-id="station",Channel\nhttps://stream.invalid/live`;
@@ -26,7 +27,7 @@ function discoveryHarness(rows, env = {}) {
     "./playlistRegistry": { listPlaylists: async () => rows, applyDiscoveredPlaylistEpg: async (...args) => updates.push(args) },
     "./multiEpgSources": { ensureDiscoveredEpgSource: async url => { calls.push(url); return url.includes("full") ? null : "detected"; } },
     "./epgSourcePreferences": { getEpgSourcePreferences: async () => ({ userUrl: "https://legacy.invalid/xml" }) },
-    "./playlistCatalog": { PRIMARY_PLAYLIST: "charm-primary", SECOND_PLAYLIST: "charm-secondary" },
+    "./playlistCatalog": catalog,
     "@/src/auth/managedContentAccess": { managedEpgUrl: id => id === "primary" ? env.EXPO_PUBLIC_EPG_URL || "" : env.EXPO_PUBLIC_EPG_URL_2 || "" },
   };
   const code = ts.transpileModule(readFileSync(new URL("../src/core/playlistEpgDiscovery.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -65,7 +66,7 @@ test("detected EPG reuses legacy feeds and preserves last-good associations when
 });
 
 
-test("shared EPG registry reuses a detected URL without enabling it and refuses excess sources", async () => {
+test("shared EPG registry preserves disabled feeds and supports more than nine sources", async () => {
   const exports = {};
   const initial = Array.from({ length: 7 }, (_, i) => ({ id: `feed${i}`, name: `Feed ${i}`, url: `https://epg.invalid/${i}`, enabled: false, overrides: {} }));
   const mocks = {
@@ -73,12 +74,14 @@ test("shared EPG registry reuses a detected URL without enabling it and refuses 
     "@/src/utils/storage": { storage: { getItem: async () => initial, setItem: async () => true } },
     "@/src/core/additionalEpgOwnership": { replaceAdditionalEpgOwners() {} },
     "@/src/source": { invalidateGuideOwnershipCaches() {} },
-    "@/src/auth/managedContentAccess": { managedEpgUrl: () => "" },
+    "@/src/auth/managedContentAccess": { managedContentSources: () => [], managedEpgUrl: () => "" },
+    "@/src/core/playlistCatalog": catalog,
   };
   const code = ts.transpileModule(readFileSync(new URL("../src/core/multiEpgSources.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInNewContext(code, { exports, require: name => { assert.ok(mocks[name], name); return mocks[name]; }, process: { env: {} } });
   assert.equal(await exports.ensureDiscoveredEpgSource("https://epg.invalid/0", "Detected"), "feed0");
   assert.equal((await exports.getMultiEpgSources())[0].enabled, false);
-  assert.equal(await exports.ensureDiscoveredEpgSource("https://epg.invalid/extra", "Detected"), null);
-  assert.equal((await exports.getMultiEpgSources()).length, 7);
+  for (let at = 7; at < 13; at++) assert.ok(await exports.ensureDiscoveredEpgSource(`https://epg.invalid/${at}`, "Detected"));
+  assert.equal((await exports.getMultiEpgSources()).length, 13);
+  assert.equal((await exports.getMultiEpgSources())[0].enabled, false);
 });

@@ -4,18 +4,17 @@ import { useEffect, useState } from "react";
 import type { Channel } from "@/src/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchNativePlaylist, finishNativeUpdateJob, startNativeUpdateJob } from "@/src/nativeEpg";
-import { managedPlaylistUrl } from "@/src/auth/managedContentAccess";
-import { combinePlaylistCatalogs, MAX_PERSONAL_PLAYLISTS, PRIMARY_PLAYLIST, SECOND_PLAYLIST,
-  scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
+import { managedContentSources, managedPlaylistUrl } from "@/src/auth/managedContentAccess";
+import { combinePlaylistCatalogs, MANAGED_PLAYLISTS, PRIMARY_PLAYLIST,
+  managedPlaylistDefinition, scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
 export type PlaylistPreview = Channel[] & { epgUrls?: string[] };
 
 const KEY = "charm_playlist_registry_v1";
 const ROOT = `${FileSystem.documentDirectory}playlists/`;
 function managedUrl(id: string): string {
-  if (id === PRIMARY_PLAYLIST) return managedPlaylistUrl("primary");
-  if (id === SECOND_PLAYLIST) return managedPlaylistUrl("secondary");
-  return "";
+  const source = managedPlaylistDefinition(id);
+  return source ? managedPlaylistUrl(source.sourceId) : "";
 }
 let records: PlaylistRecord[] | null = null;
 let queue: Promise<unknown> = Promise.resolve();
@@ -25,18 +24,44 @@ function exclusive<T>(action: () => Promise<T>): Promise<T> {
 }
 function notify() { listeners.forEach((listener) => listener()); }
 function makeRecord(id: string, name: string, managed: boolean): PlaylistRecord {
+  const supplied = managed ? managedPlaylistDefinition(id) : undefined;
   return { id, name, groupLabel: name, managed, enabled: true, revision: "", count: 0, refreshedAt: 0,
-    refreshHours: 24, status: "Not downloaded", epgSourceIds: id === PRIMARY_PLAYLIST ? ["primary"] : id === SECOND_PLAYLIST ? ["owner-secondary"] : [] };
+    refreshHours: 24, status: "Not downloaded", epgSourceIds: supplied ? [supplied.epgSourceId] : [] };
 }
+
+function reconcileManagedRows(saved: PlaylistRecord[]): PlaylistRecord[] {
+  const configured = new Set(managedContentSources().map((source) => source.id));
+  // Source availability is not deletion. Keep revision pointers, ordering and
+  // user choices during a missing configuration or a session transition.
+  const next = [...saved];
+  for (const supplied of MANAGED_PLAYLISTS) {
+    if (!configured.has(supplied.sourceId) || next.some((item) => item.id === supplied.playlistId)) continue;
+    const priorManaged = MANAGED_PLAYLISTS.slice(0, MANAGED_PLAYLISTS.indexOf(supplied))
+      .map((item) => next.findIndex((row) => row.id === item.playlistId))
+      .filter((index) => index >= 0);
+    const insertAt = priorManaged.length ? Math.max(...priorManaged) + 1 : 0;
+    next.splice(insertAt, 0, makeRecord(supplied.playlistId, supplied.name, true));
+  }
+  return next;
+}
+
 async function load(): Promise<PlaylistRecord[]> {
-  if (records) return records;
   await FileSystem.makeDirectoryAsync(ROOT, { intermediates: true });
+  if (records) {
+    const next = reconcileManagedRows(records);
+    if (JSON.stringify(next) !== JSON.stringify(records)) {
+      await AsyncStorage.setItem(KEY, JSON.stringify(next));
+      records = next;
+      notify();
+    }
+    return records;
+  }
   const raw = await AsyncStorage.getItem(KEY);
   const saved: PlaylistRecord[] = raw ? JSON.parse(raw) : [];
   if (!Array.isArray(saved)) throw new Error("Playlist settings could not be read. Saved catalogs were not changed.");
-  const next = (saved || []).filter((item) => /^[a-z0-9-]+$/.test(item.id));
-  if (!next.some((item) => item.id === PRIMARY_PLAYLIST)) next.unshift(makeRecord(PRIMARY_PLAYLIST, "CharmIPTV", true));
-  if (managedUrl(SECOND_PLAYLIST) && !next.some((item) => item.id === SECOND_PLAYLIST)) next.splice(1, 0, makeRecord(SECOND_PLAYLIST, "CharmIPTV 2", true));
+  const valid = (saved || []).filter((item) => /^[a-z0-9-]+$/.test(item.id));
+  const next = reconcileManagedRows(valid);
+  if (JSON.stringify(next) !== JSON.stringify(saved)) await AsyncStorage.setItem(KEY, JSON.stringify(next));
   records = next;
   return next;
 }
@@ -125,7 +150,7 @@ export function usePlaylists() {
 export function seedLegacyPlaylist(channels: Channel[]): Promise<void> {
   return exclusive(async () => {
     const rows = await load(); const primary = rows.find((row) => row.id === PRIMARY_PLAYLIST)!;
-    if (primary.revision || !channels.length) return;
+    if (!primary || primary.revision || !channels.length) return;
     const legacy = channels.filter((channel) => !channel.id.startsWith("pl:"));
     if (!legacy.length) return;
     const next = await writeCatalog(primary, legacy);
@@ -156,13 +181,15 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false): Promise<Chan
         await finishNativeUpdateJob(jobId, "succeeded", fresh.length).catch(() => undefined);
       } catch (error) {
         catalogs.set(row.id, previous);
-        rows = previousRows.map((item) => item.id === row.id ? { ...item, status: "Refresh failed — previous channels kept. Check source and connection." } : item);
+        const safeReason = error instanceof Error && /^(Enabled playlists exceed|Playlist contains|Playlist exceeds|No playable)/.test(error.message)
+          ? error.message : "Refresh failed — previous channels kept. Check source and connection.";
+        rows = previousRows.map((item) => item.id === row.id ? { ...item, status: safeReason } : item);
         await commit(rows);
-        await finishNativeUpdateJob(jobId, "failed", 0, error instanceof Error ? error.message : "Playlist refresh failed").catch(() => undefined);
+        await finishNativeUpdateJob(jobId, "failed", 0, safeReason).catch(() => undefined);
       }
     }
     const combined = combinePlaylistCatalogs(rows, catalogs);
-    if (!combined.length) throw new Error("No saved channels available. Open Settings → Playlists to check your sources.");
+    if (!combined.length && rows.some((row) => row.enabled)) throw new Error("No saved channels available. Open Settings → Playlists to check your sources.");
     return combined;
   });
 }
@@ -172,7 +199,6 @@ export function savePersonalPlaylist(name: string, url: string, preview: Channel
     const rows = await load();
     const old = existingId ? rows.find((row) => row.id === existingId) : undefined;
     if (existingId && (!old || old.managed)) throw new Error("This supplied playlist cannot be replaced.");
-    if (!old && rows.filter((row) => !row.managed).length >= MAX_PERSONAL_PLAYLISTS) throw new Error("This test build supports five personal playlists.");
     validatePlaylistUrl(url); validatePlaylistImport({ channels: preview, rejected: 0, truncated: false });
     const row = { ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist" };
     const catalogs = await allCatalogs(rows); catalogs.set(row.id, scopePlaylistChannels(row, preview));
@@ -189,9 +215,7 @@ export function savePersonalPlaylist(name: string, url: string, preview: Channel
 export function updatePlaylist(id: string, change: Partial<Pick<PlaylistRecord, "name" | "enabled" | "refreshHours" | "epgSourceIds" | "autoEpg" | "autoEpgSourceIds" | "epgDiscoveryStatus">>): Promise<void> {
   return exclusive(async () => {
     const rows = await load(); const next = rows.map((row) => row.id === id ? { ...row, ...change } : row);
-    if (!next.some((row) => row.enabled)) throw new Error("Keep at least one playlist enabled.");
-    const combined = combinePlaylistCatalogs(next, await allCatalogs(next));
-    if (!combined.length && rows.some((row) => row.count > 0)) throw new Error("Download channels for another playlist before disabling this one.");
+    combinePlaylistCatalogs(next, await allCatalogs(next));
     await commit(next);
   });
 }
@@ -203,8 +227,6 @@ export function removePlaylist(id: string): Promise<void> {
   return exclusive(async () => { const rows = await load(); const row = rows.find((item) => item.id === id);
     if (!row || row.managed) throw new Error("Supplied playlists can be disabled, but cannot be removed.");
     const next = rows.filter((item) => item.id !== id);
-    if (!next.some((item) => item.enabled)) throw new Error("Keep at least one playlist enabled.");
-    if (row.enabled && row.count > 0 && !combinePlaylistCatalogs(next, await allCatalogs(next)).length) throw new Error("Download channels for another playlist before removing this one.");
     await commit(next); await SecureStore.deleteItemAsync(`playlist-${id}`);
     const files = await FileSystem.readDirectoryAsync(ROOT);
     for (const file of files.filter((name) => name.startsWith(`${id}-`))) await FileSystem.deleteAsync(`${ROOT}${file}`, { idempotent: true });

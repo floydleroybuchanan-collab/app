@@ -45,8 +45,12 @@ The app keeps the returned addresses in memory rather than persistent storage.
    `env.DB`.
 3. Push the account Worker files on the RC-6 branch or manually run the
    `Deploy CharmIPTV Account Worker` workflow. Its checked-in Wrangler config
-   preserves the existing encrypted secrets, D1 binding, minute cleanup trigger,
-   and `workers.dev` address.
+   preserves the D1 binding, minute cleanup trigger, and `workers.dev` address.
+   The workflow fails closed unless all four repository source secrets
+   (`M3U_URL`, `EPG_URL`, `M3U_URL_2`, and `EPG_URL_2`) are complete HTTP/HTTPS
+   URLs, then synchronizes their masked values into the Worker. Its final health
+   check reports only whether each playlist/Guide pair is present—never an
+   address or credential.
 4. Configure a Cron Trigger for regular expired-account cleanup. Requests also
    perform a bounded cleanup so stale accounts are removed even without a cron
    invocation.

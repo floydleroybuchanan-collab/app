@@ -1,3 +1,7 @@
+import type { ManagedContentAccess } from "@/src/auth/managedContentAccess";
+
+export type { ManagedContentAccess } from "@/src/auth/managedContentAccess";
+
 export const ACCOUNT_API_BASE_URL = "https://charmiptv-account-api.agentleakage.workers.dev";
 
 const ACCOUNT_REQUEST_TIMEOUT_MS = 15_000;
@@ -38,12 +42,6 @@ export type ReferralSummary = {
   cycle_started_at: number;
   renews_at: number;
   invitations: ReferralInvitation[];
-};
-
-export type ManagedContentAccess = {
-  expires_at: number;
-  primary: { playlist_url: string; epg_url: string };
-  secondary: { playlist_url: string; epg_url: string };
 };
 
 type AccountEnvelope = {

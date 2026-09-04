@@ -142,5 +142,5 @@ test("playlist types stay batch-indexed and late profile hydration cannot overwr
   assert.match(profile, /const revisionAtStart = mutationRevision/);
   assert.match(profile, /prune\(\{ \.\.\.storedProfiles, \.\.\.cached \}\)/);
   assert.match(profile, /const pendingLoad = loadPromise/);
-  assert.match(source, /if \(!channels\.length\) return;[\s\S]*indexDeclaredStreamTypes\(channels\);[\s\S]*if \(!nativeEpgAvailable\) return;/);
+  assert.match(source, /indexDeclaredStreamTypes\(channels\);[\s\S]*if \(!nativeEpgAvailable\) return;/);
 });

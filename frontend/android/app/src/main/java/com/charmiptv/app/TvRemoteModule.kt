@@ -45,11 +45,26 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
 
   @ReactMethod
   fun setRemoteContext(context: String) {
-    remoteContext = when (context) {
+    remoteContext = normalizeRemoteContext(context)
+  }
+
+  /**
+   * Focus boundary state cannot wait behind the asynchronous React bridge: a
+   * user can press the next D-pad key immediately after focus changes. This
+   * tiny synchronous setter performs no I/O and keeps dispatchKeyEvent's owner
+   * exact on low-powered Android TV hardware.
+   */
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  fun setRemoteContextSync(context: String): Boolean {
+    remoteContext = normalizeRemoteContext(context)
+    return true
+  }
+
+  private fun normalizeRemoteContext(context: String): String =
+    when (context) {
       "guide", "guide_groups", "main_drawer", "icon_rail", "drawer_edge", "player", "modal" -> context
       else -> "default"
     }
-  }
 
   @ReactMethod
   fun getDeviceMemoryProfile(promise: Promise) {

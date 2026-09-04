@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useStore } from "@/src/store";
@@ -21,6 +21,7 @@ import { fonts, radius, tvColors } from "@/src/theme";
 import { type SourceRefreshIntervalHours, useSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { formatRelativeAge } from "@/src/utils/time";
 import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
 const PLAYLIST_PAGE_SIZE = 60;
 const XMLTV_PAGE_SIZE = 60;
@@ -33,6 +34,7 @@ function validHttpUrl(value: string): boolean {
 
 export default function CustomEpgScreen() {
   const router = useRouter();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { channels } = useStore();
   const prefs = useEpgSourcePreferences();
   const refreshPrefs = useSourceRefreshPreferences();
@@ -51,9 +53,9 @@ export default function CustomEpgScreen() {
   const [xmltvTotal, setXmltvTotal] = useState(0);
   const [xmltvFilter, setXmltvFilter] = useState<EpgPickerFilter>("all");
   const [assignDrawerOpen, setAssignDrawerOpen] = useState(false);
-  const [preferBackFocus, setPreferBackFocus] = useState(true);
   const queryGeneration = useRef(0);
   const scrollRef = useRef<ScrollView | null>(null);
+  const entryFocus = useTvRouteEntryFocus(true, "custom-epg");
 
   useTvBackHandler(useCallback(() => {
     router.replace("/epg-sources" as any);
@@ -68,10 +70,8 @@ export default function CustomEpgScreen() {
 
   useEffect(() => {
     const topTimer = setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 0);
-    const focusTimer = setTimeout(() => setPreferBackFocus(false), 180);
     return () => {
       clearTimeout(topTimer);
-      clearTimeout(focusTimer);
     };
   }, []);
 
@@ -294,7 +294,7 @@ export default function CustomEpgScreen() {
             <Text style={styles.kicker}>PHASE 9 · GUIDE SOURCES</Text>
             <Text style={styles.title}>{prefs.userName}</Text>
           </View>
-          <Pressable hasTVPreferredFocus={preferBackFocus} onFocus={() => setPreferBackFocus(false)} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
+          <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" />
             <Text style={styles.backText}>EPG Settings</Text>
           </Pressable>

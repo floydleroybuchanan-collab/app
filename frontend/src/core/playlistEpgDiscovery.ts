@@ -1,7 +1,7 @@
 import { applyDiscoveredPlaylistEpg, listPlaylists } from "./playlistRegistry";
 import { ensureDiscoveredEpgSource } from "./multiEpgSources";
 import { getEpgSourcePreferences } from "./epgSourcePreferences";
-import { PRIMARY_PLAYLIST, SECOND_PLAYLIST } from "./playlistCatalog";
+import { managedEpgSourceIds, managedPlaylistDefinition } from "./playlistCatalog";
 import { managedEpgUrl } from "@/src/auth/managedContentAccess";
 
 /** Only successfully committed playlist headers enter discovery. No validation-preview side effects. */
@@ -11,8 +11,9 @@ export async function discoverPlaylistEpg(): Promise<void> {
   for (const row of playlists) {
     if (!row.enabled || row.autoEpg === false || !row.discoveredEpgUrls?.length) continue;
     if (row.autoEpg == null && !row.managed && row.epgSourceIds.length) continue; // Preserve pre-existing manual associations.
-    const configuredOwner = row.id === PRIMARY_PLAYLIST ? managedEpgUrl("primary") : row.id === SECOND_PLAYLIST ? managedEpgUrl("secondary") : "";
-    const suppliedId = row.id === PRIMARY_PLAYLIST ? "primary" : row.id === SECOND_PLAYLIST ? "owner-secondary" : "";
+    const supplied = managedPlaylistDefinition(row.id);
+    const configuredOwner = supplied ? managedEpgUrl(supplied.sourceId) : "";
+    const suppliedId = supplied?.epgSourceId || "";
     const ids: string[] = configuredOwner?.trim() && suppliedId ? [suppliedId] : [];
     let full = false;
     for (const url of row.discoveredEpgUrls) {
@@ -23,7 +24,7 @@ export async function discoverPlaylistEpg(): Promise<void> {
     // Reserved owner slots are automatic build associations, never manual
     // selections. Drop stale reserved ids as well when a supplied URL is later
     // removed so they cannot shadow a real user-selected source.
-    const reserved = new Set(["primary", "owner-secondary", suppliedId].filter(Boolean));
+    const reserved = new Set([...managedEpgSourceIds(), suppliedId].filter(Boolean));
     const manual = row.epgSourceIds.filter((id) => !(row.autoEpgSourceIds || []).includes(id) && !reserved.has(id));
     // If capacity prevents a replacement, retain the last working association.
     const automatic = full ? Array.from(new Set([...(row.autoEpgSourceIds || []), ...ids])) : ids;

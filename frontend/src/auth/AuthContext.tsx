@@ -57,7 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const validateToken = useCallback(async (token: string, restoring = false) => {
+    if (!restoring && tokenRef.current !== token) return;
     const result = await getCurrentAccount(token);
+    if (!restoring && tokenRef.current !== token) return;
     if (result.response?.status === 401 || result.response?.status === 403) {
       await clearLocalSession("Your session expired or was revoked. Please sign in again.");
       return;
@@ -76,24 +78,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return;
     }
-    if (restoring) {
+    let sourceNotice: string | null = null;
+    {
       const content = await getManagedContentAccess(token);
+      if (!restoring && tokenRef.current !== token) return;
       if (content.response?.status === 401 || content.response?.status === 403) {
         await clearLocalSession("Your session expired or was revoked. Please sign in again.");
         return;
       }
       if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
-        tokenRef.current = token;
-        setUser(null);
-        setNotice(content.data.error || "Unable to load protected CharmIPTV sources right now.");
-        setStatus("unavailable");
-        return;
+        sourceNotice = "Supplied sources are temporarily unavailable. Your personal playlists remain available in Settings → Playlists.";
       }
     }
     tokenRef.current = token;
     lastValidatedAtRef.current = Date.now();
     setUser(result.data.user);
-    setNotice(null);
+    setNotice(sourceNotice);
     setStatus("signed_in");
   }, [clearLocalSession]);
 
@@ -145,9 +145,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return result.data.error || "Unable to sign in.";
     }
     const content = await getManagedContentAccess(result.data.token);
-    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+    if (content.response?.status === 401 || content.response?.status === 403) {
       void logoutAccount(result.data.token);
-      return content.data.error || "Unable to load protected CharmIPTV sources right now.";
+      return "Your session expired. Please sign in again.";
+    }
+    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+      clearManagedContentAccess();
+      setNotice("Supplied sources are temporarily unavailable. You can use your personal playlists.");
     }
     const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
     if (!saved) {
@@ -169,9 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return result.data.error || "Unable to create the account.";
     }
     const content = await getManagedContentAccess(result.data.token);
-    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+    if (content.response?.status === 401 || content.response?.status === 403) {
       void logoutAccount(result.data.token);
-      return content.data.error || "Unable to load protected CharmIPTV sources right now.";
+      return "Your session expired. Please sign in again.";
+    }
+    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+      clearManagedContentAccess();
+      setNotice("Supplied sources are temporarily unavailable. You can use your personal playlists.");
     }
     const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
     if (!saved) {
@@ -182,7 +190,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenRef.current = result.data.token;
     lastValidatedAtRef.current = Date.now();
     setUser(result.data.user);
-    setNotice(null);
     setStatus("signed_in");
     return null;
   }, []);

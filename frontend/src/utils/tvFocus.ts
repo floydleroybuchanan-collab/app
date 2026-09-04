@@ -1,11 +1,18 @@
 import { findNodeHandle, Platform, UIManager } from "react-native";
 
-// react-native-tvos exposes UIManager.focus at runtime; stock RN typings omit it.
-type TvUIManager = typeof UIManager & { focus?: (tag: number) => void };
-
 /** Request native TV focus on a React node (Pressable ref, View ref, etc.). */
 export function requestNativeFocus(node: unknown): boolean {
   if (!node) return false;
+  // React's generic HostComponent.focus() calls TextInputState, which is a
+  // no-op for a Pressable. TV ViewManager owns requestTVFocus instead.
+  if (Platform.isTV) {
+    try {
+      const handle = findNodeHandle(node as any);
+      if (!handle) return false;
+      UIManager.dispatchViewManagerCommand(handle, "requestTVFocus" as any, []);
+      return true;
+    } catch { return false; }
+  }
   const focus = (node as { focus?: () => void }).focus;
   if (typeof focus === "function") {
     try {
@@ -13,26 +20,19 @@ export function requestNativeFocus(node: unknown): boolean {
       return true;
     } catch {}
   }
-  const handle = findNodeHandle(node as any);
-  if (!handle) return false;
-  if (Platform.isTV) {
-    try {
-      const manager = UIManager as TvUIManager;
-      if (typeof manager.focus === "function") {
-        manager.focus(handle);
-        return true;
-      }
-      UIManager.dispatchViewManagerCommand(handle, "requestFocus" as any, []);
-      return true;
-    } catch {
-      return false;
-    }
-  }
   return false;
 }
 
-/** Retry focus a few times — virtualized lists often mount cells after the first frame. */
-export function requestNativeFocusWithRetry(node: unknown, delaysMs = [0, 32, 96, 200]): () => void {
+/**
+ * Retry focus a few times — virtualized lists often mount cells after the first
+ * frame. When confirmation is supplied, invoking `.focus()` is not considered
+ * success: only the target's real native onFocus ownership stops retries.
+ */
+export function requestNativeFocusWithRetry(
+  node: unknown,
+  delaysMs = [0, 32, 96, 200],
+  isConfirmed?: () => boolean,
+): () => void {
   const timers: ReturnType<typeof setTimeout>[] = [];
   let completed = false;
   const cancel = () => {
@@ -43,9 +43,15 @@ export function requestNativeFocusWithRetry(node: unknown, delaysMs = [0, 32, 96
     timers.push(
       setTimeout(() => {
         if (completed) return;
-        // Once native focus succeeds, never fire a later retry under the user's
-        // cursor. Late retries were a root cause of self-moving TV focus.
-        if (requestNativeFocus(node)) cancel();
+        if (isConfirmed?.()) {
+          cancel();
+          return;
+        }
+        const invoked = requestNativeFocus(node);
+        // Legacy call sites have no onFocus confirmation callback, so preserve
+        // their one-shot behavior. Route-entry owners keep retrying until their
+        // actual onFocus handler confirms ownership or cancels on route blur.
+        if (!isConfirmed && invoked) cancel();
       }, delay),
     );
   });

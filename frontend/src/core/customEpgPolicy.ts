@@ -31,7 +31,9 @@ export async function syncNativeCustomEpgPolicy(
       getEpgSourcePreferences(),
       getMultiEpgSources(),
     ]);
-    await configureNativeUserGuideSources(primary.primaryEnabled, [
+    const { listPlaylists } = await import("@/src/core/playlistRegistry");
+    const playlists = await listPlaylists();
+    await configureNativeUserGuideSources(primary.primaryEnabled && playlists.some((row) => row.id === "charm-primary" && row.enabled), [
       {
         id: "user",
         url: primary.userUrl,

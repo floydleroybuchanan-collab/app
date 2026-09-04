@@ -13,7 +13,7 @@ assert.match(nativeBridge, /Playlist request timed out before channels could be 
 assert.doesNotMatch(nativeBridge, /return nativeModule\.fetchPlaylist\(url\)/);
 assert.match(source, /refreshPlaylists\(/);
 const registry = fs.readFileSync(new URL("../src/core/playlistRegistry.ts", import.meta.url), "utf8");
-assert.match(registry, /managedPlaylistUrl\("primary"\)/);
+assert.match(registry, /managedPlaylistUrl\(source.sourceId\)/);
 assert.match(registry, /seedLegacyPlaylist/);
 assert.match(source, /Preserve provider protocol exactly/);
 

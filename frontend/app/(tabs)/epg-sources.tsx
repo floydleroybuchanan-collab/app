@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import dayjs from "dayjs";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { clearChannelLogoCache } from "@/src/components/ChannelLogo";
 import { useStore, type EpgGuideFilter, type GuideWindowHours } from "@/src/store";
@@ -25,6 +25,7 @@ import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { readPlaylistGuideHealth, refreshEveryGuide, refreshEveryPlaylistAndGuide, refreshEveryPlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 import { readNativeUpdateDiagnostics, type NativeUpdateDiagnostics } from "@/src/nativeEpg";
 import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
 const REFRESH_OPTIONS: { label: string; value: SourceRefreshIntervalHours }[] = [
   { label: "Manual only", value: 0 }, { label: "2h", value: 2 }, { label: "4h", value: 4 },
@@ -35,6 +36,7 @@ type ActiveAction = "refresh-all" | "refresh-playlist" | "refresh-epg" | "rebuil
 
 function EpgSourcesScreenContent() {
   const router = useRouter();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { refresh, channels, clock24h, epgGuideFilter, setEpgGuideFilter, guideWindowHours, setGuideWindowHours, preferTvgIdOnly, setPreferTvgIdOnly } = useStore();
   const sourceRefresh = useSourceRefreshPreferences();
   const guideTiming = useGuideTimingPreferences("default");
@@ -47,21 +49,18 @@ function EpgSourcesScreenContent() {
   const [diagnostics, setDiagnostics] = useState<SourceDiagnostics | null>(null);
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
-  const [preferTopFocus, setPreferTopFocus] = useState(true);
   const [playlistHealth, setPlaylistHealth] = useState<PlaylistGuideHealth[]>([]);
   const [updateDiagnostics, setUpdateDiagnostics] = useState<NativeUpdateDiagnostics>({ states: [], history: [] });
   const operationInFlight = useRef(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const busy = activeAction !== null;
+  const entryFocus = useTvRouteEntryFocus(true, "epg-sources");
 
   useFocusEffect(
     useCallback(() => {
-      setPreferTopFocus(true);
       const topTimer = setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 0);
-      const focusTimer = setTimeout(() => setPreferTopFocus(false), 180);
       return () => {
         clearTimeout(topTimer);
-        clearTimeout(focusTimer);
       };
     }, []),
   );
@@ -161,7 +160,7 @@ function EpgSourcesScreenContent() {
       <View style={styles.page}>
         <View style={styles.header}>
           <View><Text style={styles.kicker}>GUIDE CONFIGURATION</Text><Text style={styles.title}>EPG & Playlist</Text></View>
-          <Pressable hasTVPreferredFocus={preferTopFocus} onFocus={() => setPreferTopFocus(false)} onPress={() => router.replace("/settings" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
+          <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/settings" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>All Settings</Text>
           </Pressable>
         </View>

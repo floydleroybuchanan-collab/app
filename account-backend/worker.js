@@ -4,6 +4,12 @@ const PBKDF2_ITERATIONS = 60000;
 const REFERRAL_LIMIT = 2;
 const REFERRAL_ACTIVE_LIMIT = 6;
 const REFERRAL_INVITE_SECONDS = 3 * DAY;
+const MANAGED_SOURCE_SLOTS = [
+  { id: "primary", playlist: "M3U_URL", epg: "EPG_URL", required: true },
+  { id: "secondary", playlist: "M3U_URL_2", epg: "EPG_URL_2", required: true },
+  { id: "tertiary", playlist: "M3U_URL_3", epg: "EPG_URL_3", required: false },
+  { id: "quaternary", playlist: "M3U_URL_4", epg: "EPG_URL_4", required: false },
+];
 
 export default {
   async fetch(request, env) {
@@ -16,7 +22,18 @@ export default {
       if (path === "/" && request.method === "GET") {
         return json({ success: true, service: "CharmIPTV Account API", status: "online", referral_active_limit: 6 });
       }
-      if (path === "/health" && request.method === "GET") return json({ success: true, database: !!env.DB });
+      if (path === "/health" && request.method === "GET") {
+        const sources = managedSourceConfiguration(env);
+        // Report presence only. Provider addresses and credentials must never
+        // appear in a public diagnostic response or deployment log.
+        return json({
+          success: true,
+          database: !!env.DB,
+          content_sources_ready: sources.ready,
+          configured_source_count: sources.configured.length,
+          content_sources: Object.fromEntries(sources.slots.map((source) => [source.id, source.state === "configured"])),
+        });
+      }
       if (path === "/setup-admin" && request.method === "POST") return setupAdmin(request, env);
       if (path === "/auth/register" && request.method === "POST") return registerWithInvite(request, env);
       if (path === "/auth/login" && request.method === "POST") return login(request, env);
@@ -570,29 +587,55 @@ async function requireAdmin(request, env) {
 async function createContentAccess(request, env) {
   const auth = await requireUser(request, env);
   if (!auth.ok) return auth.response;
-  if (!validManagedSource(env.M3U_URL) || !validManagedSource(env.EPG_URL)) {
-    return json({ success: false, error: "The primary CharmIPTV sources are not configured." }, 503);
+  const sources = managedSourceConfiguration(env);
+  // Never authenticate into a silently partial catalog: a missing second URL
+  // previously looked like a successful login, then every secondary refresh
+  // failed with zero health. Slots three/four can be enabled later, but each
+  // configured slot must always contain both its playlist and Guide address.
+  if (!sources.ready) {
+    return json({ success: false, error: "The supplied CharmIPTV playlist and Guide sources are not fully configured." }, 503);
   }
   const expiresAt = Number(auth.session.expires_at);
   // The APK never contains provider URLs. Release them only after a valid
   // account/session check, over this HTTPS response, so Android can contact
   // providers directly with the same M3U/XMLTV transport used by build #150.
   // This avoids changing the request origin to a Cloudflare data-center IP.
-  const source = (configured) => validManagedSource(configured) ? String(configured).trim() : "";
+  const contentSources = sources.configured.map((configured) => ({
+    id: configured.id,
+    playlist_url: configured.playlistUrl,
+    epg_url: configured.epgUrl,
+  }));
+  const named = Object.fromEntries(contentSources.map(({ id, playlist_url, epg_url }) => [id, { playlist_url, epg_url }]));
   return json({
     success: true,
     content: {
       expires_at: expiresAt,
-      primary: {
-        playlist_url: source(env.M3U_URL),
-        epg_url: source(env.EPG_URL),
-      },
-      secondary: {
-        playlist_url: source(env.M3U_URL_2),
-        epg_url: source(env.EPG_URL_2),
-      },
+      sources: contentSources,
+      // Named pairs keep already-issued two-source APKs compatible while the
+      // scalable array lets this and future APKs consume up to four slots.
+      ...named,
     },
   });
+}
+
+function managedSourceConfiguration(env) {
+  const slots = MANAGED_SOURCE_SLOTS.map((slot) => {
+    const playlistValue = String(env[slot.playlist] || "").trim();
+    const epgValue = String(env[slot.epg] || "").trim();
+    const absent = !playlistValue && !epgValue;
+    const configured = validManagedSource(playlistValue) && validManagedSource(epgValue);
+    return {
+      ...slot,
+      state: absent ? "missing" : configured ? "configured" : "incomplete",
+      playlistUrl: configured ? playlistValue : "",
+      epgUrl: configured ? epgValue : "",
+    };
+  });
+  const configured = slots.filter((slot) => slot.state === "configured");
+  const requiredReady = slots.filter((slot) => slot.required).every((slot) => slot.state === "configured");
+  const noPartialPairs = slots.every((slot) => slot.state !== "incomplete");
+  const noSlotGap = slots[3].state !== "configured" || slots[2].state === "configured";
+  return { slots, configured, ready: requiredReady && noPartialPairs && noSlotGap };
 }
 
 function validManagedSource(value) {

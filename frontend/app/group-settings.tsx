@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { useStore } from "@/src/store";
 import { useCustomGuideGroups } from "@/src/core/customGuideGroups";
@@ -12,6 +12,7 @@ import { applyGuideGroupOrder, getGuideGroupDisplayName } from "@/src/core/guide
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
 const PAGE_SIZE = 100;
 const BUILT_INS = ["Favorites", ...SMART_GROUPS, ...CURATED_GROUPS] as string[];
@@ -22,6 +23,7 @@ function cleanGroupName(raw: string): string {
 
 export default function GroupSettingsScreen() {
   const router = useRouter();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { channels } = useStore();
   const guideUi = useGuideUiPreferences();
   const tabPrefs = useGuideGroupTabPreferences();
@@ -33,13 +35,12 @@ export default function GroupSettingsScreen() {
   const [providerRenameDraft, setProviderRenameDraft] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
-  const [preferBackFocus, setPreferBackFocus] = useState(true);
   const scrollRef = useRef<ScrollView | null>(null);
+  const entryFocus = useTvRouteEntryFocus(true, "group-settings");
 
   useEffect(() => {
     const topTimer = setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 0);
-    const focusTimer = setTimeout(() => setPreferBackFocus(false), 180);
-    return () => { clearTimeout(topTimer); clearTimeout(focusTimer); };
+    return () => clearTimeout(topTimer);
   }, []);
 
   const returnToSettings = useCallback(() => {
@@ -180,7 +181,7 @@ export default function GroupSettingsScreen() {
             <Text style={styles.kicker}>PHASE 9</Text>
             <Text style={styles.title}>Playlist & Custom Groups</Text>
           </View>
-          <Pressable hasTVPreferredFocus={preferBackFocus} onFocus={() => setPreferBackFocus(false)} onPress={returnToSettings} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
+          <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={returnToSettings} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" />
             <Text style={styles.backText}>Settings</Text>
           </Pressable>

@@ -163,7 +163,18 @@ let remoteContextOwner: RemoteContext = "default";
 
 export function setRemoteContext(context: RemoteContext) {
   remoteContextOwner = context;
-  try { TvRemote?.setRemoteContext?.(context); } catch {}
+  try {
+    // Boundary ownership must reach MainActivity before the next physical key
+    // press. The old asynchronous bridge call made quick Left taps race the
+    // native dispatcher on lower-powered Android TV boxes.
+    if (typeof TvRemote?.setRemoteContextSync === "function") {
+      TvRemote.setRemoteContextSync(context);
+      return;
+    }
+    TvRemote?.setRemoteContext?.(context);
+  } catch {
+    try { TvRemote?.setRemoteContext?.(context); } catch {}
+  }
 }
 
 export function resetRemoteContextIfOwned(

@@ -1,0 +1,44 @@
+# RC.6 optional-source and D-pad repair
+
+Branch: `feature/multiple-playlists-test-1`. Repair base: `bf6ca91`, after APK #160 (`46a5768`). Working-playlist comparison: APK #150 (`ee2dc1d`). This report supersedes fixed-count/last-playlist restrictions in the older multiple-playlists test notes.
+
+## Product contract
+
+- Account authentication stays required. Supplied sources are optional: either, both, neither, and/or personal M3U playlists and XMLTV guides.
+- Supplied addresses come from authenticated HTTPS `/content/access`; no private M3U/XMLTV address fallback is compiled into the Android bundle. Provider downloads remain direct HTTP/HTTPS, not encrypted/proxied M3U/XMLTV documents.
+- URLs are not guaranteed invisible to a recipient inspecting their own device. Direct delivery exposes them to the authenticated app at runtime. Personal URLs use SecureStore; parsed catalogs and native guide source records live in private app storage. This is not a promise of encryption for all cached provider data or HTTP traffic.
+- Every playlist retains its identity, saved catalog, refresh clock and enabled choice. Both supplied playlists may be disabled without requiring another working source. Explicitly removing the final personal playlist is allowed; supplied playlists cannot be deleted.
+- No five-personal-playlist, combined-25k-channel or nine-custom-guide configuration cap. Per-feed byte/channel/programme bounds and bounded guide paint/window caches remain for device safety. This is not a claim of unlimited physical device capacity.
+- Page edge Left → compact rail → Left → main menu. Guide has no permanent rail: channel-column Left → playlist/groups drawer → Left → main menu. The compact rail may appear beside the open groups drawer; Back there selects the rail, then Back/Left expands the menu.
+
+## Confirmed code findings and changes
+
+| Area | Evidence and repair |
+| --- | --- |
+| Build #150 vs #160 | #150 supplied URLs through Expo build environment; #160 moved them behind account access. The first account deployment kept existing Worker values but did not synchronize the known two source pairs from GitHub secrets. Its health response did not report pair readiness. This was a deployment gap, not proof that a specific private URL was invalid. Deployment now validates and syncs both required pairs and reports presence/count without addresses. Optional owner pairs 3/4 are accepted only when configured; no new provider addresses were invented. |
+| Registry hydration | Managed definitions were reconciled only at first load. Reconciliation now tolerates login/configuration arriving later and preserves existing disabled state, order and revision pointers during missing configuration. |
+| Guide preferences | Managed additional guide normalization forced enabled=true. Existing user choices are now preserved, including when configuration temporarily disappears. The primary bridge also checks the saved playlist choice, preventing other settings callers from reactivating it. |
+| Empty enabled catalog | JS/native upsert guards treated every empty aggregate as a failed provider import. An explicit empty projection now deactivates visible rows while retaining source catalogs and customization identity. Empty/invalid provider imports remain rejected. Empty saved metadata is valid and not replaced with an older cache. |
+| Multi-guide consumers | Removed independent source truncation in JS configuration, native metadata/query configuration and CombinedGuideRepository. Removed combined channel/binding truncation; binding deduplication uses a set instead of a quadratic scan. |
+| Refresh paths | EPG-only refresh now includes additional playlist guides. Shared-guide refresh candidates include all associated playlists even when initiated from one playlist. Name-only channels reach the existing guarded native name matcher. |
+| Focus/refresh coupling | Custom XMLTV streaming and native staged EPG swaps aborted when Guide/player/modal became remote owner. That could interrupt an otherwise valid import merely by opening Guide. Running background work now yields CPU and completes its existing transactional swap. Scheduling still defers new automatic work while the Guide/player is active. |
+| TV focus API | Installed RN TV's generic HostComponent.focus routes through TextInputState and is ineffective for Pressables. The helper now uses the installed ViewManager `requestTVFocus` command. Entry retries stop on actual onFocus confirmation, not merely calling a no-op method. |
+| Rail navigation | Native Activity resolves physical boundaries against attached visible views in the current shell. Right returns to a live content/group control; failure keeps the rail selected. Left/Back sends a shell-addressed menu action, avoiding competing open-group listeners and stale JS return refs. Key release is consumed with the handoff. |
+| Settings entry | Live TV and settings/EPG/playlist/group management pages use route-scoped initial focus with cancellation on blur. Rail entry tags are published/cleared by their owning shell. Old rail focus requests are not replayed when the Guide drawer reappears. |
+| Diagnostics | Playlist refresh history uses the redacted failure reason instead of raw transport error text. |
+
+## Audit coverage and limits
+
+Read the supplied TiViMate analysis reference at `eab124bb2cf19d0512fa729c30e3328177db434c`: playlist management, update safety, guide associations, menu/input and usability reports. These are behavioral reference reports, not verified TiViMate proprietary source.
+
+The repository interaction scan covers shipped app, source, Android, plugin and supporting script files, counting functions, timers, listeners and network sites and checking player/transport invariants against its baseline. Additional targeted inspection followed authentication → source registry → staged catalogs → combined projection → guide binding/import → metadata/health → scheduler → settings/guide/search/player consumers, plus Activity/remote bridge → shell → page/drawer focus boundaries. This is broad automated and targeted code review, not a claim that every line or every TV interaction has been manually verified.
+
+The three exact transport hashes were deliberately updated after reviewing these authorized changes; the exact-match guard remains active and rejects later unreviewed edits. Media3 recovery/decoder architecture, guide paint-cache bounds, VOD provider implementation, account invitation/cancellation rules and HTTP/HTTPS stream compatibility are retained.
+
+## Acceptance checks
+
+Behavioral regressions cover more than five personal playlists, more than nine guide feeds, combined catalogs exceeding 25k rows, both supplied sources disabled, re-enabling retained data, configuration loss/return, personal-only startup, per-source failure isolation, shared EPG candidates, secure session/access contract, TV focus command and retry confirmation. Wiring tests cover the Guide-only rail exception, native boundary validation and explicit-empty projection versus failed provider import.
+
+Run frontend unit tests, typecheck, lint, native config/guide validation, Worker syntax/tests, repository interaction scan, Media3 guard and Python database/contract tests. GitHub then compiles Kotlin/Java and Android unit tests, packages the universal ARMv7/ARM64 sideload APK, verifies owner signing/contents and encrypts the owner artifact.
+
+No connected TV/emulator is available here. APK compilation is not proof of real remote behavior or successful provider playback. On-device acceptance must check one-tap Left/Right on Live TV and all Settings subpages; Guide channel-column/groups/menu navigation; both supplied feeds; four or more personal feeds; each disable combination; cold restart; failed refresh retaining favorites; and memory on the Onn box.

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useStore } from "@/src/store";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
-import { assignMultiEpgChannel, type CustomEpgSourceRecord, useMultiEpgSources } from "@/src/core/multiEpgSources";
+import { assignMultiEpgChannel, isManagedEpgSourceId, type CustomEpgSourceRecord, useMultiEpgSources } from "@/src/core/multiEpgSources";
 import {
   clearNativeSourceGuide, configureNativeUserGuideSources, listNativeSourceGuideChannels,
   refreshNativeSourceGuide, setNativeSourceGuideBinding,
@@ -16,6 +16,7 @@ import { invalidateGuideOwnershipCaches } from "@/src/source";
 import { formatRelativeAge } from "@/src/utils/time";
 import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
 import { fonts, radius, tvColors } from "@/src/theme";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
 const PAGE = 50;
 const REFRESH_VALUES: CustomEpgSourceRecord["refreshHours"][] = [0, 2, 4, 6, 12, 24];
@@ -23,8 +24,10 @@ type XmltvRow = { id: string; name: string };
 
 export default function EpgSourceScreen() {
   const router = useRouter();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const params = useLocalSearchParams<{ sourceId?: string; create?: string }>();
   const sourceId = String(params.sourceId || "").trim();
+  const suppliedSource = isManagedEpgSourceId(sourceId);
   const { channels } = useStore();
   const primary = useEpgSourcePreferences();
   const registry = useMultiEpgSources();
@@ -46,13 +49,12 @@ export default function EpgSourceScreen() {
   const [assignDrawerOpen, setAssignDrawerOpen] = useState(false);
   const queryGeneration = useRef(0);
   const scrollRef = useRef<ScrollView | null>(null);
-  const [preferBackFocus, setPreferBackFocus] = useState(true);
+  const entryFocus = useTvRouteEntryFocus(true, `epg-source:${sourceId || "new"}`);
 
   useEffect(() => { if (saved) setDraft(saved); }, [saved]);
   useEffect(() => {
     const topTimer = setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 0);
-    const focusTimer = setTimeout(() => setPreferBackFocus(false), 180);
-    return () => { clearTimeout(topTimer); clearTimeout(focusTimer); };
+    return () => clearTimeout(topTimer);
   }, []);
   useTvBackHandler(useCallback(() => { router.replace("/epg-sources" as any); return true; }, [router]));
 
@@ -148,18 +150,18 @@ export default function EpgSourceScreen() {
     return choices[(Math.max(0, choices.indexOf(value)) + 1) % choices.length];
   };
   return <PurpleTvShell active="/settings"><View style={styles.page}>
-    <View style={styles.header}><Text style={styles.title}>Saved EPG source</Text><Pressable hasTVPreferredFocus={preferBackFocus} onFocus={() => setPreferBackFocus(false)} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
+    <View style={styles.header}><Text style={styles.title}>Saved EPG source</Text><Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
     <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
       <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
       <View style={styles.card}><Text style={styles.cardTitle}>Source settings</Text>
         <TextInput value={draft.name} onChangeText={(name) => setDraft((value) => ({ ...value, name }))} placeholder="Source name" placeholderTextColor={tvColors.textMuted} style={styles.input} />
-        <TextInput secureTextEntry editable={sourceId !== "owner-secondary"} value={sourceId === "owner-secondary" ? "Supplied by CharmIPTV" : draft.url} onChangeText={(url) => setDraft((value) => ({ ...value, url }))} placeholder="https://server/guide.xml.gz" placeholderTextColor={tvColors.textMuted} autoCapitalize="none" autoCorrect={false} style={styles.input} />
+        <TextInput secureTextEntry editable={!suppliedSource} value={suppliedSource ? "Supplied by CharmIPTV" : draft.url} onChangeText={(url) => setDraft((value) => ({ ...value, url }))} placeholder="https://server/guide.xml.gz" placeholderTextColor={tvColors.textMuted} autoCapitalize="none" autoCorrect={false} style={styles.input} />
         <Row label="Enabled" value={draft.enabled ? "On" : "Off"} onPress={() => setDraft((value) => ({ ...value, enabled: !value.enabled }))} />
         <Row label="Update interval" value={draft.refreshHours === 0 ? "Manual only" : `${draft.refreshHours} hours`} onPress={() => setDraft((value) => ({ ...value, refreshHours: REFRESH_VALUES[(refreshIndex + 1) % REFRESH_VALUES.length] }))} />
         <Row label="Source / server time offset" value={`${timing.source.serverOffsetMinutes > 0 ? "+" : ""}${timing.source.serverOffsetMinutes} minutes`} onPress={() => timing.setServerOffsetMinutes(cycleOffset(timing.source.serverOffsetMinutes))} />
         <Row label="Playlist time offset" value={`${timing.source.playlistOffsetMinutes > 0 ? "+" : ""}${timing.source.playlistOffsetMinutes} minutes`} onPress={() => timing.setPlaylistOffsetMinutes(cycleOffset(timing.source.playlistOffsetMinutes))} />
         <Text style={styles.help}>Latest update: {draft.lastRefreshAt ? formatRelativeAge(draft.lastRefreshAt) : "Never"} · {draft.lastStatus}</Text>
-        <View style={styles.actions}><Button label="Save" onPress={save} disabled={busy} /><Button label="Update EPG" onPress={refresh} disabled={busy} /><Button label="Clear EPG data" onPress={clearData} disabled={busy} /><Button label="Remove source" onPress={remove} disabled={busy || sourceId === "owner-secondary"} /></View>
+        <View style={styles.actions}><Button label="Save" onPress={save} disabled={busy} /><Button label="Update EPG" onPress={refresh} disabled={busy} /><Button label="Clear EPG data" onPress={clearData} disabled={busy} /><Button label="Remove source" onPress={remove} disabled={busy || suppliedSource} /></View>
       </View>
       <View style={styles.card}><Text style={styles.cardTitle}>Assign channels</Text><Text style={styles.help}>A channel can have one custom EPG owner. Assigning it here automatically removes an older custom-source assignment.</Text>
         <TextInput value={channelQuery} onChangeText={setChannelQuery} placeholder="Search playlist channels" placeholderTextColor={tvColors.textMuted} style={styles.input} />

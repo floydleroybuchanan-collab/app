@@ -16,9 +16,9 @@ internal class CombinedGuideRepository(context: Context) {
     val ids = playlistChannelIds.asSequence().map(String::trim).filter(String::isNotEmpty).distinct().toList()
     if (ids.isEmpty()) return emptyList()
 
-    val enabledCustomSources = ArrayList<EpgSourceEntity>(MAX_CUSTOM_SOURCES).apply {
+    val enabledCustomSources = ArrayList<EpgSourceEntity>().apply {
       controlDao.source(USER_SOURCE_ID)?.takeIf { it.enabled && it.url.isNotBlank() }?.let(::add)
-      addAll(controlDao.userSources().filter { it.enabled && it.url.isNotBlank() }.take(MAX_CUSTOM_SOURCES - size))
+      addAll(controlDao.userSources().filter { it.enabled && it.url.isNotBlank() })
     }
     val bindingsBySource = LinkedHashMap<String, List<EpgChannelBindingEntity>>()
     val customOwned = LinkedHashSet<String>()
@@ -59,7 +59,6 @@ internal class CombinedGuideRepository(context: Context) {
   companion object {
     private const val PRIMARY_SOURCE_ID = "default"
     private const val USER_SOURCE_ID = "user"
-    private const val MAX_CUSTOM_SOURCES = 9
     private const val BINDING_QUERY_CHUNK = 400
   }
 }

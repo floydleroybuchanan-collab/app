@@ -285,7 +285,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           updatedAtSeconds = primaryUpdatedAt,
         ))
         val keep = LinkedHashSet<String>()
-        for (index in 0 until minOf(sources.size(), MAX_USER_SOURCES)) {
+        for (index in 0 until sources.size()) {
           val row = sources.getMap(index) ?: continue
           val sourceId = CustomEpgStoreRegistry.normalizeSourceId(row.getString("id").orEmpty())
           val url = row.getString("url").orEmpty().trim()
@@ -598,7 +598,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         val userSource = controlDao.source(USER_SOURCE_ID)
         val userEnabled = userSource?.enabled == true && userSource.url.isNotBlank()
         val userBindings = if (userEnabled) controlDao.effectiveBindings(USER_SOURCE_ID) else emptyList()
-        val extraSources = controlDao.userSources().filter { it.enabled && it.url.isNotBlank() }.take(MAX_USER_SOURCES - 1)
+        val extraSources = controlDao.userSources().filter { it.enabled && it.url.isNotBlank() }
         val hasUserOwnership = (userEnabled && userBindings.isNotEmpty()) || extraSources.any { controlDao.effectiveBindings(it.playlistId).isNotEmpty() }
         val bindingByPlaylist = userBindings.associate { it.channelId to it.xmltvId }
         val userIcons = if (bindingByPlaylist.isNotEmpty()) userDatabase.iconAliases(bindingByPlaylist.values.toSet()) else emptyMap()
@@ -730,7 +730,10 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           )
         }
         promise.resolve(
-          PlaylistSyncCoordinator.sync(database, rows, playlistEpoch.toLong(), contentFingerprint.trim())
+          // This is the combined enabled-playlist projection, not a provider
+          // parse. All playlists may be explicitly disabled. Preserve their
+          // saved catalogs while removing every row from the visible view.
+          PlaylistSyncCoordinator.sync(database, rows, playlistEpoch.toLong(), contentFingerprint.trim(), allowEmptyProjection = true)
         )
       } catch (t: Throwable) {
         promise.reject("EPG_PLAYLIST_UPSERT_FAILED", t.message ?: "Could not upsert playlist channels", t)
@@ -1353,7 +1356,6 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
     private const val DEFAULT_PLAYLIST_ID = "default"
     private const val USER_SOURCE_ID = "user"
     private const val MAX_USER_BINDINGS = 10_000
-    private const val MAX_USER_SOURCES = 9
     private const val HTTP_ETAG_KEY = "epg_http_etag"
     private const val HTTP_LAST_MODIFIED_KEY = "epg_http_last_modified"
     private const val DB_BLACKOUT_UNTIL_KEY = "epg_database_blackout_until"

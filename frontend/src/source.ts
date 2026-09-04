@@ -104,7 +104,7 @@ export async function loadGuideProgramsForChannelIds(
 ): Promise<Record<string, Program[]>> {
   return {};
 }
-export async function refreshEpgOnly(): Promise<SourceStatus> {
+export async function refreshEpgOnly(_includeAdditional = true): Promise<SourceStatus> {
   return refreshSource(true);
 }
 

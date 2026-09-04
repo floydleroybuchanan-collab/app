@@ -39,7 +39,9 @@ test("custom EPG sources have one native owner and matching capacity", async () 
   const registry = await text("src/core/multiEpgSources.ts");
   const controlDb = await text("android/app/src/main/java/com/charmiptv/app/EpgControlDatabase.kt");
   const customNative = await text("android/app/src/main/java/com/charmiptv/app/CustomEpgNativeModule.kt");
-  assert.match(registry, /const MAX_SOURCES = 7/);
+  assert.doesNotMatch(registry, /const MAX_SOURCES|slice\(0, maxPersonal/);
+  const combined = await text("android/app/src/main/java/com/charmiptv/app/CombinedGuideRepository.kt");
+  assert.doesNotMatch(combined, /MAX_CUSTOM_SOURCES|take\(9\)/);
   assert.match(controlDb, /playlistId = 'user' OR playlistId LIKE 'user:%'/);
   assert.match(controlDb, /setExclusiveUserChannelBinding/);
   assert.match(customNative, /setExclusiveUserChannelBinding\(USER_SOURCE_ID/);
@@ -63,9 +65,11 @@ test("automatic scheduler and both EPG parsers yield to interactive TV ownership
   assert.match(scheduler, /schedulerGeneration/);
   assert.match(scheduler, /screenIsSafe/);
   assert.match(scheduler, /cancelled = true/);
-  assert.match(customNative, /owner == "guide" \|\| owner == "player" \|\| owner == "modal"/);
+  assert.match(customNative, /Thread.yield\(\)/);
+  assert.doesNotMatch(customNative, /refresh deferred for active TV interaction/);
   assert.match(database, /interactiveTvOwnsPriority/);
-  assert.match(database, /EPG refresh deferred before final swap/);
+  assert.match(database, /if \(interactiveTvOwnsPriority\(\)\) Thread.yield\(\)/);
+  assert.doesNotMatch(database, /throw IllegalStateException\("EPG refresh deferred/);
   assert.match(database, /db\.delete\(STAGING_TABLE, null, null\)/);
 });
 

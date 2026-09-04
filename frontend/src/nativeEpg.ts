@@ -186,7 +186,7 @@ export async function queryNativeGuideWindow(playlistChannelIds: string[], start
   return loadNativeEpgWindow(uniqueIds, startMs, endMs);
 }
 export async function touchNativePlaylistRefresh(playlistEpoch: number): Promise<void> { if (nativeModule?.touchPlaylistRefresh) await nativeModule.touchPlaylistRefresh(playlistEpoch); }
-export async function upsertNativePlaylistChannels(channels: NativePlaylistChannelRow[], playlistEpoch: number, contentFingerprint: string): Promise<boolean> { if (!nativeModule?.upsertPlaylistChannels || !channels.length) return false; return nativeModule.upsertPlaylistChannels(channels, playlistEpoch, contentFingerprint); }
+export async function upsertNativePlaylistChannels(channels: NativePlaylistChannelRow[], playlistEpoch: number, contentFingerprint: string): Promise<boolean> { if (!nativeModule?.upsertPlaylistChannels) return false; return nativeModule.upsertPlaylistChannels(channels, playlistEpoch, contentFingerprint); }
 export async function nativePlaylistIsCurrent(contentFingerprint: string): Promise<boolean> { if (!nativeModule?.isPlaylistCurrent || !contentFingerprint) return false; return nativeModule.isPlaylistCurrent(contentFingerprint); }
 /**
  * Returns false only when the bounded caller wait elapsed. The native writes
@@ -209,7 +209,18 @@ export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgM
   }
 }
 
+async function effectivePrimaryGuideEnabled(requested: boolean): Promise<boolean> {
+  if (!requested) return false;
+  // Every settings/scheduler caller crosses this boundary. A source settings
+  // screen must not reactivate a playlist that the viewer has switched off.
+  const [{ listPlaylists }, { managedEpgUrl }] = await Promise.all([
+    import("@/src/core/playlistRegistry"), import("@/src/auth/managedContentAccess"),
+  ]);
+  return !!managedEpgUrl("primary") && (await listPlaylists()).some((source) => source.id === "charm-primary" && source.enabled);
+}
+
 export async function configureNativeGuideOwnership(primaryEnabled: boolean, userEnabled: boolean, userUrl: string, userOverrides: Record<string, string>): Promise<void> {
+  primaryEnabled = await effectivePrimaryGuideEnabled(primaryEnabled);
   const normalizedUserUrl = userUrl.trim(); const effectiveUserEnabled = userEnabled && !!normalizedUserUrl;
   if (nativeModule?.configureGuideOwnership) await nativeModule.configureGuideOwnership(primaryEnabled, userEnabled, normalizedUserUrl, userOverrides);
   primaryGuideEnabled = primaryEnabled; userGuideEnabled = effectiveUserEnabled; userGuideUrl = normalizedUserUrl; ownershipRequiresSqlite = !primaryEnabled || (effectiveUserEnabled && Object.keys(userOverrides).length > 0);
@@ -217,8 +228,9 @@ export async function configureNativeGuideOwnership(primaryEnabled: boolean, use
 }
 export type NativeUserGuideSource = { id: string; url: string; enabled: boolean; refreshHours: number };
 export async function configureNativeUserGuideSources(primaryEnabled: boolean, sources: NativeUserGuideSource[], options?: { clearRam?: boolean }): Promise<void> {
-  if (nativeModule?.configureUserGuideSources) await nativeModule.configureUserGuideSources(primaryEnabled, sources.slice(0, 9));
-  primaryGuideEnabled = primaryEnabled; ownershipRequiresSqlite = sources.some((source) => source.enabled && !!source.url);
+  primaryEnabled = await effectivePrimaryGuideEnabled(primaryEnabled);
+  if (nativeModule?.configureUserGuideSources) await nativeModule.configureUserGuideSources(primaryEnabled, sources);
+  primaryGuideEnabled = primaryEnabled; ownershipRequiresSqlite = !primaryEnabled || sources.some((source) => source.enabled && !!source.url);
   if (options?.clearRam !== false && ramModule) await ramModule.clearMemory().catch(() => undefined);
 }
 export async function setNativeSourceGuideBinding(sourceId: string, channelId: string, xmltvId: string | null): Promise<number> { if (!customEpgModule?.setSourceChannelBinding) throw new Error("Multi-source EPG assignments are unavailable on this build"); const count = await customEpgModule.setSourceChannelBinding(sourceId, channelId, xmltvId?.trim() || ""); if (ramModule) await ramModule.clearMemory().catch(() => undefined); return Math.max(0, Math.round(count)); }

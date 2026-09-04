@@ -30,9 +30,28 @@ test("source modules never hardcode provider playlist/EPG URLs", async () => {
   assert.match(native, /managedEpgUrl\("primary"\)/);
   assert.match(auth, /getManagedContentAccess/);
   assert.match(worker, /\/content\/access/);
-  assert.match(worker, /playlist_url: source\(env\.M3U_URL\)/);
-  assert.match(worker, /epg_url: source\(env\.EPG_URL\)/);
+  assert.match(worker, /playlist: "M3U_URL", epg: "EPG_URL", required: true/);
+  assert.match(worker, /playlist: "M3U_URL_2", epg: "EPG_URL_2", required: true/);
+  assert.match(worker, /playlist_url: configured.playlistUrl/);
+  assert.match(worker, /epg_url: configured.epgUrl/);
+  assert.match(worker, /content_sources_ready: sources\.ready/);
+  assert.match(worker, /ready: requiredReady && noPartialPairs && noSlotGap/);
+  assert.match(protectedAccess, /if \(!playlistUrl \|\| !epgUrl\) return false/);
+  assert.doesNotMatch(protectedAccess, /process.env|EXPO_PUBLIC/);
   assert.doesNotMatch(worker, /proxyManagedContent|requireContentAccess|sealContentToken/);
+});
+
+test("account Worker deployment fail-closes and syncs the four masked source secrets", async () => {
+  const workflow = await repoSource(".github/workflows/deploy-account-worker.yml");
+  for (const name of ["M3U_URL", "EPG_URL", "M3U_URL_2", "EPG_URL_2"]) {
+    assert.match(workflow, new RegExp(`${name}: \\\$\\{\\{ secrets\\.${name} \\}\\}`));
+  }
+  assert.match(workflow, /secrets: \$\{\{ steps.managed-source-secrets.outputs.names \}\}/);
+  assert.match(workflow, /presentNames.push\(\.\.\.pair.names\)/);
+  assert.match(workflow, /data\.content_sources_ready !== true/);
+  assert.match(workflow, /data\.content_sources\?\.primary !== true/);
+  assert.match(workflow, /data\.content_sources\?\.secondary !== true/);
+  assert.doesNotMatch(workflow, /console\.log\([^\n]*(process\.env|M3U_URL|EPG_URL)/);
 });
 
 test("Purple TV APK workflow injects playlist/EPG from secrets", async () => { const workflow = await repoSource(".github/workflows/purple-tv-ui.yml"); assert.match(workflow, /secrets\.M3U_URL/); assert.match(workflow, /secrets\.EPG_URL/); assert.match(workflow, /Require playlist and EPG build configuration/); });

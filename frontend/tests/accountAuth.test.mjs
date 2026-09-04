@@ -11,6 +11,12 @@ import {
   loginToAccount,
   registerAccountWithInvite,
 } from "../src/auth/accountApi.ts";
+import {
+  clearManagedContentAccess,
+  configureManagedContentAccess,
+  managedEpgUrl,
+  managedPlaylistUrl,
+} from "../src/auth/managedContentAccess.ts";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -56,6 +62,41 @@ test("account API login and restore use the deployed Cloudflare contract without
   assert.equal(new Headers(calls[5].options.headers).get("Authorization"), "Bearer session-token");
 });
 
+test("managed content handoff requires both complete playlist/EPG pairs and applies them atomically", () => {
+  clearManagedContentAccess();
+  const complete = {
+    expires_at: 2_000_000_000,
+    primary: {
+      playlist_url: "http://primary.invalid/get.php?username=viewer&password=secret",
+      epg_url: "http://primary.invalid/xmltv.php?username=viewer&password=secret",
+    },
+    secondary: {
+      playlist_url: "https://secondary.invalid/list.m3u?token=two",
+      epg_url: "http://secondary.invalid/guide.xml.gz?token=two",
+    },
+  };
+
+  assert.equal(configureManagedContentAccess(complete), true);
+  assert.equal(managedPlaylistUrl("primary"), complete.primary.playlist_url);
+  assert.equal(managedEpgUrl("primary"), complete.primary.epg_url);
+  assert.equal(managedPlaylistUrl("secondary"), complete.secondary.playlist_url);
+  assert.equal(managedEpgUrl("secondary"), complete.secondary.epg_url);
+
+  assert.equal(configureManagedContentAccess({
+    ...complete,
+    secondary: { ...complete.secondary, playlist_url: "" },
+  }), false);
+  assert.equal(managedPlaylistUrl("secondary"), complete.secondary.playlist_url);
+  assert.equal(managedEpgUrl("secondary"), complete.secondary.epg_url);
+
+  assert.equal(configureManagedContentAccess({
+    ...complete,
+    secondary: { ...complete.secondary, epg_url: "file:///private/guide.xml" },
+  }), false);
+  assert.equal(managedEpgUrl("secondary"), complete.secondary.epg_url);
+  clearManagedContentAccess();
+});
+
 test("secure session restore gates all playlist, guide, and player providers", async () => {
   const [auth, layout, gate, settings] = await Promise.all([
     source("src/auth/AuthContext.tsx"),
@@ -91,7 +132,8 @@ test("RC.6 drawer layout pushes content beside a main icon rail and playlist lis
   ]);
   assert.match(shell, /PURPLE_SIDEBAR_WIDTH = 192/);
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
-  assert.match(shell, /!drawerOpen \? \(/);
+  assert.match(shell, /showIconRail \? \(/);
+  assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(guide, /secondaryDrawer=\{groupDrawerOpen \?/);
   assert.doesNotMatch(guide, /Open playlists & groups/);
   assert.match(drawer, /GUIDE_GROUP_DRAWER_WIDTH = 232/);
@@ -99,9 +141,9 @@ test("RC.6 drawer layout pushes content beside a main icon rail and playlist lis
   assert.match(drawer, /item\.expanded \? "chevron-up" : "chevron-down"/);
   assert.match(drawer, /groupRow: \{ paddingLeft: 28 \}/);
   assert.match(home, /setRemoteContext\("drawer_edge"\)/);
-  assert.match(home, /focusIconRail\(owner === "recent-first" \? firstRecentRef\.current : heroButtonRef\.current\)/);
+  assert.match(home, /focusIconRail\(\)/);
   assert.match(activity, /context == "drawer_edge" && boundaryKey == "LEFT"/);
-  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
+  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "BACK"\)/);
   assert.match(activity, /enterImmersiveMode\(\)/);
 });
 
@@ -113,10 +155,13 @@ test("rail focus returns to content and no-information Guide cells remain playab
     source("app/(tabs)/guide.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
   ]);
-  assert.match(shell, /if \(key === "RIGHT"\)/);
-  assert.match(shell, /getIconRailReturnTarget\(\)/);
-  assert.match(live, /focusIconRail\(owner === "recent-first" \? firstRecentRef\.current : heroButtonRef\.current\)/);
-  assert.match(activity, /boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"/);
+  assert.match(shell, /nextFocusRight=\{contentReturnTag\}/);
+  assert.doesNotMatch(shell, /getIconRailReturnTarget/);
+  assert.match(live, /focusIconRail\(\)/);
+  assert.match(activity, /onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT/);
+  assert.match(activity, /visible\(next\).*within\(next, page\).*requestFocus\(\)/);
+  assert.match(activity, /emitRemoteEvent\("CharmIconRailOpenMain", root.id.toString\(\)\)/);
+  assert.match(shell, /Number\(tag\) !== findNodeHandle\(shellRef.current\)/);
   assert.match(canvas, /else if \(value\.surface !== "channel"\) onChannelPress\(channel\)/);
   assert.match(guide, /onChannelPress=\{play\}/);
 });

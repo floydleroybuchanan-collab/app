@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
 import { replaceAdditionalEpgOwners } from "@/src/core/additionalEpgOwnership";
-import { managedEpgUrl } from "@/src/auth/managedContentAccess";
+import { managedContentSources, managedEpgUrl } from "@/src/auth/managedContentAccess";
+import { MANAGED_PLAYLISTS } from "@/src/core/playlistCatalog";
 
 export type CustomEpgSourceRecord = {
   id: string;
@@ -15,9 +16,6 @@ export type CustomEpgSourceRecord = {
 };
 
 const KEY = "gs_custom_epg_sources_v2";
-// Native supports eight user/custom sources total. The legacy `user` source
-// occupies one slot, so the additional-source registry must stop at seven.
-const MAX_SOURCES = 7;
 export const OWNER_EPG_ID = "owner-secondary";
 let cached: CustomEpgSourceRecord[] = [];
 let loaded = false;
@@ -56,27 +54,49 @@ function normalizeRecord(raw: Partial<CustomEpgSourceRecord>): CustomEpgSourceRe
     overrides: cleanOverrides(raw.overrides),
   };
 }
+
+export function isManagedEpgSourceId(id: string): boolean {
+  return MANAGED_PLAYLISTS.some((source) => source.epgSourceId === id);
+}
+
+function configuredOwnerDefinitions(existingIds: ReadonlySet<string>) {
+  const configured = new Set(managedContentSources().map((source) => source.id));
+  return MANAGED_PLAYLISTS.filter((source) => source.sourceId !== "primary" && (configured.has(source.sourceId) || existingIds.has(source.epgSourceId)));
+}
+
 function normalize(raw: unknown): CustomEpgSourceRecord[] {
-  if (!Array.isArray(raw)) return [];
-  const out: CustomEpgSourceRecord[] = [];
+  const rows = Array.isArray(raw) ? raw : [];
+  const existingOwners = new Map<string, CustomEpgSourceRecord>();
+  const personal: CustomEpgSourceRecord[] = [];
   const seen = new Set<string>();
-  for (const item of raw) {
+  for (const item of rows) {
     const source = normalizeRecord(item || {});
     if (!source || seen.has(source.id)) continue;
-    seen.add(source.id); out.push(source);
-    if (out.filter((item) => item.id !== OWNER_EPG_ID).length >= MAX_SOURCES) break;
+    seen.add(source.id);
+    if (isManagedEpgSourceId(source.id)) {
+      existingOwners.set(source.id, source);
+      continue;
+    }
+    personal.push(source);
   }
-  const ownerEpgUrl = managedEpgUrl("secondary");
-  if (ownerEpgUrl) {
-    const existing = out.find((item) => item.id === OWNER_EPG_ID);
-    const owner: CustomEpgSourceRecord = { id: OWNER_EPG_ID, name: "CharmIPTV 2 EPG", url: ownerEpgUrl, enabled: true, refreshHours: 12, lastRefreshAt: 0, lastStatus: "Not updated", overrides: {}, ...existing };
-    owner.url = ownerEpgUrl;
-    // A supplied build-time feed must recover from an older saved disabled
-    // record when it is reintroduced or its URL changes between test builds.
-    owner.enabled = true;
-    return [owner, ...out.filter((item) => item.id !== OWNER_EPG_ID)];
-  }
-  return out;
+  const owners = configuredOwnerDefinitions(new Set(existingOwners.keys())).map((definition) => {
+    const existing = existingOwners.get(definition.epgSourceId);
+    const owner: CustomEpgSourceRecord = {
+      id: definition.epgSourceId,
+      name: `${definition.name} EPG`,
+      url: managedEpgUrl(definition.sourceId),
+      enabled: true,
+      refreshHours: 12,
+      lastRefreshAt: 0,
+      lastStatus: "Not updated",
+      overrides: {},
+      ...existing,
+    };
+    owner.name = `${definition.name} EPG`;
+    owner.url = managedEpgUrl(definition.sourceId);
+    return owner;
+  });
+  return [...owners, ...personal];
 }
 function publishOwnership() {
   const ids = new Set<string>();
@@ -93,7 +113,16 @@ function invalidateGuideOwnershipView() {
     .catch(() => undefined);
 }
 async function load() {
-  if (loaded) return cached;
+  if (loaded) {
+    const next = normalize(cached);
+    if (JSON.stringify(next) !== JSON.stringify(cached)) {
+      cached = next;
+      publishOwnership();
+      listeners.forEach((listener) => { try { listener(cached); } catch {} });
+      invalidateGuideOwnershipView();
+    }
+    return cached;
+  }
   if (loading) return loading;
   const loadEpoch = mutationEpoch;
   loading = storage.getItem<CustomEpgSourceRecord[]>(KEY, []).then((raw) => {
@@ -113,7 +142,10 @@ function commit(next: CustomEpgSourceRecord[]) {
   listeners.forEach((listener) => { try { listener(cached); } catch {} });
   invalidateGuideOwnershipView();
   const snapshot = cached;
-  writeChain = writeChain.then(async () => { await storage.setItem(KEY, snapshot); }).catch(() => {});
+  // Managed URLs are session-delivered credentials. Persist their harmless
+  // status/override metadata, but never their addresses in AsyncStorage.
+  const persistable = snapshot.map((source) => isManagedEpgSourceId(source.id) ? { ...source, url: "" } : source);
+  writeChain = writeChain.then(async () => { await storage.setItem(KEY, persistable); }).catch(() => {});
 }
 function afterHydration(action: () => void): void {
   if (loaded) { action(); return; }
@@ -129,7 +161,7 @@ export function saveMultiEpgSource(source: CustomEpgSourceRecord) {
 }
 export function removeMultiEpgSource(id: string) {
   const clean = cleanId(id);
-  if (clean === OWNER_EPG_ID) return;
+  if (isManagedEpgSourceId(clean)) return;
   afterHydration(() => commit(cached.filter((item) => item.id !== clean)));
 }
 export function clearMultiEpgChannelAssignments(channelId: string) {
@@ -168,16 +200,15 @@ export function useMultiEpgSources() {
     saveMultiEpgSource(source); setSources(cached);
   }, []);
   const remove = useCallback((id: string) => { removeMultiEpgSource(id); setSources(cached); }, []);
-  return { sources, save, remove, canAdd: sources.filter((item) => item.id !== OWNER_EPG_ID).length < MAX_SOURCES };
+  return { sources, save, remove, canAdd: true };
 }
 
 
-/** Reuse shared sources; never replace a feed or consume more than the existing slot limit. */
+/** Reuse shared sources without changing a user's saved enabled/disabled choice. */
 export async function ensureDiscoveredEpgSource(url: string, name: string): Promise<string | null> {
   await load();
   const existing = cached.find((source) => source.url === url);
   if (existing) return existing.id;
-  if (cached.filter((source) => source.id !== OWNER_EPG_ID).length >= MAX_SOURCES) return null;
   const id = createCustomEpgSourceId();
   commit([...cached, { id, name: `${name} · detected EPG`.slice(0, 60), url, enabled: true,
     refreshHours: 12, lastRefreshAt: 0, lastStatus: "Detected from playlist", overrides: {} }]);

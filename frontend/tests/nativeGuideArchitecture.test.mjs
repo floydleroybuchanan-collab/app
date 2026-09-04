@@ -130,11 +130,13 @@ test("settings recovery and drawer transition guard are wired", async () => {
 test("Settings claims destination focus before swapping tile/detail trees", async () => {
   const settings = await source("app/(tabs)/settings.tsx");
   const choose = settings.match(/const choose = useCallback\([\s\S]*?\n  \}, \[router\]\);/)?.[0] || "";
-  assert.match(choose, /setPreferBackFocus\(true\);[\s\S]{0,100}setSection\(id\)/);
+  assert.match(choose, /setSection\(id\)/);
   const back = settings.match(/useTvBackHandler\([\s\S]*?\n  \);/)?.[0] || "";
-  assert.match(back, /setPreferTileFocus\(true\);[\s\S]{0,100}setSection\(null\)/);
-  assert.match(settings, /hasTVPreferredFocus=\{preferBackFocus\}/);
-  assert.match(settings, /hasTVPreferredFocus=\{preferTileFocus && index === 0\}/);
+  assert.match(back, /setSection\(null\)/);
+  assert.match(settings, /useTvRouteEntryFocus\(!section, "settings-tiles"\)/);
+  assert.match(settings, /useTvRouteEntryFocus\(!!section, section \|\| "settings-none"\)/);
+  assert.match(settings, /hasTVPreferredFocus=\{detailEntryFocus.preferredFocus\}/);
+  assert.match(settings, /hasTVPreferredFocus=\{tileEntryFocus.preferredFocus && index === 0\}/);
 });
 
 test("native Guide precomputes row labels outside the repaint loop", async () => {

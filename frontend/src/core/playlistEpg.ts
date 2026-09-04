@@ -5,6 +5,7 @@ import { listPlaylists } from "./playlistRegistry";
 import { playlistOwner, PRIMARY_PLAYLIST } from "./playlistCatalog";
 import { getMultiEpgSources, saveMultiEpgSource } from "./multiEpgSources";
 import { getEpgSourcePreferences } from "./epgSourcePreferences";
+import { managedEpgUrl } from "@/src/auth/managedContentAccess";
 import { configureNativeUserGuideSources, refreshAssociatedPlaylistGuide, replaceAutomaticPlaylistBindings } from "@/src/nativeEpg";
 
 /** Associations are independent of feeds. Manual Room bindings always override these derived exact-ID bindings. */
@@ -15,12 +16,13 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false, only
     { id: "user", name: prefs.userName, url: prefs.userUrl, enabled: prefs.userEnabled, refreshHours: 12 },
     ...extras,
   ];
-  await configureNativeUserGuideSources(prefs.primaryEnabled, sources);
+  const primaryEnabled = prefs.primaryEnabled && !!managedEpgUrl("primary") && playlists.some((row) => row.id === PRIMARY_PLAYLIST && row.enabled);
+  await configureNativeUserGuideSources(primaryEnabled, sources);
   const enabled = new Set(sources.filter((source) => source.enabled && source.url).map((source) => source.id));
   const byPlaylist = new Map(playlists.map((source) => [source.id, source.epgSourceIds.filter((id) => enabled.has(id))]));
   const bindings = channels.flatMap((channel) => {
     const ids = byPlaylist.get(playlistOwner(channel)) || [];
-    const xmltvId = channel.raw_tvg_id || (playlistOwner(channel) === PRIMARY_PLAYLIST ? channel.tvg_id : "");
+    const xmltvId = channel.raw_tvg_id || (playlistOwner(channel) === PRIMARY_PLAYLIST ? channel.tvg_id : "") || channel.name;
     return ids.length && xmltvId ? [{ channelId: channel.id, channelName: channel.name || "", channelLogo: channel.playlist_logo || channel.logo || "", xmltvId, sourceIds: ids }] : [];
   });
   await replaceAutomaticPlaylistBindings(bindings);
@@ -36,7 +38,9 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false, only
     if (downloaded.has(source.id)) continue;
     downloaded.add(source.id);
     try {
-      const result = await refreshAssociatedPlaylistGuide(source.id, source.url, refreshBindings.filter((binding) => binding.sourceIds.includes(source.id)).map((binding) => binding.xmltvId));
+      // A shared feed must keep programmes for every bound playlist, even
+      // when the refresh was initiated from just one playlist's settings.
+      const result = await refreshAssociatedPlaylistGuide(source.id, source.url, bindings.filter((binding) => binding.sourceIds.includes(source.id)).map((binding) => binding.xmltvId));
       const extra = extras.find((item) => item.id === source.id);
       if (extra) saveMultiEpgSource({ ...extra, lastRefreshAt: result.programmeSwapSucceeded === false ? extra.lastRefreshAt : Date.now(),
         lastStatus: result.programmeSwapSucceeded === false ? "No new programmes; previous guide kept." : `Indexed ${result.count} programmes.` });

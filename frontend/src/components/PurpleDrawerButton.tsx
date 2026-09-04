@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
+import { useIconRailFocusBoundary, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 
@@ -11,6 +11,7 @@ import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@
 export function PurpleDrawerButton({ testID }: { testID: string }) {
   const pathname = usePathname();
   const { focusIconRail, openDrawer } = usePurpleTvDrawer();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const [focused, setFocused] = useState(false);
   const buttonRef = useRef<unknown>(null);
   const open = useCallback(() => {
@@ -30,7 +31,7 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
     // is focused.
     setRemoteContext("drawer_edge");
     const off = addTvKeyListener((key) => {
-      if (key === "LEFT") focusIconRail(buttonRef.current);
+      if (key === "LEFT") focusIconRail();
     });
     return () => {
       off();
@@ -50,6 +51,7 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
       ref={buttonRef as any}
       accessibilityRole="button"
       accessibilityLabel="Open Drawer"
+      nextFocusLeft={iconRailEntryTag}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onPress={open}

@@ -28,11 +28,11 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod fun replaceAutomaticBindings(rows: ReadableArray, promise: Promise) { executor.execute {
     try {
-      require(rows.size() <= 25000) { "Too many automatic Guide bindings" }
       val bindings = ArrayList<EpgAutomaticBindingEntity>(rows.size())
       val directories = HashMap<String, Set<String>>()
       val names = HashMap<String, Map<String, String>>()
       val callsigns = HashMap<String, Map<String, String>>()
+      val boundChannels = HashSet<String>()
       val logoKeys = HashMap<String, Map<String, String>>()
       val fuzzyKeys = HashMap<String, Map<String, String>>()
       for (index in 0 until rows.size()) {
@@ -80,7 +80,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
           if (ids.isEmpty() && pending == null) pending = source
         }
         val source = selected ?: pending
-        if (source != null && channel.isNotBlank() && selectedXmltv.isNotBlank() && bindings.none { it.channelId == channel }) bindings.add(EpgAutomaticBindingEntity(channel, source, selectedXmltv, if (selected == null) "pending_directory" else selectedReason))
+        if (source != null && channel.isNotBlank() && selectedXmltv.isNotBlank() && boundChannels.add(channel)) bindings.add(EpgAutomaticBindingEntity(channel, source, selectedXmltv, if (selected == null) "pending_directory" else selectedReason))
       }
       controlDao.replaceAutomaticBindings(bindings)
       promise.resolve(true)
@@ -153,7 +153,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
 
   @ReactMethod fun refreshAssociatedSourceGuide(sourceId: String, url: String, ids: ReadableArray, promise: Promise) { executor.execute {
     val candidates = LinkedHashSet<String>()
-    for (index in 0 until minOf(ids.size(), 25000)) ids.getString(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
+    for (index in 0 until ids.size()) ids.getString(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
     refreshSourceGuideInternal(sourceId, url, promise, candidates)
   }}
 
@@ -361,7 +361,9 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
             "icon" -> { val id = metadataChannelId; val src = parser.getAttributeValue(null, "src")?.trim().orEmpty(); if (!id.isNullOrBlank() && src.isNotEmpty() && !channelIcons.containsKey(id)) channelIcons[id] = src }
             "programme" -> {
               rawProgrammeCount += 1L; if (rawProgrammeCount > MAX_PROGRAMME_COUNT) throw IllegalStateException("Custom EPG exceeds programme safety limit")
-              if ((rawProgrammeCount and 0x1ffL) == 0L) { val owner = TvRemoteModule.remoteContext; if (owner == "guide" || owner == "player" || owner == "modal") throw IllegalStateException("Custom EPG refresh deferred for active TV interaction") }
+              // Import runs on its own executor with bounded batches. A change
+              // of focused screen must not abort this source's transaction.
+              if ((rawProgrammeCount and 0x1ffL) == 0L) Thread.yield()
               channelId = parser.getAttributeValue(null, "channel")?.trim(); val offset = baseOffsetMs + (channelId?.let(channelOffsetMs::get) ?: 0L); val rawStart = parseXmltvTime(parser.getAttributeValue(null, "start")); val parsedStop = parseXmltvTime(parser.getAttributeValue(null, "stop")); startMs = rawStart + offset; endMs = resolveProgrammeStop(rawStart, parsedStop) + offset
               keepProgram = !channelId.isNullOrBlank() && channelId in activeXmltvIds && startMs > 0L && endMs > startMs && endMs >= minStop && startMs <= maxStart; title = ""; description = null; category = null
             }

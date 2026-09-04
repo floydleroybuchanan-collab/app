@@ -47,6 +47,7 @@ test("recovery shares one request per provider without waiting for an unrelated 
 });
 
 function registryHarness() {
+  let configured = [{ id: "primary" }, { id: "secondary" }];
   const files = new Map(), prefs = new Map(), secrets = new Map(); let failCommit = false, fetcher = async () => ({ channels: [channel()], rejected: 0, truncated: false });
   const filesystem = {
     documentDirectory: "private/", makeDirectoryAsync: async () => {},
@@ -68,13 +69,13 @@ function registryHarness() {
       finishNativeUpdateJob: async () => {},
     },
     "./playlistCatalog": catalog,
-    "@/src/auth/managedContentAccess": { managedPlaylistUrl: id => id === "primary" ? "https://primary.invalid/list" : "https://second.invalid/list" },
+    "@/src/auth/managedContentAccess": { managedContentSources: () => configured, managedPlaylistUrl: id => id === "primary" ? "https://primary.invalid/list" : "https://second.invalid/list" },
   };
   const exports = {};
   const source = readFileSync(new URL("../src/core/playlistRegistry.ts", import.meta.url), "utf8");
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInNewContext(code, { exports, require: name => { assert.ok(mocks[name], name); return mocks[name]; }, process: { env: { EXPO_PUBLIC_M3U_URL: "https://primary.invalid/list", EXPO_PUBLIC_M3U_URL_2: "https://second.invalid/list" } }, URL, console });
-  return { api: exports, files, prefs, secrets, fetch: fn => { fetcher = fn; }, failCommit: value => { failCommit = value; } };
+  return { api: exports, files, prefs, secrets, configure: rows => { configured = rows; }, fetch: fn => { fetcher = fn; }, failCommit: value => { failCommit = value; } };
 }
 
 test("migration seeds existing channels; refreshing source 2 cannot replace source 1", async () => {
@@ -126,20 +127,47 @@ test("disable retains a catalog; removal waits for an in-flight import and canno
   assert.ok(!h.secrets.has(`playlist-${id}`));
 });
 
-test("managed slots cannot be deleted and personal source limit fails explicitly", async () => {
+test("managed sources cannot be deleted but more than five personal playlists coexist", async () => {
   const h = registryHarness(); await h.api.seedLegacyPlaylist([channel()]);
   await assert.rejects(h.api.removePlaylist(primary.id), /cannot be removed/);
-  for (let at = 0; at < 5; at++) await h.api.savePersonalPlaylist(`List ${at}`, `https://mine.invalid/${at}`, [channel()]);
-  await assert.rejects(h.api.savePersonalPlaylist("Overflow", "https://mine.invalid/extra", [channel()]), /five personal/);
+  for (let at = 0; at < 12; at++) await h.api.savePersonalPlaylist(`List ${at}`, `https://mine.invalid/${at}`, [channel()]);
+  assert.equal((await h.api.listPlaylists()).filter(row => !row.managed).length, 12);
+  assert.equal((await h.api.readCombinedPlaylists()).length, 13);
 });
 
 
-test("removing the last usable personal playlist preserves its catalog", async () => {
+test("all supplied sources can be disabled; the last personal playlist can be removed explicitly", async () => {
   const h = registryHarness(); await h.api.seedLegacyPlaylist([channel("existing")]);
   const id = await h.api.savePersonalPlaylist("My list", "https://mine.invalid/list", [channel("mine")]);
   await h.api.updatePlaylist(primary.id, { enabled: false });
-  await assert.rejects(h.api.removePlaylist(id), /another playlist|at least one/);
-  assert.ok((await h.api.listPlaylists()).some(row => row.id === id));
+  await h.api.updatePlaylist(catalog.SECOND_PLAYLIST, { enabled: false });
+  await h.api.removePlaylist(id);
+  assert.ok(!(await h.api.listPlaylists()).some(row => row.id === id));
+  assert.equal((await h.api.readCombinedPlaylists()).length, 0);
+  h.fetch(async () => { assert.fail("disabled sources must not download"); });
+  assert.equal((await h.api.refreshPlaylists()).length, 0);
+  await h.api.updatePlaylist(primary.id, { enabled: true });
+  assert.equal((await h.api.readCombinedPlaylists())[0].id, "existing");
+});
+
+test("session configuration refresh preserves each supplied source's disabled choice and catalog", async () => {
+  const h = registryHarness(); await h.api.seedLegacyPlaylist([channel("existing")]);
+  await h.api.refreshPlaylists(catalog.SECOND_PLAYLIST);
+  await h.api.updatePlaylist(primary.id, { enabled: false });
+  await h.api.updatePlaylist(catalog.SECOND_PLAYLIST, { enabled: false });
+  const revisions = (await h.api.listPlaylists()).map(row => row.revision);
+  h.configure([]);
+  assert.deepEqual(Array.from((await h.api.listPlaylists()).map(row => row.revision)), Array.from(revisions));
+  h.configure([{ id: "primary" }, { id: "secondary" }]);
+  assert.ok((await h.api.listPlaylists()).every(row => !row.enabled));
+  assert.equal((await h.api.readCombinedPlaylists()).length, 0);
+});
+
+test("a personal-only installation needs no supplied source configuration", async () => {
+  const h = registryHarness(); h.configure([]);
+  await h.api.seedLegacyPlaylist([]);
+  assert.equal((await h.api.listPlaylists()).length, 0);
+  await h.api.savePersonalPlaylist("My list", "http://mine.invalid/list", [channel("mine")]);
   assert.equal((await h.api.readCombinedPlaylists()).length, 1);
 });
 

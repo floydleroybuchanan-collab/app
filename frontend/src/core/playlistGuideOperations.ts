@@ -33,7 +33,7 @@ export async function refreshEveryPlaylistOnly(): Promise<void> {
 
 export async function refreshOnePlaylistGuide(playlistId: string): Promise<void> {
   const channels = await readCombinedPlaylists();
-  if (playlistId === PRIMARY_PLAYLIST) await refreshEpgOnly();
+  if (playlistId === PRIMARY_PLAYLIST) await refreshEpgOnly(false);
   await syncPlaylistEpg(channels, true, playlistId);
   await publish(channels);
 }
@@ -41,7 +41,7 @@ export async function refreshOnePlaylistGuide(playlistId: string): Promise<void>
 export async function refreshOnePlaylistAndGuide(playlistId: string): Promise<void> {
   const channels = await refreshPlaylists(playlistId);
   await publish(channels);
-  if (playlistId === PRIMARY_PLAYLIST) await refreshEpgOnly();
+  if (playlistId === PRIMARY_PLAYLIST) await refreshEpgOnly(false);
   await syncPlaylistEpg(channels, true, playlistId);
   await publish(channels);
 }
@@ -49,7 +49,6 @@ export async function refreshOnePlaylistAndGuide(playlistId: string): Promise<vo
 export async function refreshEveryGuide(): Promise<SourceStatus> {
   await refreshEpgOnly();
   const channels = await readCombinedPlaylists();
-  await syncPlaylistEpg(channels, true);
   await publish(channels);
   return sourceStatus();
 }

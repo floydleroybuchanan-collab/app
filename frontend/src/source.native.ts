@@ -139,7 +139,6 @@ export function retainProgrammeWindowCache(keepIds: Iterable<string>): void {
 }
 
 async function syncPlaylistToNative(channels: Channel[], playlistEpoch: number): Promise<void> {
-  if (!channels.length) return;
   indexDeclaredStreamTypes(channels);
   if (!nativeEpgAvailable) return;
   const contentFingerprint = playlistNativeContentFingerprint(channels);
@@ -189,19 +188,22 @@ async function applyPersistedGuideOwnership(): Promise<EffectiveGuideOwnership> 
     getMultiEpgSources(),
     getSourceRefreshPreferences(),
   ]);
+  const playlists = await listPlaylists();
+  const primaryEnabled = prefs.primaryEnabled && !!managedEpgUrl("primary") &&
+    playlists.some((row) => row.id === "charm-primary" && row.enabled);
 
   // The legacy source imports its durable Room bindings on first launch. Keep
   // that path, then reconcile the full saved source registry so cold starts do
   // not depend on opening an EPG settings screen before native Guide reads are
   // ownership-correct.
   await configureNativeGuideOwnership(
-    prefs.primaryEnabled,
+    primaryEnabled,
     prefs.userEnabled,
     prefs.userUrl,
     prefs.userOverrides,
   );
   await configureNativeUserGuideSources(
-    prefs.primaryEnabled,
+    primaryEnabled,
     [
       {
         id: "user",
@@ -231,7 +233,7 @@ async function applyPersistedGuideOwnership(): Promise<EffectiveGuideOwnership> 
     if (!source.enabled || !source.url) continue;
     for (const channelId of Object.keys(source.overrides)) customOwnedChannelIds.add(channelId);
   }
-  return { ...prefs, legacyUserOverrideIds, customOwnedChannelIds };
+  return { ...prefs, primaryEnabled, legacyUserOverrideIds, customOwnedChannelIds };
 }
 
 function applyNativeImportProgress(phase: string, ratio: number): void {
@@ -640,7 +642,7 @@ async function readMetaFile(path: string): Promise<NativeMeta | null> {
     const info = await FileSystem.getInfoAsync(path);
     if (!info.exists) return null;
     const parsed = JSON.parse(await FileSystem.readAsStringAsync(path)) as NativeMeta;
-    if (!Array.isArray(parsed.channels) || !parsed.channels.length || !Number.isFinite(parsed.ts)) return null;
+    if (!Array.isArray(parsed.channels) || !Number.isFinite(parsed.ts)) return null;
     // Normalize in place. The old path cloned every channel, then cloned the
     // entire array again to sort it — a large transient heap spike at 6k+ rows.
     for (const channel of parsed.channels) {
@@ -762,11 +764,11 @@ async function ensureLoaded(): Promise<NativeMeta> {
   // Best-effort once per install: drop superseded JS/expo EPG files (never v3 native DB).
   void cleanupLegacyEpgArtifactsOnce();
 
-  if (MEM && MEM.channels.length > 0) return MEM;
+  if (MEM) return MEM;
   const nativeCached = await readNativeChannelCache();
   const cached = nativeCached || (await readChannelCache());
   if (cached) {
-    if (cached.channels.length === 0) {
+    if (cached.channels.length === 0 && (await listPlaylists()).some((source) => source.enabled)) {
       return refreshInternal(true);
     }
     await seedLegacyPlaylist(cached.channels);
@@ -1330,7 +1332,7 @@ export async function refreshSourcesIfDue(): Promise<SourceStatus> {
 }
 
 /** Refresh XMLTV only — keep current playlist rows (independent epochs). */
-export async function refreshEpgOnly(): Promise<SourceStatus> {
+export async function refreshEpgOnly(includeAdditional = true): Promise<SourceStatus> {
   if (catalogPublishPromise) await catalogPublishPromise;
   // TiviMate-style single refresh owner: if a full/EPG refresh is already doing
   // the provider work, join it. Do not queue an immediate duplicate XMLTV pass.
@@ -1358,6 +1360,7 @@ export async function refreshEpgOnly(): Promise<SourceStatus> {
     try {
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
       await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
+      await syncPlaylistEpg(cached.channels, includeAdditional);
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
 

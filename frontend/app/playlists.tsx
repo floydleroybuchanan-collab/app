@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { PurpleTvShell } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useParentalPin } from "@/src/core/parentalPin";
@@ -14,6 +14,8 @@ import type { PlaylistPreview } from "@/src/core/playlistRegistry";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { readPlaylistGuideHealth, refreshOnePlaylistAndGuide, refreshOnePlaylistGuide, refreshOnePlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
+import { useAuth } from "@/src/auth/AuthContext";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
   return <Pressable accessibilityRole="button" focusable={!disabled} disabled={disabled} onPress={onPress}
@@ -22,6 +24,8 @@ function Action({ label, onPress, disabled = false }: { label: string; onPress: 
 
 export default function PlaylistsScreen() {
   const router = useRouter();
+  const { notice } = useAuth();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const playlists = usePlaylists();
   const epgs = useMultiEpgSources();
   const legacy = useEpgSourcePreferences();
@@ -36,6 +40,7 @@ export default function PlaylistsScreen() {
   const [busy, setBusy] = useState(false);
   const [removeArmed, setRemoveArmed] = useState("");
   const [health, setHealth] = useState<Record<string, PlaylistGuideHealth>>({});
+  const entryFocus = useTvRouteEntryFocus(true, editing === null ? "playlist-list" : `playlist-edit:${editing}`);
   const loadHealth = useCallback(async () => {
     const rows = await readPlaylistGuideHealth(await readCombinedPlaylists());
     setHealth(Object.fromEntries(rows.map((row) => [row.playlistId, row])));
@@ -52,10 +57,11 @@ export default function PlaylistsScreen() {
   const availableEpg = [{ id: "user", name: legacy.userName || "Custom EPG", enabled: legacy.userEnabled }, ...epgs.sources];
   return <PurpleTvShell active="/settings"><View style={styles.page}>
     <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><Text style={styles.title}>Playlists</Text></View>
-      <Pressable onPress={back} disabled={busy} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
+      <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={back} disabled={busy} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
     </View>
     <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
-      <Text style={styles.help}>Your supplied CharmIPTV services and personal M3U playlists, together in one guide. Five personal playlists; 25,000 enabled channels total in this test build.</Text>
+      <Text style={styles.help}>Use CharmIPTV’s supplied playlists, your own M3U playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
+      {!!notice && <Text accessibilityLiveRegion="polite" style={styles.message}>{notice}</Text>}
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
         <Text style={styles.text}>Enter your parental PIN to manage playlists.</Text>
         <TextInput accessibilityLabel="Parental PIN" secureTextEntry keyboardType="number-pad" value={pin} onChangeText={setPin} style={styles.input} />
@@ -87,7 +93,7 @@ export default function PlaylistsScreen() {
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
           {!!source.tombstoneCount && <Text style={styles.help}>{source.tombstoneCount.toLocaleString()} temporarily missing channel record(s) retained so favorites, ordering, groups, and EPG assignments can return if the provider restores them.</Text>}
           {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
-          <Text style={styles.health}>{health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
+          <Text style={styles.health}>{!source.enabled ? "Disabled — saved catalog retained; not included in the active guide." : health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
           <Action label={`Playlist EPG detection: ${source.autoEpg === false ? "Off — manual" : "On"}`} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { autoEpg: source.autoEpg === false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
           <View style={styles.row}>
             <Action label={source.enabled ? "Disable" : "Enable"} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { enabled: !source.enabled }); await reloadPlaylistCatalog(); })} />
@@ -102,7 +108,7 @@ export default function PlaylistsScreen() {
             <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { setUrl(await getPlaylistUrl(source)); setName(source.name); setPreview(null); setEditing(source.id); })} />
             <Action label={removeArmed === source.id ? "Confirm remove playlist" : "Remove playlist"} disabled={busy} onPress={() => { if (removeArmed !== source.id) { setRemoveArmed(source.id); return; } void run(async () => { await removePlaylist(source.id); await reloadPlaylistCatalog(); setRemoveArmed(""); }); }} />
           </View>}
-          {source.id !== "charm-primary" && <>
+          {<>
             <Text style={styles.text}>Associated EPG feeds — the numbered order is the fallback priority. Manual channel assignments always win. Automatic matching uses exact IDs first, then unique names, guarded callsigns, unique logos, and conservative fuzzy matching.</Text>
             {source.epgSourceIds.map((epgId, index) => {
               const epg = availableEpg.find((item) => item.id === epgId);

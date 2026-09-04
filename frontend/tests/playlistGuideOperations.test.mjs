@@ -10,7 +10,7 @@ function harness(options = {}) {
   const channels = [{ id: "one", playlist_id: "charm-primary" }, { id: "pl:charm-secondary:two", playlist_id: "charm-secondary" }];
   const mocks = {
     "react-native": { NativeModules: options.nativeModules || {} },
-    "@/src/source": { refreshEpgOnly: async () => { events.push("primary-epg"); return { channel_count: 2 }; }, sourceStatus: () => ({ channel_count: 2 }) },
+    "@/src/source": { refreshEpgOnly: async (includeAdditional = true) => { events.push(includeAdditional ? "all-epgs" : "primary-epg"); return { channel_count: 2 }; }, sourceStatus: () => ({ channel_count: 2 }) },
     "@/src/source.native": { reloadPlaylistCatalog: async () => events.push("publish") },
     "./playlistRegistry": {
       listPlaylists: async () => options.playlists || [], readCombinedPlaylists: async () => channels,
@@ -41,7 +41,7 @@ test("per-playlist refresh controls keep playlist-only, EPG-only and combined wo
 test("global EPG refresh includes primary and every independent playlist guide", async () => {
   const h = harness();
   await h.refreshEveryGuide();
-  assert.deepEqual(h.events, ["primary-epg", "epg:true:all", "publish"]);
+  assert.deepEqual(h.events, ["all-epgs", "publish"]);
 });
 
 test("playlist health is scoped by stable playlist ownership and keeps the native module receiver", async () => {

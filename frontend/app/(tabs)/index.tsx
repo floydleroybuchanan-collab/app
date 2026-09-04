@@ -6,7 +6,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore } from "@/src/store";
 import { Channel } from "@/src/api";
@@ -15,6 +15,7 @@ import { fonts, radius, tvColors } from "@/src/theme";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
 function RecentChannelCard({
   channel,
@@ -26,6 +27,7 @@ function RecentChannelCard({
   onPlay,
   inputRef,
   nextFocusUp,
+  nextFocusLeft,
   onFocus,
   onBlur,
 }: {
@@ -38,6 +40,7 @@ function RecentChannelCard({
   onPlay: (channel: Channel) => void;
   inputRef?: (node: unknown) => void;
   nextFocusUp?: number;
+  nextFocusLeft?: number;
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
@@ -47,6 +50,7 @@ function RecentChannelCard({
     <Pressable
       ref={inputRef as any}
       nextFocusUp={nextFocusUp}
+      nextFocusLeft={nextFocusLeft}
       onFocus={onFocus}
       onBlur={onBlur}
       onPress={() => onPlay(channel)}
@@ -72,6 +76,7 @@ function LiveTvHomeScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { focusIconRail } = usePurpleTvDrawer();
+  const { iconRailEntryTag } = useIconRailFocusBoundary();
   const {
     channels,
     recent,
@@ -89,7 +94,7 @@ function LiveTvHomeScreenContent() {
   } = useStore();
   void clock24h;
   const [now, setNow] = useState(() => new Date());
-  const [preferInitialFocus, setPreferInitialFocus] = useState(true);
+  const entryFocus = useTvRouteEntryFocus(true, "live-tv-home");
   const heroButtonRef = useRef<unknown>(null);
   const firstRecentRef = useRef<unknown>(null);
   const [heroButtonTag, setHeroButtonTag] = useState<number | undefined>();
@@ -108,9 +113,10 @@ function LiveTvHomeScreenContent() {
 
   const bindHeroButtonRef = useCallback((node: unknown) => {
     heroButtonRef.current = node;
+    entryFocus.targetRef.current = node;
     const tag = node ? findNodeHandle(node as any) : null;
     setHeroButtonTag(tag || undefined);
-  }, []);
+  }, [entryFocus.targetRef]);
   const bindFirstRecentRef = useCallback((node: unknown) => {
     firstRecentRef.current = node;
     const tag = node ? findNodeHandle(node as any) : null;
@@ -126,16 +132,13 @@ function LiveTvHomeScreenContent() {
 
   useFocusEffect(
     useCallback(() => {
-      setPreferInitialFocus(true);
       const offKey = addTvKeyListener((key) => {
         if (key !== "LEFT") return;
         const owner = leftEdgeFocusRef.current;
         if (!owner) return;
-        focusIconRail(owner === "recent-first" ? firstRecentRef.current : heroButtonRef.current);
+        focusIconRail();
       });
-      const timer = setTimeout(() => setPreferInitialFocus(false), 180);
       return () => {
-        clearTimeout(timer);
         offKey();
         leftEdgeFocusRef.current = null;
         resetRemoteContextIfOwned("drawer_edge", "default");
@@ -239,13 +242,14 @@ function LiveTvHomeScreenContent() {
             {heroChannel ? (
               <Pressable
                 ref={bindHeroButtonRef as any}
-                hasTVPreferredFocus={preferInitialFocus}
+                hasTVPreferredFocus={entryFocus.preferredFocus}
+                nextFocusLeft={iconRailEntryTag}
                 nextFocusDown={firstRecentTag}
                 onFocus={() => {
-                  setPreferInitialFocus(false);
+                  entryFocus.onFocus();
                   claimLeftEdge("hero-action");
                 }}
-                onBlur={() => releaseLeftEdge("hero-action")}
+                onBlur={() => { entryFocus.onBlur(); releaseLeftEdge("hero-action"); }}
                 onPress={() => play(heroChannel)}
                 style={({ focused }: any) => [styles.primaryButton, focused && styles.focused]}
                 testID="home-continue-watching"
@@ -255,12 +259,14 @@ function LiveTvHomeScreenContent() {
               </Pressable>
             ) : (
               <Pressable
-                hasTVPreferredFocus={preferInitialFocus}
+                ref={bindHeroButtonRef as any}
+                hasTVPreferredFocus={entryFocus.preferredFocus}
+                nextFocusLeft={iconRailEntryTag}
                 onFocus={() => {
-                  setPreferInitialFocus(false);
+                  entryFocus.onFocus();
                   claimLeftEdge("hero-reload");
                 }}
-                onBlur={() => releaseLeftEdge("hero-reload")}
+                onBlur={() => { entryFocus.onBlur(); releaseLeftEdge("hero-reload"); }}
                 onPress={() => void hardRefresh()}
                 disabled={loading || refreshing}
                 style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
@@ -303,6 +309,7 @@ function LiveTvHomeScreenContent() {
               channel={channel}
               inputRef={index === 0 ? bindFirstRecentRef : undefined}
               nextFocusUp={index === 0 ? heroButtonTag : undefined}
+              nextFocusLeft={index === 0 ? iconRailEntryTag : undefined}
               onFocus={index === 0 ? () => claimLeftEdge("recent-first") : undefined}
               onBlur={index === 0 ? () => releaseLeftEdge("recent-first") : undefined}
               now={now}

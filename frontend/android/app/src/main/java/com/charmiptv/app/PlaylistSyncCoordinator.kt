@@ -21,10 +21,11 @@ internal object PlaylistSyncCoordinator {
     rows: List<PlaylistChannelRow>,
     playlistEpoch: Long,
     contentFingerprint: String,
+    allowEmptyProjection: Boolean = false,
   ): Boolean {
     // TiViMate-style last-good rule: a failed/empty provider parse must not wipe
     // the existing channel catalog.
-    if (rows.isEmpty()) {
+    if (rows.isEmpty() && !allowEmptyProjection) {
       throw IllegalStateException("Refusing to replace live playlist with an empty feed")
     }
 
