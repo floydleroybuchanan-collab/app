@@ -175,7 +175,9 @@ jobs:
             echo 'Managed provider origin leaked into the APK bundle.' >&2
             exit 1
           fi
-          CERTS="$(apksigner verify --verbose --print-certs "$APK")"
+          APKSIGNER="$(find "${ANDROID_SDK_ROOT}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          CERTS="$("$APKSIGNER" verify --verbose --print-certs "$APK")"
           printf '%s\n' "$CERTS" | grep -q 'Verified'
           if printf '%s\n' "$CERTS" | grep -qi 'Android Debug'; then
             echo 'Protected sideload APK was signed with the Android debug certificate.' >&2
