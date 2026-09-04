@@ -6,6 +6,13 @@ local tests. `worker.js` preserves the existing administrator, invitation,
 login, session, and password-reset routes while adding user referrals and
 privacy-preserving account cancellation.
 
+Managed M3U and XMLTV addresses remain server-side Worker secrets and are never
+compiled into the APK. `GET /content/access` releases them only to a currently
+authenticated account in a non-cacheable HTTPS response. Android then downloads
+the HTTP or HTTPS provider source directly, preserving the same provider-facing
+network path and existing M3U/XMLTV parsers used by the last known-good build.
+The app keeps the returned addresses in memory rather than persistent storage.
+
 ## Policy implemented
 
 - Each active user can have at most two unused referral opportunities in a

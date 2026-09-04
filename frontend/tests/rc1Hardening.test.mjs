@@ -30,7 +30,9 @@ test("source modules never hardcode provider playlist/EPG URLs", async () => {
   assert.match(native, /managedEpgUrl\("primary"\)/);
   assert.match(auth, /getManagedContentAccess/);
   assert.match(worker, /\/content\/access/);
-  assert.match(worker, /proxyManagedContent/);
+  assert.match(worker, /playlist_url: source\(env\.M3U_URL\)/);
+  assert.match(worker, /epg_url: source\(env\.EPG_URL\)/);
+  assert.doesNotMatch(worker, /proxyManagedContent|requireContentAccess|sealContentToken/);
 });
 
 test("Purple TV APK workflow injects playlist/EPG from secrets", async () => { const workflow = await repoSource(".github/workflows/purple-tv-ui.yml"); assert.match(workflow, /secrets\.M3U_URL/); assert.match(workflow, /secrets\.EPG_URL/); assert.match(workflow, /Require playlist and EPG build configuration/); });

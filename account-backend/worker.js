@@ -32,10 +32,6 @@ export default {
         return json({ success: true, user: publicUser(auth.user) });
       }
       if (path === "/content/access" && request.method === "GET") return createContentAccess(request, env);
-      const contentMatch = path.match(/^\/content\/(playlist|epg)\/(primary|secondary)$/);
-      if (contentMatch && request.method === "GET") {
-        return proxyManagedContent(request, env, contentMatch[1], contentMatch[2]);
-      }
       if (path === "/me" && request.method === "DELETE") {
         const auth = await requireUser(request, env);
         if (!auth.ok) return auth.response;
@@ -574,61 +570,29 @@ async function requireAdmin(request, env) {
 async function createContentAccess(request, env) {
   const auth = await requireUser(request, env);
   if (!auth.ok) return auth.response;
-  if (!env.CONTENT_TOKEN_KEY) return json({ success: false, error: "Protected content access is not configured." }, 503);
   if (!validManagedSource(env.M3U_URL) || !validManagedSource(env.EPG_URL)) {
     return json({ success: false, error: "The primary CharmIPTV sources are not configured." }, 503);
   }
   const expiresAt = Number(auth.session.expires_at);
-  const access = await sealContentToken(env, { session_id: auth.session.id, expires_at: expiresAt });
-  const origin = new URL(request.url).origin;
-  const source = (kind, id, configured) => configured
-    ? `${origin}/content/${kind}/${id}?access=${encodeURIComponent(access)}`
-    : "";
+  // The APK never contains provider URLs. Release them only after a valid
+  // account/session check, over this HTTPS response, so Android can contact
+  // providers directly with the same M3U/XMLTV transport used by build #150.
+  // This avoids changing the request origin to a Cloudflare data-center IP.
+  const source = (configured) => validManagedSource(configured) ? String(configured).trim() : "";
   return json({
     success: true,
     content: {
       expires_at: expiresAt,
       primary: {
-        playlist_url: source("playlist", "primary", env.M3U_URL),
-        epg_url: source("epg", "primary", env.EPG_URL),
+        playlist_url: source(env.M3U_URL),
+        epg_url: source(env.EPG_URL),
       },
       secondary: {
-        playlist_url: source("playlist", "secondary", env.M3U_URL_2),
-        epg_url: source("epg", "secondary", env.EPG_URL_2),
+        playlist_url: source(env.M3U_URL_2),
+        epg_url: source(env.EPG_URL_2),
       },
     },
   });
-}
-
-async function proxyManagedContent(request, env, kind, id) {
-  const auth = await requireContentAccess(request, env);
-  if (!auth.ok) return auth.response;
-  const key = id === "primary"
-    ? kind === "playlist" ? "M3U_URL" : "EPG_URL"
-    : kind === "playlist" ? "M3U_URL_2" : "EPG_URL_2";
-  const upstreamUrl = String(env[key] || "").trim();
-  if (!validManagedSource(upstreamUrl)) return json({ success: false, error: "This managed source is not configured." }, 404);
-  const headers = new Headers({
-    "Accept": request.headers.get("Accept") || "*/*",
-    "User-Agent": "TiviMate/5.1.6 (Linux; Android TV)",
-  });
-  for (const name of ["Range", "If-None-Match", "If-Modified-Since"]) {
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-  let upstream;
-  try {
-    upstream = await fetch(upstreamUrl, { method: "GET", headers, redirect: "follow" });
-  } catch {
-    return json({ success: false, error: "The managed source could not be reached." }, 502);
-  }
-  const responseHeaders = new Headers(upstream.headers);
-  for (const name of ["Set-Cookie", "Set-Cookie2", "Server", "X-Powered-By"]) responseHeaders.delete(name);
-  responseHeaders.set("Access-Control-Allow-Origin", "*");
-  responseHeaders.set("Cache-Control", "private, no-store");
-  responseHeaders.set("X-Content-Type-Options", "nosniff");
-  responseHeaders.set("Referrer-Policy", "no-referrer");
-  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: responseHeaders });
 }
 
 function validManagedSource(value) {
@@ -636,61 +600,6 @@ function validManagedSource(value) {
     const url = new URL(String(value || "").trim());
     return url.protocol === "http:" || url.protocol === "https:";
   } catch { return false; }
-}
-
-async function requireContentAccess(request, env) {
-  const access = new URL(request.url).searchParams.get("access") || "";
-  let payload;
-  try {
-    payload = await openContentToken(env, access);
-  } catch {
-    return { ok: false, response: json({ success: false, error: "Protected content access is invalid or expired." }, 401) };
-  }
-  const now = unixNow();
-  if (!payload?.session_id || Number(payload.expires_at) <= now) {
-    return { ok: false, response: json({ success: false, error: "Protected content access has expired." }, 401) };
-  }
-  const session = await env.DB.prepare("SELECT * FROM sessions WHERE id = ?1 LIMIT 1").bind(payload.session_id).first();
-  if (!session || session.revoked || Number(session.expires_at) <= now) {
-    return { ok: false, response: json({ success: false, error: "Your session has expired or was logged out." }, 401) };
-  }
-  const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?1 LIMIT 1").bind(session.user_id).first();
-  if (!user || user.status !== "active") {
-    return { ok: false, response: json({ success: false, error: "This account is not active." }, 403) };
-  }
-  if (user.expires_at !== null && Number(user.expires_at) <= now) {
-    await deleteAccountData(env, user.id, "account_expired");
-    return { ok: false, response: json({ success: false, error: "This account expired and was permanently removed." }, 401) };
-  }
-  return { ok: true, user, session };
-}
-
-async function contentKey(env) {
-  const encoded = String(env.CONTENT_TOKEN_KEY || "").trim();
-  if (!/^[0-9a-f]{64}$/i.test(encoded)) throw statusError("Protected content access is not configured.", 503);
-  return crypto.subtle.importKey("raw", hexToBytes(encoded), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
-}
-
-async function sealContentToken(env, payload) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const plaintext = new TextEncoder().encode(JSON.stringify({ v: 1, ...payload }));
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await contentKey(env), plaintext);
-  return `${bytesToUrlBase64(iv)}.${bytesToUrlBase64(new Uint8Array(encrypted))}`;
-}
-
-async function openContentToken(env, value) {
-  const [ivText, encryptedText, extra] = String(value || "").split(".");
-  if (!ivText || !encryptedText || extra) throw new Error("Invalid content token");
-  const iv = urlBase64ToBytes(ivText);
-  if (iv.length !== 12) throw new Error("Invalid content token");
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    await contentKey(env),
-    urlBase64ToBytes(encryptedText),
-  );
-  const payload = JSON.parse(new TextDecoder().decode(decrypted));
-  if (payload?.v !== 1) throw new Error("Invalid content token");
-  return payload;
 }
 
 async function hashPassword(password) {
@@ -774,22 +683,6 @@ function bytesToBase64(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
-}
-
-function bytesToUrlBase64(bytes) {
-  return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function urlBase64ToBytes(value) {
-  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
-  return base64ToBytes(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
-}
-
-function hexToBytes(value) {
-  const text = String(value || "");
-  const bytes = new Uint8Array(text.length / 2);
-  for (let index = 0; index < bytes.length; index++) bytes[index] = Number.parseInt(text.slice(index * 2, index * 2 + 2), 16);
-  return bytes;
 }
 
 function base64ToBytes(value) {
