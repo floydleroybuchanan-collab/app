@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { NativeModules, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useRouter } from "expo-router";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -18,7 +19,7 @@ import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 import { useAuth } from "@/src/auth/AuthContext";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityRole="button" focusable={!disabled} disabled={disabled} onPress={onPress}
+  return <Pressable accessibilityRole="button" focusable accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ focused }: any) => [styles.button, disabled && styles.disabled, focused && styles.focused]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
 }
 

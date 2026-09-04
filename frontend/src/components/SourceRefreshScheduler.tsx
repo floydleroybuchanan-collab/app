@@ -7,7 +7,7 @@ import { getMultiEpgSources, saveMultiEpgSource } from "@/src/core/multiEpgSourc
 import { isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { getSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { syncNativeCustomEpgPolicy } from "@/src/core/customEpgPolicy";
-import { readCombinedPlaylists, refreshPlaylists } from "@/src/core/playlistRegistry";
+import { listPlaylists, readCombinedPlaylists, refreshPlaylists } from "@/src/core/playlistRegistry";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import { reloadPlaylistCatalog } from "@/src/source.native";
 
@@ -73,11 +73,14 @@ export function SourceRefreshScheduler() {
 
         // Independent XMLTV stores refresh serially under this same owner. The
         // native custom parser also yields if Guide/player takes foreground.
-        const customSources = await getMultiEpgSources();
+        const [customSources, playlists, activeChannels] = await Promise.all([getMultiEpgSources(), listPlaylists(), readCombinedPlaylists()]);
+        const usedSources = new Set(playlists.filter(playlist => playlist.enabled).flatMap(playlist => playlist.epgSourceIds));
+        const activeChannelIds = new Set(activeChannels.map(channel => channel.id));
         let customGuideChanged = false;
         for (const source of customSources) {
           if (!screenIsSafe()) return;
           if (!source.enabled || !source.url || source.refreshHours === 0) continue;
+          if (!usedSources.has(source.id) && !Object.keys(source.overrides).some(id => activeChannelIds.has(id))) continue;
           if (Date.now() - source.lastRefreshAt < source.refreshHours * 60 * 60 * 1000) continue;
           try {
             const result = await refreshNativeSourceGuide(source.id, source.url);

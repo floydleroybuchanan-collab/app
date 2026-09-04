@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useFocusEffect, usePathname, useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -24,7 +25,9 @@ import { evaluateDrawerBack } from "@/src/core/drawerNavigationPolicy";
 import { requestGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
 import { isGuideScreenActive, isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { useTvCalibration } from "@/src/tvCalibration";
-import { addTvKeyListener, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
+import { addTvKeyListener, prepareIconRailHide, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
+import { useIconRailPreferences } from "@/src/core/iconRailPreferences";
+import { railIdleRemainingMs } from "@/src/core/iconRailPolicy";
 
 type Route =
   | "/"
@@ -244,6 +247,12 @@ export function PurpleTvShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isFocused = useIsFocused();
+  const railPreferences = useIconRailPreferences();
+  const [railTimedOut, setRailTimedOut] = useState(false);
+  const [railFocusNonce, setRailFocusNonce] = useState(0);
+  const lastRailInteractionRef = useRef(Date.now());
+  const railRevealPendingRef = useRef(false);
   const {
     drawerOpen,
     drawerProgress,
@@ -258,7 +267,7 @@ export function PurpleTvShell({
   const { deviceLayoutMode, activeProgram } = useStore();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -286,16 +295,75 @@ export function PurpleTvShell({
   onIconRailNavigateRef.current = onIconRailNavigate;
   onIconRailOpenMainDrawerRef.current = onIconRailOpenMainDrawer;
 
+  const revealRail = useCallback(() => {
+    lastRailInteractionRef.current = Date.now();
+    if (!railPreferences.enabled) {
+      onIconRailOpenMainDrawerRef.current?.();
+      openDrawer();
+      return;
+    }
+    railRevealPendingRef.current = true;
+    setRailTimedOut(false);
+    setRailFocusNonce(value => value + 1);
+  }, [openDrawer, railPreferences.enabled]);
+
   useEffect(() => {
-    if (!showIconRail || iconRailFocusRequest === lastIconRailFocusRequestRef.current) return;
+    lastRailInteractionRef.current = Date.now();
+    setRailTimedOut(false);
+  }, [pathname, railPreferences.enabled, railPreferences.timeoutMinutes]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const ownsTag = (tag: string) => !!shellRef.current && Number(tag) === findNodeHandle(shellRef.current);
+    const activity = DeviceEventEmitter.addListener("CharmShellInteraction", (tag: string) => {
+      if (ownsTag(tag)) lastRailInteractionRef.current = Date.now();
+    });
+    const reveal = DeviceEventEmitter.addListener("CharmIconRailReveal", (tag: string) => { if (ownsTag(tag)) revealRail(); });
+    return () => { activity.remove(); reveal.remove(); };
+  }, [isFocused, revealRail]);
+
+  useEffect(() => {
+    if (!isFocused || !showIconRail || railPreferences.timeoutMinutes === 0) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      const remaining = railIdleRemainingMs(railPreferences.timeoutMinutes, lastRailInteractionRef.current, Date.now());
+      if (remaining == null || cancelled) return;
+      if (remaining > 0) { timer = setTimeout(() => void check(), remaining); return; }
+      const observedActivity = lastRailInteractionRef.current;
+      const tag = shellRef.current ? findNodeHandle(shellRef.current) : null;
+      const safeToHide = tag ? await prepareIconRailHide(tag) : false;
+      if (cancelled) return;
+      if (safeToHide && observedActivity === lastRailInteractionRef.current) setRailTimedOut(true);
+      else timer = setTimeout(() => void check(), 1000);
+    };
+    timer = setTimeout(() => void check(), railPreferences.timeoutMinutes * 60_000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isFocused, railPreferences.timeoutMinutes, showIconRail]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      lastIconRailFocusRequestRef.current = iconRailFocusRequest;
+      railRevealPendingRef.current = false;
+      return;
+    }
+    if (iconRailFocusRequest === lastIconRailFocusRequestRef.current && !railRevealPendingRef.current) return;
+    if (!showIconRail) {
+      if (iconRailFocusRequest !== lastIconRailFocusRequestRef.current) {
+        lastIconRailFocusRequestRef.current = iconRailFocusRequest;
+        revealRail();
+      }
+      return;
+    }
+    railRevealPendingRef.current = false;
     lastIconRailFocusRequestRef.current = iconRailFocusRequest;
     const node = iconRailRefs.current.get(active) || iconRailRefs.current.get(NAV[0].route);
     const cancelFocus = requestNativeFocusWithRetry(node, [0, 70, 150], () => iconRailFocusOwnerRef.current !== null);
     return () => cancelFocus?.();
-  }, [active, showIconRail, iconRailFocusRequest]);
+  }, [active, isFocused, showIconRail, iconRailFocusRequest, railFocusNonce, revealRail]);
 
   useEffect(() => {
-    if (!showIconRail) {
+    if (!isFocused || !showIconRail) {
       publishIconRailEntryTag(iconRailPublisher, undefined);
       return;
     }
@@ -304,9 +372,10 @@ export function PurpleTvShell({
     const published = tag || undefined;
     publishIconRailEntryTag(iconRailPublisher, published);
     return () => publishIconRailEntryTag(iconRailPublisher, undefined);
-  }, [active, showIconRail, iconRailPublisher, publishIconRailEntryTag]);
+  }, [active, isFocused, showIconRail, iconRailPublisher, publishIconRailEntryTag]);
 
   useEffect(() => {
+    if (!isFocused) return;
     const subscription = DeviceEventEmitter.addListener("CharmIconRailOpenMain", (tag: string) => {
       if (!shellRef.current || Number(tag) !== findNodeHandle(shellRef.current)) return;
       iconRailFocusOwnerRef.current = null;
@@ -315,10 +384,10 @@ export function PurpleTvShell({
       openDrawer();
     });
     return () => subscription.remove();
-  }, [openDrawer]);
+  }, [isFocused, openDrawer]);
 
   useEffect(() => addTvKeyListener((key) => {
-    if (!iconRailFocusOwnerRef.current) return;
+    if (!isFocused || !iconRailFocusOwnerRef.current) return;
     // LEFT is the universal rail-to-drawer boundary. BACK remains supported
     // for the earlier compact-rail shortcut. RIGHT deliberately remains a
     // native focus transition, optionally pinned to the last page control via
@@ -328,10 +397,10 @@ export function PurpleTvShell({
     resetRemoteContextIfOwned("icon_rail", "default");
     onIconRailOpenMainDrawerRef.current?.();
     openDrawer();
-  }), [openDrawer]);
+  }), [isFocused, openDrawer]);
 
   useEffect(() => {
-    if (!drawerOpen) return;
+    if (!isFocused || !drawerOpen) return;
     setRemoteContext("main_drawer");
     if (active === "/guide") setGuideNavigationActive(false);
     const off = active === "/guide"
@@ -357,10 +426,10 @@ export function PurpleTvShell({
         resetRemoteContextIfOwned("main_drawer", "default");
       }
     };
-  }, [active, closeDrawer, drawerOpen]);
+  }, [active, isFocused, closeDrawer, drawerOpen]);
 
   useEffect(() => {
-    if (!drawerOpen) {
+    if (!isFocused || !drawerOpen) {
       setDrawerAutoFocus(false);
       setDrawerPreferredRoute(null);
       return;
@@ -387,7 +456,7 @@ export function PurpleTvShell({
       clearTimeout(clearPreferred);
       cancelFocus?.();
     };
-  }, [active, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
+  }, [active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
 
   const reopenArmedAtRef = useRef(0);
   useFocusEffect(
@@ -533,6 +602,7 @@ export function PurpleTvShell({
       testID="purple-tv-shell"
       ref={shellRef}
       collapsable={false}
+      onTouchStart={() => { lastRailInteractionRef.current = Date.now(); }}
       style={[
         styles.root,
         {
@@ -913,4 +983,3 @@ const styles = StyleSheet.create({
   content: { flex: 1, backgroundColor: tvColors.canvas },
   headerRight: { position: "absolute", top: 10, right: spacing.lg },
 });
-

@@ -11,6 +11,12 @@ const TvRemote: any = Platform.OS === "android" ? NativeModules.TvRemote : null;
 
 export const tvRemoteAvailable = !!TvRemote;
 
+export async function prepareIconRailHide(shellTag: number): Promise<boolean> {
+  if (Platform.OS !== "android") return true;
+  if (!TvRemote?.prepareIconRailHide) return false;
+  try { return (await TvRemote.prepareIconRailHide(shellTag)) === true; } catch { return false; }
+}
+
 export type TvKey = "UP" | "DOWN" | "LEFT" | "RIGHT" | "SELECT" | "BACK";
 export type TvLongPressKey = "DOWN" | "SELECT" | "BACK";
 export type TvShortcutKey = "CHANNEL_UP" | "CHANNEL_DOWN" | "MEDIA_PLAY_PAUSE";

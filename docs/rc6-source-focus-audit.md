@@ -10,6 +10,7 @@ Branch: `feature/multiple-playlists-test-1`. Repair base: `bf6ca91`, after APK #
 - Every playlist retains its identity, saved catalog, refresh clock and enabled choice. Both supplied playlists may be disabled without requiring another working source. Explicitly removing the final personal playlist is allowed; supplied playlists cannot be deleted.
 - No five-personal-playlist, combined-25k-channel or nine-custom-guide configuration cap. Per-feed byte/channel/programme bounds and bounded guide paint/window caches remain for device safety. This is not a claim of unlimited physical device capacity.
 - Page edge Left → compact rail → Left → main menu. Guide has no permanent rail: channel-column Left → playlist/groups drawer → Left → main menu. The compact rail may appear beside the open groups drawer; Back there selects the rail, then Back/Left expands the menu.
+- Settings → Appearance → Navigation icon rail controls visibility and idle timeout. Choices are 1–9 minutes and Never Leaves; default is enabled, 3 minutes. Hidden rails release their layout space and reappear/focus on page-edge Left. With the rail disabled, page-edge Left opens the main menu. Guide retains its separate groups boundary.
 
 ## Confirmed code findings and changes
 
@@ -25,6 +26,9 @@ Branch: `feature/multiple-playlists-test-1`. Repair base: `bf6ca91`, after APK #
 | TV focus API | Installed RN TV's generic HostComponent.focus routes through TextInputState and is ineffective for Pressables. The helper now uses the installed ViewManager `requestTVFocus` command. Entry retries stop on actual onFocus confirmation, not merely calling a no-op method. |
 | Rail navigation | Native Activity resolves physical boundaries against attached visible views in the current shell. Right returns to a live content/group control; failure keeps the rail selected. Left/Back sends a shell-addressed menu action, avoiding competing open-group listeners and stale JS return refs. Key release is consumed with the handoff. |
 | Settings entry | Live TV and settings/EPG/playlist/group management pages use route-scoped initial focus with cancellation on blur. Rail entry tags are published/cleared by their owning shell. Old rail focus requests are not replayed when the Guide drawer reappears. |
+| Retained routes and idle rail | Inactive retained routes cannot publish rail destinations, consume rail requests or claim drawer focus. Native code verifies a visible page control actually owns focus before an idle rail is removed. Page/rail layout uses flex space rather than an overlay. |
+| Settings fields and overlays | Shared Settings text fields show an explicit focus border. EPG assignment backdrop/card wrappers are not remote focus targets; opening selects Close and closing restores the page control with native confirmation. The timeout picker traps focus, disarms preferred focus on acquisition and restores its opener. Busy Playlist actions retain a focus target. |
+| Disabled/empty navigation | Native Guide still handles Left with an empty catalog; an empty groups drawer offers a main-menu action. Automatic EPG refresh filters manual bindings to active channels and does not download feeds used only by disabled playlists. Explicit guide refresh remains available for setup. |
 | Diagnostics | Playlist refresh history uses the redacted failure reason instead of raw transport error text. |
 
 ## Audit coverage and limits
@@ -32,6 +36,8 @@ Branch: `feature/multiple-playlists-test-1`. Repair base: `bf6ca91`, after APK #
 Read the supplied TiViMate analysis reference at `eab124bb2cf19d0512fa729c30e3328177db434c`: playlist management, update safety, guide associations, menu/input and usability reports. These are behavioral reference reports, not verified TiViMate proprietary source.
 
 The repository interaction scan covers shipped app, source, Android, plugin and supporting script files, counting functions, timers, listeners and network sites and checking player/transport invariants against its baseline. Additional targeted inspection followed authentication → source registry → staged catalogs → combined projection → guide binding/import → metadata/health → scheduler → settings/guide/search/player consumers, plus Activity/remote bridge → shell → page/drawer focus boundaries. This is broad automated and targeted code review, not a claim that every line or every TV interaction has been manually verified.
+
+Settings review covers all 13 tile destinations: General, Player, Remote Control, Playlists, EPG, Appearance, Health, Channels, Parental, Backup & Restore, Invites, Account and About. Secondary routes reviewed are Playlists, EPG Sources, individual supplied/custom EPG editors and group settings, plus assignment and timeout pickers and calibration controls. Review includes route entry, shared buttons/text fields, scrolling, busy/empty states, modal ownership, rail-to-page return and rail off/timeout transitions. These are code-level checks; a connected-TV walkthrough remains required.
 
 The three exact transport hashes were deliberately updated after reviewing these authorized changes; the exact-match guard remains active and rejects later unreviewed edits. Media3 recovery/decoder architecture, guide paint-cache bounds, VOD provider implementation, account invitation/cancellation rules and HTTP/HTTPS stream compatibility are retained.
 

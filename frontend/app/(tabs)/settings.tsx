@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -66,6 +67,7 @@ import { useAuth } from "@/src/auth/AuthContext";
 import type { ReferralSummary } from "@/src/auth/accountApi";
 import { restoreFullBackup, writeFullBackup } from "@/src/utils/fullBackup";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
+import { IconRailSettings } from "@/src/components/IconRailSettings";
 
 const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
   { label: "Previous channel", value: "previous" },
@@ -990,6 +992,7 @@ function SettingsScreenContent() {
 
             {section === "appearance" ? (
               <SettingsCard title="Appearance" icon="color-palette-outline">
+                <IconRailSettings />
                 <ChoiceRow<DeviceLayoutMode>
                   label="Device layout"
                   value={deviceLayoutMode}

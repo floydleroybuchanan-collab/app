@@ -37,12 +37,18 @@ internal class BackgroundEpgUpdater(private val context: Context) {
     check(database.ensureHealthy()) { "Guide database integrity check failed" }
     database.assertRefreshStorageAvailable()
 
+    val activeChannels = EpgDatabase.shared(context).activePlaylistChannels()
+    val activeChannelIds = activeChannels.mapTo(HashSet()) { it.playlistId }
     val bindings = if (primary) {
-      EpgDatabase.shared(context).activePlaylistChannels()
+      activeChannels
         .filter { it.matchedXmltvId.isNotBlank() }
         .map { EpgChannelBindingEntity(sourceId, it.playlistId, it.matchedXmltvId) }
-    } else dao.effectiveBindings(sourceId)
+    } else dao.effectiveBindings(sourceId).filter { it.channelId in activeChannelIds }
     val activeIds = bindings.mapTo(LinkedHashSet()) { it.xmltvId }
+    // Disabled playlists keep their saved assignments, but automatic work
+    // must not download a feed used only by those disabled channels. Explicit
+    // Refresh in EPG settings still indexes an unassigned feed for setup.
+    if (activeIds.isEmpty()) return BackgroundEpgResult(database.count(), 0, false)
     val offsetsByPlaylist = dao.channelOffsets(sourceId).associate { it.channelId to it.offsetMinutes }
     val offsetsByXmltv = HashMap<String, Long>()
     for (binding in bindings) {

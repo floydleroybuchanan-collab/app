@@ -409,7 +409,11 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-    if (!enabled || rows.isEmpty()) return super.onKeyDown(keyCode, event)
+    if (!enabled) return super.onKeyDown(keyCode, event)
+    if (rows.isEmpty()) {
+      if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { emit("topLeftBoundary", null); return true }
+      return super.onKeyDown(keyCode, event)
+    }
     if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
       keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
       navigationKeyDown = true

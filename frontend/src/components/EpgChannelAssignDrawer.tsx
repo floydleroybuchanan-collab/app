@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { TvSettingsTextInput as TextInput } from "./TvSettingsTextInput";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { fonts, radius, tvColors } from "@/src/theme";
+import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
+import { resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 
 export type EpgPickerRow = { id: string; name: string };
 export type EpgPickerFilter = "all" | "unassigned";
@@ -29,6 +32,8 @@ type Props = {
   onSelect: (id: string) => void;
   onClose: () => void;
   busy?: boolean;
+  returnFocusRef?: React.RefObject<unknown>;
+  returnFocusConfirmed?: () => boolean;
 };
 
 /**
@@ -58,6 +63,8 @@ export function EpgChannelAssignDrawer({
   onSelect,
   onClose,
   busy,
+  returnFocusRef,
+  returnFocusConfirmed,
 }: Props) {
   // Preferred focus goes to Close, not the search TextInput — same contract as
   // every other overlay/screen in this app (ProgramModal's action button,
@@ -67,6 +74,24 @@ export function EpgChannelAssignDrawer({
   // the button's own onFocus rather than a fixed timer, so it can't race a
   // slower TV focus engine.
   const [preferCloseFocus, setPreferCloseFocus] = useState(true);
+  const closeRef = useRef<unknown>(null);
+  const returnCancelRef = useRef<(() => void) | null>(null);
+  const returnToPage = useCallback(() => {
+    returnCancelRef.current?.();
+    returnCancelRef.current = requestNativeFocusWithRetry(returnFocusRef?.current, [0, 70, 160, 320], returnFocusConfirmed);
+  }, [returnFocusRef, returnFocusConfirmed]);
+
+  useEffect(() => {
+    if (!visible) return;
+    returnCancelRef.current?.();
+    setRemoteContext("modal");
+    const cancel = requestNativeFocusWithRetry(closeRef.current);
+    return () => {
+      cancel();
+      resetRemoteContextIfOwned("modal", "default");
+      requestAnimationFrame(returnToPage);
+    };
+  }, [returnToPage, visible]);
 
   useEffect(() => {
     if (visible) setPreferCloseFocus(true);
@@ -89,8 +114,8 @@ export function EpgChannelAssignDrawer({
 
   return (
     <View style={styles.overlay} testID="epg-picker-overlay">
-      <Pressable style={styles.backdrop} onPress={onClose} testID="epg-picker-backdrop">
-        <Pressable style={styles.card} onPress={() => undefined}>
+      <Pressable focusable={false} style={styles.backdrop} onPress={onClose} testID="epg-picker-backdrop">
+        <Pressable focusable={false} style={styles.card} onPress={() => undefined}>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.cardInner}>
             <View style={styles.header}>
               <View style={styles.headerText}>
@@ -98,6 +123,7 @@ export function EpgChannelAssignDrawer({
                 {subtitle ? <Text numberOfLines={2} style={styles.subtitle}>{subtitle}</Text> : null}
               </View>
               <Pressable
+                ref={closeRef as any}
                 hasTVPreferredFocus={preferCloseFocus}
                 onFocus={() => setPreferCloseFocus(false)}
                 style={({ focused }: any) => [styles.closeBtn, focused && styles.focused]}

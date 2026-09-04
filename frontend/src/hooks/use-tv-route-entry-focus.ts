@@ -55,5 +55,6 @@ export function useTvRouteEntryFocus(enabled = true, focusKey: unknown = "defaul
     confirmedRef.current = false;
   }, []);
 
-  return { targetRef, preferredFocus, onFocus, onBlur };
+  const isFocused = useCallback(() => confirmedRef.current, []);
+  return { targetRef, preferredFocus, onFocus, onBlur, isFocused };
 }

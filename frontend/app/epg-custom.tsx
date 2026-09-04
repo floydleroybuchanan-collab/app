@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useRouter } from "expo-router";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { Ionicons } from "@expo/vector-icons";
@@ -385,6 +386,8 @@ export default function CustomEpgScreen() {
 
       {selectedChannel ? (
         <EpgChannelAssignDrawer
+          returnFocusRef={entryFocus.targetRef}
+          returnFocusConfirmed={entryFocus.isFocused}
           visible={assignDrawerOpen}
           title={`Assign XMLTV channel to ${selectedChannel.name}`}
           subtitle="Search this custom EPG's own channel list, then pick one to bind it to this playlist channel."

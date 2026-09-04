@@ -13,6 +13,16 @@ import java.io.File
 class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx) {
   override fun getName(): String = "TvRemote"
 
+  @ReactMethod
+  fun prepareIconRailHide(shellTag: Double, promise: Promise) {
+    val activity = ctx.getCurrentActivity() as? MainActivity
+    if (activity == null) { promise.resolve(false); return }
+    activity.runOnUiThread {
+      try { promise.resolve(activity.prepareIconRailHide(shellTag.toInt())) }
+      catch (_: Throwable) { promise.resolve(false) }
+    }
+  }
+
   companion object {
     // Use @JvmField (a plain static field, no accessors) so Kotlin does NOT
     // generate a static setPointerActive(...) setter that would clash at the

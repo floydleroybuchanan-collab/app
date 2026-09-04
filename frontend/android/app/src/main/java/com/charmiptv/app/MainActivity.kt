@@ -27,6 +27,7 @@ class MainActivity : ReactActivity() {
   private var lastAcceptedDirectionalKeyCode = -1
   private var emittedLongPressKeyCode = -1
   private var shellBoundaryKeyDown = -1
+  private var lastShellInteractionAt = 0L
   private fun testId(view: View): String =
     view.getTag(com.facebook.react.R.id.react_test_id) as? String ?: ""
 
@@ -51,6 +52,26 @@ class MainActivity : ReactActivity() {
     return null
   }
 
+  private fun focusContentFromRail(root: View, rail: View, focus: View): Boolean {
+    val page = findTagged(root, "phase9-guide-groups-drawer") ?: findTagged(root, "purple-tv-page") ?: return false
+    val next = focus.focusSearch(View.FOCUS_RIGHT)
+    if (next !== page && visible(next) && within(next, page) && next!!.requestFocus() &&
+        currentFocus?.let { within(it, page) && !within(it, rail) } == true) return true
+    val target = page.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== page && visible(it) && it.isEnabled }
+    if (target?.requestFocus() != true) return false
+    return currentFocus?.let { within(it, page) && !within(it, rail) } == true
+  }
+
+  /** UI-thread precondition for removing a rail: it cannot retain focus. */
+  fun prepareIconRailHide(shellTag: Int): Boolean {
+    val root = window.decorView.findViewById<View>(shellTag) ?: return true
+    if (testId(root) != "purple-tv-shell") return false
+    val rail = findTagged(root, "purple-icon-rail") ?: return true
+    val focus = currentFocus ?: return true
+    if (!within(focus, rail)) return true
+    return focusContentFromRail(root, rail, focus)
+  }
+
   /** Resolve physical page/rail boundaries against this window's live views. */
   private fun routeShellBoundary(event: android.view.KeyEvent): Boolean {
     if (event.action != android.view.KeyEvent.ACTION_DOWN || TvRemoteModule.pointerActive) return false
@@ -58,6 +79,11 @@ class MainActivity : ReactActivity() {
     var shell: View? = focus
     while (shell != null && testId(shell) != "purple-tv-shell") shell = shell.parent as? View
     val root = shell ?: return false
+    val now = android.os.SystemClock.elapsedRealtime()
+    if (now - lastShellInteractionAt >= 500L) {
+      lastShellInteractionAt = now
+      emitRemoteEvent("CharmShellInteraction", root.id.toString())
+    }
     val key = event.keyCode
     val rail = findTagged(root, "purple-icon-rail")
     if (rail == null) {
@@ -65,11 +91,15 @@ class MainActivity : ReactActivity() {
       // Preview action controls use the same groups destination at their edge.
       if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT || focus is NativeGuideView ||
           focus is EditText || TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "main_drawer") return false
-      val guidePage = findTagged(root, "purple-tv-guide-page") ?: return false
-      if (!within(focus, guidePage)) return false
+      val guidePage = findTagged(root, "purple-tv-guide-page")
+      val page = guidePage ?: findTagged(root, "purple-tv-page") ?: return false
+      if (!within(focus, page)) return false
       val next = focus.focusSearch(View.FOCUS_LEFT)
-      if (next !== focus && visible(next) && within(next, guidePage)) return false
-      if (event.repeatCount == 0) emitRemoteEvent("CharmGuideGroupsRequestOpen", "")
+      if (next !== focus && visible(next) && within(next, page)) return false
+      if (event.repeatCount == 0) {
+        if (guidePage != null) emitRemoteEvent("CharmGuideGroupsRequestOpen", "")
+        else emitRemoteEvent("CharmIconRailReveal", root.id.toString())
+      }
       return true
     }
     val onRail = within(focus, rail)
@@ -80,11 +110,7 @@ class MainActivity : ReactActivity() {
       return true
     }
     if (onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
-      val page = findTagged(root, "phase9-guide-groups-drawer") ?: findTagged(root, "purple-tv-page")
-      val next = focus.focusSearch(View.FOCUS_RIGHT)
-      if (page != null && next !== page && visible(next) && within(next, page) && next!!.requestFocus()) return true
-      val target = page?.getFocusables(View.FOCUS_FORWARD)?.firstOrNull { it !== page && visible(it) && it.isEnabled }
-      target?.requestFocus()
+      focusContentFromRail(root, rail, focus)
       // Failure leaves focus on the rail, never on a hidden/stale node.
       return true
     }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -178,6 +179,8 @@ export default function EpgSourceScreen() {
   </View>
   {selectedChannel ? (
     <EpgChannelAssignDrawer
+      returnFocusRef={entryFocus.targetRef}
+      returnFocusConfirmed={entryFocus.isFocused}
       visible={assignDrawerOpen}
       title={`Assign XMLTV channel to ${selectedChannel.name}`}
       subtitle="Search this EPG source's own channel list, then pick one to bind it to this playlist channel."

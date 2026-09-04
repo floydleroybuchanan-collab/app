@@ -101,6 +101,11 @@ export function PurpleGuideGroupDrawer({
     <View style={styles.overlay} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+          {!groups.length && <Pressable hasTVPreferredFocus={preferActiveFocus}
+            onFocus={() => { setPreferActiveFocus(false); setRemoteContext("guide_groups"); }}
+            onPress={onOpenMainDrawer} style={({ focused }: any) => [styles.row, focused && styles.focused]}>
+            <Text style={styles.name}>No enabled playlists · Open main menu</Text>
+          </Pressable>}
           {groups.map((item) => (
             <Pressable
               key={item.name}
