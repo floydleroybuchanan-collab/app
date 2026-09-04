@@ -71,7 +71,7 @@ function RecentChannelCard({
 function LiveTvHomeScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { openDrawer } = usePurpleTvDrawer();
+  const { focusIconRail } = usePurpleTvDrawer();
   const {
     channels,
     recent,
@@ -128,7 +128,7 @@ function LiveTvHomeScreenContent() {
     useCallback(() => {
       setPreferInitialFocus(true);
       const offKey = addTvKeyListener((key) => {
-        if (key === "LEFT" && leftEdgeFocusRef.current) openDrawer();
+        if (key === "LEFT" && leftEdgeFocusRef.current) focusIconRail();
       });
       const timer = setTimeout(() => setPreferInitialFocus(false), 180);
       return () => {
@@ -137,7 +137,7 @@ function LiveTvHomeScreenContent() {
         leftEdgeFocusRef.current = null;
         resetRemoteContextIfOwned("drawer_edge", "default");
       };
-    }, [openDrawer]),
+    }, [focusIconRail]),
   );
 
   const channelNumberById = useMemo(() => {

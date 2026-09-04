@@ -223,7 +223,7 @@ function PurpleGuideScreenContent() {
   const activePlaylist = playlists.some((item) => item.id === selectedPlaylist && item.enabled) ? selectedPlaylist : "all";
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { drawerOpen, openDrawer, closeDrawer } = usePurpleTvDrawer();
+  const { drawerOpen, openDrawer, closeDrawer, focusIconRail } = usePurpleTvDrawer();
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -1045,12 +1045,15 @@ function PurpleGuideScreenContent() {
           open
           groups={playlistDrawerRows}
           onCloseToGuide={() => setGroupDrawerOpen(false)}
+          onFocusIconRail={focusIconRail}
           onOpenMainDrawer={() => {
             setGroupDrawerOpen(false);
             openDrawer();
           }}
         />
       ) : null}
+      onIconRailNavigate={() => setGroupDrawerOpen(false)}
+      onIconRailOpenMainDrawer={() => setGroupDrawerOpen(false)}
       footerAction={{
         label: "Guide Sources",
         icon: "refresh-outline",
@@ -1059,12 +1062,6 @@ function PurpleGuideScreenContent() {
       }}
     >
       <View style={styles.page}>
-        <Pressable accessibilityRole="button" focusable onPress={() => {
-          quiesceGuideForTransition(true);
-          setGroupDrawerOpen(true);
-        }} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>
-          <Text style={styles.retryText}>{activePlaylist === "all" ? "All Playlists" : playlists.find((item) => item.id === activePlaylist)?.name} · Open playlists & groups</Text>
-        </Pressable>
         <EpgProgressBar />
         {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
           <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>

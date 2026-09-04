@@ -54,7 +54,7 @@ export default function PlaylistsScreen() {
     <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><Text style={styles.title}>Playlists</Text></View>
       <Pressable onPress={back} disabled={busy} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
     </View>
-    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
+    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
       <Text style={styles.help}>Your supplied CharmIPTV services and personal M3U playlists, together in one guide. Five personal playlists; 25,000 enabled channels total in this test build.</Text>
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
         <Text style={styles.text}>Enter your parental PIN to manage playlists.</Text>

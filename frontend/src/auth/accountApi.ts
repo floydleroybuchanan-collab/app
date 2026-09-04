@@ -13,11 +13,32 @@ export type AccountUser = {
   active_sessions?: number | null;
 };
 
+export type ReferralInvitation = {
+  id: string;
+  invite_code: string;
+  status: "unused" | "used" | "expired" | "disabled";
+  created_at: number;
+  expires_at: number;
+  redeemed_at?: number | null;
+};
+
+export type ReferralSummary = {
+  limit: number;
+  available: number;
+  used: number;
+  active: number;
+  cycle_started_at: number;
+  renews_at: number;
+  invitations: ReferralInvitation[];
+};
+
 type AccountEnvelope = {
   success?: boolean;
   error?: string;
   token?: string;
   user?: AccountUser;
+  referral?: ReferralSummary;
+  invitation?: ReferralInvitation;
 };
 
 export type AccountApiResult = {
@@ -75,10 +96,35 @@ export function loginToAccount(login: string, password: string): Promise<Account
   });
 }
 
+export function registerAccountWithInvite(
+  inviteCode: string,
+  username: string,
+  email: string,
+  password: string,
+): Promise<AccountApiResult> {
+  return accountRequest("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      invite_code: inviteCode.trim().toUpperCase(),
+      username: username.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+    }),
+  });
+}
+
 export function getCurrentAccount(token: string): Promise<AccountApiResult> {
   return accountRequest("/me", { method: "GET" }, token);
 }
 
 export function logoutAccount(token: string): Promise<AccountApiResult> {
   return accountRequest("/auth/logout", { method: "POST" }, token);
+}
+
+export function getReferralSummary(token: string): Promise<AccountApiResult> {
+  return accountRequest("/referrals", { method: "GET" }, token);
+}
+
+export function generateReferralInvite(token: string): Promise<AccountApiResult> {
+  return accountRequest("/referrals/invites", { method: "POST" }, token);
 }

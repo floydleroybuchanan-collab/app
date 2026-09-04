@@ -120,24 +120,26 @@ test("parental pin normalize via verify after set", async () => {
   assert.equal(verifyParentalPin("1234"), false);
 });
 
-test("drawer shell boots closed and shows the icon rail only beside the playlist drawer", async () => {
+test("drawer shell boots closed with a permanent focusable icon rail", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   assert.match(shell, /useState\(false\)/);
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
   assert.match(shell, /testID="purple-icon-rail"/);
-  assert.match(shell, /!drawerOpen && secondaryDrawer/);
+  assert.match(shell, /!drawerOpen \? \(/);
+  assert.match(shell, /onPress=\{\(\) => navigate\(item\.route, "rail"\)\}/);
+  assert.match(shell, /setRemoteContext\("icon_rail"\)/);
   assert.match(shell, /isGuideSurfing/);
   assert.match(shell, /focusable=\{drawerOpen\}/);
   assert.match(shell, /outputRange: \[-PURPLE_SIDEBAR_WIDTH, 0\]/);
   assert.doesNotMatch(shell, /Catch Up|\/catchup/);
-  assert.match(shell, /autoFocus=\{!drawerOpen && !secondaryDrawer && active !== "\/guide"\}/);
+  assert.match(shell, /testID=\{`purple-icon-rail-/);
 });
 
 test("drawer route changes release drawer focus ownership before mounting the next screen", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   const navigate = shell.match(/const navigate = useCallback\([\s\S]*?\n  \);/)?.[0] || "";
   assert.match(navigate, /closeDrawer\(\{ force: true \}\)/);
-  assert.match(navigate, /if \(route === active\) \{[\s\S]*CharmGuideGroupsRequestOpen[\s\S]*return;[\s\S]*\}/);
+  assert.match(navigate, /if \(route === active && pathname === route\) \{[\s\S]*CharmGuideGroupsRequestOpen[\s\S]*return;[\s\S]*\}/);
   assert.match(navigate, /requestAnimationFrame\(\(\) => \{/);
   assert.match(navigate, /router\.replace\(route as any\)/);
   assert.ok(
@@ -154,7 +156,7 @@ test("main drawer focus retries ignore EPG group-count and programme churn", asy
   assert.doesNotMatch(shell, /\[active, activeProgram, consumeFocusDrawerTop, drawerOpen, focusDrawerTop, guideGroups\]/);
 });
 
-test("shared page focus has a deterministic Left-edge drawer handoff", async () => {
+test("shared page focus has a deterministic Left-edge icon-rail handoff", async () => {
   const [shell, collection, favorites, reminders, live, channels] = await Promise.all([
     source("src/components/PurpleTvShell.tsx"),
     source("src/components/PurpleChannelCollection.tsx"),
@@ -163,10 +165,10 @@ test("shared page focus has a deterministic Left-edge drawer handoff", async () 
     source("app/(tabs)/index.tsx"),
     source("app/(tabs)/channels.tsx"),
   ]);
-  assert.match(shell, /testID="purple-left-edge-drawer-target"/);
-  assert.match(shell, /leftEdgeDrawerTarget:[\s\S]{0,300}width: 10/);
-  assert.match(shell, /onFocus=\{\(\) => openDrawer\(\)\}/);
-  assert.match(shell, /trapFocusLeft=\{!drawerOpen && !secondaryDrawer && active === "\/"\}/);
+  assert.match(shell, /testID="purple-icon-rail"/);
+  assert.match(shell, /focusIconRail/);
+  assert.match(shell, /trapFocusLeft/);
+  assert.doesNotMatch(shell, /purple-left-edge-drawer-target/);
   assert.match(shell, /isGuideScreenActive\(\) && isGuideSurfing\(\)/);
   for (const page of [collection, favorites, reminders, live, channels]) {
     assert.match(page, /preferInitialFocus/);
@@ -174,7 +176,7 @@ test("shared page focus has a deterministic Left-edge drawer handoff", async () 
   }
   assert.match(live, /setRemoteContext\("drawer_edge"\)/);
   assert.match(live, /key === "LEFT" && leftEdgeFocusRef\.current/);
-  assert.match(live, /openDrawer\(\)/);
+  assert.match(live, /focusIconRail\(\)/);
   assert.doesNotMatch(reminders, /hasTVPreferredFocus\s*\n/);
   assert.match(reminders, /hasTVPreferredFocus=\{preferInitialFocus\}/);
 });
@@ -472,15 +474,16 @@ test("Guide preview actions have a deterministic D-pad Down return to the native
   assert.match(guide, /guideFocusTag=\{nativeGuideFocusTag\}/);
 });
 
-test("Android remote accepts the drawer_edge ownership context used by the shell", async () => {
+test("Android remote accepts drawer-edge and icon-rail focus ownership", async () => {
   const [nativeRemote, activity, bridge] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/TvRemoteModule.kt"),
     source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
     source("src/utils/tvRemote.ts"),
   ]);
-  assert.match(nativeRemote, /"main_drawer", "drawer_edge", "player"/);
+  assert.match(nativeRemote, /"main_drawer", "icon_rail", "drawer_edge", "player"/);
   assert.match(activity, /context == "drawer_edge" && boundaryKey == "LEFT"/);
-  assert.match(bridge, /\| "drawer_edge"/);
+  assert.match(activity, /context == "icon_rail" && boundaryKey == "BACK"/);
+  assert.match(bridge, /\| "icon_rail"/);
 });
 
 

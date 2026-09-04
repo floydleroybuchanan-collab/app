@@ -300,7 +300,7 @@ export default function CustomEpgScreen() {
           </Pressable>
         </View>
 
-        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}>
+        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
           <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} scrollEnabled nestedScrollEnabled contentInsetAdjustmentBehavior="never">
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Guide ownership</Text>

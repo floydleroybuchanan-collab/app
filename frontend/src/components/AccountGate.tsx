@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,12 +15,16 @@ import { useAuth } from "@/src/auth/AuthContext";
 import { fonts, radius, tvColors } from "@/src/theme";
 
 export function AccountGate({ children }: { children: React.ReactNode }) {
-  const { status, notice, signIn, signOut, retryRestore } = useAuth();
+  const { status, notice, signIn, register, signOut, retryRestore } = useAuth();
   const { width } = useWindowDimensions();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [inviteCode, setInviteCode] = useState("");
+  const [email, setEmail] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const submit = useCallback(async () => {
     const cleanUsername = username.trim();
@@ -37,6 +42,34 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
       setBusy(false);
     }
   }, [busy, password, signIn, username]);
+
+  const submitRegistration = useCallback(async () => {
+    if (busy) return;
+    if (!inviteCode.trim() || !username.trim() || !email.trim() || !password) {
+      setError("Enter the invitation code, username, email, and password.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Use a password with at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("The passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const message = await register(inviteCode, username, email, password);
+      if (message) setError(message);
+      else {
+        setPassword("");
+        setConfirmPassword("");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, confirmPassword, email, inviteCode, password, register, username]);
 
   if (status === "signed_in") return <>{children}</>;
 
@@ -80,7 +113,12 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <View style={styles.screen} testID="account-login-screen">
+    <ScrollView
+      style={styles.screenScroll}
+      contentContainerStyle={styles.screenContent}
+      keyboardShouldPersistTaps="handled"
+      testID="account-login-screen"
+    >
       <View style={[styles.card, width < 700 && styles.cardCompact]}>
         <View style={styles.brandRow}>
           <View style={styles.brandMark}><Ionicons name="sparkles" size={27} color="#fff" /></View>
@@ -89,12 +127,34 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
             <Text style={styles.kicker}>ACCOUNT SIGN IN</Text>
           </View>
         </View>
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.message}>Sign in with the username and password supplied with your invitation.</Text>
+        <Text style={styles.title}>{mode === "login" ? "Welcome back" : "Create your account"}</Text>
+        <Text style={styles.message}>
+          {mode === "login"
+            ? "Sign in with your CharmIPTV username and password."
+            : "A valid invitation code is required. There is no open public registration."}
+        </Text>
+
+        {mode === "register" ? (
+          <>
+            <Text style={styles.label}>Invitation code</Text>
+            <TextInput
+              hasTVPreferredFocus
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              editable={!busy}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder="CHARM-XXXX-XXXX"
+              placeholderTextColor="#6F6B7E"
+              style={styles.input}
+              testID="account-invite-code"
+            />
+          </>
+        ) : null}
 
         <Text style={styles.label}>Username</Text>
         <TextInput
-          hasTVPreferredFocus
+          hasTVPreferredFocus={mode === "login"}
           value={username}
           onChangeText={setUsername}
           editable={!busy}
@@ -109,6 +169,25 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           testID="account-username"
         />
 
+        {mode === "register" ? (
+          <>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              editable={!busy}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              placeholder="Enter email"
+              placeholderTextColor="#6F6B7E"
+              style={styles.input}
+              testID="account-email"
+            />
+          </>
+        ) : null}
+
         <Text style={styles.label}>Password</Text>
         <TextInput
           value={password}
@@ -117,31 +196,71 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           secureTextEntry
           textContentType="password"
           autoComplete="password"
-          returnKeyType="done"
-          onSubmitEditing={() => void submit()}
+          returnKeyType={mode === "register" ? "next" : "done"}
+          onSubmitEditing={() => {
+            if (mode === "login") void submit();
+          }}
           placeholder="Enter password"
           placeholderTextColor="#6F6B7E"
           style={styles.input}
           testID="account-password"
         />
 
+        {mode === "register" ? (
+          <>
+            <Text style={styles.label}>Confirm password</Text>
+            <TextInput
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              editable={!busy}
+              secureTextEntry
+              returnKeyType="done"
+              onSubmitEditing={() => void submitRegistration()}
+              placeholder="Enter password again"
+              placeholderTextColor="#6F6B7E"
+              style={styles.input}
+              testID="account-confirm-password"
+            />
+          </>
+        ) : null}
+
         {error || notice ? <Text style={styles.error}>{error || notice}</Text> : null}
 
         <Pressable
           disabled={busy}
-          onPress={() => void submit()}
+          onPress={() => void (mode === "login" ? submit() : submitRegistration())}
           style={({ focused }: any) => [styles.primaryButton, busy && styles.disabled, focused && styles.focused]}
           testID="account-sign-in"
         >
           {busy ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="log-in-outline" size={18} color="#fff" />}
-          <Text style={styles.primaryButtonText}>{busy ? "Signing In…" : "Sign In"}</Text>
+          <Text style={styles.primaryButtonText}>{busy ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}</Text>
+        </Pressable>
+        <Pressable
+          disabled={busy}
+          onPress={() => {
+            setError(null);
+            setMode((current) => current === "login" ? "register" : "login");
+          }}
+          style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}
+          testID="account-switch-mode"
+        >
+          <Text style={styles.secondaryButtonText}>
+            {mode === "login" ? "Register With Invitation" : "Return to Sign In"}
+          </Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  screenScroll: { flex: 1, backgroundColor: tvColors.canvas },
+  screenContent: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 28,
+  },
   screen: {
     flex: 1,
     backgroundColor: tvColors.canvas,

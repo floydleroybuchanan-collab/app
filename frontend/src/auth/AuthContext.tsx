@@ -1,7 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
-import { getCurrentAccount, loginToAccount, logoutAccount, type AccountUser } from "@/src/auth/accountApi";
+import {
+  generateReferralInvite,
+  getCurrentAccount,
+  getReferralSummary,
+  loginToAccount,
+  logoutAccount,
+  registerAccountWithInvite,
+  type AccountUser,
+  type ReferralSummary,
+} from "@/src/auth/accountApi";
 import { storage } from "@/src/utils/storage";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
@@ -14,6 +23,9 @@ type AuthContextValue = {
   user: AccountUser | null;
   notice: string | null;
   signIn: (username: string, password: string) => Promise<string | null>;
+  register: (inviteCode: string, username: string, email: string, password: string) => Promise<string | null>;
+  loadReferrals: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
+  createReferral: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
   signOut: () => Promise<void>;
   retryRestore: () => Promise<void>;
 };
@@ -123,6 +135,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
+  const acceptAuthenticatedResult = useCallback(async (
+    result: Awaited<ReturnType<typeof registerAccountWithInvite>>,
+  ): Promise<string | null> => {
+    if (!result.response || !result.response.ok || !result.data.success || !result.data.token || !result.data.user) {
+      return result.data.error || "Unable to create the account.";
+    }
+    const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
+    if (!saved) {
+      void logoutAccount(result.data.token);
+      return "This device could not securely save the session. Please try again.";
+    }
+    tokenRef.current = result.data.token;
+    lastValidatedAtRef.current = Date.now();
+    setUser(result.data.user);
+    setNotice(null);
+    setStatus("signed_in");
+    return null;
+  }, []);
+
+  const register = useCallback(async (inviteCode: string, username: string, email: string, password: string) => {
+    setNotice(null);
+    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password));
+  }, [acceptAuthenticatedResult]);
+
+  const referralRequest = useCallback(async (create: boolean) => {
+    const token = tokenRef.current;
+    if (!token) return { data: null, error: "Please sign in again." };
+    const result = create ? await generateReferralInvite(token) : await getReferralSummary(token);
+    if (result.response?.status === 401) {
+      await clearLocalSession("Your session expired or was revoked. Please sign in again.");
+      return { data: null, error: "Your session expired or was revoked." };
+    }
+    if (!result.response?.ok || !result.data.success || !result.data.referral) {
+      return { data: null, error: result.data.error || "Unable to load your invitations." };
+    }
+    return { data: result.data.referral, error: null };
+  }, [clearLocalSession]);
+
   const signOut = useCallback(async () => {
     const token = tokenRef.current;
     await clearLocalSession();
@@ -134,9 +184,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     notice,
     signIn,
+    register,
+    loadReferrals: () => referralRequest(false),
+    createReferral: () => referralRequest(true),
     signOut,
     retryRestore: restore,
-  }), [notice, restore, signIn, signOut, status, user]);
+  }), [notice, referralRequest, register, restore, signIn, signOut, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

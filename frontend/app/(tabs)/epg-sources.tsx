@@ -165,7 +165,7 @@ function EpgSourcesScreenContent() {
             <Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>All Settings</Text>
           </Pressable>
         </View>
-        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}>
+        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
           <ScrollView
             ref={scrollRef}
             scrollEnabled

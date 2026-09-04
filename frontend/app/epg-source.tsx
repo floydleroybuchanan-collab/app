@@ -149,7 +149,7 @@ export default function EpgSourceScreen() {
   };
   return <PurpleTvShell active="/settings"><View style={styles.page}>
     <View style={styles.header}><Text style={styles.title}>Saved EPG source</Text><Pressable hasTVPreferredFocus={preferBackFocus} onFocus={() => setPreferBackFocus(false)} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
-    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}>
+    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
       <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
       <View style={styles.card}><Text style={styles.cardTitle}>Source settings</Text>
         <TextInput value={draft.name} onChangeText={(name) => setDraft((value) => ({ ...value, name }))} placeholder="Source name" placeholderTextColor={tvColors.textMuted} style={styles.input} />

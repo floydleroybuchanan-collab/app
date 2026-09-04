@@ -152,6 +152,7 @@ export type RemoteContext =
   | "guide"
   | "guide_groups"
   | "main_drawer"
+  | "icon_rail"
   | "drawer_edge"
   | "player"
   | "modal";

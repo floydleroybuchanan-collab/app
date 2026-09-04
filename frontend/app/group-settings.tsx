@@ -186,7 +186,7 @@ export default function GroupSettingsScreen() {
           </Pressable>
         </View>
 
-        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.scrollWrap}>
+        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
           <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Playlist groups</Text>

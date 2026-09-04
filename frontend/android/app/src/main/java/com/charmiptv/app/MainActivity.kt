@@ -195,8 +195,9 @@ class MainActivity : ReactActivity() {
         else -> null
       }
       val owned =
-        (context == "guide_groups" && (boundaryKey == "LEFT" || boundaryKey == "RIGHT")) ||
+        (context == "guide_groups" && (boundaryKey == "LEFT" || boundaryKey == "RIGHT" || boundaryKey == "BACK")) ||
           (context == "main_drawer" && boundaryKey == "RIGHT") ||
+          (context == "icon_rail" && boundaryKey == "BACK") ||
           (context == "drawer_edge" && boundaryKey == "LEFT")
       if (owned && boundaryKey != null) {
         emitRemoteEvent("TvRemoteKey", boundaryKey)

@@ -63,6 +63,7 @@ import {
 } from "@/src/core/deviceCodecCapabilities";
 import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "@/src/auth/AuthContext";
+import type { ReferralSummary } from "@/src/auth/accountApi";
 import { restoreFullBackup, writeFullBackup } from "@/src/utils/fullBackup";
 
 const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
@@ -87,6 +88,7 @@ type Section =
   | "channels"
   | "parental"
   | "backup"
+  | "invites"
   | "account"
   | "about";
 
@@ -107,6 +109,7 @@ const TILES: Tile[] = [
   { id: "channels", label: "Channels", icon: "list-circle-outline" },
   { id: "parental", label: "Parental", icon: "lock-closed-outline" },
   { id: "backup", label: "Backup & Restore", icon: "cloud-download-outline" },
+  { id: "invites", label: "Invites", icon: "gift-outline" },
   { id: "account", label: "Account", icon: "person-outline" },
   { id: "about", label: "About", icon: "information-circle-outline" },
 ];
@@ -123,9 +126,19 @@ function formatAccountExpiry(value: number | string | null | undefined): string 
   return new Date(timestamp).toLocaleDateString();
 }
 
+function formatAccountDateTime(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "—";
+  const numeric = Number(value);
+  const timestamp = Number.isFinite(numeric)
+    ? (numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+    : Date.parse(String(value));
+  if (!Number.isFinite(timestamp)) return "—";
+  return new Date(timestamp).toLocaleString();
+}
+
 function SettingsScreenContent() {
   const router = useRouter();
-  const { user: accountUser, signOut } = useAuth();
+  const { user: accountUser, signOut, loadReferrals, createReferral } = useAuth();
   const {
     channels,
     favorites,
@@ -181,11 +194,46 @@ function SettingsScreenContent() {
   const clearFavoritesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [preferTileFocus, setPreferTileFocus] = useState(true);
   const [preferBackFocus, setPreferBackFocus] = useState(false);
+  const [referral, setReferral] = useState<ReferralSummary | null>(null);
+  const [referralBusy, setReferralBusy] = useState(false);
+  const [referralStatus, setReferralStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (section !== "health" && section !== "about") return;
     void getDeviceCodecCapabilities().then(setCodecCapabilities);
   }, [section]);
+
+  useEffect(() => {
+    if (section !== "invites") return;
+    let cancelled = false;
+    setReferralBusy(true);
+    setReferralStatus(null);
+    void loadReferrals().then((result) => {
+      if (cancelled) return;
+      setReferral(result.data);
+      setReferralStatus(result.error);
+      setReferralBusy(false);
+    });
+    return () => { cancelled = true; };
+  }, [loadReferrals, section]);
+
+  const generateInvite = useCallback(async () => {
+    if (referralBusy) return;
+    setReferralBusy(true);
+    setReferralStatus(null);
+    try {
+      const result = await createReferral();
+      if (result.data) {
+        setReferral(result.data);
+        const newest = result.data.invitations.find((item) => item.status === "unused");
+        setReferralStatus(newest ? `Invitation ${newest.invite_code} is ready. It expires in 3 days if unused.` : "Invitation created.");
+      } else {
+        setReferralStatus(result.error || "Unable to create an invitation.");
+      }
+    } finally {
+      setReferralBusy(false);
+    }
+  }, [createReferral, referralBusy]);
 
   useEffect(() => {
     if (!preferTileFocus) return;
@@ -968,6 +1016,42 @@ function SettingsScreenContent() {
               </SettingsCard>
             ) : null}
 
+            {section === "invites" ? (
+              <SettingsCard title="Family & Friend Invites" icon="gift-outline">
+                <InfoRow label="Invites available" value={referral ? `${referral.available} of ${referral.limit}` : referralBusy ? "Loading…" : "—"} />
+                <InfoRow label="Used this 6-month period" value={referral ? String(referral.used) : "—"} />
+                <InfoRow label="Active unused codes" value={referral ? String(referral.active) : "—"} />
+                <InfoRow label="Renews" value={formatAccountDateTime(referral?.renews_at)} />
+                <Text style={styles.help}>You can have up to two invitations per six-month period. A generated code reserves one invitation, expires after three days if unused, and returns automatically when it expires. Allowances never stack above two.</Text>
+                <Action
+                  label={referralBusy ? "Working…" : "Generate Invite"}
+                  icon="add-circle-outline"
+                  onPress={() => void generateInvite()}
+                  disabled={referralBusy || !referral || referral.available < 1}
+                />
+                {referralStatus ? <Text style={styles.status}>{referralStatus}</Text> : null}
+                {referral?.invitations.length ? (
+                  <View style={styles.inviteList}>
+                    {referral.invitations.map((invite) => (
+                      <View key={invite.id} style={styles.inviteRow}>
+                        <View style={styles.inviteMain}>
+                          <Text style={styles.inviteCode}>{invite.invite_code}</Text>
+                          <Text style={styles.help}>
+                            {invite.status === "unused"
+                              ? `Expires ${formatAccountDateTime(invite.expires_at)}`
+                              : invite.status === "used"
+                                ? `Used ${formatAccountDateTime(invite.redeemed_at)}`
+                                : "Expired unused — allowance returned"}
+                          </Text>
+                        </View>
+                        <Text style={styles.inviteStatus}>{invite.status.toUpperCase()}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : referral && !referralBusy ? <Text style={styles.help}>You have not generated any invitation codes yet.</Text> : null}
+              </SettingsCard>
+            ) : null}
+
             {section === "about" ? (
               <SettingsCard title="About CharmIPTV" icon="information-circle-outline">
                 <InfoRow label="Version" value={appVersion} />
@@ -1080,6 +1164,11 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   backupActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, lineHeight: 12.5 },
+  inviteList: { gap: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: tvColors.line },
+  inviteRow: { minHeight: 45, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 9, borderRadius: 5, backgroundColor: tvColors.panelRaised },
+  inviteMain: { flex: 1, gap: 2 },
+  inviteCode: { color: "#fff", fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1 },
+  inviteStatus: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8 },
   divider: { height: 1, backgroundColor: tvColors.line, marginVertical: 2 },
   infoRow: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   infoLabel: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },

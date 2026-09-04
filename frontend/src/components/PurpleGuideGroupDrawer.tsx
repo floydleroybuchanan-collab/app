@@ -13,11 +13,13 @@ export function PurpleGuideGroupDrawer({
   open,
   groups,
   onCloseToGuide,
+  onFocusIconRail,
   onOpenMainDrawer,
 }: {
   open: boolean;
   groups: PurpleGuideGroup[];
   onCloseToGuide: () => void;
+  onFocusIconRail: () => void;
   onOpenMainDrawer: () => void;
 }) {
   const refs = useRef(new Map<string, unknown>());
@@ -25,6 +27,7 @@ export function PurpleGuideGroupDrawer({
   const focusedNameRef = useRef<string | null>(null);
   const groupsRef = useRef(groups);
   const closeToGuideRef = useRef(onCloseToGuide);
+  const focusIconRailRef = useRef(onFocusIconRail);
   const openMainDrawerRef = useRef(onOpenMainDrawer);
   const [preferActiveFocus, setPreferActiveFocus] = useState(false);
 
@@ -35,18 +38,23 @@ export function PurpleGuideGroupDrawer({
   activeNameRef.current = groups.find((item) => item.active)?.name || groups[0]?.name || null;
   groupsRef.current = groups;
   closeToGuideRef.current = onCloseToGuide;
+  focusIconRailRef.current = onFocusIconRail;
   openMainDrawerRef.current = onOpenMainDrawer;
 
   useEffect(() => {
     if (!open) return;
-    // The groups drawer owns horizontal remote actions. BACK stays with the
-    // Guide Back hierarchy so each drawer transition keeps its deliberate
-    // double-Back gesture. Up/Down and OK stay with Android native focus.
+    // The groups drawer owns its boundary actions. BACK hands focus to the
+    // permanent icon rail; a second BACK from that rail expands the full menu.
+    // Up/Down and OK stay with Android native focus.
     setGuideNavigationActive(false);
     setRemoteContext("guide_groups");
     setPreferActiveFocus(true);
     const clearPreferred = setTimeout(() => setPreferActiveFocus(false), 240);
     const offKey = addTvKeyListener((key) => {
+      if (key === "BACK") {
+        focusIconRailRef.current();
+        return;
+      }
       if (key === "LEFT") {
         openMainDrawerRef.current();
         return;
@@ -102,7 +110,11 @@ export function PurpleGuideGroupDrawer({
               }}
               focusable
               hasTVPreferredFocus={preferActiveFocus && item.name === activeNameRef.current}
-              onFocus={() => { focusedNameRef.current = item.name; }}
+              onFocus={() => {
+                focusedNameRef.current = item.name;
+                setGuideNavigationActive(false);
+                setRemoteContext("guide_groups");
+              }}
               onPress={item.onPress}
               onLongPress={Platform.isTV ? undefined : item.onLongPress}
               delayLongPress={420}

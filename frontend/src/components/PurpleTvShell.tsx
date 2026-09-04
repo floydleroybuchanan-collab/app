@@ -11,7 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -96,6 +96,8 @@ type DrawerContextValue = {
   drawerProgress: Animated.Value;
   openDrawer: (options?: OpenDrawerOptions) => void;
   closeDrawer: (options?: { force?: boolean }) => void;
+  focusIconRail: () => void;
+  iconRailFocusRequest: number;
   focusDrawerTop: boolean;
   consumeFocusDrawerTop: () => void;
 };
@@ -105,6 +107,7 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
 export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [focusDrawerTop, setFocusDrawerTop] = useState(false);
+  const [iconRailFocusRequest, setIconRailFocusRequest] = useState(0);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const drawerOpenRef = useRef(false);
   const openedAtRef = useRef(0);
@@ -127,6 +130,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   }, []);
 
   const consumeFocusDrawerTop = useCallback(() => setFocusDrawerTop(false), []);
+  const focusIconRail = useCallback(() => setIconRailFocusRequest((value) => value + 1), []);
 
   useEffect(() => {
     const animation = Animated.timing(drawerProgress, {
@@ -139,8 +143,17 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   }, [drawerOpen, drawerProgress]);
 
   const value = useMemo(
-    () => ({ drawerOpen, drawerProgress, openDrawer, closeDrawer, focusDrawerTop, consumeFocusDrawerTop }),
-    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, openDrawer],
+    () => ({
+      drawerOpen,
+      drawerProgress,
+      openDrawer,
+      closeDrawer,
+      focusIconRail,
+      iconRailFocusRequest,
+      focusDrawerTop,
+      consumeFocusDrawerTop,
+    }),
+    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, iconRailFocusRequest, openDrawer],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
@@ -180,6 +193,8 @@ export function PurpleTvShell({
   guideGroups,
   watchingChannelId,
   secondaryDrawer,
+  onIconRailNavigate,
+  onIconRailOpenMainDrawer,
 }: {
   active: Route;
   children: React.ReactNode;
@@ -190,9 +205,20 @@ export function PurpleTvShell({
   guideGroups?: PurpleGuideGroup[];
   watchingChannelId?: string | null;
   secondaryDrawer?: React.ReactNode;
+  onIconRailNavigate?: () => void;
+  onIconRailOpenMainDrawer?: () => void;
 }) {
   const router = useRouter();
-  const { drawerOpen, drawerProgress, openDrawer, closeDrawer, focusDrawerTop, consumeFocusDrawerTop } = usePurpleTvDrawer();
+  const pathname = usePathname();
+  const {
+    drawerOpen,
+    drawerProgress,
+    openDrawer,
+    closeDrawer,
+    iconRailFocusRequest,
+    focusDrawerTop,
+    consumeFocusDrawerTop,
+  } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
   const { calibration } = useTvCalibration();
@@ -202,6 +228,10 @@ export function PurpleTvShell({
   }, [calibration, deviceLayoutMode, height, width]);
 
   const navRefs = useRef(new Map<Route, unknown>());
+  const iconRailRefs = useRef(new Map<Route, unknown>());
+  const iconRailFocusOwnerRef = useRef<Route | "power" | null>(null);
+  const onIconRailNavigateRef = useRef(onIconRailNavigate);
+  const onIconRailOpenMainDrawerRef = useRef(onIconRailOpenMainDrawer);
   const guideGroupRefs = useRef(new Map<string, unknown>());
   const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
@@ -211,6 +241,23 @@ export function PurpleTvShell({
     () => guideGroups?.find((item) => item.active)?.name || null,
     [guideGroups],
   );
+  onIconRailNavigateRef.current = onIconRailNavigate;
+  onIconRailOpenMainDrawerRef.current = onIconRailOpenMainDrawer;
+
+  useEffect(() => {
+    if (!iconRailFocusRequest || drawerOpen) return;
+    const node = iconRailRefs.current.get(active) || iconRailRefs.current.get(NAV[0].route);
+    const cancelFocus = requestNativeFocusWithRetry(node, [0, 70, 150]);
+    return () => cancelFocus?.();
+  }, [active, drawerOpen, iconRailFocusRequest]);
+
+  useEffect(() => addTvKeyListener((key) => {
+    if (key !== "BACK" || !iconRailFocusOwnerRef.current) return;
+    iconRailFocusOwnerRef.current = null;
+    resetRemoteContextIfOwned("icon_rail", "default");
+    onIconRailOpenMainDrawerRef.current?.();
+    openDrawer();
+  }), [openDrawer]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -312,7 +359,7 @@ export function PurpleTvShell({
   );
 
   const navigate = useCallback(
-    (route: Route) => {
+    (route: Route, source: "drawer" | "rail" = "drawer") => {
       void Haptics.selectionAsync().catch(() => undefined);
       if (deferredDrawerCloseTimer.current) {
         clearTimeout(deferredDrawerCloseTimer.current);
@@ -324,8 +371,9 @@ export function PurpleTvShell({
       // A normal close can be rejected by the anti-bounce opening guard, which
       // previously allowed two live focus owners during rapid drawer selection.
       closeDrawer({ force: true });
-      if (route === active) {
-        if (route === "/guide") {
+      if (source === "rail") onIconRailNavigateRef.current?.();
+      if (route === active && pathname === route) {
+        if (route === "/guide" && source === "drawer") {
           requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
         }
         return;
@@ -337,7 +385,7 @@ export function PurpleTvShell({
         router.replace(route as any);
       });
     },
-    [active, closeDrawer, router],
+    [active, closeDrawer, pathname, router],
   );
 
   useEffect(() => () => {
@@ -360,6 +408,20 @@ export function PurpleTvShell({
   }, []);
 
   const drawerTranslateX = drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-PURPLE_SIDEBAR_WIDTH, 0] });
+
+  const claimIconRail = useCallback((owner: Route | "power") => {
+    iconRailFocusOwnerRef.current = owner;
+    setRemoteContext("icon_rail");
+    if (active === "/guide") setGuideNavigationActive(false);
+  }, [active]);
+
+  const releaseIconRail = useCallback((owner: Route | "power") => {
+    if (iconRailFocusOwnerRef.current !== owner) return;
+    iconRailFocusOwnerRef.current = null;
+    if (resetRemoteContextIfOwned("icon_rail", active === "/guide" ? "guide" : "default") && active === "/guide") {
+      setGuideNavigationActive(true);
+    }
+  }, [active]);
 
   const renderNavItem = (item: NavItem) => {
     const selected = item.route === active;
@@ -518,8 +580,8 @@ export function PurpleTvShell({
       </Animated.View>
 
       {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
-      {!drawerOpen && secondaryDrawer ? (
-        <View style={styles.iconRail} pointerEvents="none" testID="purple-icon-rail">
+      {!drawerOpen ? (
+        <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
           <View style={styles.iconRailBrand}>
             <Ionicons name="sparkles" size={18} color={tvColors.purpleSoft} />
           </View>
@@ -527,37 +589,55 @@ export function PurpleTvShell({
             {NAV.map((item) => {
               const selected = item.route === active;
               return (
-                <View key={item.route} style={[styles.iconRailItem, selected && styles.iconRailItemSelected]}>
+                <Pressable
+                  key={item.route}
+                  ref={(node) => {
+                    if (node) iconRailRefs.current.set(item.route, node);
+                    else iconRailRefs.current.delete(item.route);
+                  }}
+                  focusable
+                  accessibilityLabel={item.label}
+                  onFocus={() => claimIconRail(item.route)}
+                  onBlur={() => releaseIconRail(item.route)}
+                  onPress={() => navigate(item.route, "rail")}
+                  style={({ focused }: any) => [
+                    styles.iconRailItem,
+                    selected && styles.iconRailItemSelected,
+                    focused && styles.iconRailItemFocused,
+                  ]}
+                  testID={`purple-icon-rail-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                >
                   <Ionicons
                     name={selected ? (item.icon.replace("-outline", "") as any) : item.icon}
                     size={17}
                     color={selected ? "#fff" : tvColors.textMuted}
                   />
-                </View>
+                  {item.route === "/" && isWatching ? <WatchingDot /> : null}
+                </Pressable>
               );
             })}
           </View>
-          <View style={styles.iconRailPower}>
+          <Pressable
+            focusable
+            accessibilityLabel="Exit"
+            onFocus={() => claimIconRail("power")}
+            onBlur={() => releaseIconRail("power")}
+            onPress={promptHoldToExit}
+            onLongPress={exit}
+            delayLongPress={650}
+            style={({ focused }: any) => [styles.iconRailPower, focused && styles.iconRailItemFocused]}
+            testID="purple-icon-rail-power"
+          >
             <Ionicons name="power-outline" size={17} color={tvColors.textMuted} />
-          </View>
-        </View>
+          </Pressable>
+        </FocusGuide>
       ) : null}
       {!drawerOpen && secondaryDrawer ? secondaryDrawer : null}
-      {!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/" ? (
-        <Pressable
-          focusable
-          onFocus={() => openDrawer()}
-          onPress={() => openDrawer()}
-          style={styles.leftEdgeDrawerTarget}
-          testID="purple-left-edge-drawer-target"
-        />
-      ) : null}
       <FocusGuide
         style={[styles.content, contentStyle]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusLeft={!drawerOpen && !secondaryDrawer && active === "/"}
         trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}
       >
         {children}
@@ -598,15 +678,20 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
     borderLeftWidth: 3,
     borderLeftColor: "transparent",
   },
   iconRailItemSelected: { backgroundColor: tvColors.purple, borderLeftColor: tvColors.purpleBright },
+  iconRailItemFocused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
   iconRailPower: {
     width: 36,
     minHeight: 31,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
     borderTopWidth: 1,
     borderTopColor: tvColors.line,
   },
@@ -745,17 +830,6 @@ const styles = StyleSheet.create({
   footerCompactText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
   footerDisabled: { opacity: 0.5 },
   content: { flex: 1, backgroundColor: tvColors.canvas },
-  leftEdgeDrawerTarget: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    // A 2 px candidate is easy for Android TV spatial focus to skip. Ten px
-    // remains inside our standard page gutter while providing a real Left edge.
-    width: 10,
-    zIndex: 2,
-    opacity: 0.01,
-  },
   headerRight: { position: "absolute", top: 10, right: spacing.lg },
 });
 
