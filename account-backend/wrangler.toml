@@ -1,0 +1,16 @@
+name = "charmiptv-account-api"
+main = "worker.js"
+compatibility_date = "2026-09-04"
+workers_dev = true
+keep_vars = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "charmiptv-accounts"
+database_id = "9e4e3e10-d947-467b-a7e5-b8530ceac272"
+
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true

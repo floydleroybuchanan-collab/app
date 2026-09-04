@@ -43,7 +43,10 @@ The app keeps the returned addresses in memory rather than persistent storage.
 1. Back up the bound D1 database before applying the migration.
 2. Apply `migrations/0002_user_referrals.sql` to the same D1 database bound as
    `env.DB`.
-3. Deploy `worker.js` to the `charmiptv-account-api` Worker.
+3. Push the account Worker files on the RC-6 branch or manually run the
+   `Deploy CharmIPTV Account Worker` workflow. Its checked-in Wrangler config
+   preserves the existing encrypted secrets, D1 binding, minute cleanup trigger,
+   and `workers.dev` address.
 4. Configure a Cron Trigger for regular expired-account cleanup. Requests also
    perform a bounded cleanup so stale accounts are removed even without a cron
    invocation.
