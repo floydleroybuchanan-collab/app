@@ -150,7 +150,7 @@ jobs:
           kotlin.daemon.enabled=false
           reactNativeArchitectures=armeabi-v7a,arm64-v8a
           charm.requireProtectedSigning=true
-          android.enableMinifyInReleaseBuilds=true
+          android.enableMinifyInReleaseBuilds=false
           android.enableShrinkResourcesInReleaseBuilds=false
           charm.enableR8Optimization=false
           EOF
