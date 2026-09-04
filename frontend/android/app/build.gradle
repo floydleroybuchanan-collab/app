@@ -60,6 +60,7 @@ react {
  * Set this to true in release builds to optimize the app using R8.
  */
 def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBuilds') ?: false).toBoolean()
+def enableR8Optimization = (findProperty('charm.enableR8Optimization') ?: false).toBoolean()
 
 /**
  * Preferred JavaScriptCore flavor when Hermes is disabled.
@@ -134,7 +135,8 @@ android {
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            def defaultProguardRules = enableR8Optimization ? "proguard-android-optimize.txt" : "proguard-android.txt"
+            proguardFiles getDefaultProguardFile(defaultProguardRules), "proguard-rules.pro"
             def enablePngCrunch = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
             crunchPngs enablePngCrunch.toBoolean()
         }
