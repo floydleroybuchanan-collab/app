@@ -13,6 +13,12 @@
   public static int i(...);
 }
 
+# Optional desktop-Java adapters bundled by Rhino and dnsjava. Android does
+# not provide java.beans or the legacy Sun JVM name-service SPI, and CharmIPTV
+# never invokes those desktop-only integration paths.
+-dontwarn java.beans.**
+-dontwarn sun.net.spi.nameservice.**
+
 # Keep Parcelable implementations
 -keepclassmembers class * implements android.os.Parcelable {
   public static final android.os.Parcelable$Creator CREATOR;
