@@ -15,7 +15,7 @@ import { useAuth } from "@/src/auth/AuthContext";
 import { fonts, radius, tvColors } from "@/src/theme";
 
 export function AccountGate({ children }: { children: React.ReactNode }) {
-  const { status, notice, signIn, register, signOut, retryRestore } = useAuth();
+  const { status, user, notice, signIn, register, signOut, retryRestore } = useAuth();
   const { width } = useWindowDimensions();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -71,7 +71,26 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
     }
   }, [busy, confirmPassword, email, inviteCode, password, register, username]);
 
-  if (status === "signed_in") return <>{children}</>;
+  if (status === "signed_in") {
+    const expiresAt = user?.expires_at == null ? null : Number(user.expires_at) * (Number(user.expires_at) < 10_000_000_000 ? 1000 : 1);
+    const remainingMs = expiresAt == null ? null : expiresAt - Date.now();
+    const warningDays = remainingMs == null ? null : Math.max(0, Math.ceil(remainingMs / 86_400_000));
+    return (
+      <View style={styles.authenticatedScreen}>
+        {children}
+        {warningDays != null && warningDays <= 14 ? (
+          <View style={[styles.expiryNotice, warningDays <= 3 && styles.expiryNoticeUrgent]} testID="account-expiry-warning">
+            <Ionicons name="time-outline" size={18} color="#fff" />
+            <Text style={styles.expiryNoticeText}>
+              {warningDays === 0
+                ? "Your account time ends today. Renew now to avoid losing the account."
+                : `${warningDays} day${warningDays === 1 ? "" : "s"} of account time remain. Renew as soon as possible.`}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
 
   if (status === "restoring") {
     return (
@@ -254,6 +273,25 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  authenticatedScreen: { flex: 1 },
+  expiryNotice: {
+    position: "absolute",
+    top: 10,
+    right: 14,
+    maxWidth: 360,
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#F0B84A",
+    backgroundColor: "rgba(115, 70, 0, 0.96)",
+    zIndex: 1000,
+  },
+  expiryNoticeUrgent: { borderColor: "#FF7272", backgroundColor: "rgba(120, 23, 35, 0.97)" },
+  expiryNoticeText: { flex: 1, color: "#fff", fontFamily: fonts.semibold, fontSize: 9, lineHeight: 13 },
   screenScroll: { flex: 1, backgroundColor: tvColors.canvas },
   screenContent: {
     flexGrow: 1,

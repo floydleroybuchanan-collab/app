@@ -3,10 +3,12 @@ import { AppState } from "react-native";
 
 import {
   generateReferralInvite,
+  deleteReferralInviteHistory,
   getCurrentAccount,
   getReferralSummary,
   loginToAccount,
   logoutAccount,
+  permanentlyCancelAccount,
   registerAccountWithInvite,
   type AccountUser,
   type ReferralSummary,
@@ -26,6 +28,8 @@ type AuthContextValue = {
   register: (inviteCode: string, username: string, email: string, password: string) => Promise<string | null>;
   loadReferrals: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
   createReferral: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
+  deleteReferral: (invitationId: string) => Promise<{ data: ReferralSummary | null; error: string | null }>;
+  cancelAccount: (password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   retryRestore: () => Promise<void>;
 };
@@ -51,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const validateToken = useCallback(async (token: string, restoring = false) => {
     const result = await getCurrentAccount(token);
-    if (result.response?.status === 401) {
+    if (result.response?.status === 401 || result.response?.status === 403) {
       await clearLocalSession("Your session expired or was revoked. Please sign in again.");
       return;
     }
@@ -159,11 +163,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password));
   }, [acceptAuthenticatedResult]);
 
-  const referralRequest = useCallback(async (create: boolean) => {
+  const referralRequest = useCallback(async (action: "load" | "create" | "delete", invitationId?: string) => {
     const token = tokenRef.current;
     if (!token) return { data: null, error: "Please sign in again." };
-    const result = create ? await generateReferralInvite(token) : await getReferralSummary(token);
-    if (result.response?.status === 401) {
+    const result = action === "create"
+      ? await generateReferralInvite(token)
+      : action === "delete" && invitationId
+        ? await deleteReferralInviteHistory(token, invitationId)
+        : await getReferralSummary(token);
+    if (result.response?.status === 401 || result.response?.status === 403) {
       await clearLocalSession("Your session expired or was revoked. Please sign in again.");
       return { data: null, error: "Your session expired or was revoked." };
     }
@@ -171,6 +179,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { data: null, error: result.data.error || "Unable to load your invitations." };
     }
     return { data: result.data.referral, error: null };
+  }, [clearLocalSession]);
+
+  const cancelAccount = useCallback(async (password: string) => {
+    const token = tokenRef.current;
+    if (!token) return "Please sign in again.";
+    const result = await permanentlyCancelAccount(token, password);
+    if (!result.response?.ok || !result.data.success) {
+      return result.data.error || "Unable to cancel the account.";
+    }
+    await clearLocalSession("Your account and personal data were permanently deleted.");
+    return null;
   }, [clearLocalSession]);
 
   const signOut = useCallback(async () => {
@@ -185,11 +204,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     notice,
     signIn,
     register,
-    loadReferrals: () => referralRequest(false),
-    createReferral: () => referralRequest(true),
+    loadReferrals: () => referralRequest("load"),
+    createReferral: () => referralRequest("create"),
+    deleteReferral: (invitationId) => referralRequest("delete", invitationId),
+    cancelAccount,
     signOut,
     retryRestore: restore,
-  }), [notice, referralRequest, register, restore, signIn, signOut, status, user]);
+  }), [cancelAccount, notice, referralRequest, register, restore, signIn, signOut, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

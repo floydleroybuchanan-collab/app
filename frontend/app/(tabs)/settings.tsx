@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { DeviceEventEmitter, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -115,6 +115,7 @@ const TILES: Tile[] = [
 ];
 
 const ADULT_GROUP_RE = /adult|xxx|porn/i;
+const TELEGRAM_COMMUNITY_URL = "https://t.me/+f2Pr2-L3WWI4MDJh";
 
 function formatAccountExpiry(value: number | string | null | undefined): string {
   if (value == null || value === "") return "—";
@@ -136,9 +137,20 @@ function formatAccountDateTime(value: number | string | null | undefined): strin
   return new Date(timestamp).toLocaleString();
 }
 
+function formatTimeRemaining(value: number | string | null | undefined): string {
+  if (value == null || value === "") return "No expiration";
+  const numeric = Number(value);
+  const timestamp = Number.isFinite(numeric) ? (numeric < 10_000_000_000 ? numeric * 1000 : numeric) : Date.parse(String(value));
+  if (!Number.isFinite(timestamp)) return "—";
+  const seconds = Math.max(0, Math.floor((timestamp - Date.now()) / 1000));
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  return seconds <= 0 ? "Expired" : `${days}d ${hours}h remaining`;
+}
+
 function SettingsScreenContent() {
   const router = useRouter();
-  const { user: accountUser, signOut, loadReferrals, createReferral } = useAuth();
+  const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
   const {
     channels,
     favorites,
@@ -197,6 +209,11 @@ function SettingsScreenContent() {
   const [referral, setReferral] = useState<ReferralSummary | null>(null);
   const [referralBusy, setReferralBusy] = useState(false);
   const [referralStatus, setReferralStatus] = useState<string | null>(null);
+  const [cancelArmed, setCancelArmed] = useState(false);
+  const [cancelPassword, setCancelPassword] = useState("");
+  const [cancelPhrase, setCancelPhrase] = useState("");
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelStatus, setCancelStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (section !== "health" && section !== "about") return;
@@ -234,6 +251,36 @@ function SettingsScreenContent() {
       setReferralBusy(false);
     }
   }, [createReferral, referralBusy]);
+
+  const removeInviteHistory = useCallback(async (invitationId: string) => {
+    if (referralBusy) return;
+    setReferralBusy(true);
+    setReferralStatus(null);
+    const result = await deleteReferral(invitationId);
+    setReferral(result.data);
+    setReferralStatus(result.error || "Inactive invitation removed from your list.");
+    setReferralBusy(false);
+  }, [deleteReferral, referralBusy]);
+
+  const permanentlyCancel = useCallback(async () => {
+    if (!cancelPassword || cancelBusy) {
+      setCancelStatus("Enter your current password to permanently cancel this account.");
+      return;
+    }
+    if (cancelPhrase.trim().toLowerCase() !== "please cancel me") {
+      setCancelStatus('Type "please cancel me" exactly to confirm permanent deletion.');
+      return;
+    }
+    setCancelBusy(true);
+    setCancelStatus(null);
+    const error = await cancelAccount(cancelPassword);
+    if (error) {
+      setCancelStatus(error);
+      setCancelBusy(false);
+      return;
+    }
+    setCancelPassword("");
+  }, [cancelAccount, cancelBusy, cancelPassword, cancelPhrase]);
 
   useEffect(() => {
     if (!preferTileFocus) return;
@@ -1010,19 +1057,61 @@ function SettingsScreenContent() {
                 {accountUser?.email ? <InfoRow label="Email" value={accountUser.email} /> : null}
                 <InfoRow label="Status" value={accountUser?.status || "Active"} />
                 <InfoRow label="Account expires" value={formatAccountExpiry(accountUser?.expires_at)} />
+                <InfoRow label="Account time remaining" value={formatTimeRemaining(accountUser?.expires_at)} />
                 <InfoRow label="Simultaneous sessions" value={accountUser?.max_sessions != null ? String(accountUser.max_sessions) : "Managed by account"} />
                 <Text style={styles.help}>Session limits and expired or revoked access are enforced by the CharmIPTV account service.</Text>
                 <Action label="Sign Out" icon="log-out-outline" onPress={() => void signOut()} />
+                <View style={styles.divider} />
+                <Text style={styles.dangerTitle}>Permanently cancel account</Text>
+                <Text style={styles.help}>This immediately deletes your account, sessions, personal information, and server-side preferences. It cannot be undone. If this account used a friend&apos;s invitation, their available capacity is returned automatically.</Text>
+                {!cancelArmed ? (
+                  <Action label="Cancel Account" icon="trash-outline" onPress={() => setCancelArmed(true)} />
+                ) : (
+                  <View style={styles.cancelBlock}>
+                    <View style={styles.cancelNotice}>
+                      <Text style={styles.dangerTitle}>Are you absolutely sure?</Text>
+                      <Text style={styles.help}>Your sign-in, account timer, sessions, and personal account data will be permanently erased. You will need a new invitation to return. Enter your password, then type &quot;please cancel me&quot; to unlock the final cancellation.</Text>
+                    </View>
+                    <TextInput
+                      value={cancelPassword}
+                      onChangeText={setCancelPassword}
+                      editable={!cancelBusy}
+                      secureTextEntry
+                      placeholder="Enter current password"
+                      placeholderTextColor="#777184"
+                      style={styles.pinInput}
+                      testID="cancel-account-password"
+                    />
+                    <TextInput
+                      value={cancelPhrase}
+                      onChangeText={setCancelPhrase}
+                      editable={!cancelBusy}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholder='Type "please cancel me"'
+                      placeholderTextColor="#777184"
+                      style={styles.pinInput}
+                      testID="cancel-account-confirmation"
+                    />
+                    <View style={styles.backupActions}>
+                      <Action label={cancelBusy ? "Deleting…" : "Cancel My Account Forever"} icon="warning-outline" onPress={() => void permanentlyCancel()} disabled={cancelBusy || !cancelPassword || cancelPhrase.trim().toLowerCase() !== "please cancel me"} />
+                      <Action label="Keep Account" icon="close-outline" onPress={() => { setCancelArmed(false); setCancelPassword(""); setCancelPhrase(""); setCancelStatus(null); }} disabled={cancelBusy} />
+                    </View>
+                  </View>
+                )}
+                {cancelStatus ? <Text style={styles.errorStatus}>{cancelStatus}</Text> : null}
               </SettingsCard>
             ) : null}
 
             {section === "invites" ? (
               <SettingsCard title="Family & Friend Invites" icon="gift-outline">
-                <InfoRow label="Invites available" value={referral ? `${referral.available} of ${referral.limit}` : referralBusy ? "Loading…" : "—"} />
+                <InfoRow label="Code opportunities available" value={referral ? `${referral.available} of ${referral.limit}` : referralBusy ? "Loading…" : "—"} />
+                <InfoRow label="Active invited accounts" value={referral ? `${referral.active_accounts} of ${referral.active_limit}` : "—"} />
+                <InfoRow label="Family positions available" value={referral ? `${referral.network_available} of ${referral.active_limit}` : "—"} />
                 <InfoRow label="Used this 6-month period" value={referral ? String(referral.used) : "—"} />
                 <InfoRow label="Active unused codes" value={referral ? String(referral.active) : "—"} />
                 <InfoRow label="Renews" value={formatAccountDateTime(referral?.renews_at)} />
-                <Text style={styles.help}>You can have up to two invitations per six-month period. A generated code reserves one invitation, expires after three days if unused, and returns automatically when it expires. Allowances never stack above two.</Text>
+                <Text style={styles.help}>You can keep up to two code opportunities and six active invited accounts. Each generated code expires after three days if unused and returns automatically. When an invited account is canceled or expires, its family position and one code opportunity return, without ever stacking above two.</Text>
                 <Action
                   label={referralBusy ? "Working…" : "Generate Invite"}
                   icon="add-circle-outline"
@@ -1035,16 +1124,27 @@ function SettingsScreenContent() {
                     {referral.invitations.map((invite) => (
                       <View key={invite.id} style={styles.inviteRow}>
                         <View style={styles.inviteMain}>
+                          <Text style={styles.inviteLabel}>Invite {invite.network_slot_number || "—"}</Text>
                           <Text style={styles.inviteCode}>{invite.invite_code}</Text>
                           <Text style={styles.help}>
                             {invite.status === "unused"
-                              ? `Expires ${formatAccountDateTime(invite.expires_at)}`
-                              : invite.status === "used"
-                                ? `Used ${formatAccountDateTime(invite.redeemed_at)}`
-                                : "Expired unused — allowance returned"}
+                              ? `Sent ${formatAccountDateTime(invite.created_at)} · Code expires ${formatAccountDateTime(invite.expires_at)}`
+                              : invite.status === "active"
+                                ? `Activated ${formatAccountDateTime(invite.redeemed_at)} · ${formatTimeRemaining(invite.account_expires_at)}`
+                                : `Ended ${formatAccountDateTime(invite.ended_at)} · Capacity returned`}
                           </Text>
                         </View>
-                        <Text style={styles.inviteStatus}>{invite.status.toUpperCase()}</Text>
+                        <View style={styles.inviteStatusBlock}>
+                          <View style={styles.statusLine}>
+                            <View style={[styles.statusDot, invite.status === "active" || invite.status === "unused" ? styles.statusDotActive : styles.statusDotEnded]} />
+                            <Text style={styles.inviteStatus}>
+                              {invite.status === "active" ? "ACTIVE" : invite.status === "unused" ? "PENDING" : invite.status.replace("_", " ").toUpperCase()}
+                            </Text>
+                          </View>
+                          {["code_expired", "account_expired", "canceled", "disabled"].includes(invite.status) ? (
+                            <Action label="Delete" icon="trash-outline" onPress={() => void removeInviteHistory(invite.id)} disabled={referralBusy} />
+                          ) : null}
+                        </View>
                       </View>
                     ))}
                   </View>
@@ -1060,6 +1160,12 @@ function SettingsScreenContent() {
                 <InfoRow label="Install package" value="Purple / side-by-side" />
                 <InfoRow label="Core" value="perf/opt-fix performance grade" />
                 <Text style={styles.help}>This branch changes presentation and navigation while preserving the optimized playback, guide, cache, and source architecture underneath.</Text>
+                <View style={styles.divider} />
+                <Text style={styles.help}>Questions, announcements, and community help:</Text>
+                <Action label="Open CharmIPTV Telegram" icon="paper-plane-outline" onPress={() => void Linking.openURL(TELEGRAM_COMMUNITY_URL)} />
+                <View style={styles.divider} />
+                <Text style={styles.settingLabel}>Account privacy</Text>
+                <Text style={styles.help}>CharmIPTV keeps the username, email, password hash, account timer, and session records needed to operate your account. Canceling or reaching the account expiration time permanently removes that account data. A referring user may retain only an anonymous Invite number, status, and dates—never your username, email, or password.</Text>
               </SettingsCard>
             ) : null}
           </ScrollView>
@@ -1165,10 +1271,20 @@ const styles = StyleSheet.create({
   backupActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, lineHeight: 12.5 },
   inviteList: { gap: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: tvColors.line },
-  inviteRow: { minHeight: 45, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 9, borderRadius: 5, backgroundColor: tvColors.panelRaised },
+  inviteRow: { minHeight: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 5, backgroundColor: tvColors.panelRaised },
   inviteMain: { flex: 1, gap: 2 },
+  inviteLabel: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8.5 },
   inviteCode: { color: "#fff", fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1 },
+  inviteStatusBlock: { alignItems: "flex-end", gap: 6 },
+  statusLine: { flexDirection: "row", alignItems: "center", gap: 5 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusDotActive: { backgroundColor: "#55D889" },
+  statusDotEnded: { backgroundColor: "#FF6868" },
   inviteStatus: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8 },
+  dangerTitle: { color: "#FF9191", fontFamily: fonts.semibold, fontSize: 10 },
+  cancelBlock: { gap: 8 },
+  cancelNotice: { gap: 5, padding: 9, borderRadius: 5, borderWidth: 1, borderColor: "#A74755", backgroundColor: "rgba(93, 24, 34, 0.4)" },
+  errorStatus: { color: "#FF9191", fontFamily: fonts.medium, fontSize: 8.5, lineHeight: 12.5 },
   divider: { height: 1, backgroundColor: tvColors.line, marginVertical: 2 },
   infoRow: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   infoLabel: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },

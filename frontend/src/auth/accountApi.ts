@@ -16,17 +16,25 @@ export type AccountUser = {
 export type ReferralInvitation = {
   id: string;
   invite_code: string;
-  status: "unused" | "used" | "expired" | "disabled";
+  status: "unused" | "active" | "code_expired" | "account_expired" | "canceled" | "disabled";
+  network_slot_number?: number | null;
   created_at: number;
   expires_at: number;
   redeemed_at?: number | null;
+  ended_at?: number | null;
+  end_reason?: string | null;
+  account_expires_at?: number | null;
 };
 
 export type ReferralSummary = {
   limit: number;
+  active_limit: number;
   available: number;
   used: number;
   active: number;
+  active_accounts: number;
+  occupied: number;
+  network_available: number;
   cycle_started_at: number;
   renews_at: number;
   invitations: ReferralInvitation[];
@@ -127,4 +135,15 @@ export function getReferralSummary(token: string): Promise<AccountApiResult> {
 
 export function generateReferralInvite(token: string): Promise<AccountApiResult> {
   return accountRequest("/referrals/invites", { method: "POST" }, token);
+}
+
+export function deleteReferralInviteHistory(token: string, invitationId: string): Promise<AccountApiResult> {
+  return accountRequest(`/referrals/invites/${encodeURIComponent(invitationId)}`, { method: "DELETE" }, token);
+}
+
+export function permanentlyCancelAccount(token: string, password: string): Promise<AccountApiResult> {
+  return accountRequest("/me", {
+    method: "DELETE",
+    body: JSON.stringify({ password, confirmation: "please cancel me" }),
+  }, token);
 }

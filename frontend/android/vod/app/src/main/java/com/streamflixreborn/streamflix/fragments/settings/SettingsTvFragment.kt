@@ -489,11 +489,13 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             setOnPreferenceClickListener(null)
         }
 
-        // CharmIPTV will supply its own community destination later.
         findPreference<Preference>("p_settings_telegram")?.apply {
-            isEnabled = false
-            isSelectable = false
-            setOnPreferenceClickListener(null)
+            isEnabled = true
+            isSelectable = true
+            setOnPreferenceClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.charm_vod_telegram_url))))
+                true
+            }
         }
 
         findPreference<SwitchPreference>("AUTOPLAY")?.isChecked = UserPreferences.autoplay

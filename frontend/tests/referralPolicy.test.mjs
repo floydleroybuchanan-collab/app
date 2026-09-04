@@ -27,11 +27,15 @@ test("unused active codes reserve slots, used codes consume slots, and quota nev
   assert.deepEqual(referralAvailability([
     { invite_id: null, consumed_at: null },
     { invite_id: null, consumed_at: null },
-  ]), { limit: 2, used: 0, active: 0, available: 2 });
+  ], Array.from({ length: 6 }, () => ({ invite_id: null }))), {
+    limit: 2, active_limit: 6, used: 0, active: 0, occupied: 0, network_available: 6, available: 2,
+  });
   assert.deepEqual(referralAvailability([
     { invite_id: "invite-1", consumed_at: null },
     { invite_id: null, consumed_at: 100 },
-  ]), { limit: 2, used: 1, active: 1, available: 0 });
+  ], [{ invite_id: "invite-1" }, ...Array.from({ length: 5 }, () => ({ invite_id: null }))]), {
+    limit: 2, active_limit: 6, used: 1, active: 1, occupied: 1, network_available: 5, available: 0,
+  });
 });
 
 test("a generated referral invitation expires after exactly three days", () => {
@@ -56,6 +60,7 @@ test("referral database migration keeps admin invitations isolated", async () =>
   const migration = await readFile(new URL("../../account-backend/migrations/0002_user_referrals.sql", import.meta.url), "utf8");
   assert.match(migration, /CREATE TABLE IF NOT EXISTS referral_invites/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS referral_slots/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS referral_network_slots/);
   assert.doesNotMatch(migration, /ALTER TABLE invites/);
 });
 
@@ -64,6 +69,6 @@ test("redemption advances the inviter cycle before consuming a slot", async () =
   const service = await readFile(new URL("../../account-backend/referral-service.js", import.meta.url), "utf8");
   const consume = service.match(/export async function consumeReferralInvitation[\s\S]*?\n}/)?.[0] || "";
   assert.match(consume, /await syncReferralSlots\(env, owner, now\)/);
-  assert.ok(consume.indexOf("await syncReferralSlots") < consume.indexOf("SET status = 'used'"));
+  assert.ok(consume.indexOf("await syncReferralSlots") < consume.indexOf("SET status = 'active'"));
   assert.match(service, /grant_expires_at IS NOT NULL AND grant_expires_at <= \?2/);
 });

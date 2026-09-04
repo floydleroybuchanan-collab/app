@@ -7,6 +7,8 @@ import {
   buildReferralSummary,
   consumeReferralInvitation,
   createReferralInvitation,
+  deleteReferralHistory,
+  releaseReferralForAccount,
 } from "../../account-backend/referral-service.js";
 import { REFERRAL_INVITE_LIFETIME_SECONDS } from "../../account-backend/referral-policy.js";
 
@@ -110,7 +112,7 @@ test("referral service atomically caps rapid generation and refunds expired code
     { available: afterExpiry.available, active: afterExpiry.active, used: afterExpiry.used },
     { available: 2, active: 0, used: 0 },
   );
-  assert.ok(afterExpiry.invitations.every((invite) => invite.status === "expired"));
+  assert.ok(afterExpiry.invitations.every((invite) => invite.status === "code_expired"));
 });
 
 test("redeeming a referral consumes one slot exactly once", async () => {
@@ -136,6 +138,38 @@ test("redeeming a referral consumes one slot exactly once", async () => {
     { available: summary.available, active: summary.active, used: summary.used },
     { available: 1, active: 0, used: 1 },
   );
-  assert.equal(summary.invitations[0].status, "used");
+  assert.equal(summary.invitations[0].status, "active");
   assert.equal(summary.invitations[0].redeemed_at, now + 10);
+});
+
+test("six active invited accounts cap the network and cancellation returns one allowance", async () => {
+  const { database, env } = await fixture();
+  const now = Math.floor(Date.UTC(2026, 3, 1, 9) / 1000);
+  const owner = { id: "owner", status: "active", created_at: now, expires_at: now + 40000000, max_sessions: 2 };
+  addUser(database, owner);
+
+  for (let index = 1; index <= 6; index += 1) {
+    const friend = { ...owner, id: `friend-${index}` };
+    addUser(database, friend);
+    const invitation = await createReferralInvitation(env, owner, now + index * 10);
+    const stored = database.prepare("SELECT * FROM referral_invites WHERE id = ?1").get(invitation.id);
+    assert.equal(await consumeReferralInvitation(env, stored, friend.id, now + index * 10 + 1), true);
+    if (index % 2 === 0 && index < 6) {
+      database.prepare("UPDATE referral_slots SET consumed_at = NULL WHERE owner_user_id = ?1").run(owner.id);
+    }
+  }
+
+  const full = await buildReferralSummary(env, owner, now + 100);
+  assert.equal(full.active_accounts, 6);
+  assert.equal(full.network_available, 0);
+  assert.equal(full.available, 0);
+
+  assert.equal(await releaseReferralForAccount(env, "friend-3", "user_canceled", now + 101), true);
+  database.prepare("DELETE FROM users WHERE id = ?1").run("friend-3");
+  const released = await buildReferralSummary(env, owner, now + 102);
+  assert.equal(released.active_accounts, 5);
+  assert.equal(released.available, 1);
+  assert.equal(released.invitations.find((item) => item.network_slot_number === 3)?.status, "canceled");
+  const ended = released.invitations.find((item) => item.status === "canceled");
+  assert.deepEqual(await deleteReferralHistory(env, owner.id, ended.id), { ok: true });
 });

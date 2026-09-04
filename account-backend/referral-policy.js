@@ -1,4 +1,5 @@
 export const REFERRAL_LIMIT = 2;
+export const REFERRAL_ACTIVE_LIMIT = 6;
 export const REFERRAL_INVITE_LIFETIME_SECONDS = 3 * 24 * 60 * 60;
 
 function addUtcMonths(timestampSeconds, months) {
@@ -45,14 +46,20 @@ export function referralCycleFor(createdAtSeconds, nowSeconds) {
   return { startedAt: candidate, endsAt: end };
 }
 
-export function referralAvailability(slots) {
+export function referralAvailability(slots, networkSlots = []) {
   const used = slots.filter((slot) => slot.consumed_at != null).length;
   const active = slots.filter((slot) => slot.invite_id != null).length;
+  const occupiedNetwork = networkSlots.filter((slot) => slot.invite_id != null).length;
+  const allowanceAvailable = Math.max(0, REFERRAL_LIMIT - used - active);
+  const networkAvailable = Math.max(0, REFERRAL_ACTIVE_LIMIT - occupiedNetwork);
   return {
     limit: REFERRAL_LIMIT,
+    active_limit: REFERRAL_ACTIVE_LIMIT,
     used,
     active,
-    available: Math.max(0, REFERRAL_LIMIT - used - active),
+    occupied: occupiedNetwork,
+    network_available: networkAvailable,
+    available: Math.min(allowanceAvailable, networkAvailable),
   };
 }
 
