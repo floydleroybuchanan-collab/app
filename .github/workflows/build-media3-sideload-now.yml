@@ -157,7 +157,7 @@ jobs:
       - name: Compile sideload Kotlin and Java
         run: |
           chmod +x android/gradlew
-          ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac :app:testSideloadUnitTest :app:mergeDexSideload --no-daemon --max-workers=1 --stacktrace
+          ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac :app:testSideloadUnitTest --no-daemon --max-workers=1 --stacktrace
 
       - name: Build universal sideload APK
         run: ./android/gradlew -p android :app:assembleSideload --no-daemon --max-workers=1 --stacktrace
