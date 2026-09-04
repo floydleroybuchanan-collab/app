@@ -87,10 +87,31 @@ def active_workflow_findings(relative: str, source: str) -> list[str]:
             findings.append(f"Unreviewed artifact uploader; use the encrypted owner publisher: {relative}")
         return findings
 
-    for key in ("M3U", "EPG"):
-        binding = rf"(?m)^      EXPO_PUBLIC_{key}_URL:\s*\$\{{\{{\s*secrets\.{key}_URL\s*\}}\}}\s*$"
+    # Managed playlist/EPG origins now live only in Cloudflare Worker secrets.
+    # The APK publisher must never receive them as Expo environment values.
+    if re.search(r"(?m)^      EXPO_PUBLIC_(?:M3U|EPG)_URL:\s*", source) or re.search(
+        r"secrets\.(?:M3U|EPG)_URL", source
+    ):
+        findings.append("Owner publisher must not receive managed playlist/EPG origins")
+    if not re.search(r'(?m)^      EXPO_NO_DOTENV:\s*["\x27]1["\x27]\s*$', source):
+        findings.append("Owner publisher must disable dotenv")
+    for key in (
+        "CHARM_KEYSTORE_B64",
+        "CHARM_UPLOAD_STORE_PASSWORD",
+        "CHARM_UPLOAD_KEY_ALIAS",
+        "CHARM_UPLOAD_KEY_PASSWORD",
+    ):
+        binding = rf"(?m)^      {key}:\s*\$\{{\{{\s*secrets\.{key}\s*\}}\}}\s*$"
         if not re.search(binding, source):
-            findings.append(f"Owner publisher must use only secrets.{key}_URL")
+            findings.append(f"Owner publisher is missing protected signing secret {key}")
+    for marker in (
+        'test -z "${EXPO_PUBLIC_M3U_URL:-}"',
+        'test -z "${EXPO_PUBLIC_EPG_URL:-}"',
+        "grep -q '/content/access' src/auth/accountApi.ts",
+        "charm.requireProtectedSigning=true",
+    ):
+        if marker not in source:
+            findings.append(f"Owner publisher is missing protected-content/signing gate: {marker}")
     blocks = [block for block in re.split(r"(?m)^      - ", source) if re.search(upload_marker, block)]
     if len(uploads) != 1 or len(blocks) != 1:
         findings.append("Owner publisher must have exactly one canonical encrypted upload step")

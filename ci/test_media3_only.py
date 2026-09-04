@@ -148,11 +148,28 @@ class OwnerWorkflowGuardTests(unittest.TestCase):
 
     def test_old_provider_fallback_and_dotenv_are_rejected(self):
         for source in [
-            self.publisher.replace("secrets.M3U_URL", "secrets.M3U_URL || vars.EXPO_PUBLIC_M3U_URL"),
+            self.publisher.replace(
+                '      EXPO_NO_DOTENV: "1"',
+                '      EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL }}\n      EXPO_NO_DOTENV: "1"',
+            ),
             self.publisher.replace('EXPO_NO_DOTENV: "1"', 'EXPO_NO_DOTENV: "0"'),
-            self.publisher.replace("secrets.EPG_URL", "vars.EXPO_PUBLIC_EPG_URL"),
+            self.publisher.replace(
+                '      EXPO_NO_DOTENV: "1"',
+                '      EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL }}\n      EXPO_NO_DOTENV: "1"',
+            ),
         ]:
             self.assertTrue(guard.active_workflow_findings(guard.OWNER_PUBLISHER, source))
+
+    def test_missing_owner_signing_or_managed_content_gate_is_rejected(self):
+        for marker in [
+            "CHARM_KEYSTORE_B64: ${{ secrets.CHARM_KEYSTORE_B64 }}",
+            'test -z "${EXPO_PUBLIC_M3U_URL:-}"',
+            "grep -q '/content/access' src/auth/accountApi.ts",
+            "charm.requireProtectedSigning=true",
+        ]:
+            source = self.publisher.replace(marker, "removed-reviewed-gate")
+            with self.subTest(marker=marker):
+                self.assertTrue(guard.active_workflow_findings(guard.OWNER_PUBLISHER, source))
 
     def test_missing_encryption_or_duplicate_uploader_is_rejected(self):
         for source in [
