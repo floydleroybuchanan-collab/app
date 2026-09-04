@@ -68,6 +68,7 @@ function registryHarness() {
       finishNativeUpdateJob: async () => {},
     },
     "./playlistCatalog": catalog,
+    "@/src/auth/managedContentAccess": { managedPlaylistUrl: id => id === "primary" ? "https://primary.invalid/list" : "https://second.invalid/list" },
   };
   const exports = {};
   const source = readFileSync(new URL("../src/core/playlistRegistry.ts", import.meta.url), "utf8");

@@ -1139,6 +1139,7 @@ function PurpleGuideScreenContent() {
                 clock24h={clock24h}
                 channelNumberById={channelNumberById}
                 onProgramPress={openGuideProgram}
+                onChannelPress={play}
                 onChannelFocus={onFocusChannel}
                 onProgramFocus={onFocusProgram}
                 onViewportChannelIds={onViewportChannelIds}

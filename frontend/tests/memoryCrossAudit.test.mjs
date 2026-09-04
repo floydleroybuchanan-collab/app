@@ -84,7 +84,7 @@ test("direct IPTV sources preserve HTTP and cache writes avoid reparsing the old
   assert.match(source, /refreshPlaylists\(/);
   const registry = await readFile(join(root, "src/core/playlistRegistry.ts"), "utf8");
   assert.match(registry, /fetchNativePlaylist\(url.trim\(\)\)/);
-  assert.match(source, /refreshNativeEpg\([\s\S]*?sourceUrl\(SOURCE_EPG\)/);
+  assert.match(source, /const primaryEpgUrl = managedEpgUrl\("primary"\)[\s\S]*?refreshNativeEpg\([\s\S]*?sourceUrl\(primaryEpgUrl\)/);
   assert.doesNotMatch(source, /const validCurrent = await readMetaFile\(CHANNEL_CACHE\)/);
   assert.match(source, /channelCacheKnownGood/);
   assert.match(source, /channelCacheKnownGood = restored/);

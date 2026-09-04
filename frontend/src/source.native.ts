@@ -41,12 +41,9 @@ import { getEpgSourcePreferences, type EpgSourcePreferences } from "@/src/core/e
 import { getMultiEpgSources } from "@/src/core/multiEpgSources";
 import { indexDeclaredStreamTypes } from "@/src/core/playbackProfileIndex";
 import { createPlaylistPlaybackRefresher } from "@/src/core/playlistPlaybackRefresh";
+import { managedEpgUrl, managedPlaylistUrl } from "@/src/auth/managedContentAccess";
 
 export const API_BASE = "";
-/** Playlist URL — set via EXPO_PUBLIC_M3U_URL at build time. Never hardcode provider URLs. */
-export const SOURCE_M3U = (process.env.EXPO_PUBLIC_M3U_URL || "").trim();
-/** XMLTV URL — set via EXPO_PUBLIC_EPG_URL at build time. Never hardcode provider URLs. */
-export const SOURCE_EPG = (process.env.EXPO_PUBLIC_EPG_URL || "").trim();
 
 /** Shared empty programmes array — reused for channels with no EPG in-window. Never mutate. */
 const EMPTY_PROGRAMS: Program[] = [];
@@ -895,12 +892,13 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
         setProgress({ phase: "ready", ratio: 1, etaSeconds: 0, message: null }, true);
         return MEM;
       }
-      if (!SOURCE_EPG) throw new Error("EPG is not configured for this build (missing EXPO_PUBLIC_EPG_URL).");
+      const primaryEpgUrl = managedEpgUrl("primary");
+      if (!primaryEpgUrl) throw new Error("The protected CharmIPTV EPG source is not available.");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
       const activeBindings = activeEpgBindings(channels, ownership.customOwnedChannelIds);
-      await configureNativeEpgSource(sourceUrl(SOURCE_EPG), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
+      await configureNativeEpgSource(sourceUrl(primaryEpgUrl), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
       const epg = await refreshNativeEpg(
-        sourceUrl(SOURCE_EPG),
+        sourceUrl(primaryEpgUrl),
         false,
         activeBindings.ids,
         activeBindings.names,
@@ -1393,12 +1391,13 @@ export async function refreshEpgOnly(): Promise<SourceStatus> {
         return MEM;
       }
 
-      if (!SOURCE_EPG) throw new Error("EPG is not configured for this build (missing EXPO_PUBLIC_EPG_URL).");
+      const primaryEpgUrl = managedEpgUrl("primary");
+      if (!primaryEpgUrl) throw new Error("The protected CharmIPTV EPG source is not available.");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
       const activeBindings = activeEpgBindings(cached.channels, ownership.customOwnedChannelIds);
-      await configureNativeEpgSource(sourceUrl(SOURCE_EPG), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
+      await configureNativeEpgSource(sourceUrl(primaryEpgUrl), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
       const epg = await refreshNativeEpg(
-        sourceUrl(SOURCE_EPG),
+        sourceUrl(primaryEpgUrl),
         true,
         activeBindings.ids,
         activeBindings.names,
@@ -1514,9 +1513,11 @@ export async function refreshEpgOnly(): Promise<SourceStatus> {
 
 export function sourceStatus(): SourceStatus {
   const channels = MEM?.channels || [];
+  const primaryPlaylistUrl = managedPlaylistUrl("primary");
+  const primaryEpgUrl = managedEpgUrl("primary");
   return {
-    m3u_url: SOURCE_M3U ? "configured" : "not configured",
-    epg_url: SOURCE_EPG ? "configured" : "not configured",
+    m3u_url: primaryPlaylistUrl ? "configured" : "not configured",
+    epg_url: primaryEpgUrl ? "configured" : "not configured",
     channel_count: channels.length,
     channels_with_epg: MEM?.epgChannelCount || 0,
     last_refresh: MEM && MEM.ts > 0 ? new Date(MEM.ts).toISOString() : null,
@@ -1555,7 +1556,7 @@ export async function sourceDiagnostics(): Promise<SourceDiagnostics> {
   const nextCandidates = [playlistNext, epgNext].filter((value): value is number => typeof value === "number");
   const nextAutoRefreshAt = nextCandidates.length ? Math.min(...nextCandidates) : null;
   return {
-    mode: SOURCE_M3U ? "direct" : "unconfigured",
+    mode: managedPlaylistUrl("primary") ? "direct" : "unconfigured",
     cacheBytes,
     cacheAgeMinutes: MEM && MEM.ts > 0 ? Math.max(0, Math.round((Date.now() - MEM.ts) / 60000)) : null,
     channels: MEM?.channels.length || 0,

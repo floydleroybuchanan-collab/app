@@ -12,6 +12,7 @@ type Props = {
   onChannelFocus: (channel: Channel, settled: boolean) => void;
   onProgramFocus: (program: Program, channel: Channel, settled: boolean) => void;
   onProgramPress: (program: Program, channel: Channel) => void;
+  onChannelPress: (channel: Channel) => void;
   onViewportChannelIds: (ids: string[], priorityIds: string[], pageSize: number, velocity: number) => void;
   onNativeGuideTag?: (tag: number | null) => void;
   onLeftBoundary: () => void;
@@ -32,6 +33,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   onChannelFocus,
   onProgramFocus,
   onProgramPress,
+  onChannelPress,
   onViewportChannelIds,
   onNativeGuideTag,
   onLeftBoundary,
@@ -106,8 +108,9 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
     }
     if (value.pressed) {
       if (value.surface !== "channel" && program) onProgramPress(program, channel);
+      else if (value.surface !== "channel") onChannelPress(channel);
     }
-  }, [channelById, onChannelFocus, onProgramFocus, onProgramPress]);
+  }, [channelById, onChannelFocus, onChannelPress, onProgramFocus, onProgramPress]);
 
   const handleRunwayChange = useCallback((event: NativeSyntheticEvent<RunwayEvent>) => {
     const value = event.nativeEvent;

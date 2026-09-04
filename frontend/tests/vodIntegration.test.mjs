@@ -17,6 +17,13 @@ test('VOD enters through the host after Live TV releases its decoders',()=>{
   assert.match(manifest,/MainTvActivity" android:exported="false" android:process=":vod"/);
   assert.doesNotMatch(manifest,/category.LAUNCHER|category.LEANBACK_LAUNCHER/);
 });
+test('VOD navigation uses a transparent proportional CharmIPTV header mark',()=>{
+  const activity=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/activities/main/MainTvActivity.kt');
+  const header=read('android/vod/app/src/main/res/layout/content_header_menu_main_tv.xml');
+  assert.match(activity,/R\.drawable\.charm_vod_brand_header/);
+  assert.match(header,/android:adjustViewBounds="true"/);
+  assert.match(header,/android:scaleType="fitCenter"/);
+});
 test('default provider is selected once and embedded VOD never offers upstream APK updates',()=>{
   const defaults=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodDefaults.kt');
   assert.match(defaults,/if \(UserPreferences.currentProvider == null\)/);

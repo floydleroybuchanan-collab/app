@@ -5,6 +5,7 @@ import {
   generateReferralInvite,
   deleteReferralInviteHistory,
   getCurrentAccount,
+  getManagedContentAccess,
   getReferralSummary,
   loginToAccount,
   logoutAccount,
@@ -13,6 +14,7 @@ import {
   type AccountUser,
   type ReferralSummary,
 } from "@/src/auth/accountApi";
+import { clearManagedContentAccess, configureManagedContentAccess } from "@/src/auth/managedContentAccess";
 import { storage } from "@/src/utils/storage";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearLocalSession = useCallback(async (message?: string) => {
     tokenRef.current = null;
+    clearManagedContentAccess();
     lastValidatedAtRef.current = 0;
     setUser(null);
     setNotice(message || null);
@@ -72,6 +75,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setNotice(message);
       }
       return;
+    }
+    if (restoring) {
+      const content = await getManagedContentAccess(token);
+      if (content.response?.status === 401 || content.response?.status === 403) {
+        await clearLocalSession("Your session expired or was revoked. Please sign in again.");
+        return;
+      }
+      if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+        tokenRef.current = token;
+        setUser(null);
+        setNotice(content.data.error || "Unable to load protected CharmIPTV sources right now.");
+        setStatus("unavailable");
+        return;
+      }
     }
     tokenRef.current = token;
     lastValidatedAtRef.current = Date.now();
@@ -127,8 +144,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!result.response || !result.response.ok || !result.data.success || !result.data.token || !result.data.user) {
       return result.data.error || "Unable to sign in.";
     }
+    const content = await getManagedContentAccess(result.data.token);
+    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+      void logoutAccount(result.data.token);
+      return content.data.error || "Unable to load protected CharmIPTV sources right now.";
+    }
     const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
     if (!saved) {
+      clearManagedContentAccess();
       void logoutAccount(result.data.token);
       return "This device could not securely save the session. Please try again.";
     }
@@ -145,8 +168,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!result.response || !result.response.ok || !result.data.success || !result.data.token || !result.data.user) {
       return result.data.error || "Unable to create the account.";
     }
+    const content = await getManagedContentAccess(result.data.token);
+    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
+      void logoutAccount(result.data.token);
+      return content.data.error || "Unable to load protected CharmIPTV sources right now.";
+    }
     const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
     if (!saved) {
+      clearManagedContentAccess();
       void logoutAccount(result.data.token);
       return "This device could not securely save the session. Please try again.";
     }

@@ -74,12 +74,14 @@ def releaseSigning = [
 ]
 def releaseSigningConfigured = releaseSigning.values().every { it != null && it.toString().trim() }
 def releaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+def sideloadTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("sideload") }
+def requireProtectedSigning = (findProperty('charm.requireProtectedSigning') ?: false).toBoolean()
 
-if (releaseTaskRequested && !releaseSigningConfigured) {
+if ((releaseTaskRequested || (sideloadTaskRequested && requireProtectedSigning)) && !releaseSigningConfigured) {
     throw new GradleException(
         "Release signing is required. Configure CHARM_UPLOAD_STORE_FILE, " +
         "CHARM_UPLOAD_STORE_PASSWORD, CHARM_UPLOAD_KEY_ALIAS, and CHARM_UPLOAD_KEY_PASSWORD. " +
-        "Use assembleSideload for a standalone tester APK."
+        "The protected RC sideload workflow also requires the owner signing key."
     )
 }
 
@@ -132,16 +134,18 @@ android {
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             def enablePngCrunch = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
             crunchPngs enablePngCrunch.toBoolean()
         }
-        // Standalone tester builds embed the release JS bundle but are clearly
-        // separated from production signing and installation identity.
+        // Standalone tester build: embeds the release JS bundle, is owner-signed
+        // in the protected RC workflow,
+        // while retaining a separate installation identity from production.
         sideload {
             initWith release
             matchingFallbacks = ['release']
-            signingConfig signingConfigs.debug
+            debuggable false
+            signingConfig releaseSigningConfigured ? signingConfigs.release : signingConfigs.debug
             applicationIdSuffix '.sideload'
             versionNameSuffix '-sideload'
             manifestPlaceholders.allowCleartextStreams = "true"

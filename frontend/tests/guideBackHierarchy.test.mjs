@@ -24,7 +24,7 @@ test("Guide BACK moves from groups to the icon rail, then expands the main drawe
   assert.match(groups, /if \(key === "BACK"\) \{\s*focusIconRailRef\.current\(\)/);
   assert.match(groups, /if \(key === "LEFT"\)/);
   assert.match(activity, /context == "guide_groups" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
-  assert.match(activity, /context == "icon_rail" && boundaryKey == "BACK"/);
+  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
 });
 
 test("returning from fullscreen restores the selected Guide group and channel instead of All", async () => {

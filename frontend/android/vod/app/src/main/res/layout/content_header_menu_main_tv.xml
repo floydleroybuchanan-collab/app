@@ -12,11 +12,12 @@
 
     <ImageView
         android:id="@+id/iv_navigation_header_icon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:adjustViewBounds="true"
         android:duplicateParentState="true"
         android:foreground="@drawable/fg_navigation_header_icon_tv"
-        android:padding="2dp"
+        android:padding="1dp"
         android:scaleType="fitCenter"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"

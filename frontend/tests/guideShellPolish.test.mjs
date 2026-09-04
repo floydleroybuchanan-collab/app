@@ -175,8 +175,8 @@ test("shared page focus has a deterministic Left-edge icon-rail handoff", async 
     assert.match(page, /setPreferInitialFocus\(false\)/);
   }
   assert.match(live, /setRemoteContext\("drawer_edge"\)/);
-  assert.match(live, /key === "LEFT" && leftEdgeFocusRef\.current/);
-  assert.match(live, /focusIconRail\(\)/);
+  assert.match(live, /const owner = leftEdgeFocusRef\.current/);
+  assert.match(live, /focusIconRail\(owner === "recent-first" \? firstRecentRef\.current : heroButtonRef\.current\)/);
   assert.doesNotMatch(reminders, /hasTVPreferredFocus\s*\n/);
   assert.match(reminders, /hasTVPreferredFocus=\{preferInitialFocus\}/);
 });
@@ -482,7 +482,7 @@ test("Android remote accepts drawer-edge and icon-rail focus ownership", async (
   ]);
   assert.match(nativeRemote, /"main_drawer", "icon_rail", "drawer_edge", "player"/);
   assert.match(activity, /context == "drawer_edge" && boundaryKey == "LEFT"/);
-  assert.match(activity, /context == "icon_rail" && boundaryKey == "BACK"/);
+  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
   assert.match(bridge, /\| "icon_rail"/);
 });
 

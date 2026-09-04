@@ -11,8 +11,10 @@ test("sideload CI includes only the public recipient key and uploads ciphertext"
   assert.match(publicKey, /^-----BEGIN PUBLIC KEY-----/);
   assert.doesNotMatch(publicKey, /PRIVATE KEY/);
   const workflow = await readFile(new URL("../../.github/workflows/build-media3-sideload-now.yml", import.meta.url), "utf8");
-  assert.match(workflow, /EXPO_PUBLIC_M3U_URL: \$\{\{ secrets.M3U_URL \}\}/);
-  assert.match(workflow, /EXPO_PUBLIC_EPG_URL: \$\{\{ secrets.EPG_URL \}\}/);
+  assert.doesNotMatch(workflow, /EXPO_PUBLIC_M3U_URL: \$\{\{ secrets.M3U_URL \}\}/);
+  assert.doesNotMatch(workflow, /EXPO_PUBLIC_EPG_URL: \$\{\{ secrets.EPG_URL \}\}/);
+  assert.match(workflow, /CHARM_KEYSTORE_B64: \$\{\{ secrets.CHARM_KEYSTORE_B64 \}\}/);
+  assert.match(workflow, /Managed provider origin leaked into the APK bundle/);
   assert.match(workflow, /EXPO_NO_DOTENV: "1"/);
   assert.doesNotMatch(workflow, /vars.EXPO_PUBLIC_(?:M3U|EPG)_URL/);
   const upload = workflow.slice(workflow.indexOf("- name: Upload encrypted sideload artifact"));

@@ -96,7 +96,8 @@ type DrawerContextValue = {
   drawerProgress: Animated.Value;
   openDrawer: (options?: OpenDrawerOptions) => void;
   closeDrawer: (options?: { force?: boolean }) => void;
-  focusIconRail: () => void;
+  focusIconRail: (returnTarget?: unknown) => void;
+  getIconRailReturnTarget: () => unknown;
   iconRailFocusRequest: number;
   focusDrawerTop: boolean;
   consumeFocusDrawerTop: () => void;
@@ -108,6 +109,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [focusDrawerTop, setFocusDrawerTop] = useState(false);
   const [iconRailFocusRequest, setIconRailFocusRequest] = useState(0);
+  const iconRailReturnTargetRef = useRef<unknown>(null);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const drawerOpenRef = useRef(false);
   const openedAtRef = useRef(0);
@@ -130,7 +132,11 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   }, []);
 
   const consumeFocusDrawerTop = useCallback(() => setFocusDrawerTop(false), []);
-  const focusIconRail = useCallback(() => setIconRailFocusRequest((value) => value + 1), []);
+  const focusIconRail = useCallback((returnTarget?: unknown) => {
+    if (returnTarget) iconRailReturnTargetRef.current = returnTarget;
+    setIconRailFocusRequest((value) => value + 1);
+  }, []);
+  const getIconRailReturnTarget = useCallback(() => iconRailReturnTargetRef.current, []);
 
   useEffect(() => {
     const animation = Animated.timing(drawerProgress, {
@@ -149,11 +155,12 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       openDrawer,
       closeDrawer,
       focusIconRail,
+      getIconRailReturnTarget,
       iconRailFocusRequest,
       focusDrawerTop,
       consumeFocusDrawerTop,
     }),
-    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, iconRailFocusRequest, openDrawer],
+    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, getIconRailReturnTarget, iconRailFocusRequest, openDrawer],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
@@ -218,6 +225,7 @@ export function PurpleTvShell({
     iconRailFocusRequest,
     focusDrawerTop,
     consumeFocusDrawerTop,
+    getIconRailReturnTarget,
   } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
@@ -252,12 +260,21 @@ export function PurpleTvShell({
   }, [active, drawerOpen, iconRailFocusRequest]);
 
   useEffect(() => addTvKeyListener((key) => {
-    if (key !== "BACK" || !iconRailFocusOwnerRef.current) return;
+    if (!iconRailFocusOwnerRef.current) return;
+    if (key === "RIGHT") {
+      const returnTarget = getIconRailReturnTarget();
+      if (returnTarget) requestNativeFocusWithRetry(returnTarget, [0, 60, 140]);
+      return;
+    }
+    // LEFT is the universal rail-to-drawer boundary. BACK remains supported
+    // for the earlier compact-rail shortcut, but neither key is allowed to
+    // fall through to Android's focus search and strand focus off-screen.
+    if (key !== "LEFT" && key !== "BACK") return;
     iconRailFocusOwnerRef.current = null;
     resetRemoteContextIfOwned("icon_rail", "default");
     onIconRailOpenMainDrawerRef.current?.();
     openDrawer();
-  }), [openDrawer]);
+  }), [getIconRailReturnTarget, openDrawer]);
 
   useEffect(() => {
     if (!drawerOpen) return;

@@ -27,6 +27,7 @@ function discoveryHarness(rows, env = {}) {
     "./multiEpgSources": { ensureDiscoveredEpgSource: async url => { calls.push(url); return url.includes("full") ? null : "detected"; } },
     "./epgSourcePreferences": { getEpgSourcePreferences: async () => ({ userUrl: "https://legacy.invalid/xml" }) },
     "./playlistCatalog": { PRIMARY_PLAYLIST: "charm-primary", SECOND_PLAYLIST: "charm-secondary" },
+    "@/src/auth/managedContentAccess": { managedEpgUrl: id => id === "primary" ? env.EXPO_PUBLIC_EPG_URL || "" : env.EXPO_PUBLIC_EPG_URL_2 || "" },
   };
   const code = ts.transpileModule(readFileSync(new URL("../src/core/playlistEpgDiscovery.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInNewContext(code, { exports, require: name => mocks[name], process: { env } });
@@ -72,6 +73,7 @@ test("shared EPG registry reuses a detected URL without enabling it and refuses 
     "@/src/utils/storage": { storage: { getItem: async () => initial, setItem: async () => true } },
     "@/src/core/additionalEpgOwnership": { replaceAdditionalEpgOwners() {} },
     "@/src/source": { invalidateGuideOwnershipCaches() {} },
+    "@/src/auth/managedContentAccess": { managedEpgUrl: () => "" },
   };
   const code = ts.transpileModule(readFileSync(new URL("../src/core/multiEpgSources.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInNewContext(code, { exports, require: name => { assert.ok(mocks[name], name); return mocks[name]; }, process: { env: {} } });

@@ -95,7 +95,9 @@ class MainTvActivity : FragmentActivity() {
             binding.navMain.headerView?.apply {
                 val header = ContentHeaderMenuMainTvBinding.bind(this)
 
-                header.ivNavigationHeaderIcon.setImageResource(R.drawable.charm_vod_brand)
+                // Header-specific transparent artwork avoids the old opaque
+                // square and preserves the circular mark at a true aspect fit.
+                header.ivNavigationHeaderIcon.setImageResource(R.drawable.charm_vod_brand_header)
                 header.tvNavigationHeaderTitle.text = getString(R.string.app_name)
                 contentDescription = getString(R.string.charm_vod_provider_access)
                 header.tvNavigationHeaderSubtitle.text = getString(R.string.main_menu_change_provider)

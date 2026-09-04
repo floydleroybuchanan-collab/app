@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Channel } from "@/src/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchNativePlaylist, finishNativeUpdateJob, startNativeUpdateJob } from "@/src/nativeEpg";
+import { managedPlaylistUrl } from "@/src/auth/managedContentAccess";
 import { combinePlaylistCatalogs, MAX_PERSONAL_PLAYLISTS, PRIMARY_PLAYLIST, SECOND_PLAYLIST,
   scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
@@ -11,10 +12,11 @@ export type PlaylistPreview = Channel[] & { epgUrls?: string[] };
 
 const KEY = "charm_playlist_registry_v1";
 const ROOT = `${FileSystem.documentDirectory}playlists/`;
-const managedUrls: Record<string, string> = {
-  [PRIMARY_PLAYLIST]: (process.env.EXPO_PUBLIC_M3U_URL || "").trim(),
-  [SECOND_PLAYLIST]: (process.env.EXPO_PUBLIC_M3U_URL_2 || "").trim(),
-};
+function managedUrl(id: string): string {
+  if (id === PRIMARY_PLAYLIST) return managedPlaylistUrl("primary");
+  if (id === SECOND_PLAYLIST) return managedPlaylistUrl("secondary");
+  return "";
+}
 let records: PlaylistRecord[] | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 const listeners = new Set<() => void>();
@@ -34,7 +36,7 @@ async function load(): Promise<PlaylistRecord[]> {
   if (!Array.isArray(saved)) throw new Error("Playlist settings could not be read. Saved catalogs were not changed.");
   const next = (saved || []).filter((item) => /^[a-z0-9-]+$/.test(item.id));
   if (!next.some((item) => item.id === PRIMARY_PLAYLIST)) next.unshift(makeRecord(PRIMARY_PLAYLIST, "CharmIPTV", true));
-  if (managedUrls[SECOND_PLAYLIST] && !next.some((item) => item.id === SECOND_PLAYLIST)) next.splice(1, 0, makeRecord(SECOND_PLAYLIST, "CharmIPTV 2", true));
+  if (managedUrl(SECOND_PLAYLIST) && !next.some((item) => item.id === SECOND_PLAYLIST)) next.splice(1, 0, makeRecord(SECOND_PLAYLIST, "CharmIPTV 2", true));
   records = next;
   return next;
 }
@@ -85,7 +87,7 @@ async function writeCatalog(row: PlaylistRecord, channels: PlaylistPreview): Pro
   return next;
 }
 export async function getPlaylistUrl(row: PlaylistRecord): Promise<string> {
-  return row.managed ? managedUrls[row.id] || "" : await SecureStore.getItemAsync(`playlist-${row.id}`) || "";
+  return row.managed ? managedUrl(row.id) : await SecureStore.getItemAsync(`playlist-${row.id}`) || "";
 }
 export function validatePlaylistUrl(url: string) {
   if (/^content:\/\/\S+$/.test(url)) return;

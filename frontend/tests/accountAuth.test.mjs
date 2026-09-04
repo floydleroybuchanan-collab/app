@@ -6,6 +6,7 @@ import {
   ACCOUNT_API_BASE_URL,
   generateReferralInvite,
   getCurrentAccount,
+  getManagedContentAccess,
   getReferralSummary,
   loginToAccount,
   registerAccountWithInvite,
@@ -27,6 +28,7 @@ test("account API login and restore use the deployed Cloudflare contract without
   try {
     await loginToAccount("viewer", "secret");
     await getCurrentAccount("session-token");
+    await getManagedContentAccess("session-token");
     await registerAccountWithInvite("charm-abcd-1234", "friend", "FRIEND@example.com", "password8");
     await getReferralSummary("session-token");
     await generateReferralInvite("session-token");
@@ -40,16 +42,18 @@ test("account API login and restore use the deployed Cloudflare contract without
   assert.deepEqual(Object.keys(JSON.parse(String(calls[0].options.body))).sort(), ["login", "password"]);
   assert.equal(calls[1].url, `${ACCOUNT_API_BASE_URL}/me`);
   assert.equal(new Headers(calls[1].options.headers).get("Authorization"), "Bearer session-token");
-  assert.equal(calls[2].url, `${ACCOUNT_API_BASE_URL}/auth/register`);
-  assert.deepEqual(JSON.parse(String(calls[2].options.body)), {
+  assert.equal(calls[2].url, `${ACCOUNT_API_BASE_URL}/content/access`);
+  assert.equal(new Headers(calls[2].options.headers).get("Authorization"), "Bearer session-token");
+  assert.equal(calls[3].url, `${ACCOUNT_API_BASE_URL}/auth/register`);
+  assert.deepEqual(JSON.parse(String(calls[3].options.body)), {
     invite_code: "CHARM-ABCD-1234",
     username: "friend",
     email: "friend@example.com",
     password: "password8",
   });
-  assert.equal(calls[3].url, `${ACCOUNT_API_BASE_URL}/referrals`);
-  assert.equal(calls[4].url, `${ACCOUNT_API_BASE_URL}/referrals/invites`);
-  assert.equal(new Headers(calls[4].options.headers).get("Authorization"), "Bearer session-token");
+  assert.equal(calls[4].url, `${ACCOUNT_API_BASE_URL}/referrals`);
+  assert.equal(calls[5].url, `${ACCOUNT_API_BASE_URL}/referrals/invites`);
+  assert.equal(new Headers(calls[5].options.headers).get("Authorization"), "Bearer session-token");
 });
 
 test("secure session restore gates all playlist, guide, and player providers", async () => {
@@ -95,7 +99,24 @@ test("RC.6 drawer layout pushes content beside a main icon rail and playlist lis
   assert.match(drawer, /item\.expanded \? "chevron-up" : "chevron-down"/);
   assert.match(drawer, /groupRow: \{ paddingLeft: 28 \}/);
   assert.match(home, /setRemoteContext\("drawer_edge"\)/);
-  assert.match(home, /key === "LEFT" && leftEdgeFocusRef\.current\) focusIconRail\(\)/);
+  assert.match(home, /focusIconRail\(owner === "recent-first" \? firstRecentRef\.current : heroButtonRef\.current\)/);
   assert.match(activity, /context == "drawer_edge" && boundaryKey == "LEFT"/);
+  assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
   assert.match(activity, /enterImmersiveMode\(\)/);
+});
+
+test("rail focus returns to content and no-information Guide cells remain playable", async () => {
+  const [shell, live, canvas, guide, activity] = await Promise.all([
+    source("src/components/PurpleTvShell.tsx"),
+    source("app/(tabs)/index.tsx"),
+    source("src/components/NativeGuideCanvas.tsx"),
+    source("app/(tabs)/guide.tsx"),
+    source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
+  ]);
+  assert.match(shell, /if \(key === "RIGHT"\)/);
+  assert.match(shell, /getIconRailReturnTarget\(\)/);
+  assert.match(live, /focusIconRail\(owner === "recent-first" \? firstRecentRef\.current : heroButtonRef\.current\)/);
+  assert.match(activity, /boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"/);
+  assert.match(canvas, /else if \(value\.surface !== "channel"\) onChannelPress\(channel\)/);
+  assert.match(guide, /onChannelPress=\{play\}/);
 });

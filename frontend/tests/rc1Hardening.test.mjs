@@ -25,9 +25,12 @@ test("Expo dependency validation is an explicit release gate", async () => {
 });
 
 test("source modules never hardcode provider playlist/EPG URLs", async () => {
-  const [native, web] = await Promise.all([source("src/source.native.ts"), source("src/source.ts")]);
-  for (const body of [native, web]) { assert.doesNotMatch(body, /m3u4u\.com/i); assert.match(body, /EXPO_PUBLIC_M3U_URL/); assert.match(body, /EXPO_PUBLIC_EPG_URL/); assert.match(body, /SOURCE_M3U = \(process\.env\.EXPO_PUBLIC_M3U_URL \|\| ""\)\.trim\(\)/); }
-  assert.match(native, /not configured for this build/);
+  const [native, web, protectedAccess, auth, worker] = await Promise.all([source("src/source.native.ts"), source("src/source.ts"), source("src/auth/managedContentAccess.ts"), source("src/auth/AuthContext.tsx"), repoSource("account-backend/worker.js")]);
+  for (const body of [native, web, protectedAccess]) assert.doesNotMatch(body, /m3u4u\.com/i);
+  assert.match(native, /managedEpgUrl\("primary"\)/);
+  assert.match(auth, /getManagedContentAccess/);
+  assert.match(worker, /\/content\/access/);
+  assert.match(worker, /proxyManagedContent/);
 });
 
 test("Purple TV APK workflow injects playlist/EPG from secrets", async () => { const workflow = await repoSource(".github/workflows/purple-tv-ui.yml"); assert.match(workflow, /secrets\.M3U_URL/); assert.match(workflow, /secrets\.EPG_URL/); assert.match(workflow, /Require playlist and EPG build configuration/); });
@@ -63,7 +66,7 @@ test("Cloudflare worker does not default CORS to wildcard", async () => { const 
 
 test("release packaging requires upload signing and permits direct IPTV HTTP", async () => {
   const [appJson, gradle, manifest] = await Promise.all([source("app.json"), source("android/app/build.gradle"), source("android/app/src/main/AndroidManifest.xml")]);
-  assert.match(appJson, /"versionCode": 10/); assert.match(appJson, /2\.1\.0-rc\.6/); assert.match(gradle, /versionCode 10/); assert.match(gradle, /CHARM_UPLOAD_STORE_FILE/); assert.match(gradle, /signingConfigs\.release/); assert.match(gradle, /releaseTaskRequested && !releaseSigningConfigured/); assert.match(gradle, /assembleSideload/); assert.match(gradle, /applicationIdSuffix '\.sideload'/); assert.match(gradle, /manifestPlaceholders\.allowCleartextStreams = "true"/); assert.doesNotMatch(gradle, /Falls back to the debug keystore/); assert.match(appJson, /"allowBackup": false/); assert.match(appJson, /"blockedPermissions"/); assert.match(appJson, /"usesCleartextTraffic": true/); assert.match(manifest, /android:allowBackup="false"/); assert.match(manifest, /android:usesCleartextTraffic="\$\{allowCleartextStreams\}"/); assert.match(manifest, /android:scheme="charmiptv-purple"/); for (const permission of ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "SYSTEM_ALERT_WINDOW"]) assert.match(manifest, new RegExp(`${permission}\\" tools:node=\\"remove`));
+  assert.match(appJson, /"versionCode": 10/); assert.match(appJson, /2\.1\.0-rc\.6/); assert.match(gradle, /versionCode 10/); assert.match(gradle, /CHARM_UPLOAD_STORE_FILE/); assert.match(gradle, /signingConfigs\.release/); assert.match(gradle, /releaseTaskRequested \|\| \(sideloadTaskRequested && requireProtectedSigning\)/); assert.match(gradle, /charm\.requireProtectedSigning/); assert.match(gradle, /proguard-android-optimize\.txt/); assert.match(gradle, /applicationIdSuffix '\.sideload'/); assert.match(gradle, /manifestPlaceholders\.allowCleartextStreams = "true"/); assert.doesNotMatch(gradle, /Falls back to the debug keystore/); assert.match(appJson, /"allowBackup": false/); assert.match(appJson, /"blockedPermissions"/); assert.match(appJson, /"usesCleartextTraffic": true/); assert.match(manifest, /android:allowBackup="false"/); assert.match(manifest, /android:usesCleartextTraffic="\$\{allowCleartextStreams\}"/); assert.match(manifest, /android:scheme="charmiptv-purple"/); for (const permission of ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "SYSTEM_ALERT_WINDOW"]) assert.match(manifest, new RegExp(`${permission}\\" tools:node=\\"remove`));
 });
 
 test("legacy backend proxy blocks private destinations", async () => { const server = await repoSource("backend/server.py"); assert.match(server, /_assert_safe_proxy_url/); assert.match(server, /is_private/); assert.match(server, /allow_redirects=False/); assert.match(server, /PROXY_ALLOW_HOSTS/); assert.match(server, /if not allowlist_raw/); assert.match(server, /_fetch_spooled/); assert.match(server, /ET\.iterparse/); assert.match(server, /MAX_EPG_DECOMPRESSED_BYTES/); assert.doesNotMatch(server, /ET\.fromstring/); assert.doesNotMatch(server, /content=r\.content/); assert.doesNotMatch(server, /detail=f"Proxy fetch failed/); assert.match(server, /async def force_refresh\(_:\s*str = Depends\(require_admin\)\)/); assert.match(server, /async def get_settings\(_:\s*str = Depends\(require_admin\)\)/); assert.doesNotMatch(server, /allow_origins=\["\*"\]/); });

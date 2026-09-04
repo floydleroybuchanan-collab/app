@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { storage } from "@/src/utils/storage";
 import { replaceAdditionalEpgOwners } from "@/src/core/additionalEpgOwnership";
+import { managedEpgUrl } from "@/src/auth/managedContentAccess";
 
 export type CustomEpgSourceRecord = {
   id: string;
@@ -18,7 +19,6 @@ const KEY = "gs_custom_epg_sources_v2";
 // occupies one slot, so the additional-source registry must stop at seven.
 const MAX_SOURCES = 7;
 export const OWNER_EPG_ID = "owner-secondary";
-const OWNER_EPG_URL = (process.env.EXPO_PUBLIC_EPG_URL_2 || "").trim();
 let cached: CustomEpgSourceRecord[] = [];
 let loaded = false;
 let loading: Promise<CustomEpgSourceRecord[]> | null = null;
@@ -66,10 +66,11 @@ function normalize(raw: unknown): CustomEpgSourceRecord[] {
     seen.add(source.id); out.push(source);
     if (out.filter((item) => item.id !== OWNER_EPG_ID).length >= MAX_SOURCES) break;
   }
-  if (OWNER_EPG_URL) {
+  const ownerEpgUrl = managedEpgUrl("secondary");
+  if (ownerEpgUrl) {
     const existing = out.find((item) => item.id === OWNER_EPG_ID);
-    const owner: CustomEpgSourceRecord = { id: OWNER_EPG_ID, name: "CharmIPTV 2 EPG", url: OWNER_EPG_URL, enabled: true, refreshHours: 12, lastRefreshAt: 0, lastStatus: "Not updated", overrides: {}, ...existing };
-    owner.url = OWNER_EPG_URL;
+    const owner: CustomEpgSourceRecord = { id: OWNER_EPG_ID, name: "CharmIPTV 2 EPG", url: ownerEpgUrl, enabled: true, refreshHours: 12, lastRefreshAt: 0, lastStatus: "Not updated", overrides: {}, ...existing };
+    owner.url = ownerEpgUrl;
     // A supplied build-time feed must recover from an older saved disabled
     // record when it is reintroduced or its URL changes between test builds.
     owner.enabled = true;

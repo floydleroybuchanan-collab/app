@@ -49,10 +49,11 @@ jobs:
       UPROT_API_KEY: ${{ secrets.UPROT_API_KEY }}
       EXPO_NO_DOTENV: "1"
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
-      EXPO_PUBLIC_M3U_URL: ${{ secrets.M3U_URL }}
-      EXPO_PUBLIC_EPG_URL: ${{ secrets.EPG_URL }}
-      EXPO_PUBLIC_M3U_URL_2: ${{ secrets.M3U_URL_2 }}
-      EXPO_PUBLIC_EPG_URL_2: ${{ secrets.EPG_URL_2 }}
+      CHARM_KEYSTORE_B64: ${{ secrets.CHARM_KEYSTORE_B64 }}
+      CHARM_UPLOAD_STORE_FILE: charm-upload.jks
+      CHARM_UPLOAD_STORE_PASSWORD: ${{ secrets.CHARM_UPLOAD_STORE_PASSWORD }}
+      CHARM_UPLOAD_KEY_ALIAS: ${{ secrets.CHARM_UPLOAD_KEY_ALIAS }}
+      CHARM_UPLOAD_KEY_PASSWORD: ${{ secrets.CHARM_UPLOAD_KEY_PASSWORD }}
       EXPO_PUBLIC_GUIDE_WINDOW_HOURS: ${{ vars.EXPO_PUBLIC_GUIDE_WINDOW_HOURS || '24' }}
 
     steps:
@@ -93,10 +94,21 @@ jobs:
       - name: Verify preserved VOD source
         run: node scripts/verify-vod-source.mjs
 
-      - name: Verify locked build sources
+      - name: Configure owner release signing
         run: |
-          test -n "${EXPO_PUBLIC_M3U_URL}"
-          test -n "${EXPO_PUBLIC_EPG_URL}"
+          test -n "${CHARM_KEYSTORE_B64}"
+          test -n "${CHARM_UPLOAD_STORE_PASSWORD}"
+          test -n "${CHARM_UPLOAD_KEY_ALIAS}"
+          test -n "${CHARM_UPLOAD_KEY_PASSWORD}"
+          printf '%s' "${CHARM_KEYSTORE_B64}" | base64 --decode > android/app/charm-upload.jks
+          test -s android/app/charm-upload.jks
+
+      - name: Verify protected managed-content wiring
+        run: |
+          test -z "${EXPO_PUBLIC_M3U_URL:-}"
+          test -z "${EXPO_PUBLIC_EPG_URL:-}"
+          grep -q 'getManagedContentAccess' src/auth/AuthContext.tsx
+          grep -q '/content/access' src/auth/accountApi.ts
 
       - name: Verify native architecture and config
         run: |
@@ -137,6 +149,9 @@ jobs:
           kotlin.compiler.execution.strategy=in-process
           kotlin.daemon.enabled=false
           reactNativeArchitectures=armeabi-v7a,arm64-v8a
+          charm.requireProtectedSigning=true
+          android.enableMinifyInReleaseBuilds=true
+          android.enableShrinkResourcesInReleaseBuilds=true
           EOF
 
       - name: Compile sideload Kotlin and Java
@@ -156,6 +171,16 @@ jobs:
           grep -q 'lib/armeabi-v7a/' apk-contents.txt
           grep -q 'lib/arm64-v8a/' apk-contents.txt
           grep -Eq 'libffmpeg|ffmpeg' apk-contents.txt
+          if unzip -p "$APK" assets/index.android.bundle | grep -a -q 'm3u4u\.com'; then
+            echo 'Managed provider origin leaked into the APK bundle.' >&2
+            exit 1
+          fi
+          CERTS="$(apksigner verify --verbose --print-certs "$APK")"
+          printf '%s\n' "$CERTS" | grep -q 'Verified'
+          if printf '%s\n' "$CERTS" | grep -qi 'Android Debug'; then
+            echo 'Protected sideload APK was signed with the Android debug certificate.' >&2
+            exit 1
+          fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
           cp "$APK" "artifacts/CharmIPTV.RC-6-Sideload-${GITHUB_RUN_NUMBER}.apk"
@@ -178,3 +203,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f android/app/charm-upload.jks

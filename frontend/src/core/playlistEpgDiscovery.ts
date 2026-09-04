@@ -2,6 +2,7 @@ import { applyDiscoveredPlaylistEpg, listPlaylists } from "./playlistRegistry";
 import { ensureDiscoveredEpgSource } from "./multiEpgSources";
 import { getEpgSourcePreferences } from "./epgSourcePreferences";
 import { PRIMARY_PLAYLIST, SECOND_PLAYLIST } from "./playlistCatalog";
+import { managedEpgUrl } from "@/src/auth/managedContentAccess";
 
 /** Only successfully committed playlist headers enter discovery. No validation-preview side effects. */
 export async function discoverPlaylistEpg(): Promise<void> {
@@ -10,7 +11,7 @@ export async function discoverPlaylistEpg(): Promise<void> {
   for (const row of playlists) {
     if (!row.enabled || row.autoEpg === false || !row.discoveredEpgUrls?.length) continue;
     if (row.autoEpg == null && !row.managed && row.epgSourceIds.length) continue; // Preserve pre-existing manual associations.
-    const configuredOwner = row.id === PRIMARY_PLAYLIST ? process.env.EXPO_PUBLIC_EPG_URL : row.id === SECOND_PLAYLIST ? process.env.EXPO_PUBLIC_EPG_URL_2 : "";
+    const configuredOwner = row.id === PRIMARY_PLAYLIST ? managedEpgUrl("primary") : row.id === SECOND_PLAYLIST ? managedEpgUrl("secondary") : "";
     const suppliedId = row.id === PRIMARY_PLAYLIST ? "primary" : row.id === SECOND_PLAYLIST ? "owner-secondary" : "";
     const ids: string[] = configuredOwner?.trim() && suppliedId ? [suppliedId] : [];
     let full = false;

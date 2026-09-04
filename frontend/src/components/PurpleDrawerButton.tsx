@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
@@ -10,8 +10,9 @@ import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@
 /** Consistent, explicit Drawer entry for full-bleed TV pages. */
 export function PurpleDrawerButton({ testID }: { testID: string }) {
   const pathname = usePathname();
-  const { openDrawer } = usePurpleTvDrawer();
+  const { focusIconRail, openDrawer } = usePurpleTvDrawer();
   const [focused, setFocused] = useState(false);
+  const buttonRef = useRef<unknown>(null);
   const open = useCallback(() => {
     void Haptics.selectionAsync().catch(() => undefined);
     openDrawer({ focusTop: true });
@@ -29,7 +30,7 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
     // is focused.
     setRemoteContext("drawer_edge");
     const off = addTvKeyListener((key) => {
-      if (key === "LEFT") open();
+      if (key === "LEFT") focusIconRail(buttonRef.current);
     });
     return () => {
       off();
@@ -42,10 +43,11 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
           : "default";
       resetRemoteContextIfOwned("drawer_edge", fallback);
     };
-  }, [focused, open, pathname]);
+  }, [focusIconRail, focused, pathname]);
 
   return (
     <Pressable
+      ref={buttonRef as any}
       accessibilityRole="button"
       accessibilityLabel="Open Drawer"
       onFocus={() => setFocused(true)}

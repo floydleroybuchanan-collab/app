@@ -40,6 +40,12 @@ export type ReferralSummary = {
   invitations: ReferralInvitation[];
 };
 
+export type ManagedContentAccess = {
+  expires_at: number;
+  primary: { playlist_url: string; epg_url: string };
+  secondary: { playlist_url: string; epg_url: string };
+};
+
 type AccountEnvelope = {
   success?: boolean;
   error?: string;
@@ -47,6 +53,7 @@ type AccountEnvelope = {
   user?: AccountUser;
   referral?: ReferralSummary;
   invitation?: ReferralInvitation;
+  content?: ManagedContentAccess;
 };
 
 export type AccountApiResult = {
@@ -123,6 +130,10 @@ export function registerAccountWithInvite(
 
 export function getCurrentAccount(token: string): Promise<AccountApiResult> {
   return accountRequest("/me", { method: "GET" }, token);
+}
+
+export function getManagedContentAccess(token: string): Promise<AccountApiResult> {
+  return accountRequest("/content/access", { method: "GET" }, token);
 }
 
 export function logoutAccount(token: string): Promise<AccountApiResult> {

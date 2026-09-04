@@ -554,7 +554,10 @@ function SettingsScreenContent() {
 
         {!section ? (
           <FocusGuide style={styles.tileGridWrap}>
-            <View style={styles.tileGrid}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.tileGrid}
+            >
               {TILES.map((tile, index) => (
                 <Pressable
                   key={tile.id}
@@ -568,7 +571,7 @@ function SettingsScreenContent() {
                   <Text style={styles.tileText}>{tile.label}</Text>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           </FocusGuide>
         ) : (
           <FocusGuide style={styles.detailsWrap}>
@@ -1235,15 +1238,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 14 },
-  header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
+  page: { flex: 1, minWidth: 0, padding: 14, overflow: "hidden" },
+  header: { minHeight: 52, flexShrink: 0, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, backgroundColor: tvColors.canvas },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
   backButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
-  tileGridWrap: { flex: 1 },
-  tileGrid: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "center", gap: 9, paddingHorizontal: 18 },
+  tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden" },
+  tileGrid: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 9, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
   detailsWrap: { flex: 1 },
   tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
   tileIcon: { width: 48, height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },

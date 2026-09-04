@@ -128,7 +128,10 @@ function LiveTvHomeScreenContent() {
     useCallback(() => {
       setPreferInitialFocus(true);
       const offKey = addTvKeyListener((key) => {
-        if (key === "LEFT" && leftEdgeFocusRef.current) focusIconRail();
+        if (key !== "LEFT") return;
+        const owner = leftEdgeFocusRef.current;
+        if (!owner) return;
+        focusIconRail(owner === "recent-first" ? firstRecentRef.current : heroButtonRef.current);
       });
       const timer = setTimeout(() => setPreferInitialFocus(false), 180);
       return () => {
