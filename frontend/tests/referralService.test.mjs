@@ -59,6 +59,7 @@ async function fixture() {
   database.exec(`
     CREATE TABLE users (
       id TEXT PRIMARY KEY,
+      role TEXT NOT NULL DEFAULT 'user',
       status TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       expires_at INTEGER,

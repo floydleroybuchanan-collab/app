@@ -1,4 +1,52 @@
-# CharmIPTV account referrals
+# CharmIPTV accounts, referrals and delegated administration
+
+## Owner administration update
+
+- The verified original owner is anchored by user ID in migration 0003.
+  Only that login can create staff, change permissions, reset staff passwords,
+  or grant unlimited viewer access. Owner-password confirmation is required for
+  every staff change. Administrator identities are disabled, not deleted.
+- Staff logins are panel-only. They do not confer unlimited viewer access.
+  Staff cannot modify any administrator through viewer-account routes.
+- Staff have independently selectable create/time/session/suspend/delete/reset/
+  logout/revoke/history/audit permissions; account scope defaults to their own
+  attributed viewers. The owner can explicitly permit all-viewer scope.
+- Duration is a resulting-remaining-time ceiling, not a per-click extension
+  allowance. Lifetime direct-account budget, open direct-account budget, pending
+  codes, sessions, and unused-code validity are independently bounded. Zero
+  creation budgets deny creation. Pending valid codes reserve capacity.
+- Creator attribution survives deleting invitation history. Anonymous creator
+  totals survive viewer deletion, but viewer identity/attribution does not.
+  Surviving historical invite records are backfilled; erased history is not guessed.
+- Timed family referrals use the earlier of the expiry saved at generation and
+  the inviter's current expiry at redemption. Expired, disabled, deleted, unlimited,
+  or administrator inviters cannot grant usable family referrals.
+- Unlimited viewer accounts remain owner-selectable, but have zero available
+  family-and-friend invites and cannot generate codes. Existing viewer timers
+  are not retroactively changed by the migration.
+- Registration and one-use claim/attribution/slot consumption are transactional.
+  Issuer permissions and expiry are checked again inside that transaction.
+- The panel in ../admin-panel has 25/50/100-row pagination, search, sort, status
+  and creator filters, owner-only Admins, scoped activity, and detailed controls.
+  It migrates an existing panel token to sessionStorage; no passwords are stored.
+
+### Deploying this update
+
+Back up D1 privately, rehearse 0003 on a local copy, and verify the complete users
+table is unchanged. Apply migrations/0003_owner_admin_controls.sql once to the
+existing database (0002 is already installed), then deploy account-backend and
+admin-panel. Verify exactly one anchored owner before deploying. Do not rerun
+0003 or restore an older database over newer user activity.
+
+Run node --test account-backend/test/accounts.test.mjs from the repository root,
+the frontend test suite, and Wrangler dry runs for both Workers before release.
+The dedicated account workflow tests and deploys both Workers; database migrations
+remain explicit, reviewed operations. No APK rebuild is needed for this update.
+Local UI fixtures are test/preview.mjs and must never be deployed.
+
+Deletion removes data from the live application database. Cloudflare recovery
+retention and private migration backups are separate from live data; do not
+promise immediate erasure from infrastructure backups.
 
 This directory contains the deployable `charmiptv-account-api` Worker, its
 additive D1 migration, and focused referral policy/service modules used by the

@@ -1,3 +1,4 @@
+import { referralAccess, policyError } from "./admin-policy.js";
 import {
   REFERRAL_ACTIVE_LIMIT,
   REFERRAL_LIMIT,
@@ -178,6 +179,9 @@ export async function buildReferralSummary(env, user, now) {
   const invitations = inviteResult.results || [];
   return {
     ...availability,
+    ...(user.role === "admin" || user.expires_at == null ? {
+      available: 0, generation_disabled_reason: "Family-and-friend invites are disabled for unlimited and administrator accounts.",
+    } : {}),
     active_accounts: invitations.filter((item) => item.status === "active").length,
     cycle_started_at: cycle.startedAt,
     renews_at: cycle.endsAt,
@@ -199,6 +203,10 @@ async function reserveSlot(env, tableName, userId, inviteId, slots) {
 }
 
 export async function createReferralInvitation(env, user, now) {
+  if (user.role === "admin" || user.expires_at == null)
+    throw policyError("Family-and-friend invites are disabled for unlimited and administrator accounts.");
+  if (user.status !== "active" || !Number.isSafeInteger(Number(user.expires_at)) || Number(user.expires_at) <= now)
+    throw policyError("Only an active timed account can generate an invitation.", 410);
   const state = await syncReferralSlots(env, user, now);
   if (referralAvailability(state.allowanceSlots, state.networkSlots).available < 1) {
     const error = new Error("You have no invitations available right now.");
@@ -276,10 +284,10 @@ export async function findReferralInvitation(env, inviteCode) {
 
 export async function consumeReferralInvitation(env, invitation, newUserId, now) {
   const owner = await env.DB.prepare(`
-    SELECT id, created_at, expires_at, max_sessions FROM users
+    SELECT id, role, status, created_at, expires_at, max_sessions FROM users
     WHERE id = ?1 AND status = 'active' LIMIT 1
   `).bind(invitation.owner_user_id).first();
-  if (!owner || (owner.expires_at != null && Number(owner.expires_at) <= now)) return false;
+  try { referralAccess(invitation, owner, now); } catch { return false; }
   await syncReferralSlots(env, owner, now);
   const claimed = await env.DB.prepare(`
     UPDATE referral_invites SET status = 'active', redeemed_by_user_id = ?2, redeemed_at = ?3

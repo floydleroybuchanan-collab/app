@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="api" content="https://charmiptv-account-api.agentleakage.workers.dev">
+  <title>CharmIPTV · Account control</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/panel.js" defer></script>
+</head>
+<body>
+  <section id="login" class="login">
+    <form id="loginForm" class="card login-card">
+      <p class="eyebrow">CHARMIPTV</p><h1>Account control</h1>
+      <p class="muted">Sign in to your administrator account.</p>
+      <label>Username or email<input name="login" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Sign in</button>
+      <p id="loginError" role="alert"></p>
+    </form>
+  </section>
+  <div id="app" hidden>
+    <header><div><p class="eyebrow">CHARMIPTV</p><strong>Account control</strong></div><div class="header-right"><span id="identity"></span><button id="logout">Sign out</button></div></header>
+    <div class="layout">
+      <nav id="nav" aria-label="Administration">
+        <button data-view="dashboard">Overview</button>
+        <button data-view="users">Users</button>
+        <button data-view="create" data-permission="can_create_invites">Create invitation</button>
+        <button data-view="invites">Invitations</button>
+        <button data-view="admins" id="adminsTab">Admins · owner only</button>
+        <button data-view="activity" data-permission="can_view_audit">Activity</button>
+      </nav>
+      <main><div id="notice" role="status" aria-live="polite"></div><section id="content" aria-live="polite"></section></main>
+    </div>
+  </div>
+  <dialog id="dialog"><button id="closeDialog" class="close" aria-label="Close dialog">✕</button><div id="dialogBody"></div><p id="dialogError" role="alert"></p></dialog>
+</body>
+</html>

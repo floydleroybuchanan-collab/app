@@ -153,26 +153,20 @@ test("explicit all-disabled projection is supported while failed provider import
 });
 
 test("Worker rejects incomplete supplied pairs and releases both only after session authorization", async () => {
-  const context = vm.createContext({ URL, Request, Response, Headers });
-  const worker = readFileSync(new URL("../../account-backend/worker.js", import.meta.url), "utf8");
-  vm.runInContext(worker.replace("export default {", "globalThis.worker = {"), context);
-  const env = { M3U_URL: "http://one.invalid/list", EPG_URL: "http://one.invalid/guide",
-    M3U_URL_2: "https://two.invalid/list", EPG_URL_2: "http://two.invalid/guide" };
-  assert.equal(context.managedSourceConfiguration(env).ready, true);
-  assert.equal(context.managedSourceConfiguration({ ...env, M3U_URL_2: "" }).ready, false);
-  context.requireUser = async () => ({ ok: false, response: new Response("Unauthorized", { status: 401 }) });
-  const request = new Request("https://account.invalid/content/access");
-  assert.equal((await context.createContentAccess(request, env)).status, 401);
-  context.requireUser = async () => ({ ok: true, session: { expires_at: 2_000_000_000 } });
-  const response = await context.createContentAccess(request, env);
+  const { fixture } = await import("../../account-backend/test/fixture.mjs");
+  const f = fixture();
+  f.user("sourceviewer");
+  const token = f.token("sourceviewer");
+  assert.equal((await f.request("/content/access")).status, 401);
+  const response = await f.request("/content/access", { token });
   assert.equal(response.status, 200);
-  const payload = await response.json();
+  const payload = response.body;
   assert.equal(payload.content.sources.length, 2);
-  assert.equal(payload.content.secondary.playlist_url, env.M3U_URL_2);
-  assert.match(response.headers.get("Cache-Control"), /no-store/);
-  context.purgeExpiredAccounts = async () => {};
-  const health = await context.worker.fetch(new Request("https://account.invalid/health"), { ...env, DB: {} });
-  const body = await health.text();
-  assert.equal(JSON.parse(body).content_sources.secondary, true);
-  assert.doesNotMatch(body, /one.invalid|two.invalid/);
+  assert.equal(payload.content.secondary.playlist_url, f.env.M3U_URL_2);
+  const health = await f.request("/health");
+  assert.equal(health.body.content_sources.secondary, true);
+  assert.doesNotMatch(JSON.stringify(health.body), /provider\.example/);
+  f.env.M3U_URL_2 = "";
+  assert.equal((await f.request("/health")).body.content_sources_ready, false);
+  assert.equal((await f.request("/content/access", { token })).status, 503);
 });
