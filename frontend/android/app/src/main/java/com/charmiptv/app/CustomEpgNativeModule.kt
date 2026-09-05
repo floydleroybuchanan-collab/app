@@ -21,7 +21,11 @@ import java.util.zip.GZIPInputStream
 class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
   private val userDatabase = CustomEpgStoreRegistry.database(reactContext, USER_SOURCE_ID)
   private val controlDao = EpgControlDatabase.get(reactContext).dao()
-  private val executor = Executors.newSingleThreadExecutor()
+  private val executor = Executors.newSingleThreadExecutor { task ->
+    Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); task.run() }, "charm-custom-epg-import")
+  }
+  // Directory, health and search reads must not wait behind network/XML import.
+  private val queryExecutor = Executors.newFixedThreadPool(2)
   private val policyPrefs = reactContext.getSharedPreferences(POLICY_PREFS, Context.MODE_PRIVATE)
 
   override fun getName(): String = "CharmCustomEpg"
@@ -102,7 +106,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (t: Throwable) { promise.reject("CUSTOM_EPG_BINDING_FAILED", t.message ?: "Could not update custom Guide assignment", t) }
   }}
 
-  @ReactMethod fun listUserGuideChannels(query: String, offset: Double, limit: Double, promise: Promise) { executor.execute {
+  @ReactMethod fun listUserGuideChannels(query: String, offset: Double, limit: Double, promise: Promise) { queryExecutor.execute {
     try {
       val page = userDatabase.listDisplayNameAliases(query, offset.toInt().coerceAtLeast(0), limit.toInt().coerceIn(1, 100))
       val rows = Arguments.createArray(); for (row in page.rows) rows.pushMap(Arguments.createMap().apply { putString("id", row.channelId); putString("name", row.displayName) })
@@ -110,7 +114,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (t: Throwable) { promise.reject("CUSTOM_EPG_DIRECTORY_FAILED", t.message ?: "Could not read custom Guide channels", t) }
   }}
 
-  @ReactMethod fun listSourceGuideChannels(sourceId: String, query: String, offset: Double, limit: Double, promise: Promise) { executor.execute {
+  @ReactMethod fun listSourceGuideChannels(sourceId: String, query: String, offset: Double, limit: Double, promise: Promise) { queryExecutor.execute {
     try {
       val page = CustomEpgStoreRegistry.database(reactContext, sourceId).listDisplayNameAliases(query, offset.toInt().coerceAtLeast(0), limit.toInt().coerceIn(1, 100))
       val rows = Arguments.createArray(); for (row in page.rows) rows.pushMap(Arguments.createMap().apply { putString("id", row.channelId); putString("name", row.displayName) })
@@ -118,7 +122,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (t: Throwable) { promise.reject("CUSTOM_EPG_DIRECTORY_FAILED", t.message ?: "Could not read custom Guide channels", t) }
   }}
 
-  @ReactMethod fun searchSourceProgrammes(sourceId: String, query: String, limit: Double, promise: Promise) { executor.execute {
+  @ReactMethod fun searchSourceProgrammes(sourceId: String, query: String, limit: Double, promise: Promise) { queryExecutor.execute {
     try {
       val source = CustomEpgStoreRegistry.normalizeSourceId(sourceId)
       val safeLimit = limit.toInt().coerceIn(1, 80)
@@ -160,7 +164,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod fun refreshUserGuide(url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(USER_SOURCE_ID, url, promise) } }
   @ReactMethod fun refreshSourceGuide(sourceId: String, url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(sourceId, url, promise) } }
 
-  @ReactMethod fun getPlaylistGuideHealth(groups: ReadableArray, promise: Promise) { executor.execute {
+  @ReactMethod fun getPlaylistGuideHealth(groups: ReadableArray, promise: Promise) { queryExecutor.execute {
     try {
       // EpgNativeModule stores the managed source under `default`. Keep health
       // reporting on the same identifier used by imports and Guide queries.
@@ -410,7 +414,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (_: Throwable) { 0L }
   }
 
-  override fun invalidate() { executor.shutdownNow(); CustomEpgStoreRegistry.closeAll(); super.invalidate() }
+  override fun invalidate() { executor.shutdownNow(); queryExecutor.shutdownNow(); CustomEpgStoreRegistry.closeAll(); super.invalidate() }
   private class BoundedInputStream(input: InputStream, private val maxBytes: Long) : FilterInputStream(input) { private var bytesRead=0L; private fun account(count:Int):Int { if(count<=0)return count; bytesRead+=count.toLong(); if(bytesRead>maxBytes)throw IllegalStateException("Custom EPG exceeds size safety limit"); return count }; override fun read():Int { val value=super.read(); if(value>=0)account(1); return value }; override fun read(buffer:ByteArray,offset:Int,length:Int):Int=account(super.read(buffer,offset,length)) }
   companion object { private const val USER_SOURCE_ID="user"; private const val POLICY_PREFS="charm_epg_custom_policy"; private const val POLICY_PAST_DAYS="past_days"; private const val BATCH_SIZE=1000; private const val NETWORK_BUFFER_SIZE=64*1024; private const val MAX_HTTP_REDIRECTS=6; private const val MAX_COMPRESSED_EPG_BYTES=256L*1024L*1024L; private const val MAX_DECOMPRESSED_EPG_BYTES=1024L*1024L*1024L; private const val MAX_PROGRAMME_COUNT=2_000_000L; private const val DAY_MS=24L*60L*60L*1000L; private const val GUIDE_WINDOW_MS=72L*60L*60L*1000L; private const val DEFAULT_PROGRAMME_DURATION_MS=30L*60L*1000L; private const val MAX_PROGRAMME_DURATION_MS=24L*60L*60L*1000L }
 }

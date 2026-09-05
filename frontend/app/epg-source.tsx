@@ -3,7 +3,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
-import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useStore } from "@/src/store";
@@ -152,8 +151,8 @@ export default function EpgSourceScreen() {
   };
   return <PurpleTvShell active="/settings"><View style={styles.page}>
     <View style={styles.header}><Text style={styles.title}>Saved EPG source</Text><Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
-    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
-      <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
+    <View style={styles.scrollWrap}>
+      <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
       <View style={styles.card}><Text style={styles.cardTitle}>Source settings</Text>
         <TextInput value={draft.name} onChangeText={(name) => setDraft((value) => ({ ...value, name }))} placeholder="Source name" placeholderTextColor={tvColors.textMuted} style={styles.input} />
         <TextInput secureTextEntry editable={!suppliedSource} value={suppliedSource ? "Supplied by CharmIPTV" : draft.url} onChangeText={(url) => setDraft((value) => ({ ...value, url }))} placeholder="https://server/guide.xml.gz" placeholderTextColor={tvColors.textMuted} autoCapitalize="none" autoCorrect={false} style={styles.input} />
@@ -175,7 +174,7 @@ export default function EpgSourceScreen() {
       </View> : null}
       {message ? <Text style={styles.status}>{message}</Text> : null}
       </ScrollView>
-    </FocusGuide>
+    </View>
   </View>
   {selectedChannel ? (
     <EpgChannelAssignDrawer

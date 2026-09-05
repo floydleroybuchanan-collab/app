@@ -194,13 +194,13 @@ test("Live preview has an explicit D-pad bridge into the recent channel list", a
   assert.match(live, /ref=\{inputRef as any\}/);
 });
 
-test("automatic refresh stays away from guide and player screens", async () => {
+test("automatic refresh waits for surfing to settle and avoids starting during fullscreen playback", async () => {
   const [scheduler, preferences] = await Promise.all([
     source("src/components/SourceRefreshScheduler.tsx"),
     source("src/core/sourceRefreshPreferences.ts"),
   ]);
-  assert.match(scheduler, /pathname\?\.startsWith\("\/guide"\)/);
-  assert.match(scheduler, /pathname\?\.startsWith\("\/player"\)/);
+  assert.doesNotMatch(scheduler, /pathname(?:Ref.current)?\?\.startsWith\("\/guide"\)/);
+  assert.match(scheduler, /pathnameRef.current\?\.startsWith\("\/player"\)/);
   assert.match(scheduler, /isGuideSurfing\(\)/);
   assert.match(preferences, /playlistHours: 24/);
   assert.match(preferences, /epgHours: 6/);
@@ -241,7 +241,8 @@ test("EPG and playlist controls live only on the dedicated EPG settings page", a
   assert.doesNotMatch(epg, /<Pressable disabled=\{disabled\}/);
   assert.match(epg, /accessibilityState=\{\{ busy: Boolean\(disabled\) \}\}/);
   assert.match(epg, /<ScrollView/);
-  assert.match(epg, /<FocusGuide/);
+  assert.match(epg, /<PurpleTvShell/);
+  assert.doesNotMatch(epg, /<FocusGuide[^>]*trapFocusUp/);
   assert.match(epg, /hasTVPreferredFocus=\{entryFocus.preferredFocus\}/);
   assert.match(epg, /scrollRef\.current\?\.scrollTo\(\{ y: 0, animated: false \}\)/);
   assert.match(epg, /nestedScrollEnabled/);

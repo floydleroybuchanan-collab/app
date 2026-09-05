@@ -159,7 +159,9 @@ test("rail focus returns to content and no-information Guide cells remain playab
   assert.doesNotMatch(shell, /getIconRailReturnTarget/);
   assert.match(live, /focusIconRail\(\)/);
   assert.match(activity, /onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT/);
-  assert.match(activity, /visible\(next\).*within\(next, page\).*requestFocus\(\)/);
+  assert.match(activity, /visible\(view\)[\s\S]*?within\(view, page\)/);
+  assert.match(activity, /TvFocusTraversal.transfer/);
+  assert.match(activity, /usable\(currentFocus\)/);
   assert.match(activity, /emitRemoteEvent\("CharmIconRailOpenMain", root.id.toString\(\)\)/);
   assert.match(shell, /Number\(tag\) !== findNodeHandle\(shellRef.current\)/);
   assert.match(canvas, /else if \(value\.surface !== "channel"\) onChannelPress\(channel\)/);

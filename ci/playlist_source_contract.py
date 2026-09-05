@@ -5,15 +5,17 @@ The source.native snapshot includes the reviewed RC.6 optional-source repair:
 authenticated managed-content handoff, independent guide refresh, preserved
 disable choices and explicitly empty enabled-catalog projections. HTTP/HTTPS
 provider transport remains direct. See docs/rc6-source-focus-audit.md.
+The follow-up reviewed scheduler/primary-parser repair is documented in
+docs/rc6-build163-regression-repair.md; it does not change provider transport.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': '4da8e293af539342e178b3f115d679566521bc97e24ae5ce56dc00125ba81da4',
+    'frontend/src/source.native.ts': '3b2f4c1e1aedbad8966e28712a1610a5348c85944bd7e3b8ed558afcc459bc35',
     'frontend/src/nativeEpg.ts': 'caa2c548a16b96563dcc32a4b7b34e02589302009482d683b0f179097b4f739e',
-    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'eec2d6a4dbcc5300c586fa7a63f474d6bb0afe8dcd0999843695b0a7840d288e',
+    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'c5d610ce625af16df4333a4972bc3370ebb236cc0232ab844fdf9b787526ff48',
 }
 
 def is_reviewed_playlist_transport(path: str, source: str) -> bool:

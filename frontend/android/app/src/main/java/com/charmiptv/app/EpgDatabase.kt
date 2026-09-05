@@ -46,6 +46,12 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
 
   private val appContext = context.applicationContext
 
+  init {
+    // Configure Android's connection pool, not only SQLite's journal pragma.
+    // Read-only guide queries can then use a separate connection during import.
+    setWriteAheadLoggingEnabled(true)
+  }
+
   fun assertRefreshStorageAvailable(declaredCompressedBytes: Long = -1L) {
     val dbFile = appContext.getDatabasePath(databaseName)
     val currentBytes = listOf(dbFile, java.io.File(dbFile.path + "-wal"), java.io.File(dbFile.path + "-shm")).sumOf { if (it.exists()) it.length() else 0L }
@@ -229,7 +235,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
 
   private fun insertBatch(db: SQLiteDatabase, table: String, batch: List<NativeEpgProgram>) {
     if (batch.isEmpty()) return
-    db.beginTransaction()
+    db.beginTransactionNonExclusive()
     try {
       val statement = db.compileStatement("INSERT INTO $table(channel_id, title, description, category, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)")
       try {
@@ -256,7 +262,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
 
   fun inferMissingStopsFromNextProgram(defaultDurationMs: Long, maxDurationMs: Long) {
     val db = writableDatabase
-    db.beginTransaction()
+    db.beginTransactionNonExclusive()
     try {
       createStopUpdateTable(db)
       db.delete(STOP_UPDATE_TABLE, null, null)
@@ -497,7 +503,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
 
   fun replaceBatches(batches: Sequence<List<NativeEpgProgram>>, beforeSwap: (() -> Unit)? = null) {
     val db = writableDatabase
-    db.beginTransaction()
+    db.beginTransactionNonExclusive()
     try { db.delete(STAGING_TABLE, null, null); db.setTransactionSuccessful() } finally { db.endTransaction() }
     try {
       var batchNumber = 0
@@ -515,7 +521,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
       inferMissingStopsFromNextProgram(DEFAULT_PROGRAMME_DURATION_MS, MAX_PROGRAMME_DURATION_MS)
       beforeSwap?.invoke()
       if (interactiveTvOwnsPriority()) Thread.yield()
-      db.beginTransaction()
+      db.beginTransactionNonExclusive()
       try {
         db.delete(LIVE_TABLE, null, null)
         db.execSQL("INSERT INTO $LIVE_TABLE(channel_id,title,description,category,start_time,end_time) SELECT channel_id,title,description,category,start_time,end_time FROM $STAGING_TABLE")
@@ -525,7 +531,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
       } finally { db.endTransaction() }
     } catch (failure: Throwable) {
       try {
-        db.beginTransaction()
+        db.beginTransactionNonExclusive()
         try { db.delete(STAGING_TABLE, null, null); db.setTransactionSuccessful() } finally { db.endTransaction() }
         runPragma(db, "PRAGMA wal_checkpoint(PASSIVE)")
       } catch (_: Throwable) {}

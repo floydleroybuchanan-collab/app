@@ -16,6 +16,7 @@ import android.content.Context
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
+import com.facebook.react.views.view.ReactViewGroup
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
@@ -40,9 +41,15 @@ class MainActivity : ReactActivity() {
     return false
   }
 
-  private fun visible(view: View?): Boolean =
-    view != null && view.isAttachedToWindow && view.isShown &&
-      view.alpha > 0f && view.getGlobalVisibleRect(Rect())
+  private fun visible(view: View?): Boolean {
+    if (view == null || !view.isAttachedToWindow || !view.isShown || !view.getGlobalVisibleRect(Rect())) return false
+    var ancestor: View? = view
+    while (ancestor != null) {
+      if (ancestor.alpha <= 0f) return false
+      ancestor = ancestor.parent as? View
+    }
+    return true
+  }
 
   private fun findTagged(view: View, id: String): View? {
     if (testId(view) == id && visible(view)) return view
@@ -55,11 +62,23 @@ class MainActivity : ReactActivity() {
   private fun focusContentFromRail(root: View, rail: View, focus: View): Boolean {
     val page = findTagged(root, "phase9-guide-groups-drawer") ?: findTagged(root, "purple-tv-page") ?: return false
     val next = focus.focusSearch(View.FOCUS_RIGHT)
-    if (next !== page && visible(next) && within(next, page) && next!!.requestFocus() &&
-        currentFocus?.let { within(it, page) && !within(it, rail) } == true) return true
-    val target = page.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== page && visible(it) && it.isEnabled }
-    if (target?.requestFocus() != true) return false
-    return currentFocus?.let { within(it, page) && !within(it, rail) } == true
+    fun usable(view: View?): Boolean = view != null && view !== page && visible(view) &&
+      view.isEnabled && view.isFocusable && within(view, page) && !within(view, rail) &&
+      !(view is ReactViewGroup && view.isTVFocusGuide) &&
+      view !is android.widget.ScrollView && view !is android.widget.HorizontalScrollView
+    // RN TV autoFocus guides expose only themselves to getFocusables() when
+    // focus is outside. Walk mounted children instead of accepting that sentinel
+    // or restoring a clipped, previously focused descendant behind the viewport.
+    val targets = TvFocusTraversal.targets(page, { view ->
+      if (!visible(view) || (view is ViewGroup && view.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS)) emptyList()
+      else if (view is ViewGroup) (0 until view.childCount).map(view::getChildAt) else emptyList()
+    }, ::usable)
+    return TvFocusTraversal.transfer(
+      listOfNotNull(next?.takeIf(::usable)) + targets,
+      { it.requestFocus(View.FOCUS_RIGHT) },
+      { usable(currentFocus) },
+      { focus.requestFocus() },
+    )
   }
 
   /** UI-thread precondition for removing a rail: it cannot retain focus. */
@@ -85,6 +104,8 @@ class MainActivity : ReactActivity() {
       emitRemoteEvent("CharmShellInteraction", root.id.toString())
     }
     val key = event.keyCode
+    if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT &&
+        key != android.view.KeyEvent.KEYCODE_DPAD_RIGHT && key != android.view.KeyEvent.KEYCODE_BACK) return false
     val rail = findTagged(root, "purple-icon-rail")
     if (rail == null) {
       // NativeGuideView handles its own timeline/channel-column boundary.

@@ -47,7 +47,7 @@ export function requestNativeFocusWithRetry(
           cancel();
           return;
         }
-        const invoked = requestNativeFocus(node);
+        const invoked = requestNativeFocus(typeof node === "function" ? node() : node);
         // Legacy call sites have no onFocus confirmation callback, so preserve
         // their one-shot behavior. Route-entry owners keep retrying until their
         // actual onFocus handler confirms ownership or cancels on route blur.

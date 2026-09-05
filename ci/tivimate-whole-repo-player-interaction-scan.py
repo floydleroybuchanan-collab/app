@@ -367,13 +367,22 @@ for path in current_files:
             critical.append(f"heavy refresh work leaked into background worker: {rel}: {risky}")
 
 scheduler = read_file(ROOT / "src/components/SourceRefreshScheduler.tsx")
+# APK #163 regression repair permits due-only work on an idle Guide. Blocking
+# every Guide visit starved refreshes; rapid surfing and fullscreen still gate
+# new work. Runtime timer/navigation coverage lives in epg163Regression.test.mjs.
 for required in (
-    '!pathname?.startsWith("/guide")',
-    '!pathname?.startsWith("/player")',
+    '!pathnameRef.current?.startsWith("/player")',
     '!isGuideSurfing()',
+    'if (!screenIsSafe() || running || Date.now() < automaticRefreshEligibleAt) return;',
 ):
     if required not in scheduler:
         critical.append(f"foreground source scheduler can compete with playback: {required}")
+for module in ("EpgNativeModule.kt", "CustomEpgNativeModule.kt"):
+    parser = read_file(ROOT / "android/app/src/main/java/com/charmiptv/app" / module)
+    if "setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)" not in parser:
+        critical.append(f"guide import lost background CPU priority: {module}")
+    if "EPG refresh deferred for active TV interaction" in parser:
+        critical.append(f"page navigation still aborts an accepted XMLTV import: {module}")
 
 main_activity = read_file(ROOT / "android/app/src/main/java/com/charmiptv/app/MainActivity.kt")
 for required in (

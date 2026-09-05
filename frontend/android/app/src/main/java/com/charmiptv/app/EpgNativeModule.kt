@@ -39,7 +39,9 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   // Refresh/network/XML work is intentionally isolated from guide reads. A slow
   // EPG download must never queue bounded Guide reads behind it; WAL lets the
   // query executor keep serving the last-good live table until the final swap.
-  private val refreshExecutor = Executors.newSingleThreadExecutor()
+  private val refreshExecutor = Executors.newSingleThreadExecutor { task ->
+    Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); task.run() }, "charm-primary-epg-import")
+  }
   private val playlistExecutor = Executors.newSingleThreadExecutor()
   private val queryExecutor = Executors.newFixedThreadPool(2)
   @Volatile private var guideHistoryMs = DEFAULT_GUIDE_HISTORY_MS
@@ -954,10 +956,10 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
             "programme" -> {
               rawProgrammeCount += 1L
               if ((rawProgrammeCount and 0x1ffL) == 0L) {
-                val owner = TvRemoteModule.remoteContext
-                if (owner == "guide" || owner == "player" || owner == "modal") {
-                  throw IllegalStateException("EPG refresh deferred for active TV interaction")
-                }
+                // A page change is not an import failure. Finish the staging
+                // transaction at background priority and preserve normal reads.
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("Guide import stopped")
+                Thread.yield()
               }
               if (rawProgrammeCount % PROGRESS_PROGRAMME_INTERVAL == 0L) {
                 val workRatio = 1.0 - exp(-rawProgrammeCount.toDouble() / PROGRESS_PROGRAMME_SCALE)

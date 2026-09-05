@@ -73,6 +73,32 @@ test("TV Pressables use the installed TV ViewManager command, not TextInputState
   assert.equal(api.requestNativeFocus(null), false);
 });
 
+test("a completed additional guide is published before a later slow source finishes", async () => {
+  const events = [];
+  let release;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const sources = ["first", "slow"].map(id => ({ id, url: `http://${id}.invalid/guide`, enabled: true, refreshHours: 12 }));
+  const api = load("src/core/playlistEpg.ts", {
+    "./playlistEpgDiscovery": { discoverPlaylistEpg: async () => {} },
+    "./additionalEpgOwnership": { replaceAutomaticEpgOwners() {} },
+    "./playlistRegistry": { listPlaylists: async () => [{ id: "one", enabled: true, epgSourceIds: ["first", "slow"] }] },
+    "./playlistCatalog": catalog,
+    "./multiEpgSources": { getMultiEpgSources: async () => sources, updateMultiEpgRefreshStatus() {} },
+    "./epgSourcePreferences": { getEpgSourcePreferences: async () => ({ primaryEnabled: false, userEnabled: false, userUrl: "" }) },
+    "@/src/auth/managedContentAccess": { managedEpgUrl: () => "" },
+    "@/src/nativeEpg": {
+      configureNativeUserGuideSources: async () => {},
+      replaceAutomaticPlaylistBindings: async () => events.push("bindings"),
+      refreshAssociatedPlaylistGuide: async id => { events.push(id); if (id === "slow") await waiting; return { count: 2 }; },
+    },
+  });
+  const pending = api.syncPlaylistEpg([{ id: "station", playlist_id: "one", raw_tvg_id: "station", name: "Station" }], true, undefined, () => events.push("published"));
+  for (let i = 0; i < 50; i++) await Promise.resolve();
+  assert.deepEqual(events, ["bindings", "first", "bindings", "published", "slow"]);
+  release(); await pending;
+  assert.deepEqual(events.slice(-2), ["bindings", "published"]);
+});
+
 test("late EPG completion preserves new settings and cannot recreate a removed source", async () => {
   const initial = { id: "personal-guide", name: "Original", url: "https://guide.invalid/one", enabled: true,
     refreshHours: 12, lastRefreshAt: 1, lastStatus: "Old", overrides: {} };

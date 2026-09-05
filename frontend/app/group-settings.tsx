@@ -4,7 +4,6 @@ import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTex
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
-import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { useStore } from "@/src/store";
 import { useCustomGuideGroups } from "@/src/core/customGuideGroups";
 import { CURATED_GROUPS, SMART_GROUPS } from "@/src/core/guideGroups";
@@ -188,8 +187,8 @@ export default function GroupSettingsScreen() {
           </Pressable>
         </View>
 
-        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
-          <ScrollView ref={scrollRef} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
+        <View style={styles.scrollWrap}>
+          <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Playlist groups</Text>
             <Text style={styles.help}>TiViMate-style metadata: provider names stay untouched for playlist matching while your display name, visibility, and order are saved separately.</Text>
@@ -288,7 +287,7 @@ export default function GroupSettingsScreen() {
             </View>
           ) : null}
           </ScrollView>
-        </FocusGuide>
+        </View>
       </View>
     </PurpleTvShell>
   );

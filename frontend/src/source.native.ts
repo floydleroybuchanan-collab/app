@@ -559,14 +559,9 @@ function disarmProgressStallWatchdog(): void {
 function onProgressStalled(): void {
   progressStallTimer = null;
   if (progress.phase === "ready" || progress.phase === "error") return;
-  const message = "Guide refresh stalled — showing saved Guide where available";
-  lastSourceError = message;
-  if (MEM) {
-    MEM = { ...MEM, epgError: message };
-    void persistMeta(MEM).catch(() => undefined);
-    emit();
-  }
-  setProgress({ phase: "error", ratio: 0, etaSeconds: null, message }, true);
+  // A long provider response or SQLite index operation is not a failed job.
+  // Only an actual rejected import may publish/persist an EPG error.
+  setProgress({ message: "Guide update is taking longer; still working. Saved guide remains available." }, true);
 }
 
 function setProgress(next: Partial<EpgProgress>, force = false): void {
@@ -835,6 +830,8 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
     }
 
     lastSourceError = null;
+    if (MEM) MEM = { ...MEM, epgError: undefined };
+    emit();
     let channels = cached?.channels || [];
     try {
       setProgress({ phase: "channels", ratio: 0.05, etaSeconds: null }, true);
@@ -864,7 +861,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       emit();
 
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
-      await syncPlaylistEpg(channels, true);
+      await syncPlaylistEpg(channels, true, undefined, invalidateGuideOwnershipCaches);
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
       // The custom source manager performs a deliberate full XMLTV index when
@@ -1017,6 +1014,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
     return await refreshPromise;
   } finally {
     refreshPromise = null;
+    emit();
   }
 }
 
@@ -1310,7 +1308,7 @@ async function publishPlaylistCatalog(refreshId?: string): Promise<void> {
   clearProgrammeWindowCache(); clearGuidePrograms(); emit();
 }
 
-/** Check persisted independent playlist/EPG clocks and refresh only what is due. */
+/** Scheduler already checked playlists; do not reload unchanged catalogs here. */
 export async function refreshSourcesIfDue(): Promise<SourceStatus> {
   if (refreshPromise) {
     await refreshPromise;
@@ -1320,13 +1318,12 @@ export async function refreshSourcesIfDue(): Promise<SourceStatus> {
   const cached = MEM || (await readChannelCache());
   if (!cached?.channels?.length) return sourceStatus();
   MEM = cached;
-  await refreshPlaylists(undefined, true);
-  await reloadPlaylistCatalog();
   const prefs = await getSourceRefreshPreferences();
   const now = Date.now();
   const guideLast = cached.guideRefreshedAt != null ? cached.guideRefreshedAt : cached.ts;
   if (isRefreshDue(guideLast, prefs.epgHours, now)) {
-    return refreshEpgOnly();
+    // Additional feeds use their own due clocks in SourceRefreshScheduler.
+    return refreshEpgOnly(false);
   }
   return sourceStatus();
 }
@@ -1357,10 +1354,13 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
 
   refreshPromise = (async () => {
     lastSourceError = null;
+    if (MEM) MEM = { ...MEM, epgError: undefined };
+    emit();
+    setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
     try {
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
       await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
-      await syncPlaylistEpg(cached.channels, includeAdditional);
+      await syncPlaylistEpg(cached.channels, includeAdditional, undefined, invalidateGuideOwnershipCaches);
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
 
@@ -1510,6 +1510,7 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
     await refreshPromise;
   } finally {
     refreshPromise = null;
+    emit();
   }
   return sourceStatus();
 }

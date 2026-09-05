@@ -6,7 +6,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import dayjs from "dayjs";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
-import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { clearChannelLogoCache } from "@/src/components/ChannelLogo";
 import { useStore, type EpgGuideFilter, type GuideWindowHours } from "@/src/store";
 import { clearGuideCache, refreshSource, sourceDiagnostics, sourceStatus, subscribeSource, type SourceDiagnostics } from "@/src/source";
@@ -23,7 +22,7 @@ import { createCustomEpgSourceId, useMultiEpgSources } from "@/src/core/multiEpg
 import { fonts, radius, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { readPlaylistGuideHealth, refreshEveryGuide, refreshEveryPlaylistAndGuide, refreshEveryPlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
-import { readNativeUpdateDiagnostics, type NativeUpdateDiagnostics } from "@/src/nativeEpg";
+import { nativeEpgAvailable, readNativeUpdateDiagnostics, type NativeUpdateDiagnostics } from "@/src/nativeEpg";
 import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
@@ -78,8 +77,22 @@ function EpgSourcesScreenContent() {
     load();
     return subscribeSource(load);
   }, [load]);
-  useEffect(() => { void readPlaylistGuideHealth(channels).then(setPlaylistHealth).catch(() => setPlaylistHealth([])); }, [channels, status.last_refresh]);
-  useEffect(() => { void readNativeUpdateDiagnostics().then(setUpdateDiagnostics).catch(() => setUpdateDiagnostics({ states: [], history: [] })); }, [status.last_refresh, actionStatus]);
+  useEffect(() => {
+    let alive = true;
+    let reading = false;
+    const readHealth = async () => {
+      if (reading) return;
+      reading = true;
+      try {
+        const [health, updates] = await Promise.all([readPlaylistGuideHealth(channels), readNativeUpdateDiagnostics()]);
+        if (alive) { setPlaylistHealth(health); setUpdateDiagnostics(updates); }
+      } catch { /* Keep the last observed health while a query is unavailable. */ }
+      finally { reading = false; }
+    };
+    void readHealth();
+    const timer = status.refreshing ? setInterval(() => void readHealth(), 5_000) : null;
+    return () => { alive = false; if (timer) clearInterval(timer); };
+  }, [channels, status.last_refresh, status.refreshing, status.error, multiEpg.sources]);
 
   const runAction = useCallback(async (kind: Exclude<ActiveAction, null>, message: string, action: () => Promise<string>) => {
     if (operationInFlight.current) return;
@@ -154,6 +167,9 @@ function EpgSourcesScreenContent() {
   ];
 
   const timeFormat = clock24h ? "MMM D, HH:mm" : "MMM D, h:mm A";
+  const indexedChannelCount = playlistHealth.length ? playlistHealth.reduce((sum, item) => sum + item.indexedChannels, 0) : status.channels_with_epg || 0;
+  const matchedChannelCount = playlistHealth.length ? playlistHealth.reduce((sum, item) => sum + item.matched, 0) : diagnostics?.matchQuality?.matched;
+  const unmatchedChannelCount = playlistHealth.length ? playlistHealth.reduce((sum, item) => sum + item.unmatched, 0) : diagnostics?.matchQuality?.unmatched;
 
   return (
     <PurpleTvShell active="/settings">
@@ -164,9 +180,13 @@ function EpgSourcesScreenContent() {
             <Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>All Settings</Text>
           </Pressable>
         </View>
-        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
+        {/* The shell owns the page-wide focus boundary, including All Settings.
+            A nested upward trap here prevents returning to the fixed header. */}
+        <View style={styles.scrollWrap}>
           <ScrollView
             ref={scrollRef}
+            removeClippedSubviews={false}
+            focusable={false}
             scrollEnabled
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
@@ -174,14 +194,14 @@ function EpgSourcesScreenContent() {
             contentContainerStyle={styles.content}
           >
             <Card title="Sources" icon="server-outline">
-              <SourceRow title="Primary XMLTV Guide" subtitle="Managed by CharmIPTV · locked source" status={!epgOwnership.primaryEnabled ? "Disabled" : status.error ? "Guide error — see below" : "Active"} />
+              <SourceRow title="Primary XMLTV Guide" subtitle="Managed by CharmIPTV · locked source" status={!epgOwnership.primaryEnabled ? "Disabled" : status.refreshing ? "Updating…" : status.error ? "Last update failed — see below" : "Active"} />
               <SourceRow title={epgOwnership.userName} subtitle="Saved custom XMLTV source · select for settings" status={!epgOwnership.userEnabled ? "Disabled" : epgOwnership.userUrl ? `${Object.keys(epgOwnership.userOverrides).length} assigned channels` : "Enabled · URL required"} onPress={() => router.push("/epg-custom" as any)} />
               {multiEpg.sources.map((source) => (
                 <SourceRow key={source.id} title={source.name} subtitle="Independent custom XMLTV source · select for settings" status={!source.enabled ? "Disabled" : source.url ? `${Object.keys(source.overrides).length} assigned channels` : "Enabled · URL required"} onPress={() => router.push({ pathname: "/epg-source" as any, params: { sourceId: source.id } })} />
               ))}
               {multiEpg.canAdd ? <Action label="Add another EPG source" icon="add-circle-outline" onPress={() => router.push({ pathname: "/epg-source" as any, params: { sourceId: createCustomEpgSourceId(), create: "1" } })} /> : null}
               <SourceRow title="Playlist Channel Map" subtitle="Managed by CharmIPTV · locked source" status={`${status.channel_count || 0} channels`} />
-              <SourceRow title="Native EPG Cache" subtitle="Streamed XMLTV on-device (Android)" status={status.error ? "Unavailable" : `${diagnostics?.programs || 0} cached programs`} />
+              <SourceRow title="Native EPG Cache" subtitle="Saved guide statistics · per-playlist coverage shown under Source Health" status={!nativeEpgAvailable ? "Engine unavailable" : `${diagnostics?.programs || 0} last-reported programs`} />
             </Card>
             <Card title="Guide Data" icon="calendar-outline">
               <ChoiceRow<string>
@@ -234,11 +254,11 @@ function EpgSourcesScreenContent() {
             </Card>
             <Card title="Source Health" icon="pulse-outline">
               <Info label="Channels" value={String(channels.length)} />
-              <Info label="Channels with EPG" value={String(status.channels_with_epg || 0)} />
-              <Info label="Matched" value={String(diagnostics?.matchQuality?.matched ?? "—")} />
+              <Info label="Channels with EPG" value={String(indexedChannelCount)} />
+              <Info label="Matched" value={String(matchedChannelCount ?? "Checking…")} />
               <Info label="Ambiguous" value={String(diagnostics?.matchQuality?.ambiguous ?? "—")} />
-              <Info label="Unmatched" value={String(diagnostics?.matchQuality?.unmatched ?? "—")} />
-              <Info label="Refresh in progress" value={diagnostics?.refreshInFlight ? "Yes" : "No"} />
+              <Info label="Unmatched" value={String(unmatchedChannelCount ?? "Checking…")} />
+              <Info label="Refresh in progress" value={status.refreshing ? "Yes" : "No"} />
               <Info label="Playlist refreshed" value={diagnostics?.playlistRefreshedAt ? `${formatRelativeAge(diagnostics.playlistRefreshedAt)} · ${dayjs(diagnostics.playlistRefreshedAt).format(timeFormat)}` : "—"} />
               <Info label="EPG refreshed" value={diagnostics?.guideRefreshedAt ? `${formatRelativeAge(diagnostics.guideRefreshedAt)} · ${dayjs(diagnostics.guideRefreshedAt).format(timeFormat)}` : "—"} />
               <Info label="Cache age" value={diagnostics?.cacheAgeMinutes != null ? `${diagnostics.cacheAgeMinutes} min` : "—"} />
@@ -273,7 +293,7 @@ function EpgSourcesScreenContent() {
             </Card>
             {actionStatus ? <Text style={styles.actionStatus} accessibilityLiveRegion="polite">{actionStatus}</Text> : null}
           </ScrollView>
-        </FocusGuide>
+        </View>
       </View>
     </PurpleTvShell>
   );

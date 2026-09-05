@@ -62,11 +62,15 @@ test("automatic scheduler and both EPG parsers yield to interactive TV ownership
   const scheduler = await text("src/components/SourceRefreshScheduler.tsx");
   const customNative = await text("android/app/src/main/java/com/charmiptv/app/CustomEpgNativeModule.kt");
   const database = await text("android/app/src/main/java/com/charmiptv/app/EpgDatabase.kt");
+  const primaryNative = await text("android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt");
   assert.match(scheduler, /schedulerGeneration/);
   assert.match(scheduler, /screenIsSafe/);
   assert.match(scheduler, /cancelled = true/);
   assert.match(customNative, /Thread.yield\(\)/);
   assert.doesNotMatch(customNative, /refresh deferred for active TV interaction/);
+  assert.doesNotMatch(primaryNative, /refresh deferred for active TV interaction/);
+  assert.match(primaryNative, /Thread.yield\(\)/);
+  for (const importer of [primaryNative, customNative]) assert.match(importer, /THREAD_PRIORITY_BACKGROUND/);
   assert.match(database, /interactiveTvOwnsPriority/);
   assert.match(database, /if \(interactiveTvOwnsPriority\(\)\) Thread.yield\(\)/);
   assert.doesNotMatch(database, /throw IllegalStateException\("EPG refresh deferred/);

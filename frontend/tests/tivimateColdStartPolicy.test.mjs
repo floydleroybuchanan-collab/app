@@ -25,7 +25,7 @@ test("TiviMate-style native cold start is read-only while successful provider re
   assert.match(fullRefresh, /channels = await fetchPlaylist\(\)/);
   assert.match(fullRefresh, /await syncPlaylistToNative\(channels, playlistEpoch\);[\s\S]*?await touchNativePlaylistRefresh\(playlistEpoch\);/);
 
-  const playlistOnly = appSource.match(/export async function refreshPlaylistOnly\(\)[\s\S]*?\/\*\* Check persisted/)?.[0] || "";
+  const playlistOnly = appSource.match(/export async function refreshPlaylistOnly\(\)[\s\S]*?export async function refreshSourcesIfDue/)?.[0] || "";
   assert.match(playlistOnly, /const fresh = await fetchPlaylist\(\)/);
   assert.match(playlistOnly, /await syncPlaylistToNative\(channels, playlistEpoch\);[\s\S]*?await touchNativePlaylistRefresh\(playlistEpoch\);/);
 

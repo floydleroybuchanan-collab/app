@@ -6,7 +6,6 @@ import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
-import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useStore } from "@/src/store";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
@@ -301,8 +300,8 @@ export default function CustomEpgScreen() {
           </Pressable>
         </View>
 
-        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}>
-          <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} scrollEnabled nestedScrollEnabled contentInsetAdjustmentBehavior="never">
+        <View style={styles.scrollWrap}>
+          <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} scrollEnabled nestedScrollEnabled contentInsetAdjustmentBehavior="never">
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Guide ownership</Text>
               <Text style={styles.help}>Each playlist channel resolves to one Guide owner. A custom assignment overrides Charm EPG for that channel; the primary source is not queried for an overridden channel.</Text>
@@ -381,7 +380,7 @@ export default function CustomEpgScreen() {
 
             {status ? <Text style={styles.status}>{status}</Text> : null}
           </ScrollView>
-        </FocusGuide>
+        </View>
       </View>
 
       {selectedChannel ? (

@@ -31,7 +31,7 @@ export function useTvRouteEntryFocus(enabled = true, focusKey: unknown = "defaul
       }
       setPreferredFocus(true);
       const cancel = requestNativeFocusWithRetry(
-        targetRef.current,
+        () => targetRef.current,
         ROUTE_ENTRY_RETRIES_MS,
         () => confirmedRef.current,
       );
