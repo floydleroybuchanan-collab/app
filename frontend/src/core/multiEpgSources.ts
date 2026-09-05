@@ -159,6 +159,14 @@ export function saveMultiEpgSource(source: CustomEpgSourceRecord) {
     commit(index >= 0 ? cached.map((item, at) => at === index ? clean : item) : [...cached, clean]);
   });
 }
+/** An in-flight refresh owns status only, never a newer Settings edit or removal. */
+export function updateMultiEpgRefreshStatus(id: string, expectedUrl: string, status: { lastStatus: string; lastRefreshAt?: number }) {
+  afterHydration(() => {
+    const current = cached.find(source => source.id === id);
+    if (!current || current.url !== expectedUrl) return;
+    commit(cached.map(source => source.id === id ? { ...source, ...status } : source));
+  });
+}
 export function removeMultiEpgSource(id: string) {
   const clean = cleanId(id);
   if (isManagedEpgSourceId(clean)) return;

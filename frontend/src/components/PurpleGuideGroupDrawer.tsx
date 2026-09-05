@@ -25,6 +25,8 @@ export function PurpleGuideGroupDrawer({
   const refs = useRef(new Map<string, unknown>());
   const activeNameRef = useRef<string | null>(null);
   const focusedNameRef = useRef<string | null>(null);
+  const focusConfirmedRef = useRef(false);
+  const emptyRef = useRef<unknown>(null);
   const groupsRef = useRef(groups);
   const closeToGuideRef = useRef(onCloseToGuide);
   const focusIconRailRef = useRef(onFocusIconRail);
@@ -49,7 +51,7 @@ export function PurpleGuideGroupDrawer({
     setGuideNavigationActive(false);
     setRemoteContext("guide_groups");
     setPreferActiveFocus(true);
-    const clearPreferred = setTimeout(() => setPreferActiveFocus(false), 240);
+    focusConfirmedRef.current = false;
     const offKey = addTvKeyListener((key) => {
       if (key === "BACK") {
         focusIconRailRef.current();
@@ -72,13 +74,13 @@ export function PurpleGuideGroupDrawer({
     // movement until the drawer closes; active-group/count updates cannot yank it.
     const activeName = activeNameRef.current;
     focusedNameRef.current = activeName;
-    const node = activeName ? refs.current.get(activeName) : null;
-    const cancelFocus = requestNativeFocusWithRetry(node, [0, 80, 160, 260]);
+    const node = activeName ? refs.current.get(activeName) : emptyRef.current;
+    const cancelFocus = requestNativeFocusWithRetry(node, [0, 80, 160, 260, 560], () => focusConfirmedRef.current);
     return () => {
       offKey();
       offLongPress();
       cancelFocus?.();
-      clearTimeout(clearPreferred);
+      focusConfirmedRef.current = false;
       setPreferActiveFocus(false);
       focusedNameRef.current = null;
       // Do not let this outgoing drawer cleanup overwrite a main drawer that
@@ -101,8 +103,8 @@ export function PurpleGuideGroupDrawer({
     <View style={styles.overlay} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-          {!groups.length && <Pressable hasTVPreferredFocus={preferActiveFocus}
-            onFocus={() => { setPreferActiveFocus(false); setRemoteContext("guide_groups"); }}
+          {!groups.length && <Pressable ref={emptyRef as any} hasTVPreferredFocus={preferActiveFocus}
+            onFocus={() => { focusConfirmedRef.current = true; setPreferActiveFocus(false); setRemoteContext("guide_groups"); }}
             onPress={onOpenMainDrawer} style={({ focused }: any) => [styles.row, focused && styles.focused]}>
             <Text style={styles.name}>No enabled playlists · Open main menu</Text>
           </Pressable>}
@@ -116,6 +118,8 @@ export function PurpleGuideGroupDrawer({
               focusable
               hasTVPreferredFocus={preferActiveFocus && item.name === activeNameRef.current}
               onFocus={() => {
+                focusConfirmedRef.current = true;
+                setPreferActiveFocus(false);
                 focusedNameRef.current = item.name;
                 setGuideNavigationActive(false);
                 setRemoteContext("guide_groups");
@@ -183,4 +187,3 @@ const styles = StyleSheet.create({
   activeName: { color: "#fff" },
   count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9, marginLeft: 6 },
 });
-

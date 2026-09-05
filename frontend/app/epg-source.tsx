@@ -8,7 +8,7 @@ import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/E
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useStore } from "@/src/store";
 import { useEpgSourcePreferences } from "@/src/core/epgSourcePreferences";
-import { assignMultiEpgChannel, isManagedEpgSourceId, type CustomEpgSourceRecord, useMultiEpgSources } from "@/src/core/multiEpgSources";
+import { assignMultiEpgChannel, isManagedEpgSourceId, updateMultiEpgRefreshStatus, type CustomEpgSourceRecord, useMultiEpgSources } from "@/src/core/multiEpgSources";
 import {
   clearNativeSourceGuide, configureNativeUserGuideSources, listNativeSourceGuideChannels,
   refreshNativeSourceGuide, setNativeSourceGuideBinding,
@@ -92,11 +92,11 @@ export default function EpgSourceScreen() {
       const result = await refreshNativeSourceGuide(sourceId, enabled.url);
       const count = Math.max(0, Math.round(result.count || 0));
       const status = result.programmeSwapSucceeded === false ? `No usable new programme rows; kept last-good data (${count}).` : `Indexed ${count} programmes.`;
-      const completed = { ...enabled, lastRefreshAt: result.programmeSwapSucceeded === false ? enabled.lastRefreshAt : Date.now(), lastStatus: status };
-      registry.save(completed); setDraft(completed); setMessage(status); invalidateGuideOwnershipCaches();
+      updateMultiEpgRefreshStatus(sourceId, enabled.url, { ...(result.programmeSwapSucceeded === false ? {} : { lastRefreshAt: Date.now() }), lastStatus: status });
+      setMessage(status); invalidateGuideOwnershipCaches();
     } catch (error) { setMessage(error instanceof Error ? error.message : "EPG refresh failed."); }
     finally { setBusy(false); }
-  }, [busy, draft, persist, registry, sourceId]);
+  }, [busy, draft, persist, sourceId]);
 
   const filteredChannels = useMemo(() => {
     const query = channelQuery.trim().toLowerCase();
@@ -131,10 +131,10 @@ export default function EpgSourceScreen() {
 
   const clearData = useCallback(async () => {
     if (busy) return; setBusy(true);
-    try { await clearNativeSourceGuide(sourceId); const next = { ...draft, lastRefreshAt: 0, lastStatus: "EPG data cleared" }; registry.save(next); setDraft(next); setXmltvRows([]); setXmltvTotal(0); invalidateGuideOwnershipCaches(); setMessage("Programme data cleared; source and assignments kept."); }
+    try { await clearNativeSourceGuide(sourceId); updateMultiEpgRefreshStatus(sourceId, draft.url, { lastRefreshAt: 0, lastStatus: "EPG data cleared" }); setXmltvRows([]); setXmltvTotal(0); invalidateGuideOwnershipCaches(); setMessage("Programme data cleared; source and assignments kept."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not clear EPG data."); }
     finally { setBusy(false); }
-  }, [busy, draft, registry, sourceId]);
+  }, [busy, draft.url, sourceId]);
 
   const remove = useCallback(async () => {
     if (busy) return; setBusy(true);

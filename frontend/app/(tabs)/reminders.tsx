@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -18,6 +18,8 @@ import { useStore, type Reminder } from "@/src/store";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { fmtDayTime } from "@/src/utils/time";
+import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
+import { requestNativeFocus } from "@/src/utils/tvFocus";
 
 const COLUMNS = 6;
 
@@ -100,7 +102,8 @@ function RemindersScreenContent() {
   const { openDrawer } = usePurpleTvDrawer();
   const { reminders, removeReminder, channelById, channelLogos } = useStore();
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [preferInitialFocus, setPreferInitialFocus] = useState(true);
+  const entryFocus = useTvRouteEntryFocus();
+  const [contentWidth, setContentWidth] = useState(width);
 
   useTvBackHandler(
     useCallback(() => {
@@ -116,14 +119,6 @@ function RemindersScreenContent() {
     return () => clearInterval(timer);
   }, [isFocused]);
 
-  useFocusEffect(
-    useCallback(() => {
-      setPreferInitialFocus(true);
-      const timer = setTimeout(() => setPreferInitialFocus(false), 700);
-      return () => clearTimeout(timer);
-    }, []),
-  );
-
   const upcoming = useMemo(() => {
     return reminders
       .map((item) => {
@@ -138,11 +133,11 @@ function RemindersScreenContent() {
       .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   }, [channelById, reminders]);
 
-  const gap = width >= 1200 ? 14 : 10;
+  const gap = contentWidth >= 1200 ? 14 : 10;
   const pagePad = 18;
   const cardWidth = Math.max(
-    140,
-    Math.floor((width - pagePad * 2 - gap * (COLUMNS - 1) - 8) / COLUMNS),
+    1,
+    Math.floor((contentWidth - pagePad * 2 - gap * (COLUMNS - 1) - 8) / COLUMNS),
   );
 
   const returnToGuide = useCallback(() => {
@@ -158,19 +153,24 @@ function RemindersScreenContent() {
   const cancelReminder = useCallback(
     (key: string) => {
       void Haptics.selectionAsync().catch(() => undefined);
+      // The selected Cancel button is about to disappear. Hand off before
+      // removing its card, rather than letting Android pick a hidden neighbour.
+      requestNativeFocus(entryFocus.targetRef.current);
       void removeReminder(key);
     },
-    [removeReminder],
+    [entryFocus.targetRef, removeReminder],
   );
 
   return (
     <PurpleTvShell active="/reminders">
-      <View style={styles.page} testID="reminders-page">
+      <View style={styles.page} testID="reminders-page" onLayout={event => setContentWidth(event.nativeEvent.layout.width)}>
         <View style={styles.topBar}>
           <View style={styles.topActions}>
             <Pressable
-              hasTVPreferredFocus={preferInitialFocus}
-              onFocus={() => setPreferInitialFocus(false)}
+              ref={entryFocus.targetRef as any}
+              hasTVPreferredFocus={entryFocus.preferredFocus}
+              onFocus={entryFocus.onFocus}
+              onBlur={entryFocus.onBlur}
               onPress={returnToGuide}
               style={({ focused }: any) => [styles.returnButton, focused && styles.returnFocused]}
               testID="reminders-return-guide"

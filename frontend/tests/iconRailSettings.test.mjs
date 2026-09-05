@@ -111,3 +111,38 @@ test("disabled-only guide sources avoid automatic downloads and an empty Guide r
   assert.match(read("src/components/PurpleGuideGroupDrawer.tsx"), /No enabled playlists/);
   assert.match(read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"), /if \(rows.isEmpty\(\)\) \{\s*if \(keyCode == KeyEvent.KEYCODE_DPAD_LEFT\) \{ emit\("topLeftBoundary"/);
 });
+
+test("secondary pages do not expire initial focus on an arbitrary timer and Reminders measures available space", () => {
+  for (const path of ["app/(tabs)/channels.tsx", "app/(tabs)/favorites.tsx", "app/(tabs)/search.tsx", "app/(tabs)/reminders.tsx", "src/components/PurpleChannelCollection.tsx", "src/components/PurpleGuideGroupDrawer.tsx"]) {
+    assert.doesNotMatch(read(path), /setTimeout\(\(\) => setPrefer\w+Focus\(false\)/, path);
+  }
+  const reminders = read("app/(tabs)/reminders.tsx");
+  assert.match(reminders, /setContentWidth\(event.nativeEvent.layout.width\)/);
+  assert.match(reminders, /Math.floor\(\(contentWidth - pagePad/);
+  assert.match(reminders, /requestNativeFocus\(entryFocus.targetRef.current\);\s*void removeReminder\(key\)/);
+  const groups = read("src/components/PurpleGuideGroupDrawer.tsx");
+  assert.match(groups, /\(\) => focusConfirmedRef.current/);
+  assert.match(groups, /focusConfirmedRef.current = true;\s*setPreferActiveFocus\(false\)/);
+});
+
+test("preview retries stop only after native acquisition, a newer request, or unmount", () => {
+  const exports = {}, calls = []; let canceled = 0;
+  const code = ts.transpileModule(read("src/utils/guidePreviewFocus.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInNewContext(code, { exports, require: () => ({ requestNativeFocusWithRetry: (node, delays, confirmed) => {
+    calls.push({ node, confirmed }); return () => { canceled++; };
+  } }) });
+  const node = {};
+  exports.registerGuidePreviewNode("play", node, true);
+  assert.equal(exports.focusGuidePreviewSurface(), true);
+  assert.equal(calls[0].confirmed(), false);
+  exports.noteGuidePreviewFocus(node);
+  assert.equal(calls[0].confirmed(), true);
+  assert.equal(canceled, 1);
+  exports.focusGuidePreviewSurface();
+  assert.equal(calls[1].confirmed(), false);
+  exports.focusGuidePreviewSurface();
+  assert.equal(canceled, 2);
+  exports.registerGuidePreviewNode("play", null);
+  assert.equal(canceled, 3);
+  assert.equal(exports.focusGuidePreviewSurface(), false);
+});

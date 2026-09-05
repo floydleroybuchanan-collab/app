@@ -83,8 +83,7 @@ export function PurpleChannelCollection({
   useFocusEffect(
     useCallback(() => {
       setPreferInitialFocus(true);
-      const timer = setTimeout(() => setPreferInitialFocus(false), 180);
-      return () => clearTimeout(timer);
+      return () => setPreferInitialFocus(false);
     }, []),
   );
 
@@ -144,6 +143,7 @@ export function PurpleChannelCollection({
             {playlistEmpty ? (
               <Pressable
                 hasTVPreferredFocus={preferInitialFocus}
+                onFocus={disarmInitialFocus}
                 onPress={() => void hardRefresh()}
                 disabled={loading || refreshing}
                 style={({ focused }: any) => [styles.emptyButton, focused && styles.focused]}
@@ -154,6 +154,7 @@ export function PurpleChannelCollection({
             ) : (
               <Pressable
                 hasTVPreferredFocus={preferInitialFocus}
+                onFocus={disarmInitialFocus}
                 onPress={() => router.replace("/guide" as any)}
                 style={({ focused }: any) => [styles.emptyButton, focused && styles.focused]}
               >

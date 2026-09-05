@@ -287,6 +287,7 @@ export function PurpleTvShell({
   const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
+  const drawerFocusConfirmedRef = useRef(false);
   const [drawerPreferredRoute, setDrawerPreferredRoute] = useState<Route | null>(drawerOpen ? active : null);
   const activeGuideGroupName = useMemo(
     () => guideGroups?.find((item) => item.active)?.name || null,
@@ -430,6 +431,7 @@ export function PurpleTvShell({
 
   useEffect(() => {
     if (!isFocused || !drawerOpen) {
+      drawerFocusConfirmedRef.current = false;
       setDrawerAutoFocus(false);
       setDrawerPreferredRoute(null);
       return;
@@ -441,19 +443,14 @@ export function PurpleTvShell({
     if (focusDrawerTop) consumeFocusDrawerTop();
     setDrawerPreferredRoute(preferredRoute);
     setDrawerAutoFocus(true);
-
-    const clearPreferred = setTimeout(() => {
-      setDrawerAutoFocus(false);
-      setDrawerPreferredRoute(null);
-    }, 220);
+    drawerFocusConfirmedRef.current = false;
     const preferredNode = preferredGuideGroupName
       ? guideGroupRefs.current.get(preferredGuideGroupName)
       : preferredRoute
         ? navRefs.current.get(preferredRoute)
         : null;
-    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, PURPLE_DRAWER_ANIMATION_MS + 20]);
+    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 70, PURPLE_DRAWER_ANIMATION_MS + 20, 380, 560], () => drawerFocusConfirmedRef.current);
     return () => {
-      clearTimeout(clearPreferred);
       cancelFocus?.();
     };
   }, [active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
@@ -621,7 +618,11 @@ export function PurpleTvShell({
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
+        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={() => {
+          drawerFocusConfirmedRef.current = true;
+          setDrawerAutoFocus(false);
+          setDrawerPreferredRoute(null);
+        }}>
           <SmallBrand />
 
           {contextActions?.length ? (

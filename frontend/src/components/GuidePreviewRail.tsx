@@ -91,8 +91,7 @@ export function GuidePreviewRail({
   useEffect(() => {
     if (focusRequestToken <= 0) return;
     setPreferPlayFocus(true);
-    const timer = setTimeout(() => setPreferPlayFocus(false), 320);
-    return () => clearTimeout(timer);
+    return () => setPreferPlayFocus(false);
   }, [focusRequestToken]);
   const nowDate = useMemo(() => new Date(now), [now]);
   const progress = current ? progressPct(current, nowDate) : 0;
@@ -169,7 +168,7 @@ export function GuidePreviewRail({
         )}
       </View>
 
-      <FocusGuide style={styles.actionGrid} onFocusLost={() => onActionsFocusChange(false)}>
+      <FocusGuide style={styles.actionGrid} onFocusCapture={() => setPreferPlayFocus(false)} onFocusLost={() => onActionsFocusChange(false)}>
         <View style={styles.actionColumn}>
           <Pressable
             ref={playFocus.setRef}

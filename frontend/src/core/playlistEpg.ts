@@ -3,7 +3,7 @@ import { replaceAutomaticEpgOwners } from "./additionalEpgOwnership";
 import type { Channel } from "@/src/api";
 import { listPlaylists } from "./playlistRegistry";
 import { playlistOwner, PRIMARY_PLAYLIST } from "./playlistCatalog";
-import { getMultiEpgSources, saveMultiEpgSource } from "./multiEpgSources";
+import { getMultiEpgSources, updateMultiEpgRefreshStatus } from "./multiEpgSources";
 import { getEpgSourcePreferences } from "./epgSourcePreferences";
 import { managedEpgUrl } from "@/src/auth/managedContentAccess";
 import { configureNativeUserGuideSources, refreshAssociatedPlaylistGuide, replaceAutomaticPlaylistBindings } from "@/src/nativeEpg";
@@ -42,11 +42,11 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false, only
       // when the refresh was initiated from just one playlist's settings.
       const result = await refreshAssociatedPlaylistGuide(source.id, source.url, bindings.filter((binding) => binding.sourceIds.includes(source.id)).map((binding) => binding.xmltvId));
       const extra = extras.find((item) => item.id === source.id);
-      if (extra) saveMultiEpgSource({ ...extra, lastRefreshAt: result.programmeSwapSucceeded === false ? extra.lastRefreshAt : Date.now(),
+      if (extra) updateMultiEpgRefreshStatus(extra.id, source.url, { ...(result.programmeSwapSucceeded === false ? {} : { lastRefreshAt: Date.now() }),
         lastStatus: result.programmeSwapSucceeded === false ? "No new programmes; previous guide kept." : `Indexed ${result.count} programmes.` });
     } catch {
       const extra = extras.find((item) => item.id === source.id);
-      if (extra) saveMultiEpgSource({ ...extra, lastStatus: "Refresh failed. Previous guide kept; check source and connection." });
+      if (extra) updateMultiEpgRefreshStatus(extra.id, source.url, { lastStatus: "Refresh failed. Previous guide kept; check source and connection." });
     }
   }
   // Newly read directories can now select the first exact match in priority order.

@@ -171,7 +171,7 @@ test("shared page focus has a deterministic Left-edge icon-rail handoff", async 
   assert.match(shell, /trapFocusLeft/);
   assert.doesNotMatch(shell, /purple-left-edge-drawer-target/);
   assert.match(shell, /isGuideScreenActive\(\) && isGuideSurfing\(\)/);
-  for (const page of [collection, favorites, reminders, channels]) {
+  for (const page of [collection, favorites, channels]) {
     assert.match(page, /preferInitialFocus/);
     assert.match(page, /setPreferInitialFocus\(false\)/);
   }
@@ -180,7 +180,8 @@ test("shared page focus has a deterministic Left-edge icon-rail handoff", async 
   assert.match(live, /focusIconRail\(\)/);
   assert.match(live, /hasTVPreferredFocus=\{entryFocus.preferredFocus\}/);
   assert.doesNotMatch(reminders, /hasTVPreferredFocus\s*\n/);
-  assert.match(reminders, /hasTVPreferredFocus=\{preferInitialFocus\}/);
+  assert.match(reminders, /hasTVPreferredFocus=\{entryFocus.preferredFocus\}/);
+  assert.match(reminders, /onFocus=\{entryFocus.onFocus\}/);
 });
 
 test("Live preview has an explicit D-pad bridge into the recent channel list", async () => {
@@ -295,7 +296,7 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   assert.match(guide, /setPreviewFocusRequestToken\(\(value\) => value \+ 1\)/);
   assert.match(guide, /focusRequestToken=\{previewFocusRequestToken\}/);
   assert.match(preview, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(preview, /setTimeout\(\(\) => setPreferPlayFocus\(false\), 320\)/);
+  assert.match(preview, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
   assert.match(guide, /requestAnimationFrame\(\(\) => \{[\s\S]{0,160}focusGuidePreviewSurface\(\)/);
   assert.match(focus, /typeof focus === "function"/);
   assert.match(focus, /dispatchViewManagerCommand/);

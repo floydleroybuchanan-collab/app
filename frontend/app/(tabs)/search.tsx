@@ -27,7 +27,7 @@ type FocusZone = "keyboard" | "results" | "header" | null;
 function SearchScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { openDrawer } = usePurpleTvDrawer();
+  const { focusIconRail } = usePurpleTvDrawer();
   const { channels, addRecent, channelLogos } = useStore();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -83,10 +83,9 @@ function SearchScreenContent() {
     useCallback(() => {
       focusZoneRef.current = null;
       setPreferKeyFocus(true);
-      const clearPreferred = setTimeout(() => setPreferKeyFocus(false), 180);
-      const cancelFocus = requestNativeFocusWithRetry(firstKeyRef.current, [0, 80, 180, 320]);
+      const cancelFocus = requestNativeFocusWithRetry(firstKeyRef.current, [0, 80, 180, 320, 560], () => focusZoneRef.current !== null);
       return () => {
-        clearTimeout(clearPreferred);
+        setPreferKeyFocus(false);
         cancelFocus?.();
       };
     }, []),
@@ -97,13 +96,13 @@ function SearchScreenContent() {
     return addTvKeyListener((key) => {
       if (key !== "LEFT") return;
       // Ten fixed-width normal keys fit each TV keyboard row. At the first
-      // column, Left is a navigation-boundary action: open Drawer instead of
+      // column, Left is a navigation-boundary action: enter the rail instead of
       // letting Android search outside the React focus tree.
       if (focusZoneRef.current === "keyboard" && keyboardIndexRef.current % 10 === 0) {
-        openDrawer({ focusTop: true });
+        focusIconRail();
       }
     });
-  }, [isFocused, isTV, openDrawer]);
+  }, [isFocused, isTV, focusIconRail]);
 
   // Keep cursor in range if query is replaced (suggestions / clear).
   useEffect(() => {

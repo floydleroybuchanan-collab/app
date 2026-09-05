@@ -152,8 +152,7 @@ function ChannelsScreenContent() {
   useFocusEffect(
     useCallback(() => {
       setPreferInitialFocus(true);
-      const timer = setTimeout(() => setPreferInitialFocus(false), 180);
-      return () => clearTimeout(timer);
+      return () => setPreferInitialFocus(false);
     }, []),
   );
 
@@ -261,6 +260,7 @@ function ChannelsScreenContent() {
             </Text>
             <Pressable
               hasTVPreferredFocus={preferInitialFocus}
+              onFocus={() => setPreferInitialFocus(false)}
               onPress={() => void hardRefresh()}
               disabled={loading || refreshing}
               style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}

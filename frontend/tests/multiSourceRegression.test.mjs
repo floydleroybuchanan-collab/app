@@ -42,7 +42,7 @@ test("refreshing a shared EPG from one playlist keeps candidate IDs for all asso
     "./additionalEpgOwnership": { replaceAutomaticEpgOwners() {} },
     "./playlistRegistry": { listPlaylists: async () => playlists },
     "./playlistCatalog": catalog,
-    "./multiEpgSources": { getMultiEpgSources: async () => sources, saveMultiEpgSource() {} },
+    "./multiEpgSources": { getMultiEpgSources: async () => sources, updateMultiEpgRefreshStatus() {} },
     "./epgSourcePreferences": { getEpgSourcePreferences: async () => ({ primaryEnabled: true, userEnabled: false, userUrl: "" }) },
     "@/src/auth/managedContentAccess": { managedEpgUrl: () => "" },
     "@/src/nativeEpg": {
@@ -71,6 +71,34 @@ test("TV Pressables use the installed TV ViewManager command, not TextInputState
   assert.equal(commands[0][0], 42);
   assert.equal(commands[0][1], "requestTVFocus");
   assert.equal(api.requestNativeFocus(null), false);
+});
+
+test("late EPG completion preserves new settings and cannot recreate a removed source", async () => {
+  const initial = { id: "personal-guide", name: "Original", url: "https://guide.invalid/one", enabled: true,
+    refreshHours: 12, lastRefreshAt: 1, lastStatus: "Old", overrides: {} };
+  const api = load("src/core/multiEpgSources.ts", {
+    react: { useEffect() {}, useState() {}, useCallback() {} },
+    "@/src/utils/storage": { storage: { getItem: async () => [initial], setItem: async () => true } },
+    "@/src/core/additionalEpgOwnership": { replaceAdditionalEpgOwners() {} },
+    "@/src/auth/managedContentAccess": { managedContentSources: () => [], managedEpgUrl: () => "" },
+    "@/src/core/playlistCatalog": catalog,
+    "@/src/source": { invalidateGuideOwnershipCaches() {} },
+  });
+  await api.getMultiEpgSources();
+  api.saveMultiEpgSource({ ...initial, name: "Edited", enabled: false, refreshHours: 0, overrides: { station: "manual" } });
+  api.updateMultiEpgRefreshStatus(initial.id, initial.url, { lastRefreshAt: 2, lastStatus: "Complete" });
+  const updated = (await api.getMultiEpgSources())[0];
+  assert.equal(updated.enabled, false);
+  assert.equal(updated.name, "Edited");
+  assert.equal(updated.refreshHours, 0);
+  assert.equal(updated.overrides.station, "manual");
+  assert.equal(updated.lastRefreshAt, 2);
+  api.saveMultiEpgSource({ ...updated, url: "https://guide.invalid/replacement" });
+  api.updateMultiEpgRefreshStatus(initial.id, initial.url, { lastRefreshAt: 3, lastStatus: "Stale" });
+  assert.equal((await api.getMultiEpgSources())[0].lastRefreshAt, 2);
+  api.removeMultiEpgSource(initial.id);
+  api.updateMultiEpgRefreshStatus(initial.id, initial.url, { lastRefreshAt: 4, lastStatus: "Stale" });
+  assert.equal((await api.getMultiEpgSources()).length, 0);
 });
 
 test("route-entry retry waits for confirmed native focus and stops after confirmation", () => {

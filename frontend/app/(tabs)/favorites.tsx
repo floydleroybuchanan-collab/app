@@ -134,8 +134,7 @@ function FavoritesScreenContent() {
   useFocusEffect(
     useCallback(() => {
       setPreferInitialFocus(true);
-      const timer = setTimeout(() => setPreferInitialFocus(false), 180);
-      return () => clearTimeout(timer);
+      return () => setPreferInitialFocus(false);
     }, []),
   );
 

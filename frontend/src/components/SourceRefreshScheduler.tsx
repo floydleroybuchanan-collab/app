@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import { usePathname } from "expo-router";
 import { refreshEpgOnly, refreshSource, refreshSourcesIfDue } from "@/src/source";
 import { consumeNativeScheduledEpgRefresh, refreshNativeSourceGuide } from "@/src/nativeEpg";
-import { getMultiEpgSources, saveMultiEpgSource } from "@/src/core/multiEpgSources";
+import { getMultiEpgSources, updateMultiEpgRefreshStatus } from "@/src/core/multiEpgSources";
 import { isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { getSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { syncNativeCustomEpgPolicy } from "@/src/core/customEpgPolicy";
@@ -87,13 +87,13 @@ export function SourceRefreshScheduler() {
             if (!stillOwner()) return;
             const swapped = result.programmeSwapSucceeded !== false;
             customGuideChanged = customGuideChanged || swapped;
-            saveMultiEpgSource({ ...source,
-              lastRefreshAt: swapped ? Date.now() : source.lastRefreshAt,
+            updateMultiEpgRefreshStatus(source.id, source.url, {
+              ...(swapped ? { lastRefreshAt: Date.now() } : {}),
               lastStatus: swapped ? `Indexed ${Math.max(0, Math.round(result.count || 0))} programmes.` : "No usable new rows; kept last-good data.",
             });
-          } catch (error) {
+          } catch {
             if (!stillOwner()) return;
-            saveMultiEpgSource({ ...source, lastStatus: error instanceof Error ? error.message : "Automatic EPG refresh failed." });
+            updateMultiEpgRefreshStatus(source.id, source.url, { lastStatus: "Automatic EPG refresh failed; previous guide kept. Check source and connection." });
           }
         }
         if (customGuideChanged && screenIsSafe()) {
