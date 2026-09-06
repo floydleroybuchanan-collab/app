@@ -10,7 +10,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODULE="$ROOT/android/ffmpeg-audio/src/main"
 FFMPEG_DIR="$MODULE/jni/ffmpeg"
 FFMPEG_COMMIT="ea3d24bbe3c58b171e55fe2151fc7ffaca3ab3d2" # upstream n6.0
-ANDROID_API="${CHARM_FFMPEG_ANDROID_API:-26}"
+APP_MIN_SDK="$(sed -n 's/^android.minSdkVersion=//p' "$ROOT/android/gradle.properties" | tr -d '\r' | tail -n 1)"
+ANDROID_API="${CHARM_FFMPEG_ANDROID_API:-$APP_MIN_SDK}"
+if [[ ! "$APP_MIN_SDK" =~ ^[0-9]+$ || ! "$ANDROID_API" =~ ^[0-9]+$ ]] || (( ANDROID_API < 21 || ANDROID_API > APP_MIN_SDK )); then
+  echo "FFmpeg must target an Android API no newer than the app minimum ($APP_MIN_SDK)." >&2
+  exit 1
+fi
 NDK_PATH="${ANDROID_NDK_HOME:-${ANDROID_HOME:-}/ndk/27.1.12297006}"
 HOST_PLATFORM="linux-x86_64"
 case "$(uname -s)" in

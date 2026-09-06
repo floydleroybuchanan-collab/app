@@ -13,6 +13,37 @@ import subprocess
 import zipfile
 
 
+def android_api_notes(data: bytes) -> list[int]:
+    """Read NDK minimum-API notes from ELF SHT_NOTE sections, if present."""
+    if len(data) < 64 or data[:4] != b"\x7fELF" or data[5] != 1:
+        return []
+    wide = data[4] == 2
+    table = struct.unpack_from("<Q" if wide else "<I", data, 40 if wide else 32)[0]
+    stride, count = struct.unpack_from("<HH", data, 58 if wide else 46)
+    levels = []
+    if stride < (64 if wide else 40) or table + stride * count > len(data):
+        return levels
+    for index in range(count):
+        section = table + index * stride
+        if struct.unpack_from("<I", data, section + 4)[0] != 7:
+            continue
+        offset, size = struct.unpack_from("<QQ" if wide else "<II", data, section + (24 if wide else 16))
+        end = offset + size
+        if end > len(data):
+            raise ValueError("Malformed native ELF note section")
+        while offset + 12 <= end:
+            namesize, descsize, kind = struct.unpack_from("<III", data, offset)
+            name = offset + 12
+            desc = name + ((namesize + 3) & ~3)
+            after = desc + ((descsize + 3) & ~3)
+            if after > end:
+                raise ValueError("Malformed native ELF note")
+            if kind == 1 and data[name:name + namesize].rstrip(b"\0") == b"Android" and descsize >= 4:
+                levels.append(struct.unpack_from("<I", data, desc)[0])
+            offset = after
+    return levels
+
+
 def verify_archive(archive: zipfile.ZipFile) -> tuple[dict[str, list[str]], list[str]]:
     """Validate packaged engines, including every ABI, without executing the APK."""
     names = archive.namelist()
@@ -33,6 +64,10 @@ def verify_archive(archive: zipfile.ZipFile) -> tuple[dict[str, list[str]], list
             if name == "libffmpegJNI.so" and b"ffmpegGetVersion" not in data:
                 raise ValueError(f"FFmpeg JNI exports missing for {abi}")
         libraries[abi] = sorted(n.rsplit("/", 1)[1] for n in names if n.startswith(f"lib/{abi}/") and n.endswith(".so"))
+        for name in libraries[abi]:
+            levels = android_api_notes(archive.read(f"lib/{abi}/{name}"))
+            if any(level > 24 for level in levels):
+                raise ValueError(f"Native library requires newer than Android 7: {abi}/{name}: {levels}")
     dex = b"".join(archive.read(n) for n in names if re.fullmatch(r"classes\d*\.dex", n))
     for marker in (b"Lorg/videolan/", b"Lcom/charmiptv/app/NativeVlc", b"RCTVLCPlayer"):
         if marker in dex:
@@ -106,6 +141,7 @@ def main() -> None:
         "package": package.group(1), "versionCode": int(package.group(2)), "versionName": package.group(3),
         "signatureVerified": True, "zipAlignment16KiBVerified": True,
         "minSdk": int(minimum.group(1)), "targetSdk": int(target.group(1)),
+        "nativeAndroidApiNotesChecked": True,
         "playbackEngine": "Media3", "vlcAbsent": True,
         "requiredClasses": classes, "nativeLibraries": libraries,
         "deviceInstallTested": False, "providerPlaybackTested": False,

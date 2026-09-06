@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.text.InputType
@@ -1065,6 +1066,12 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     }
 
     private fun exportBackupToDownloads(fileName: String) {
+        // The menu already filters Downloads by OS. Guard the operation too so
+        // every caller is safe on Android 7/8 without broad storage permission.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            exportBackupToLocalFile(fileName)
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             withBackupLoading(R.string.backup_export_title) {
                 val jsonData = withContext(Dispatchers.IO) {
@@ -1132,6 +1139,10 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     }
 
     private fun exportDatabaseBackupToDownloads(fileName: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            exportDatabaseBackupToLocalFile(fileName)
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             withBackupLoading(R.string.backup_db_export_title) {
                 val zipData = withContext(Dispatchers.IO) {

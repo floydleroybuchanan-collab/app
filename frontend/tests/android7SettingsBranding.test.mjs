@@ -76,9 +76,19 @@ test('host and VOD support API 24 without dropping current framework or HTTP sou
   assert.match(read('android/gradle.properties'), /android.minSdkVersion=24/);
   assert.match(read('android/vod/app/build.gradle'), /minSdk 24/);
   assert.match(read('android/app/build.gradle'), /coreLibraryDesugaringEnabled true/);
+  assert.doesNotMatch(read('android/app/src/main/res/values/styles.xml'), /android:windowSplashScreenBehavior/);
+  assert.match(read('android/app/src/main/res/values-v33/styles.xml'), /android:windowSplashScreenBehavior/);
+  const audio = read('scripts/build-media3-ffmpeg-audio.sh');
+  assert.match(audio, /CHARM_FFMPEG_ANDROID_API:-\$APP_MIN_SDK/);
+  assert.match(audio, /ANDROID_API > APP_MIN_SDK/);
+  assert.doesNotMatch(audio, /CHARM_FFMPEG_ANDROID_API:-26/);
   const welcome = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodWelcomeView.kt');
   assert.match(welcome, /SDK_INT >= Build.VERSION_CODES.O\) \{\s*ValueAnimator.areAnimatorsEnabled\(\)/);
   assert.match(welcome, /Settings.Global.ANIMATOR_DURATION_SCALE/);
+  const settings = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/SettingsTvFragment.kt');
+  for (const kind of ['Backup', 'DatabaseBackup']) {
+    assert.match(settings, new RegExp(`private fun export${kind}ToDownloads[^\\n]+\\{\\s*(?://[^\\n]*\\n\\s*)*if \\(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q\\) \\{\\s*export${kind}ToLocalFile\\(fileName\\)`));
+  }
   assert.match(read('android/app/src/main/AndroidManifest.xml'), /usesCleartextTraffic="\$\{allowCleartextStreams\}"/);
 });
 
