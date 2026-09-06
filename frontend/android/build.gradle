@@ -28,6 +28,19 @@ allprojects {
 ext.excludeAppGlideModule = true
 
 subprojects { subproject ->
+  // Opt-in compatibility gate: check native API availability at the declared
+  // minimum OS without turning unrelated upstream style warnings into blockers.
+  ['com.android.application', 'com.android.library'].each { pluginId ->
+    subproject.plugins.withId(pluginId) {
+      if (rootProject.hasProperty('charm.compatibilityAudit')) {
+        subproject.android.lint {
+          checkOnly += ['NewApi', 'InlinedApi']
+          abortOnError true
+          textReport true
+        }
+      }
+    }
+  }
   if (subproject.name == 'expo-image') {
     subproject.plugins.withId('org.jetbrains.kotlin.android') {
       // Expo's Java-source exclusion does not exclude Kotlin sources on Kotlin 2.2.

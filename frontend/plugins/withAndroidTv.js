@@ -22,9 +22,15 @@ module.exports = function withAndroidTv(config) {
     };
     addFeature("android.hardware.touchscreen");
     addFeature("android.software.leanback");
+    addFeature("android.hardware.camera");
+    addFeature("android.hardware.camera.autofocus");
 
     // --- add LEANBACK_LAUNCHER category to the main launcher activity ---
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
+    // Checked-in native artwork resources are shared with the embedded VOD library.
+    app.$["android:icon"] = "@drawable/charm_launcher";
+    app.$["android:roundIcon"] = "@drawable/charm_launcher";
+    app.$["android:banner"] = "@drawable/charm_tv_banner";
     (app.activity || []).forEach((activity) => {
       (activity["intent-filter"] || []).forEach((filter) => {
         const categories = filter.category || [];

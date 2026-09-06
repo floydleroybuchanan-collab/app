@@ -83,6 +83,15 @@ def main() -> None:
         raise ValueError("APK is missing TV launcher or Internet permission")
     if "application-debuggable" in badging:
         raise ValueError("Sideload must embed the production bundle without a debuggable application")
+    minimum = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
+    target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
+    if not minimum or int(minimum.group(1)) != 24:
+        raise ValueError("Final merged APK must support Android 7 (minSdk 24)")
+    if not target or int(target.group(1)) < 36 or "maxSdkVersion" in manifest:
+        raise ValueError("APK must target modern Android without a maximum OS restriction")
+    for feature in ("touchscreen", "camera", "camera.autofocus", "microphone"):
+        if f"uses-feature: name='android.hardware.{feature}'" in badging:
+            raise ValueError(f"TV-incompatible required hardware: {feature}")
 
     with zipfile.ZipFile(args.apk) as archive:
         libraries, classes = verify_archive(archive)
@@ -96,6 +105,7 @@ def main() -> None:
         "apk": args.apk.name, "bytes": args.apk.stat().st_size, "sha256": checksum,
         "package": package.group(1), "versionCode": int(package.group(2)), "versionName": package.group(3),
         "signatureVerified": True, "zipAlignment16KiBVerified": True,
+        "minSdk": int(minimum.group(1)), "targetSdk": int(target.group(1)),
         "playbackEngine": "Media3", "vlcAbsent": True,
         "requiredClasses": classes, "nativeLibraries": libraries,
         "deviceInstallTested": False, "providerPlaybackTested": False,

@@ -160,7 +160,12 @@ jobs:
           chmod +x android/gradlew
           ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac :app:testSideloadUnitTest --no-daemon --max-workers=1 --stacktrace
 
-      - name: Build universal sideload APK
+      - name: Check Android 7 native API compatibility
+        # Lint before packaging catches calls that compile with API 36 but crash
+        # on the API 24/25 televisions this release now supports.
+        run: ./android/gradlew -p android :app:lintSideload :vod:lintSideload -Pcharm.compatibilityAudit=true --no-daemon --max-workers=1 --stacktrace
+
+      - name: Package signed universal sideload APK
         run: ./android/gradlew -p android :app:assembleSideload --no-daemon --max-workers=1 --stacktrace
 
       - name: Verify Media3-only APK and checksum

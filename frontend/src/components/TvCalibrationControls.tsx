@@ -10,7 +10,7 @@ import {
   useTvCalibration,
 } from "@/src/tvCalibration";
 
-const STEP = 4;
+const STEP = 1;
 const MIN_ADJUST_INTERVAL_MS = 90;
 const RED = "#E3262E";
 
@@ -73,7 +73,7 @@ export function TvCalibrationControls() {
           <Text style={styles.title}>TV screen fit / overscan</Text>
           <Text style={styles.hint}>
             Minus (−) stretches the app outward to fill the TV. Plus (+) pulls an edge inward for overscan.
-            Save & Apply updates immediately — no restart.
+            Each press adjusts 1 pixel. Save & Apply updates immediately — no restart.
           </Text>
         </View>
         <Pressable

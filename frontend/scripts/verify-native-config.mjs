@@ -23,6 +23,9 @@ const buildProperties = app.plugins.find(
 requireMatch(applicationId === app.android.package, 'app.json package must match Gradle applicationId');
 requireMatch(versionCode === app.android.versionCode, 'app.json versionCode must match Gradle versionCode');
 requireMatch(versionName === app.version, 'app.json version must match Gradle versionName');
+requireMatch(buildProperties?.minSdkVersion === 24, 'This release must support Android 7 (API 24)');
+requireMatch(/^android.minSdkVersion=24$/m.test(read('android/gradle.properties').replaceAll('\r', '')), 'Native host minimum must match Android 7');
+requireMatch(/minSdk 24/.test(read('android/vod/app/build.gradle')), 'Embedded VOD minimum must match Android 7');
 requireMatch(
   manifest.includes('android:usesCleartextTraffic="${allowCleartextStreams}"'),
   'AndroidManifest must use the allowCleartextStreams build placeholder',

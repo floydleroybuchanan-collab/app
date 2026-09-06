@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
-import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useParentalPin } from "@/src/core/parentalPin";
 import { useMultiEpgSources } from "@/src/core/multiEpgSources";
@@ -19,7 +18,9 @@ import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 import { useAuth } from "@/src/auth/AuthContext";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityRole="button" focusable accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+  // Keep the current native focus owner mounted and focusable during a refresh.
+  // Actions remain inert while disabled; disabling the native view loses D-pad focus.
+  return <Pressable accessibilityRole="button" focusable accessibilityState={{ disabled }} onPress={() => { if (!disabled) onPress(); }}
     style={({ focused }: any) => [styles.button, disabled && styles.disabled, focused && styles.focused]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
 }
 
@@ -41,7 +42,15 @@ export default function PlaylistsScreen() {
   const [busy, setBusy] = useState(false);
   const [removeArmed, setRemoveArmed] = useState("");
   const [health, setHealth] = useState<Record<string, PlaylistGuideHealth>>({});
+  const scrollRef = useRef<ScrollView | null>(null);
+  const operationInFlight = useRef(false);
   const entryFocus = useTvRouteEntryFocus(true, editing === null ? "playlist-list" : `playlist-edit:${editing}`);
+  useFocusEffect(useCallback(() => {
+    void editing;
+    // A new list/editor entry starts at the fixed header, never a saved offscreen row.
+    const topTimer = setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 0);
+    return () => clearTimeout(topTimer);
+  }, [editing]));
   const loadHealth = useCallback(async () => {
     const rows = await readPlaylistGuideHealth(await readCombinedPlaylists());
     setHealth(Object.fromEntries(rows.map((row) => [row.playlistId, row])));
@@ -50,17 +59,19 @@ export default function PlaylistsScreen() {
   const back = useCallback(() => { if (editing !== null) { setEditing(null); setPreview(null); setUrl(""); } else router.replace("/settings" as any); return true; }, [editing, router]);
   useTvBackHandler(back);
   const run = async (action: () => Promise<void>) => {
-    if (busy) return; setBusy(true); setMessage("Working…");
+    if (operationInFlight.current) return;
+    operationInFlight.current = true; setBusy(true); setMessage("Working…");
     try { await action(); setMessage("Done."); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Operation failed; check your source."); }
-    finally { await loadHealth().catch(() => undefined); setBusy(false); }
+    finally { await loadHealth().catch(() => undefined); operationInFlight.current = false; setBusy(false); }
   };
   const availableEpg = [{ id: "user", name: legacy.userName || "Custom EPG", enabled: legacy.userEnabled }, ...epgs.sources];
   return <PurpleTvShell active="/settings"><View style={styles.page}>
     <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><Text style={styles.title}>Playlists</Text></View>
-      <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={back} disabled={busy} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
+      <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => { if (!busy) back(); }} accessibilityState={{ disabled: busy }} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
     </View>
-    <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusRight style={styles.scrollWrap}><ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
+    {/* The shell boundary includes the fixed header; a nested upward trap blocks it. */}
+    <View style={styles.scrollWrap}><ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
       <Text style={styles.help}>Use CharmIPTV’s supplied playlists, your own M3U playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
       {!!notice && <Text accessibilityLiveRegion="polite" style={styles.message}>{notice}</Text>}
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
@@ -128,7 +139,7 @@ export default function PlaylistsScreen() {
         </View>)}
       </>}
       {!!message && <Text accessibilityLiveRegion="polite" style={styles.message}>{message}</Text>}
-    </ScrollView></FocusGuide>
+    </ScrollView></View>
   </View></PurpleTvShell>;
 }
 

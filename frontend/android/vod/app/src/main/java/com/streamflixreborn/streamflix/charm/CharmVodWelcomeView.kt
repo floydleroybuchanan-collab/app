@@ -5,13 +5,17 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
+import android.provider.Settings
 import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.View
@@ -26,10 +30,15 @@ class CharmVodWelcomeView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val logo = BitmapFactory.decodeResource(resources, R.drawable.charm_vod_brand,
+    private val logo = BitmapFactory.decodeResource(resources, R.drawable.charm_living_room,
         BitmapFactory.Options().apply { inSampleSize = 2 })
-    private val logoBounds = RectF(380f, 92f, 580f, 292f)
-    private val orbit = RectF(358f, 70f, 602f, 314f)
+    private val logoBounds = RectF(358f, 70f, 602f, 314f)
+    private val logoShader = BitmapShader(logo, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+        setLocalMatrix(Matrix().apply {
+            setRectToRect(RectF(0f, 0f, logo.width.toFloat(), logo.height.toFloat()), logoBounds, Matrix.ScaleToFit.CENTER)
+        })
+    }
+    private val orbit = RectF(340f, 52f, 620f, 332f)
     private val glow = RadialGradient(480f, 215f, 370f,
         intArrayOf(Color.rgb(58, 23, 100), Color.rgb(7, 7, 17)), null, Shader.TileMode.CLAMP)
     private val regular = Typeface.create("sans-serif", Typeface.NORMAL)
@@ -53,7 +62,13 @@ class CharmVodWelcomeView @JvmOverloads constructor(
 
     fun play(onFinished: () -> Unit) {
         completion = onFinished
-        if (!ValueAnimator.areAnimatorsEnabled()) {
+        // areAnimatorsEnabled was added in API 26. Respect reduced motion on API 24/25 too.
+        val animationsEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ValueAnimator.areAnimatorsEnabled()
+        } else {
+            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
+        }
+        if (!animationsEnabled) {
             dismiss()
             return
         }
@@ -143,7 +158,11 @@ class CharmVodWelcomeView @JvmOverloads constructor(
         canvas.save()
         val zoom = 0.94f + 0.06f * (progress / 0.28f).coerceIn(0f, 1f)
         canvas.scale(zoom, zoom, 480f, 192f)
-        canvas.drawBitmap(logo, null, logoBounds, paint)
+        // Render the supplied artwork through an antialiased circle, not a square bitmap.
+        // The source image remains unchanged; its rectangular corners never paint.
+        paint.shader = logoShader
+        canvas.drawCircle(logoBounds.centerX(), logoBounds.centerY(), logoBounds.width() / 2f, paint)
+        paint.shader = null
         canvas.restore()
         val reveal = ((progress - 0.10f) / 0.20f).coerceIn(0f, 1f)
         drawText(canvas, welcome, 338f, 16f, Color.rgb(193, 170, 225), reveal)
