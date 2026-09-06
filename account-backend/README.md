@@ -6,7 +6,15 @@
   Only that login can create staff, change permissions, reset staff passwords,
   or grant unlimited viewer access. Owner-password confirmation is required for
   every staff change. Administrator identities are disabled, not deleted.
-- Staff logins are panel-only. They do not confer unlimited viewer access.
+- Shared admin logins can have independently owner-granted TV access. They do
+  not automatically confer unlimited viewing. Use Admins > Viewing access for
+  an existing administrator; no invite or separate account is required.
+  Add administrator > Use existing user promotes a viewer without replacing
+  their credentials, original creation date, preferences, or viewing expiry.
+  The owner can also create a new shared login with an explicit viewing duration.
+  Panel permissions remain valid when viewing time expires; the administrator
+  identity is retained, not deleted by viewer cleanup. Disabling panel access
+  does not disable valid TV access. Only the owner controls administrator viewing.
   Staff cannot modify any administrator through viewer-account routes.
 - Staff have independently selectable create/time/session/suspend/delete/reset/
   logout/revoke/history/audit permissions; account scope defaults to their own
@@ -20,7 +28,8 @@
   Surviving historical invite records are backfilled; erased history is not guessed.
 - Timed family referrals use the earlier of the expiry saved at generation and
   the inviter's current expiry at redemption. Expired, disabled, deleted, unlimited,
-  or administrator inviters cannot grant usable family referrals.
+  or panel-only inviters cannot grant usable family referrals. A shared-login
+  admin with active finite TV access retains the ordinary family-invite rules.
 - Unlimited viewer accounts remain owner-selectable, but have zero available
   family-and-friend invites and cannot generate codes. Existing viewer timers
   are not retroactively changed by the migration.
@@ -43,6 +52,13 @@ the frontend test suite, and Wrangler dry runs for both Workers before release.
 The dedicated account workflow tests and deploys both Workers; database migrations
 remain explicit, reviewed operations. No APK rebuild is needed for this update.
 Local UI fixtures are test/preview.mjs and must never be deployed.
+
+For the shared-login update, first back up the current database and apply
+migrations/0004_shared_admin_login.sql once before deploying either Worker.
+It adds a disabled-by-default viewing flag to existing administrator profiles;
+no existing login, permissions, viewing timer or account is changed automatically.
+Existing staff viewing must be explicitly enabled by the owner. Staff accounts
+cannot self-delete in the app; the owner manages their access through Admins.
 
 Deletion removes data from the live application database. Cloudflare recovery
 retention and private migration backups are separate from live data; do not

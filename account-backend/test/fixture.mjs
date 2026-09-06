@@ -33,7 +33,7 @@ export function fixture() {
     return u;
   }
   user(OWNER, { role: "admin", expires_at: null });
-  for (const name of ["0002_user_referrals.sql", "0003_owner_admin_controls.sql"])
+  for (const name of ["0002_user_referrals.sql", "0003_owner_admin_controls.sql", "0004_shared_admin_login.sql"])
     db.exec(readFileSync(new URL("../migrations/"+name, import.meta.url),"utf8"));
   function prepare(sql, values=[]) {
     function execute(kind) {

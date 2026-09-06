@@ -13,7 +13,7 @@ const allowedBody = (body, keys) => { for (const key of Object.keys(body)) if (!
 const permissionProfile = row => Object.fromEntries(PROFILE_KEYS.map(key => [key, Number(row[key])]));
 
 export async function resolveAdminAccess(env, user) {
-  if (user.role !== "admin" || user.status !== "active") throw policyError("Administrator permission required.");
+  if (user.role !== "admin") throw policyError("Administrator permission required.");
   const profile = await first(env, "SELECT p.*, CASE WHEN o.user_id=p.user_id THEN 1 ELSE 0 END AS is_owner FROM admin_profiles p LEFT JOIN admin_owner o ON o.user_id=p.user_id WHERE p.user_id=?1", [user.id]);
   if (!profile || profile.enabled !== 1) throw policyError("This administrator's panel access is disabled. Contact the owner.");
   return { user, profile, isOwner: profile.is_owner === 1 };
@@ -61,7 +61,7 @@ async function ownerRecheck(auth, body, verifyPassword) {
 
 export async function handleAdminRequest(request, env, helpers) {
   const { requireUser, json, safeJson, publicUser, hashPassword, verifyPassword, audit, deleteAccountData } = helpers;
-  const session = await requireUser(request, env);
+  const session = await requireUser(request, env, { panel: true });
   if (!session.ok) return session.response;
   const auth = { ...session, ...await resolveAdminAccess(env, session.user) };
   const url = new URL(request.url), path = url.pathname, method = request.method;
@@ -230,7 +230,7 @@ export async function handleAdminRequest(request, env, helpers) {
     if (["enabled", "disabled"].includes(status)) { values.push(status === "enabled" ? 1 : 0); where.push(`p.enabled=?${values.length}`); }
     else if (status !== "all") throw policyError("Invalid administrator filter.", 400);
     const result = await paged(env, options, "FROM users u JOIN admin_profiles p ON p.user_id=u.id JOIN admin_account_stats st ON st.admin_user_id=u.id LEFT JOIN admin_owner o ON o.user_id=u.id", where, values,
-      `u.id,u.username,u.email,u.status,u.created_at,u.last_login_at,p.*,st.accounts_created,st.accounts_expired,st.accounts_canceled,st.accounts_deleted,st.invites_created,st.tracking_started_at,CASE WHEN o.user_id=u.id THEN 1 ELSE 0 END AS is_owner,
+      `u.id,u.username,u.email,u.status,u.created_at,u.last_login_at,u.expires_at,u.max_sessions AS viewer_max_sessions,p.*,st.accounts_created,st.accounts_expired,st.accounts_canceled,st.accounts_deleted,st.invites_created,st.tracking_started_at,CASE WHEN o.user_id=u.id THEN 1 ELSE 0 END AS is_owner,
       (SELECT COUNT(*) FROM admin_user_attribution a JOIN users v ON v.id=a.user_id WHERE a.admin_user_id=u.id AND a.origin='admin_invite' AND v.status='active' AND (v.expires_at IS NULL OR v.expires_at>?1)) AS active_accounts,
       (SELECT COUNT(*) FROM admin_user_attribution a JOIN users v ON v.id=a.user_id WHERE a.admin_user_id=u.id AND a.origin='admin_invite' AND v.status='disabled') AS disabled_accounts,
       (SELECT COUNT(*) FROM admin_user_attribution a WHERE a.admin_user_id=u.id AND a.origin='referral') AS referred_accounts,
@@ -240,27 +240,62 @@ export async function handleAdminRequest(request, env, helpers) {
   if (path === "/admin/admins" && method === "POST") {
     const body = await safeJson(request);
     await ownerRecheck(auth, body, verifyPassword);
-    allowedBody(body, ["username", "email", "password", "owner_password", "permissions"]);
+    allowedBody(body, ["username", "email", "password", "owner_password", "permissions", "existing_username", "viewing_days"]);
+    if (body.existing_username !== undefined) {
+      if (["username","email","password","viewing_days"].some(key => Object.hasOwn(body,key)))
+        throw policyError("Choose an existing account or a new account, not both.",400);
+      const existing=await first(env,"SELECT * FROM users WHERE username=?1 COLLATE NOCASE",[String(body.existing_username).trim()]);
+      if (!existing) throw policyError("Existing user not found. Enter their current CharmIPTV username.",404);
+      if (existing.role !== "user") throw policyError("This account already has an administrator identity. Use its Permissions or Viewing access button.",409);
+      const profile=normalizeAdminProfile(body.permissions || {});
+      await env.DB.batch([
+        stmt(env,"UPDATE users SET role='admin' WHERE id=?1 AND role='user'",[existing.id]),
+        stmt(env,"INSERT INTO admin_profiles(user_id,viewer_access,"+PROFILE_KEYS.join(",")+") VALUES(?1,1,"+PROFILE_KEYS.map((_,i)=>"?"+(i+2)).join(",")+")",[existing.id,...PROFILE_KEYS.map(key=>profile[key])]),
+        stmt(env,"INSERT INTO admin_account_stats(admin_user_id) VALUES(?1)",[existing.id]),
+        stmt(env,"UPDATE sessions SET revoked=1 WHERE user_id=?1",[existing.id]),
+      ]);
+      await audit(env,null,auth.user.id,"existing_user_granted_admin",JSON.stringify({admin_id:existing.id}));
+      return json({success:true,message:"Admin access added. Use the same username and password in the app and panel. Viewing time is unchanged; please sign in again.",admin:{id:existing.id,username:existing.username}},201);
+    }
     const username = String(body.username || "").trim().toLowerCase(), email = String(body.email || "").trim().toLowerCase(), password = String(body.password || "");
     if (!/^[a-z0-9._-]{3,32}$/.test(username) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 12 || password.length > 256)
       throw policyError("Enter a valid username/email and an administrator password of 12–256 characters.", 400);
     const profile = normalizeAdminProfile(body.permissions || {}), id = crypto.randomUUID();
+    if (await first(env,"SELECT id FROM users WHERE username=?1 OR email=?2",[username,email]))
+      throw policyError("That username or email already belongs to an account. Choose Use existing user to add admin access to it.",409);
+    const viewingDays=body.viewing_days === undefined ? undefined : body.viewing_days === null ? null : integer(body.viewing_days,1,3650,"Viewing days");
     await env.DB.batch([
-      stmt(env, "INSERT INTO users(id,username,email,password_hash,role,status,max_sessions,created_at,activated_at) VALUES(?1,?2,?3,?4,'admin',?5,2,?6,?6)", [id, username, email, await hashPassword(password), profile.enabled ? "active" : "disabled", now]),
+      stmt(env, "INSERT INTO users(id,username,email,password_hash,role,status,max_sessions,created_at,activated_at) VALUES(?1,?2,?3,?4,'admin',?5,2,?6,?6)", [id, username, email, await hashPassword(password), "active", now]),
       stmt(env, `INSERT INTO admin_profiles(user_id,${PROFILE_KEYS.join(",")}) VALUES(?1,${PROFILE_KEYS.map((_, i) => `?${i + 2}`).join(",")})`, [id, ...PROFILE_KEYS.map(key => profile[key])]),
       stmt(env, "INSERT INTO admin_account_stats(admin_user_id) VALUES(?1)", [id]),
+      ...(viewingDays === undefined ? [] : [
+        stmt(env,"UPDATE admin_profiles SET viewer_access=1 WHERE user_id=?1",[id]),
+        stmt(env,"UPDATE users SET expires_at=?2 WHERE id=?1",[id,viewingDays===null?null:now+viewingDays*DAY]),
+      ]),
     ]);
     await audit(env, null, auth.user.id, "admin_created", JSON.stringify({ admin_id: id }));
     return json({ success: true, message: "Administrator created with only the selected permissions.", admin: { id, username } }, 201);
   }
-  const adminMatch = path.match(/^\/admin\/admins\/([^/]+)(?:\/(password))?$/);
+  const adminMatch = path.match(/^\/admin\/admins\/([^/]+)(?:\/(password|viewing))?$/);
   if (adminMatch && (method === "PATCH" || method === "POST")) {
     const body = await safeJson(request);
     await ownerRecheck(auth, body, verifyPassword);
     if (adminMatch[1] === auth.user.id) throw policyError("The owner account cannot be disabled or changed through delegated-admin controls.");
     const existing = await first(env, "SELECT p.* FROM admin_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?1 AND u.role='admin'", [adminMatch[1]]);
     if (!existing) throw policyError("Administrator not found.", 404);
-    if (adminMatch[2] === "password" && method === "POST") {
+    if (adminMatch[2] === "viewing" && method === "PATCH") {
+      allowedBody(body,["owner_password","viewer_access","expires_at","max_sessions"]);
+      const enabled=integer(body.viewer_access,0,1,"Viewing access");
+      const expiry=body.expires_at===null?null:integer(body.expires_at,1,now+3650*DAY,"Viewing expiration");
+      const sessions=integer(body.max_sessions,1,20,"Viewing sessions");
+      await env.DB.batch([
+        stmt(env,"UPDATE admin_profiles SET viewer_access=?2,revision=revision+1,updated_at=?3 WHERE user_id=?1",[existing.user_id,enabled,now]),
+        stmt(env,"UPDATE users SET expires_at=?2,max_sessions=?3,status='active' WHERE id=?1",[existing.user_id,expiry,sessions]),
+        stmt(env,"UPDATE sessions SET revoked=1 WHERE user_id=?1",[existing.user_id]),
+      ]);
+      await audit(env,null,auth.user.id,"admin_viewing_updated",JSON.stringify({admin_id:existing.user_id}));
+      return json({success:true,message:"Viewing access updated. Panel permissions are unchanged. Sign in again using the same login."});
+    } else if (adminMatch[2] === "password" && method === "POST") {
       allowedBody(body, ["owner_password", "new_password"]);
       const password = String(body.new_password || "");
       if (password.length < 12 || password.length > 256) throw policyError("Administrator passwords require 12–256 characters.", 400);
@@ -271,7 +306,6 @@ export async function handleAdminRequest(request, env, helpers) {
       const profile = normalizeAdminProfile(body.permissions || {}, existing);
       await env.DB.batch([
         stmt(env, `UPDATE admin_profiles SET ${PROFILE_KEYS.map((key, i) => `${key}=?${i + 1}`).join(",")},revision=revision+1,updated_at=?${PROFILE_KEYS.length + 1} WHERE user_id=?${PROFILE_KEYS.length + 2}`, [...PROFILE_KEYS.map(key => profile[key]), now, existing.user_id]),
-        stmt(env, "UPDATE users SET status=?1 WHERE id=?2", [profile.enabled ? "active" : "disabled", existing.user_id]),
         stmt(env, "UPDATE sessions SET revoked=1 WHERE user_id=?1", [existing.user_id]),
       ]);
       await audit(env, null, auth.user.id, "admin_permissions_updated", JSON.stringify({ admin_id: existing.user_id, permissions: profile }));

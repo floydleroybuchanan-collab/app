@@ -22,7 +22,7 @@ export async function registerInvitedAccount(request, env, helpers) {
   if (invitation.status !== "unused") throw policyError("This invitation is no longer available.", 409);
   if (invitation.expires_at !== null && invitation.expires_at <= now) throw policyError("This invitation has expired.", 410);
   if (referral) {
-    const inviter = await env.DB.prepare("SELECT * FROM users WHERE id=?1").bind(referral.owner_user_id).first();
+    const inviter = await env.DB.prepare("SELECT u.*,COALESCE(p.viewer_access,0) viewer_access FROM users u LEFT JOIN admin_profiles p ON p.user_id=u.id WHERE u.id=?1").bind(referral.owner_user_id).first();
     referralAccess(referral, inviter, now);
     await syncReferralSlots(env, inviter, now);
   }
@@ -41,7 +41,7 @@ export async function registerInvitedAccount(request, env, helpers) {
         JOIN admin_profiles p ON p.user_id=creator.id JOIN admin_account_stats st ON st.admin_user_id=creator.id
         LEFT JOIN admin_owner o ON o.user_id=creator.id
         WHERE i.id=?6 AND i.status='unused' AND (i.expires_at IS NULL OR i.expires_at>?5)
-          AND creator.role='admin' AND creator.status='active' AND p.enabled=1
+          AND creator.role='admin' AND p.enabled=1
           AND (o.user_id IS NOT NULL OR (p.can_create_invites=1
             AND i.account_duration_days IS NOT NULL AND i.account_duration_days BETWEEN 1 AND p.max_duration_days
             AND i.max_sessions BETWEEN 1 AND p.max_sessions
@@ -59,7 +59,7 @@ export async function registerInvitedAccount(request, env, helpers) {
         SELECT ?1,?2,?3,?4,'user','active',MIN(i.max_sessions,u.max_sessions),?5,?5,MIN(i.grant_expires_at,u.expires_at)
         FROM referral_invites i JOIN users u ON u.id=i.owner_user_id
         WHERE i.id=?6 AND i.status='unused' AND i.expires_at>?5
-          AND u.role='user' AND u.status='active' AND u.expires_at IS NOT NULL AND u.expires_at>?5
+          AND (u.role='user' OR EXISTS(SELECT 1 FROM admin_profiles p WHERE p.user_id=u.id AND p.viewer_access=1)) AND u.status='active' AND u.expires_at IS NOT NULL AND u.expires_at>?5
           AND i.grant_expires_at IS NOT NULL AND i.grant_expires_at>?5
           AND EXISTS(SELECT 1 FROM referral_slots s WHERE s.owner_user_id=u.id AND s.invite_id=i.id AND s.consumed_at IS NULL)
           AND EXISTS(SELECT 1 FROM referral_network_slots n WHERE n.owner_user_id=u.id AND n.invite_id=i.id)`).bind(...parameters),

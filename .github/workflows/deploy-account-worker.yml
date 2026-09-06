@@ -139,7 +139,7 @@ jobs:
           const expectedCount = Number(process.env.EXPECTED_SOURCE_COUNT || 2);
           const optionalReady = (process.env.EXPECT_TERTIARY !== "true" || data.content_sources?.tertiary === true) &&
             (process.env.EXPECT_QUATERNARY !== "true" || data.content_sources?.quaternary === true);
-          if (!response.ok || data.success !== true || data.database !== true || data.admin_controls_version !== 1 || data.content_sources_ready !== true || data.content_sources?.primary !== true || data.content_sources?.secondary !== true || Number(data.configured_source_count || 0) < expectedCount || !optionalReady) {
+          if (!response.ok || data.success !== true || data.database !== true || data.admin_controls_version !== 1 || data.shared_admin_login_version !== 1 || data.content_sources_ready !== true || data.content_sources?.primary !== true || data.content_sources?.secondary !== true || Number(data.configured_source_count || 0) < expectedCount || !optionalReady) {
             throw new Error(`Account Worker health check failed (${response.status})`);
           }
           console.log(`CharmIPTV account Worker database and ${data.configured_source_count} managed source pair(s) verified`);

@@ -1,4 +1,4 @@
-import { handleAdminRequest, resolveAdminAccess } from "./admin-service.js";
+import { handleAdminRequest } from "./admin-service.js";
 import { registerInvitedAccount } from "./registration-service.js";
 import { buildReferralSummary, createReferralInvitation, deleteReferralHistory, releaseReferralForAccount } from "./referral-service.js";
 const DAY = 86400;
@@ -30,6 +30,7 @@ export default {
           success: true,
           database: !!env.DB,
           admin_controls_version: 1,
+          shared_admin_login_version: 1,
           content_sources_ready: sources.ready,
           configured_source_count: sources.configured.length,
           content_sources: Object.fromEntries(sources.slots.map((source) => [source.id, source.state === "configured"])),
@@ -39,7 +40,7 @@ export default {
       if (path === "/auth/register" && request.method === "POST") return await registerWithInvite(request, env);
       if (path === "/auth/login" && request.method === "POST") return await login(request, env);
       if (path === "/auth/logout" && request.method === "POST") {
-        const auth = await requireUser(request, env);
+        const auth = await requireUser(request, env, { panel: true });
         if (!auth.ok) return auth.response;
         await env.DB.prepare("UPDATE sessions SET revoked = 1 WHERE id = ?1").bind(auth.session.id).run();
         return json({ success: true, message: "Logged out." });
@@ -139,8 +140,8 @@ async function login(request, env) {
   const user = await env.DB.prepare("SELECT * FROM users WHERE lower(username) = ?1 OR lower(email) = ?1 LIMIT 1").bind(loginValue).first();
   if (!user || !(await verifyPassword(password, user.password_hash))) return json({ success: false, error: "Invalid username/email or password." }, 401);
   const now = unixNow();
-  if (user.status === "disabled") return json({ success: false, error: "This CharmIPTV account has been disabled." }, 403);
-  if (user.status === "expired" || (user.expires_at !== null && Number(user.expires_at) <= now)) {
+  if (user.role !== "admin" && user.status === "disabled") return json({ success: false, error: "This CharmIPTV account has been disabled." }, 403);
+  if (user.role !== "admin" && (user.status === "expired" || (user.expires_at !== null && Number(user.expires_at) <= now))) {
     await deleteAccountData(env, user.id, "account_expired");
     return json({ success: false, error: "This CharmIPTV account expired and was permanently removed." }, 403);
   }
@@ -193,10 +194,12 @@ async function deleteAccountData(env, userId, reason) {
 async function purgeExpiredAccounts(env, limit) {
   const result = await env.DB.prepare(`SELECT id FROM users WHERE role = 'user' AND expires_at IS NOT NULL AND expires_at <= ?1 LIMIT ?2`).bind(unixNow(), limit).all();
   for (const user of result.results || []) await deleteAccountData(env, user.id, "account_expired");
+  const endedAdmins=await env.DB.prepare("SELECT u.id FROM users u JOIN referral_invites i ON i.redeemed_by_user_id=u.id AND i.status='active' WHERE u.role='admin' AND u.expires_at IS NOT NULL AND u.expires_at<=?1 LIMIT ?2").bind(unixNow(),limit).all();
+  for(const user of endedAdmins.results || []) await releaseReferralForAccount(env,user.id,"account_expired",unixNow());
   return (result.results || []).length;
 }
 
-async function requireUser(request, env) {
+async function requireUser(request, env, { panel = false } = {}) {
   const header = request.headers.get("Authorization") || "";
   if (!header.startsWith("Bearer ")) return { ok: false, response: json({ success: false, error: "Authentication required." }, 401) };
   const hash = await sha256(header.slice(7).trim());
@@ -205,11 +208,19 @@ async function requireUser(request, env) {
   if (!session || session.revoked || Number(session.expires_at) <= now) return { ok: false, response: json({ success: false, error: "Your session has expired or was logged out." }, 401) };
   const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?1 LIMIT 1").bind(session.user_id).first();
   if (!user) return { ok: false, response: json({ success: false, error: "Account not found." }, 401) };
-  if (user.expires_at !== null && Number(user.expires_at) <= now) {
-    await deleteAccountData(env, user.id, "account_expired");
-    return { ok: false, response: json({ success: false, error: "This account expired and was permanently removed." }, 401) };
+  if (user.role === "admin") {
+    const access=await env.DB.prepare("SELECT p.viewer_access,CASE WHEN o.user_id=p.user_id THEN 1 ELSE 0 END is_owner FROM admin_profiles p LEFT JOIN admin_owner o ON o.user_id=p.user_id WHERE p.user_id=?1").bind(user.id).first();
+    user.viewer_access=Number(access?.viewer_access || 0);
+    if (!panel && !access?.is_owner && !user.viewer_access)
+      return {ok:false,response:json({success:false,error:"TV access is not enabled for this account. Ask the owner to enable Viewing access."},401)};
   }
-  if (user.status !== "active") return { ok: false, response: json({ success: false, error: "This account is not active." }, 403) };
+  if (!(panel && user.role === "admin")) {
+    if (user.expires_at !== null && Number(user.expires_at) <= now) {
+      if(user.role !== "admin") await deleteAccountData(env,user.id,"account_expired");
+      return {ok:false,response:json({success:false,error:user.role === "admin" ? "Your TV access expired. Your administrator panel access is unchanged." : "This account expired and was permanently removed."},401)};
+    }
+    if (user.status !== "active") return {ok:false,response:json({success:false,error:"This viewing account is not active."},403)};
+  }
   if (now - Number(session.last_activity_at || 0) >= 300) await env.DB.prepare("UPDATE sessions SET last_activity_at = ?1 WHERE id = ?2").bind(now, session.id).run();
   return { ok: true, user, session };
 }
@@ -217,8 +228,6 @@ async function requireUser(request, env) {
 async function createContentAccess(request, env) {
   const auth = await requireUser(request, env);
   if (!auth.ok) return auth.response;
-  if (auth.user.role === "admin" && !(await resolveAdminAccess(env, auth.user)).isOwner)
-    return json({ success: false, error: "Administrator logins are for the panel. Use a separate timed viewer account in the app." }, 403);
   const sources = managedSourceConfiguration(env);
   // Never authenticate into a silently partial catalog: a missing second URL
   // previously looked like a successful login, then every secondary refresh

@@ -141,8 +141,8 @@ function inviteRow(i) {
   return [cell(i.invite_code),badge(i.status),cell(i.account_duration_days==null?"Unlimited":i.account_duration_days+" days",i.max_sessions+" simultaneous sessions"),i.created_by_admin_name||"—",date(i.created_at),cell(date(i.expires_at),"Redeemed: "+date(i.redeemed_at)),actions];
 }
 function adminRow(a) {
-  const actions=el("div",undefined,"actions");if(!a.is_owner)actions.append(button("Permissions",()=>editAdmin(a)),button("Reset password",()=>resetAdmin(a)));
-  return [cell(a.username,a.email),badge(a.is_owner?"owner":a.enabled?"enabled":"disabled"),cell(a.accounts_created+" created",a.active_accounts+" active · "+a.disabled_accounts+" disabled"),
+  const actions=el("div",undefined,"actions");if(!a.is_owner)actions.append(button("Permissions",()=>editAdmin(a)),button("Viewing access",()=>editViewing(a)),button("Reset password",()=>resetAdmin(a)));
+  return [cell(a.username,a.email),cell(a.is_owner?"Owner":a.enabled?"Panel enabled":"Panel disabled",a.is_owner?"Owner TV access":a.viewer_access?"TV: "+remaining(a.expires_at):"TV: not enabled"),cell(a.accounts_created+" created",a.active_accounts+" active · "+a.disabled_accounts+" disabled"),
     cell(a.accounts_expired+" expired",a.accounts_canceled+" canceled · "+a.accounts_deleted+" deleted"),
     cell(a.pending_invites+" pending · "+a.invites_created+" codes ever",a.referred_accounts+" current referred accounts"),date(a.last_login_at),actions];
 }
@@ -192,28 +192,38 @@ function editUser(u) {
   f.append(el("p","Current access: "+remaining(u.expires_at)+". Use either an expiration date or an extension. Delegated administrators cannot exceed their maximum resulting days remaining.","help"));
   submit(f,"Save account changes");
   const actions=el("div",undefined,"form-actions");body.append(actions);
+  if(admin.is_owner)actions.append(button("Give this user admin access",()=>{$("dialog").close();editAdmin(undefined,u.username);}));
   if(permitted("can_force_logout"))actions.append(button("Sign out all sessions",async()=>{if(confirm("Sign out every session for "+u.username+"?")){await api("/admin/users/"+u.id+"/logout","POST",{});await saved("All sessions revoked.");}}));
   if(permitted("can_reset_password"))actions.append(button("Reset password",()=>{ $("dialog").close();const target=openDialog("Reset viewer password",u.username+" will be signed out on all sessions.");const rf=form(target,async()=>{await api("/admin/users/"+u.id+"/reset-password","POST",{new_password:password.value});await saved("Password changed.");});const password=field(rf,"New password","password","","password",{required:true,minLength:8,maxLength:256,autocomplete:"new-password"});submit(rf,"Reset password");}));
   if(permitted("can_delete_users"))actions.append(button("Delete account",()=>{$("dialog").close();const target=openDialog("Permanently delete account","This removes "+u.username+"'s personal information and releases their inviter's eligible slot. This cannot be undone.");
     const df=form(target,async()=>{await api("/admin/users/"+u.id,"DELETE",{confirmation:confirmation.value});await saved("Account and personal data deleted.");});const confirmation=field(df,"Type "+u.username+" to confirm","confirmation","","text",{required:true});submit(df,"Permanently delete");},"danger"));
 }
-function editAdmin(existing) {
+function editAdmin(existing,existingUsername="") {
   if(!admin.is_owner)return;
-  const body=openDialog(existing?"Permissions · "+existing.username:"Add administrator","Only the owner can manage this area. Staff logins are panel-only, cannot add administrators, and cannot grant unlimited viewer access.");
+  const body=openDialog(existing?"Permissions · "+existing.username:"Add administrator","Only the owner can manage this area. An existing user can use one login for TV and this panel. Staff cannot add administrators or grant unlimited viewer access.");
   const f=form(body,async()=>{
     const permissions=Object.fromEntries(Object.keys(FLAGS).map(key=>[key,f.elements[key].checked?1:0]));
     for(const key of Object.keys(LIMITS))permissions[key]=Number(f.elements[key].value);
     permissions.enabled=f.elements.enabled.checked?1:0;
     const payload={permissions,owner_password:f.elements.owner_password.value};
-    if(!existing)Object.assign(payload,{username:f.elements.username.value,email:f.elements.email.value,password:f.elements.password.value});
+    if(!existing){
+      if(f.elements.account_mode.value==="existing")payload.existing_username=f.elements.existing_username.value;
+      else Object.assign(payload,{username:f.elements.username.value,email:f.elements.email.value,password:f.elements.password.value,viewing_days:Number(f.elements.viewing_days.value)});
+    }
     const result=await api("/admin/admins"+(existing?"/"+existing.id:""),existing?"PATCH":"POST",payload);
     creators=(await api("/admin/creators")).creators;await saved(result.message);
   });
   if(!existing){
+    const mode=select(f,"Account to use","account_mode",[["existing","Use existing user"],["new","Create new shared login"]],"existing");
+    const existingField=field(f,"Existing CharmIPTV username","existing_username",existingUsername,"text",{required:true,autocomplete:"off"});
     const grid=el("div",undefined,"form-grid");f.append(grid);
-    field(grid,"Administrator username","username","","text",{required:true,minLength:3,maxLength:32,pattern:"[a-zA-Z0-9._-]{3,32}",autocomplete:"off"});
+    field(grid,"New username","username","","text",{required:true,minLength:3,maxLength:32,pattern:"[a-zA-Z0-9._-]{3,32}",autocomplete:"off"});
     field(grid,"Email","email","","email",{required:true,autocomplete:"off"});
-    field(grid,"Initial admin password (12+ characters)","password","","password",{required:true,minLength:12,maxLength:256,autocomplete:"new-password"});
+    field(grid,"Initial password for app and panel (12+ characters)","password","","password",{required:true,minLength:12,maxLength:256,autocomplete:"new-password"});
+    field(grid,"Initial TV access (days)","viewing_days",30,"number",{required:true,min:1,max:3650});
+    const help=el("p","An existing user's username, email, password, remaining TV time and settings are preserved. Existing sessions are signed out once when admin access is granted. Deleted accounts cannot be restored through this option.","help");f.append(help);
+    const toggle=()=>{const reuse=mode.value==="existing";existingField.parentElement.hidden=!reuse;existingField.disabled=!reuse;grid.hidden=reuse;grid.querySelectorAll("input").forEach(input=>input.disabled=reuse);};
+    mode.addEventListener("change",toggle);toggle();
   }
   check(f,"Panel access enabled","enabled",existing?existing.enabled:1);
   f.append(el("h3","Privileges"));for(const [key,label] of Object.entries(FLAGS))check(f,label,key,existing?.permissions[key]||false);
@@ -222,6 +232,24 @@ function editAdmin(existing) {
   for(const [key,[label,min,max,fallback]] of Object.entries(LIMITS))field(grid,label,key,existing?.permissions[key]??fallback,"number",{min,max,required:true});
   field(f,"Your current owner password to authorize these changes","owner_password","","password",{required:true,autocomplete:"current-password"});
   f.append(el("p","Changing permissions or disabling access revokes this administrator's current sessions. Existing viewer accounts and their expiration dates are unchanged.","help"));submit(f,existing?"Save permissions":"Create administrator");
+}
+function editViewing(a) {
+  if(!admin.is_owner)return;
+  const body=openDialog("Viewing access · "+a.username,"Use this same administrator username and password in CharmIPTV. No invitation or second account is needed. Expired TV time stops viewing, but panel access remains.");
+  const f=form(body,async()=>{
+    const expiryValue=unlimited.checked?null:Math.floor(new Date(expiry.value).getTime()/1000);
+    await api("/admin/admins/"+a.id+"/viewing","PATCH",{owner_password:ownerPassword.value,viewer_access:enabled.checked?1:0,expires_at:expiryValue,max_sessions:Number(sessions.value)});
+    await saved("Viewing access saved. The administrator can sign in to the app with their existing login. Panel permissions are unchanged.");
+  });
+  const enabled=check(f,"Enable TV access with this login","viewer_access",a.viewer_access);
+  const initial=a.expires_at==null?Date.now()+30*86400000:a.expires_at*1000;
+  const expiry=field(f,"TV expiration (your local time)","expires_at",new Date(initial-new Date(initial).getTimezoneOffset()*60000).toISOString().slice(0,16),"datetime-local",{required:true});
+  const unlimited=check(f,"Unlimited TV access · owner grant only; family invites disabled","unlimited",!!a.viewer_access&&a.expires_at==null);
+  unlimited.addEventListener("change",()=>{expiry.disabled=unlimited.checked;expiry.required=!unlimited.checked;});expiry.disabled=unlimited.checked;expiry.required=!unlimited.checked;
+  const sessions=field(f,"Simultaneous sessions","max_sessions",a.viewer_max_sessions||2,"number",{min:1,max:20,required:true});
+  const ownerPassword=field(f,"Your owner password","owner_password","","password",{required:true,autocomplete:"current-password"});
+  f.append(el("p","This does not recreate data from a previously deleted viewer account. Viewing changes sign out current sessions; sign in again with the same credentials.","help"));
+  submit(f,"Save viewing access");
 }
 function resetAdmin(a) {
   const body=openDialog("Reset administrator password",a.username+" will be signed out. Your owner password is required.");

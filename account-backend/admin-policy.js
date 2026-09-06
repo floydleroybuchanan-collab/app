@@ -54,7 +54,7 @@ export function invitationTerms(body, auth) {
 }
 export function referralAccess(invitation, inviter, now) {
   // Never turn a user referral into fresh plan days or propagate unlimited access.
-  if (!inviter || inviter.role === "admin" || inviter.status !== "active") throw policyError("The inviting account is not available.", 410);
+  if (!inviter || (inviter.role === "admin" && !inviter.viewer_access) || inviter.status !== "active") throw policyError("The inviting account is not available.", 410);
   const current = inviter.expires_at == null ? null : Number(inviter.expires_at);
   const grant = invitation.grant_expires_at == null ? null : Number(invitation.grant_expires_at);
   if (!Number.isSafeInteger(current) || !Number.isSafeInteger(grant) || current <= now || grant <= now)

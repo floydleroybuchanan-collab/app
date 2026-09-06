@@ -20,7 +20,7 @@ test("only owner can create/change staff, and cannot change the owner via these 
   assert.equal((await f.request(action.path,{...action,token:s.token,body:{role:"admin",new_password:PASSWORD}})).status,404);
  assert.equal((await f.request("/admin/admins/"+OWNER,{method:"PATCH",token:f.ownerToken,body:{owner_password:PASSWORD,permissions:{enabled:0}}})).status,403);
  assert.equal((await f.request("/admin/admins",{method:"POST",token:f.ownerToken,body:{owner_password:"wrong"}})).status,403);
- assert.equal((await f.request("/content/access",{token:s.token})).status,403);
+ assert.equal((await f.request("/content/access",{token:s.token})).status,401);
  assert.equal((await f.request("/content/access",{token:f.ownerToken})).status,200);
 });
 test("staff can only see/manage attributed accounts unless owner explicitly grants all-account scope",async()=>{
@@ -121,4 +121,77 @@ test("server pagination, literal search and sorting stay bounded and do not incl
 test("permission values reject null, unknown privilege fields and misleading booleans",()=>{
  for(const profile of [{is_owner:1},{enabled:null},{can_create_invites:"false"},{max_accounts_total:-1},{max_sessions:null},[]])
   assert.throws(()=>normalizeAdminProfile(profile));
+});
+
+test("owner enables existing administrator viewing without an invitation or second identity",async()=>{
+ const f=fixture(),s=await f.staff(),expiry=NOW()+45*DAY;
+ const before=f.db.prepare("SELECT * FROM users WHERE id=?").get(s.id);
+ const result=await f.request("/admin/admins/"+s.id+"/viewing",{method:"PATCH",token:f.ownerToken,body:{owner_password:PASSWORD,viewer_access:1,expires_at:expiry,max_sessions:3}});
+ assert.equal(result.status,200,JSON.stringify(result));
+ const after=f.db.prepare("SELECT * FROM users WHERE id=?").get(s.id);
+ assert.equal(after.username,before.username);assert.equal(after.email,before.email);assert.equal(after.password_hash,before.password_hash);
+ assert.equal(after.expires_at,expiry);assert.equal(after.max_sessions,3);
+ const login=await f.request("/auth/login",{method:"POST",body:{login:after.username,password:PASSWORD}});
+ assert.equal(login.status,200);
+ assert.equal((await f.request("/content/access",{token:login.body.token})).status,200);
+ assert.equal((await f.request("/admin/me",{token:login.body.token})).status,200);
+ assert.equal(f.db.prepare("SELECT COUNT(*) n FROM users").get().n,2);
+});
+test("expired TV access preserves administrator login and panel access but denies app restoration and sources",async()=>{
+ const f=fixture(),s=await f.staff();
+ f.db.prepare("UPDATE admin_profiles SET viewer_access=1 WHERE user_id=?").run(s.id);
+ f.db.prepare("UPDATE users SET expires_at=? WHERE id=?").run(NOW()-10,s.id);
+ const login=await f.request("/auth/login",{method:"POST",body:{login:"staff",password:PASSWORD}});
+ assert.equal(login.status,200);
+ assert.equal((await f.request("/admin/me",{token:login.body.token})).status,200);
+ assert.equal((await f.request("/me",{token:login.body.token})).status,401);
+ assert.equal((await f.request("/content/access",{token:login.body.token})).status,401);
+ assert.equal((await f.request("/referrals",{token:login.body.token})).status,401);
+ assert.ok(f.db.prepare("SELECT id FROM users WHERE id=?").get(s.id));
+});
+test("disabling panel access does not disable valid TV access",async()=>{
+ const f=fixture(),s=await f.staff();
+ f.db.prepare("UPDATE admin_profiles SET viewer_access=1 WHERE user_id=?").run(s.id);
+ f.db.prepare("UPDATE users SET expires_at=? WHERE id=?").run(NOW()+30*DAY,s.id);
+ await f.request("/admin/admins/"+s.id,{method:"PATCH",token:f.ownerToken,body:{owner_password:PASSWORD,permissions:{enabled:0}}});
+ const login=await f.request("/auth/login",{method:"POST",body:{login:"staff",password:PASSWORD}});
+ assert.equal(login.status,200);
+ assert.equal((await f.request("/content/access",{token:login.body.token})).status,200);
+ assert.equal((await f.request("/admin/me",{token:login.body.token})).status,403);
+});
+test("promotion preserves the existing viewer identity, credentials, expiry, settings and family invites",async()=>{
+ const f=fixture(),u=f.user("existingviewer"),oldToken=f.token(u.id);
+ f.db.prepare("INSERT INTO user_preferences(user_id,preferences_json) VALUES(?,?)").run(u.id,'{"test":"preserved"}');
+ const before=f.db.prepare("SELECT * FROM users WHERE id=?").get(u.id);
+ const pending=await f.request("/referrals/invites",{method:"POST",token:oldToken,body:{}});
+ const promoted=await f.request("/admin/admins",{method:"POST",token:f.ownerToken,body:{existing_username:u.username,owner_password:PASSWORD,permissions:{}}});
+ assert.equal(promoted.status,201,JSON.stringify(promoted));
+ const after=f.db.prepare("SELECT * FROM users WHERE id=?").get(u.id);
+ for(const key of ["id","username","email","password_hash","expires_at","created_at","max_sessions"])assert.equal(after[key],before[key]);
+ assert.equal(after.role,"admin");
+ assert.equal((await f.request("/me",{token:oldToken})).status,401);
+ assert.equal(f.db.prepare("SELECT preferences_json FROM user_preferences WHERE user_id=?").get(u.id).preferences_json,'{"test":"preserved"}');
+ const token=f.token(u.id);
+ assert.equal((await f.request("/admin/me",{token})).status,200);
+ assert.equal((await f.request("/content/access",{token})).status,200);
+ const referred=await f.redeem(pending.body.invitation.invite_code);
+ assert.equal(referred.status,201,JSON.stringify(referred));assert.equal(referred.body.user.expires_at,u.expires_at);
+ assert.equal((await f.request("/referrals/invites",{method:"POST",token,body:{}})).status,201);
+});
+test("staff cannot grant themselves viewing, unlimited time or admin access for another user",async()=>{
+ const f=fixture(),s=await f.staff();f.user("viewer");
+ for(const body of [{viewer_access:1,expires_at:null,max_sessions:20,owner_password:PASSWORD},{viewer_access:1,expires_at:NOW()+DAY,max_sessions:1,owner_password:PASSWORD}])
+  assert.equal((await f.request("/admin/admins/"+s.id+"/viewing",{method:"PATCH",token:s.token,body})).status,403);
+ assert.equal((await f.request("/admin/admins",{method:"POST",token:s.token,body:{existing_username:"viewer",owner_password:PASSWORD}})).status,403);
+ assert.equal((await f.request("/admin/admins/"+s.id,{method:"PATCH",token:f.ownerToken,body:{owner_password:PASSWORD,permissions:{viewer_access:1}}})).status,400);
+});
+test("new shared login grants explicit finite viewing and duplicate account details produce a useful conflict",async()=>{
+ const f=fixture();f.user("taken");
+ const duplicate=await f.request("/admin/admins",{method:"POST",token:f.ownerToken,body:{username:"newname",email:"taken@example.test",password:PASSWORD,owner_password:PASSWORD,permissions:{}}});
+ assert.equal(duplicate.status,409);assert.match(duplicate.body.error,/Use existing user/);
+ const shared=await f.request("/admin/admins",{method:"POST",token:f.ownerToken,body:{username:"shared",email:"shared@example.test",password:PASSWORD,owner_password:PASSWORD,viewing_days:30,permissions:{}}});
+ assert.equal(shared.status,201);
+ const login=await f.request("/auth/login",{method:"POST",body:{login:"shared",password:PASSWORD}});
+ assert.equal((await f.request("/content/access",{token:login.body.token})).status,200);
+ assert.ok(login.body.user.expires_at<=NOW()+30*DAY);
 });

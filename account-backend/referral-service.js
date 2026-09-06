@@ -179,8 +179,8 @@ export async function buildReferralSummary(env, user, now) {
   const invitations = inviteResult.results || [];
   return {
     ...availability,
-    ...(user.role === "admin" || user.expires_at == null ? {
-      available: 0, generation_disabled_reason: "Family-and-friend invites are disabled for unlimited and administrator accounts.",
+    ...((user.role === "admin" && !user.viewer_access) || user.expires_at == null ? {
+      available: 0, generation_disabled_reason: "Family-and-friend invites are disabled for unlimited accounts and accounts without TV access.",
     } : {}),
     active_accounts: invitations.filter((item) => item.status === "active").length,
     cycle_started_at: cycle.startedAt,
@@ -203,8 +203,8 @@ async function reserveSlot(env, tableName, userId, inviteId, slots) {
 }
 
 export async function createReferralInvitation(env, user, now) {
-  if (user.role === "admin" || user.expires_at == null)
-    throw policyError("Family-and-friend invites are disabled for unlimited and administrator accounts.");
+  if ((user.role === "admin" && !user.viewer_access) || user.expires_at == null)
+    throw policyError("Family-and-friend invites are disabled for unlimited accounts and accounts without TV access.");
   if (user.status !== "active" || !Number.isSafeInteger(Number(user.expires_at)) || Number(user.expires_at) <= now)
     throw policyError("Only an active timed account can generate an invitation.", 410);
   const state = await syncReferralSlots(env, user, now);
