@@ -28,6 +28,7 @@ export function SourceRefreshScheduler() {
     let active = AppState.currentState !== "background" && AppState.currentState !== "inactive";
     let running = false;
     let initialCheckPending = true;
+    let pendingCatalogRefresh = false;
     let cancelled = false;
     const automaticRefreshEligibleAt = Date.now() + 30_000;
 
@@ -43,6 +44,14 @@ export function SourceRefreshScheduler() {
       try {
         const prefs = await getSourceRefreshPreferences();
         if (!screenIsSafe()) return;
+        if (pendingCatalogRefresh) {
+          const channels = await readCombinedPlaylists();
+          if (!screenIsSafe()) return;
+          await syncPlaylistEpg(channels, false);
+          if (!screenIsSafe()) return;
+          await reloadPlaylistCatalog();
+          pendingCatalogRefresh = false;
+        }
         // Synchronize settings -> native source records before checking due state.
         await syncNativeCustomEpgPolicy(prefs.epgHours, prefs.epgPastDays);
         if (!screenIsSafe()) return;
@@ -51,26 +60,31 @@ export function SourceRefreshScheduler() {
         initialCheckPending = false;
 
         if (isInitialCheck && prefs.updateEpgOnAppStart) {
-          await refreshEpgOnly();
+          await refreshEpgOnly(true, screenIsSafe);
         } else {
           // Playlist jobs complete before dependent EPG association/import work.
           // A failed source keeps its previous revision, so the following EPG
           // pass never observes a half-written catalog.
           const before = await listPlaylists();
-          const scheduledChannels = await refreshPlaylists(undefined, true);
-          if (!stillOwner()) return;
+          const scheduledChannels = await refreshPlaylists(undefined, true, screenIsSafe);
+          if (!screenIsSafe()) { pendingCatalogRefresh = true; return; }
           const after = await listPlaylists();
+          if (!screenIsSafe()) { pendingCatalogRefresh = true; return; }
           const playlistChanged = after.some(row => row.revision !== before.find(previous => previous.id === row.id)?.revision);
           if (playlistChanged) {
+            pendingCatalogRefresh = true;
             if (prefs.updateEpgOnPlaylistChange) await syncPlaylistEpg(scheduledChannels, false);
+            if (!screenIsSafe()) return;
             await reloadPlaylistCatalog();
+            pendingCatalogRefresh = false;
           }
+          if (!screenIsSafe()) return;
           const nativeDue = await consumeNativeScheduledEpgRefresh();
-          if (!stillOwner()) return;
-          if (nativeDue && prefs.epgHours > 0) await refreshEpgOnly(false);
-          else await refreshSourcesIfDue();
+          if (!screenIsSafe()) return;
+          if (nativeDue && prefs.epgHours > 0) await refreshEpgOnly(false, screenIsSafe);
+          else await refreshSourcesIfDue(screenIsSafe);
         }
-        if (!stillOwner()) return;
+        if (!screenIsSafe()) return;
 
         // Independent XMLTV stores refresh serially under this same owner. The
         // native custom parser also yields if Guide/player takes foreground.
@@ -79,28 +93,32 @@ export function SourceRefreshScheduler() {
         const activeChannelIds = new Set(activeChannels.map(channel => channel.id));
         let customGuideChanged = false;
         for (const source of customSources) {
-          if (!stillOwner()) return;
+          if (!screenIsSafe()) break;
           if (!source.enabled || !source.url || source.refreshHours === 0) continue;
           if (!usedSources.has(source.id) && !Object.keys(source.overrides).some(id => activeChannelIds.has(id))) continue;
           if (Date.now() - source.lastRefreshAt < source.refreshHours * 60 * 60 * 1000) continue;
           try {
             const result = await refreshNativeSourceGuide(source.id, source.url);
-            if (!stillOwner()) return;
             const swapped = result.programmeSwapSucceeded !== false;
+            if (swapped) pendingCatalogRefresh = true;
             customGuideChanged = customGuideChanged || swapped;
             updateMultiEpgRefreshStatus(source.id, source.url, {
               ...(swapped ? { lastRefreshAt: Date.now() } : {}),
               lastStatus: swapped ? `Indexed ${Math.max(0, Math.round(result.count || 0))} programmes.` : "No usable new rows; kept last-good data.",
             });
+            if (!stillOwner()) return;
           } catch {
             if (!stillOwner()) return;
             updateMultiEpgRefreshStatus(source.id, source.url, { lastStatus: "Automatic EPG refresh failed; previous guide kept. Check source and connection." });
           }
         }
-        if (customGuideChanged && stillOwner()) {
+        if (customGuideChanged && screenIsSafe()) {
           const channels = await readCombinedPlaylists();
+          if (!screenIsSafe()) return;
           await syncPlaylistEpg(channels, false);
+          if (!screenIsSafe()) return;
           await reloadPlaylistCatalog();
+          pendingCatalogRefresh = false;
         }
       } catch {
         // Last-good playlist/guide remains authoritative; normal source UI surfaces errors.

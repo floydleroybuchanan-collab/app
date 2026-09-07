@@ -7,15 +7,19 @@ disable choices and explicitly empty enabled-catalog projections. HTTP/HTTPS
 provider transport remains direct. See docs/rc6-source-focus-audit.md.
 The follow-up reviewed scheduler/primary-parser repair is documented in
 docs/rc6-build163-regression-repair.md; it does not change provider transport.
+The build-166 stability follow-up adds per-stage scheduling gates, reports
+match-write failures honestly, and leases native imports through metadata
+publication. URLs, parsers, request headers and payload delivery are unchanged.
+Regression coverage: stability166Regression.test.mjs and EpgImportCoordinatorTest.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': '3b2f4c1e1aedbad8966e28712a1610a5348c85944bd7e3b8ed558afcc459bc35',
-    'frontend/src/nativeEpg.ts': 'caa2c548a16b96563dcc32a4b7b34e02589302009482d683b0f179097b4f739e',
-    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'c5d610ce625af16df4333a4972bc3370ebb236cc0232ab844fdf9b787526ff48',
+    'frontend/src/source.native.ts': '0abc1004f35dea9ca5220cb645610120ebf9f237e85eda779cd5abec63382945',
+    'frontend/src/nativeEpg.ts': 'd461decc33083a30f2f727f77eac010815f033b0ec14b1a6a3051d80b7ed7f23',
+    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }
 
 def is_reviewed_playlist_transport(path: str, source: str) -> bool:

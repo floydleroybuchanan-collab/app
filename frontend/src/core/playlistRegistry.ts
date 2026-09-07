@@ -162,10 +162,11 @@ export function readCombinedPlaylists(): Promise<Channel[]> {
   return exclusive(async () => { const rows = await load(); return combinePlaylistCatalogs(rows, await allCatalogs(rows)); });
 }
 
-export function refreshPlaylists(onlyId?: string, dueOnly = false): Promise<Channel[]> {
+export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext: () => boolean = () => true): Promise<Channel[]> {
   return exclusive(async () => {
     let rows = await load(); const catalogs = await allCatalogs(rows);
     for (const row of [...rows]) {
+      if (!canStartNext()) break;
       if (!row.enabled || (onlyId && row.id !== onlyId)) continue;
       if (dueOnly && row.revision && (!row.refreshHours || Date.now() - row.refreshedAt < row.refreshHours * 3_600_000)) continue;
       const previous = catalogs.get(row.id) || [];

@@ -199,6 +199,68 @@ object NativePlaybackManager {
   private var audioDecoder: String? = null
   private var codecError: String? = null
   private var decoderReleaseFailure: Throwable? = null
+  private val healthHistory = PlaybackHealthHistory()
+  private var lastVideoOutputs = -1
+  private var lastVideoAdvanceMs = 0L
+  private val healthSampler = object : Runnable {
+    override fun run() {
+      val instance = player ?: return
+      if (owner == Owner.NONE || activeSource == null) return
+      captureHealth("sample", instance)
+      main.postDelayed(this, 2_000L)
+    }
+  }
+
+  fun getHealthHistory(onResult: (String) -> Unit) = runOnMain {
+    if (player != null && owner != Owner.NONE) captureHealth("snapshot", player)
+    val rows = org.json.JSONArray()
+    for (row in healthHistory.snapshot()) rows.put(org.json.JSONObject(row))
+    onResult(rows.toString())
+  }
+
+  fun restartChannel(expectedChannelKey: String, onResult: (Boolean) -> Unit) = runOnMain {
+    val source = activeSource
+    if (owner != Owner.FULLSCREEN || source == null || source.channelKey != expectedChannelKey || pendingRecovery != null || pendingSourceRefresh != null) {
+      onResult(false)
+      return@runOnMain
+    }
+    captureHealth("manual-channel-restart", player)
+    val profile = activeBufferProfile
+    stopInternal(releasePlayer = true)
+    if (decoderReleaseFailure != null) { publishState("error", "release-failed"); onResult(false); return@runOnMain }
+    // Reuse the active (possibly auth-refreshed) source; never replay stale JSX URLs.
+    prepare(Owner.FULLSCREEN, source.channelKey, source.uri, source.headers, source.contentType, profile)
+    onResult(true)
+  }
+
+  private fun captureHealth(event: String, instance: ExoPlayer?) {
+    val now = SystemClock.elapsedRealtime()
+    val counters = instance?.videoDecoderCounters
+    counters?.ensureUpdated()
+    val outputs = counters?.renderedOutputBufferCount ?: -1
+    if (outputs != lastVideoOutputs || userPaused || instance?.isPlaying != true) {
+      lastVideoOutputs = outputs
+      lastVideoAdvanceMs = now
+    }
+    fun safeCode(value: String?): String = if (value.orEmpty().contains("://")) "redacted" else value.orEmpty().take(96).replace(Regex("[^a-zA-Z0-9_./:+-]"), "_")
+    healthHistory.add(linkedMapOf(
+      "atMs" to System.currentTimeMillis(), "event" to safeCode(event),
+      "owner" to owner.name.lowercase(), "state" to playbackStateName(instance),
+      "tune" to playbackRevision, "positionMs" to (instance?.currentPosition ?: 0L),
+      "bufferMs" to (instance?.totalBufferedDuration ?: 0L),
+      "playing" to (instance?.isPlaying == true), "userPaused" to userPaused,
+      "suppression" to (instance?.playbackSuppressionReason ?: 0),
+      "videoMime" to safeCode(videoMimeType), "audioMime" to safeCode(audioMimeType),
+      "videoDecoder" to safeCode(videoDecoder), "audioDecoder" to safeCode(audioDecoder),
+      "videoOutputs" to outputs, "droppedVideo" to (counters?.droppedBufferCount ?: 0),
+      "videoQuietMs" to (if (lastVideoAdvanceMs > 0) now - lastVideoAdvanceMs else 0L),
+      "width" to (videoWidth ?: 0), "height" to (videoHeight ?: 0),
+      "surfaceAttached" to (playerViewFor(owner)?.isAttachedToWindow == true),
+      "epgImports" to EpgImportCoordinator.activeImports(),
+      "heapMiB" to ((Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / (1024 * 1024)),
+      "errorCode" to (instance?.playerError?.errorCode ?: 0),
+    ))
+  }
 
   private val startupTimeout: Runnable = Runnable {
     if (userPaused) return@Runnable
@@ -313,6 +375,10 @@ object NativePlaybackManager {
       return@runOnMain
     }
     cancelRecoveryCallbacks()
+    EpgImportCoordinator.playbackActive = true
+    main.removeCallbacks(healthSampler)
+    lastVideoOutputs = -1
+    lastVideoAdvanceMs = 0L
     playbackRevision += 1
     userPaused = false
     val video = playerViewFor(requestedOwner)
@@ -334,6 +400,7 @@ object NativePlaybackManager {
         contentType,
         bufferProfile,
       )
+      EpgImportCoordinator.playbackActive = true
       publishState("loading", "awaiting-surface")
       markPlaybackStarting("awaiting-surface")
       recordDiagnostic("awaiting-surface", lastPlaybackError, player)
@@ -445,8 +512,14 @@ object NativePlaybackManager {
     val instance = player ?: return@runOnMain
     val builder = instance.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_AUDIO)
     if (groupIndex != null && trackIndex != null) {
-      val group = instance.currentTracks.groups.getOrNull(groupIndex)?.mediaTrackGroup ?: return@runOnMain
-      builder.addOverride(TrackSelectionOverride(group, trackIndex))
+      val group = instance.currentTracks.groups.getOrNull(groupIndex)
+      if (group != null && group.type == C.TRACK_TYPE_AUDIO && trackIndex in 0 until group.length && group.isTrackSupported(trackIndex)) {
+        builder.addOverride(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+      } else {
+        // Saved IDs/bridge commands may outlive a manifest's track groups.
+        // Retain language preference but let Media3 choose a supported track.
+        recordDiagnostic("audio-selection-fallback", lastPlaybackError, instance)
+      }
     } else builder.setPreferredAudioLanguage(preferredLanguage)
     instance.trackSelectionParameters = builder.build()
   }
@@ -478,6 +551,9 @@ object NativePlaybackManager {
 
   private fun publishState(state: String, reason: String? = null) { listener?.onState(state, reason) }
   private fun stopInternal(releasePlayer: Boolean) {
+    captureHealth("stop", player)
+    main.removeCallbacks(healthSampler)
+    EpgImportCoordinator.playbackActive = false
     val previousOwner = currentOwner()
     playbackRevision += 1
     pendingPrepare = null
@@ -678,6 +754,10 @@ object NativePlaybackManager {
         if (!isCurrent()) return
         codecError = "audio:${safeThrowableSummary(audioCodecError)}"
         recordDiagnostic("audio-codec-error", lastPlaybackError, created)
+      }
+
+      override fun onAudioUnderrun(eventTime: AnalyticsListener.EventTime, bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
+        if (isCurrent()) captureHealth("audio-underrun", created)
       }
     }
     analyticsListener = nextAnalytics
@@ -998,6 +1078,8 @@ object NativePlaybackManager {
     instance.prepare()
     instance.playWhenReady = !userPaused
     armStartupTimeout()
+    main.removeCallbacks(healthSampler)
+    main.postDelayed(healthSampler, 2_000L)
     recordDiagnostic(event, lastPlaybackError, instance)
   }
   private fun buildMediaItem(source: PlaybackSource): MediaItem {
@@ -1065,6 +1147,8 @@ object NativePlaybackManager {
   }
   private fun finishWithError(reason: String, instance: ExoPlayer? = player) {
     if (instance != null && player !== instance) return
+    EpgImportCoordinator.playbackActive = false
+    main.removeCallbacks(healthSampler)
     playbackRevision += 1
     pendingPrepare = null
     cancelRecoveryCallbacks()
@@ -1255,6 +1339,7 @@ object NativePlaybackManager {
     return if (raw.isEmpty()) value.javaClass.simpleName else "${value.javaClass.simpleName}:$raw"
   }
   private fun recordDiagnostic(event: String, error: PlaybackException?, instance: ExoPlayer?) {
+    captureHealth(event, instance)
     val runtime = Runtime.getRuntime()
     val bufferedPosition = instance?.bufferedPosition ?: 0L
     val position = instance?.currentPosition ?: 0L

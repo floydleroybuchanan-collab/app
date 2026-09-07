@@ -32,6 +32,7 @@ import { getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
+import { restartNativePlaybackChannel } from "@/src/nativePlayback";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
@@ -226,6 +227,21 @@ export default function PlayerScreen() {
     const shouldClaim = opts?.claimChannelsFocus !== false && wasHidden && isTV && !channelsOpenRef.current;
     if (shouldClaim) requestAnimationFrame(() => requestNativeFocus(channelsButtonRef.current));
   }, [hasStream, isTV, scheduleHide, status]);
+
+  const restartInFlightRef = useRef(false);
+  const restartThisChannel = useCallback(async () => {
+    if (restartInFlightRef.current || exitInFlightRef.current) return;
+    restartInFlightRef.current = true;
+    const requested = channelIdRef.current;
+    try {
+      const restarted = await restartNativePlaybackChannel(requested);
+      if (requested !== channelIdRef.current || exitInFlightRef.current) return;
+      if (restarted) { setPlaybackPaused(false); showNotice("Restarting this channel…"); }
+      else showNotice("Recovery is already running, or no active channel is available. Use Retry if an error appears.");
+    } catch {
+      if (!exitInFlightRef.current) showNotice("Could not restart this channel. Try switching away and back.");
+    } finally { restartInFlightRef.current = false; }
+  }, [showNotice]);
 
   const changeChannel = useCallback((id: string, haptic = false) => {
     if (!id || exitInFlightRef.current) return;
@@ -560,6 +576,7 @@ export default function PlayerScreen() {
               <Pressable onPress={goGuide} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="information-circle-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Guide</Text></Pressable>
               <Pressable ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; setTracksOpen(false); setChannelsOpen((value) => !value); scheduleHide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
               <View style={styles.controlsSpacer} />
+              <Pressable accessibilityLabel="Restart this channel" testID="restart-current-channel" onPress={() => void restartThisChannel()} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="refresh" size={15} color="#fff" /><Text style={styles.controlLabel}>Restart channel</Text></Pressable>
               <Pressable ref={prevButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(-1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-back" size={18} color="#fff" /></Pressable>
               <Pressable accessibilityLabel={playbackPaused ? "Play stream" : "Pause stream"} onPress={() => { setPlaybackPaused((value) => !value); revealControls({ claimChannelsFocus: false }); }} style={({ focused }: any) => [styles.pauseControl, focused && styles.focused]}><Ionicons name={playbackPaused ? "play" : "pause"} size={18} color="#fff" /></Pressable>
               <Pressable ref={nextButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-forward" size={18} color="#fff" /></Pressable>

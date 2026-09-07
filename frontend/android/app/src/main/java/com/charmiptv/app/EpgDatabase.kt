@@ -46,6 +46,8 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
 
   private val appContext = context.applicationContext
 
+  fun acquireImport(): AutoCloseable = EpgImportCoordinator.acquire(databaseName)
+
   init {
     // Configure Android's connection pool, not only SQLite's journal pragma.
     // Read-only guide queries can then use a separate connection during import.
@@ -502,6 +504,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
   }
 
   fun replaceBatches(batches: Sequence<List<NativeEpgProgram>>, beforeSwap: (() -> Unit)? = null) {
+    acquireImport().use {
     val db = writableDatabase
     db.beginTransactionNonExclusive()
     try { db.delete(STAGING_TABLE, null, null); db.setTransactionSuccessful() } finally { db.endTransaction() }
@@ -536,6 +539,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
         runPragma(db, "PRAGMA wal_checkpoint(PASSIVE)")
       } catch (_: Throwable) {}
       throw failure
+    }
     }
   }
 
@@ -579,12 +583,14 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
   }
 
   fun clear() {
+    acquireImport().use {
     val db = writableDatabase
     db.beginTransaction()
     try {
       db.delete(LIVE_TABLE, null, null); db.delete(STAGING_TABLE, null, null); db.delete(ALIAS_TABLE, null, null); db.delete(PLAYLIST_TABLE, null, null); db.delete(MATCH_TABLE, null, null); db.delete(STOP_UPDATE_TABLE, null, null); db.delete(FTS_TABLE, null, null); db.delete(META_TABLE, null, null)
       db.setTransactionSuccessful()
     } finally { db.endTransaction() }
+    }
   }
 
   fun count(): Long = countTable(LIVE_TABLE)

@@ -35,6 +35,7 @@ import {
   writeFavoritesBackup,
 } from "@/src/utils/favoritesBackup";
 import { formatDiagnosticsExport } from "@/src/core/diagnosticsExport";
+import { getNativePlaybackHealth } from "@/src/nativePlayback";
 import {
   audioDiagnosticsExtras,
   getLastAudioDiagnostics,
@@ -375,6 +376,7 @@ function SettingsScreenContent() {
     setBusy(true);
     try {
       const snap = await sourceDiagnostics();
+      const playbackHistory = await getNativePlaybackHealth();
       const body = formatDiagnosticsExport({
         diagnostics: snap,
         appVersion,
@@ -389,6 +391,7 @@ function SettingsScreenContent() {
           logosOffWhileSurfing,
           favorites: favorites.length,
           ...audioDiagnosticsExtras(),
+          playbackHistory,
         },
       });
       const root = FileSystem.documentDirectory || "";
@@ -781,6 +784,7 @@ function SettingsScreenContent() {
                   setBackupStatus(`Removed ${report.removedFiles} old cache files (${(report.removedBytes / 1048576).toFixed(1)} MiB).`);
                 })()} />
                 <Action label={busy ? "Working…" : "Export diagnostics"} icon="document-text-outline" onPress={exportDiagnostics} disabled={busy} />
+                <Text style={styles.help}>Includes recent playback, decoder, buffer and guide-import activity. Kept locally in a short rolling history; no source addresses or login credentials.</Text>
                 {backupStatus && section === "health" ? <Text style={styles.status}>{backupStatus}</Text> : null}
                 {failedChannelRows.length ? (
                   <View style={styles.matchBlock}>

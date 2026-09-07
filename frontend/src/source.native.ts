@@ -985,7 +985,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       setProgress({ phase: "caching", ratio: 0.975, etaSeconds: null }, true);
       await persistMeta(MEM);
       setProgress({ phase: "finalizing", ratio: 0.99, etaSeconds: null }, true);
-      await syncMatchesToNative(matchedChannelsWithLogos, guideEpoch).catch(() => undefined);
+      await syncMatchesToNative(matchedChannelsWithLogos, guideEpoch);
       if (LEGACY_CHANNEL_CACHE) {
         void FileSystem.deleteAsync(LEGACY_CHANNEL_CACHE, { idempotent: true }).catch(() => undefined);
       }
@@ -1309,7 +1309,8 @@ async function publishPlaylistCatalog(refreshId?: string): Promise<void> {
 }
 
 /** Scheduler already checked playlists; do not reload unchanged catalogs here. */
-export async function refreshSourcesIfDue(): Promise<SourceStatus> {
+export async function refreshSourcesIfDue(canStartNext: () => boolean = () => true): Promise<SourceStatus> {
+  if (!canStartNext()) return sourceStatus();
   if (refreshPromise) {
     await refreshPromise;
     return sourceStatus();
@@ -1323,13 +1324,14 @@ export async function refreshSourcesIfDue(): Promise<SourceStatus> {
   const guideLast = cached.guideRefreshedAt != null ? cached.guideRefreshedAt : cached.ts;
   if (isRefreshDue(guideLast, prefs.epgHours, now)) {
     // Additional feeds use their own due clocks in SourceRefreshScheduler.
-    return refreshEpgOnly(false);
+    return refreshEpgOnly(false, canStartNext);
   }
   return sourceStatus();
 }
 
 /** Refresh XMLTV only — keep current playlist rows (independent epochs). */
-export async function refreshEpgOnly(includeAdditional = true): Promise<SourceStatus> {
+export async function refreshEpgOnly(includeAdditional = true, canStartNext: () => boolean = () => true): Promise<SourceStatus> {
+  if (!canStartNext()) return sourceStatus();
   if (catalogPublishPromise) await catalogPublishPromise;
   // TiviMate-style single refresh owner: if a full/EPG refresh is already doing
   // the provider work, join it. Do not queue an immediate duplicate XMLTV pass.
@@ -1348,6 +1350,7 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
   // self-referential promise cycle because refreshInternal coalesces on it.
   const cached = MEM || (await readChannelCache());
   if (!cached?.channels?.length) {
+    if (!canStartNext()) return sourceStatus();
     await refreshInternal(true);
     return sourceStatus();
   }
@@ -1360,7 +1363,7 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
     try {
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
       await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
-      await syncPlaylistEpg(cached.channels, includeAdditional, undefined, invalidateGuideOwnershipCaches);
+      await syncPlaylistEpg(cached.channels, includeAdditional, undefined, invalidateGuideOwnershipCaches, canStartNext);
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
 
@@ -1368,7 +1371,7 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
       // playlist channel is explicitly owned by the custom XMLTV source. Manual
       // refresh in the Custom EPG manager still performs a full source index so
       // users can discover XMLTV channels before creating assignments.
-      if (ownership.userEnabled && ownership.userUrl && ownership.legacyUserOverrideIds.size > 0) {
+      if (ownership.userEnabled && ownership.userUrl && ownership.legacyUserOverrideIds.size > 0 && canStartNext()) {
         await refreshNativeUserGuide(ownership.userUrl);
       }
 
@@ -1394,11 +1397,19 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
         return MEM;
       }
 
+      if (!canStartNext()) {
+        setProgress({ phase: "idle", ratio: 0, etaSeconds: null, message: null }, true);
+        return MEM || cached;
+      }
       const primaryEpgUrl = managedEpgUrl("primary");
       if (!primaryEpgUrl) throw new Error("The protected CharmIPTV EPG source is not available.");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
       const activeBindings = activeEpgBindings(cached.channels, ownership.customOwnedChannelIds);
       await configureNativeEpgSource(sourceUrl(primaryEpgUrl), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
+      if (!canStartNext()) {
+        setProgress({ phase: "idle", ratio: 0, etaSeconds: null, message: null }, true);
+        return MEM || cached;
+      }
       const epg = await refreshNativeEpg(
         sourceUrl(primaryEpgUrl),
         true,
@@ -1489,7 +1500,7 @@ export async function refreshEpgOnly(includeAdditional = true): Promise<SourceSt
       setProgress({ phase: "caching", ratio: 0.975, etaSeconds: null }, true);
       await persistMeta(MEM);
       setProgress({ phase: "finalizing", ratio: 0.99, etaSeconds: null }, true);
-      await syncMatchesToNative(refreshedChannels, guideEpoch).catch(() => undefined);
+      await syncMatchesToNative(refreshedChannels, guideEpoch);
       emit();
       setProgress({ phase: "ready", ratio: 1, etaSeconds: 0, message: null }, true);
       return MEM;

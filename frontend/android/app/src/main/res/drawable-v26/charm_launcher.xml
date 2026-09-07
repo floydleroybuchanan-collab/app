@@ -2,8 +2,7 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/charm_icon_background" />
     <foreground>
-        <inset android:inset="20%">
-            <bitmap android:src="@drawable/charm_living_room" android:gravity="fill" android:filter="true" />
-        </inset>
+        <!-- Foreground PNG already includes the adaptive-icon safe-area padding. -->
+        <bitmap android:src="@drawable/charm_refined_foreground" android:gravity="fill" android:filter="true" />
     </foreground>
 </adaptive-icon>

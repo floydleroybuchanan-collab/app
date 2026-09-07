@@ -24,6 +24,16 @@ import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
 
+  override fun onStart() {
+    EpgImportCoordinator.appVisible = true
+    super.onStart()
+  }
+
+  override fun onStop() {
+    super.onStop()
+    EpgImportCoordinator.appVisible = false
+  }
+
   private var lastAcceptedDirectionalRepeatAt = 0L
   private var lastAcceptedDirectionalKeyCode = -1
   private var emittedLongPressKeyCode = -1

@@ -76,6 +76,12 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
     if (NativePlaybackManager.hasReleaseFailure()) promise.reject("E_PLAYBACK_RELEASE", "Media3 ownership is uncertain after failed release")
     else promise.resolve(NativePlaybackManager.currentOwner().name.lowercase())
   } }
+  @ReactMethod fun getHealthHistory(promise: Promise) {
+    NativePlaybackManager.getHealthHistory { promise.resolve(it) }
+  }
+  @ReactMethod fun restartChannel(channelKey: String, promise: Promise) {
+    NativePlaybackManager.restartChannel(channelKey) { promise.resolve(it) }
+  }
 
   override fun onState(state: String, reason: String?) {
     emit("NativePlaybackState", identityMap().apply {

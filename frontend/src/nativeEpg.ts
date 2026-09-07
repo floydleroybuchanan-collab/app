@@ -73,6 +73,8 @@ const ramModule = NativeModules.CharmEpgRam as CharmEpgRamModule | undefined;
 export const nativeEpgAvailable = Platform.OS === "android" && !!nativeModule;
 export const nativeEpgRamAvailable = Platform.OS === "android" && !!ramModule;
 let ownershipRequiresSqlite = false;
+let ramMatchesReady = true;
+let matchSyncRevision = 0;
 let primaryGuideEnabled = true;
 let userGuideEnabled = false;
 let userGuideUrl = "";
@@ -181,7 +183,7 @@ export async function loadNativeEpgWindow(channelIds: string[], startMs: number,
 }
 export async function queryNativeGuideWindow(playlistChannelIds: string[], startMs: number, endMs: number): Promise<Record<string, Program[]>> {
   if (!nativeModule) return {}; const uniqueIds = Array.from(new Set(playlistChannelIds.filter(Boolean))); if (!uniqueIds.length) return {};
-  if (ramModule && !ownershipRequiresSqlite) { const ramWindow = await ramModule.queryGuideWindow(startMs, endMs, uniqueIds); if (ramWindow) return windowToPrograms(ramWindow, uniqueIds); }
+  if (ramModule && ramMatchesReady && !ownershipRequiresSqlite) { const ramWindow = await ramModule.queryGuideWindow(startMs, endMs, uniqueIds); if (ramWindow) return windowToPrograms(ramWindow, uniqueIds); }
   if (typeof nativeModule.queryGuideWindow === "function") return windowToPrograms(await nativeModule.queryGuideWindow(startMs, endMs, uniqueIds), uniqueIds);
   return loadNativeEpgWindow(uniqueIds, startMs, endMs);
 }
@@ -189,21 +191,27 @@ export async function touchNativePlaylistRefresh(playlistEpoch: number): Promise
 export async function upsertNativePlaylistChannels(channels: NativePlaylistChannelRow[], playlistEpoch: number, contentFingerprint: string): Promise<boolean> { if (!nativeModule?.upsertPlaylistChannels) return false; return nativeModule.upsertPlaylistChannels(channels, playlistEpoch, contentFingerprint); }
 export async function nativePlaylistIsCurrent(contentFingerprint: string): Promise<boolean> { if (!nativeModule?.isPlaylistCurrent || !contentFingerprint) return false; return nativeModule.isPlaylistCurrent(contentFingerprint); }
 /**
- * Returns false only when the bounded caller wait elapsed. The native writes
- * continue in their own queues; callers must not record a completed
- * fingerprint until this returns true or a later source pass will never retry.
+ * Failed/false writes and timeouts must not become successful fingerprints.
+ * SQLite stays authoritative while RAM mappings are pending or have failed.
  */
 export async function upsertNativePlaylistEpgMatches(matches: NativePlaylistEpgMatchRow[], guideEpoch: number): Promise<boolean> {
   const tasks: Promise<unknown>[] = [];
+  const revision = ++matchSyncRevision;
+  ramMatchesReady = false;
   if (nativeModule?.upsertPlaylistEpgMatches) tasks.push(nativeModule.upsertPlaylistEpgMatches(matches, guideEpoch));
   if (ramModule) tasks.push(ramModule.replaceMatches(matches));
-  if (!tasks.length) return true;
+  if (!tasks.length) return false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   try {
-    return await Promise.race([
-      Promise.all(tasks.map((task) => task.catch(() => undefined))).then(() => true),
+    const completed = await Promise.race([
+      Promise.all(tasks.map((task) => task.catch(() => false))).then((results) => {
+        if (!results.every((result) => result === true)) throw new Error("Guide associations could not be synchronized. Saved guide remains available; retry the guide refresh.");
+        return true;
+      }),
       new Promise<boolean>((resolve) => { timeout = setTimeout(() => resolve(false), MATCH_SYNC_TIMEOUT_MS); }),
     ]);
+    if (revision === matchSyncRevision) ramMatchesReady = completed;
+    return completed;
   } finally {
     if (timeout) clearTimeout(timeout);
   }

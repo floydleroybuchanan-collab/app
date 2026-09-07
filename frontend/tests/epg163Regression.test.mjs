@@ -118,9 +118,9 @@ test("slow progress is informational, real failures remain errors, and completio
   assert.doesNotMatch(watchdog, /phase: "error"|epgError:|persistMeta/);
   assert.match(source, /catch \(error\)[\s\S]*?setProgress\(\{ phase: "error"/);
   assert.equal((source.match(/refreshPromise = null;\n    emit\(\);/g) || []).length, 2);
-  const due = source.match(/export async function refreshSourcesIfDue\(\)[\s\S]*?\n}/)[0];
+  const due = source.match(/export async function refreshSourcesIfDue\([^\n]+[\s\S]*?\n}/)[0];
   assert.doesNotMatch(due, /refreshPlaylists|reloadPlaylistCatalog/);
-  assert.match(due, /refreshEpgOnly\(false\)/);
+  assert.match(due, /refreshEpgOnly\(false, canStartNext\)/);
 });
 
 test("Android guide store enables pooled WAL reads and keeps import swaps transactional", () => {

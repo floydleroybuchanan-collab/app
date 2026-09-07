@@ -77,6 +77,8 @@ type NativePlaybackModuleShape = {
   stopPreview(releasePlayer: boolean): Promise<void>;
   stopFullscreen(releasePlayer: boolean): Promise<void>;
   getOwner(): Promise<NativePlaybackOwner>;
+  getHealthHistory?(): Promise<string>;
+  restartChannel?(channelKey: string): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 };
@@ -95,7 +97,7 @@ export function resumeNativePlayback(): void { native?.resume(); }
 export function setNativePlaybackMuted(muted: boolean): void { native?.setMuted(muted); }
 
 export function selectNativeAudio(track?: NativePlaybackTrack | null, language?: string | null): void {
-  if (track) native?.selectAudio(track.groupIndex, track.trackIndex); else native?.selectAudioLanguage(language ?? null);
+  if (track && track.isSupported !== false) native?.selectAudio(track.groupIndex, track.trackIndex); else native?.selectAudioLanguage(language ?? null);
 }
 export function selectNativeSubtitle(track?: NativePlaybackTrack | null, language?: string | null): void {
   if (track) native?.selectSubtitle(track.groupIndex, track.trackIndex); else if (language) native?.selectSubtitleLanguage(language); else native?.subtitlesOff();
@@ -103,6 +105,12 @@ export function selectNativeSubtitle(track?: NativePlaybackTrack | null, languag
 export async function stopNativePreview(releasePlayer = false): Promise<void> { await native?.stopPreview(releasePlayer); }
 export async function stopNativeFullscreen(releasePlayer = true): Promise<void> { await native?.stopFullscreen(releasePlayer); }
 export async function getNativePlaybackOwner(): Promise<NativePlaybackOwner> { return (await native?.getOwner()) ?? "none"; }
+export async function getNativePlaybackHealth(): Promise<string> {
+  try { return (await native?.getHealthHistory?.()) ?? "[]"; } catch { return "[]"; }
+}
+export async function restartNativePlaybackChannel(channelKey: string): Promise<boolean> {
+  return (await native?.restartChannel?.(channelKey)) ?? false;
+}
 export function addNativePlaybackStateListener(listener: (event: NativePlaybackIdentity & { state: NativePlaybackState; reason?: string | null }) => void): () => void { const sub = emitter?.addListener("NativePlaybackState", listener); return () => sub?.remove(); }
 export function addNativePlaybackTracksListener(listener: (event: NativePlaybackIdentity & { audio: NativePlaybackTrack[]; text: NativePlaybackTrack[] }) => void): () => void { const sub = emitter?.addListener("NativePlaybackTracks", listener); return () => sub?.remove(); }
 export function addNativePlaybackSourceRefreshListener(listener: (event: NativePlaybackSourceRefreshRequest) => void): () => void { const sub = emitter?.addListener("NativePlaybackSourceRefreshRequested", listener); return () => sub?.remove(); }

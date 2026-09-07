@@ -339,10 +339,9 @@ for rel in (
     if current != baseline:
         critical.append(f"repair changed M3U/EPG transport: {rel}")
 
-# Background workers are optional architecture. If present, they may only set
-# due flags; they must never download or parse playlist/EPG data themselves.
-# This preserves the verified foreground owner without requiring obsolete worker
-# classes to exist just to satisfy a scanner.
+# Legacy *Worker.kt owners remain flag-only. The newer EpgUpdateWorker lives
+# inside EpgUpdateScheduler.kt and uses BackgroundEpgUpdater; explicitly audit
+# that real importer too, rather than missing it because of its filename.
 worker_flags = {
     "EpgUpdateWorker.kt": "epg_refresh_due",
     "PlaylistUpdateWorker.kt": "playlist_refresh_due",
@@ -365,6 +364,23 @@ for path in current_files:
     ):
         if risky in data:
             critical.append(f"heavy refresh work leaked into background worker: {rel}: {risky}")
+
+native_root = ROOT / "android/app/src/main/java/com/charmiptv/app"
+durable_worker = read_file(native_root / "EpgUpdateScheduler.kt")
+durable_updater = read_file(native_root / "BackgroundEpgUpdater.kt")
+if durable_worker.count("!EpgImportCoordinator.canStartBackground()") < 2:
+    critical.append("durable importer must recheck foreground ownership before and after acquiring its lease")
+for required in ("updater.acquireImport(source)", "finally { importLease.close() }"):
+    if required not in durable_worker:
+        critical.append(f"durable importer lacks database/metadata serialization: {required}")
+for required in ("acquireImport(source).use", "THREAD_PRIORITY_BACKGROUND", "setThreadPriority(previousPriority)"):
+    if required not in durable_updater:
+        critical.append(f"durable importer lost lease or bounded thread-priority ownership: {required}")
+for module, lease in (("EpgNativeModule.kt", "database.acquireImport().use"),
+                       ("CustomEpgNativeModule.kt", "target.acquireImport().use"),
+                       ("EpgDatabase.kt", "acquireImport().use")):
+    if lease not in read_file(native_root / module):
+        critical.append(f"foreground importer lost shared import lease: {module}")
 
 scheduler = read_file(ROOT / "src/components/SourceRefreshScheduler.tsx")
 # APK #163 regression repair permits due-only work on an idle Guide. Blocking

@@ -23,15 +23,27 @@ export function EpgProgressBar() {
   // Keep high-frequency progress updates out of the shared guide context.
   const [epgProgress, setEpgProgress] = useState<EpgProgress>(INITIAL_PROGRESS);
   const lastUiAt = useRef(0);
+  const lastPhase = useRef<EpgProgress["phase"]>("idle");
   useEffect(
-    () =>
-      subscribeProgress((next) => {
-        // Throttle UI to ~4 Hz so guide focus isn't fighting the progress bar on boot.
+    () => {
+      let pending: ReturnType<typeof setTimeout> | null = null;
+      const unsubscribe = subscribeProgress((next) => {
+        if (pending) clearTimeout(pending);
+        pending = null;
         const now = Date.now();
-        if (next.phase !== "error" && now - lastUiAt.current < 250) return;
-        lastUiAt.current = now;
-        setEpgProgress(next);
-      }),
+        const publish = () => {
+          pending = null;
+          lastUiAt.current = Date.now();
+          lastPhase.current = next.phase;
+          setEpgProgress(next);
+        };
+        // Never lose completion or a phase transition. Intermediate updates
+        // keep a trailing delivery so the latest state cannot remain stranded.
+        if (next.phase !== lastPhase.current || next.phase === "ready" || next.phase === "error" || now - lastUiAt.current >= 250) publish();
+        else pending = setTimeout(publish, 250 - (now - lastUiAt.current));
+      });
+      return () => { unsubscribe(); if (pending) clearTimeout(pending); };
+    },
     [],
   );
   const { phase, ratio, etaSeconds, message } = epgProgress;

@@ -4,6 +4,6 @@
         <shape><solid android:color="@color/charm_icon_background" /></shape>
     </item>
     <item android:width="176dp" android:height="176dp" android:gravity="center">
-        <bitmap android:src="@drawable/charm_living_room" android:gravity="fill" android:filter="true" />
+        <bitmap android:src="@drawable/charm_refined" android:gravity="fill" android:filter="true" />
     </item>
 </layer-list>

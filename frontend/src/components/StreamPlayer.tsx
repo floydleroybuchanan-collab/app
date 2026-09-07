@@ -292,7 +292,7 @@ export function StreamPlayer({
       text: event.text.map((track) => ({ id: track.id, name: track.name })),
     });
     const remembered = audioTrack ?? getRememberedChannelAudioTrack(currentChannelKey);
-    const selectedAudio = remembered == null ? null : event.audio.find((track) => String(track.id) === String(remembered)) ?? null;
+    const selectedAudio = remembered == null ? null : event.audio.find((track) => track.isSupported !== false && String(track.id) === String(remembered)) ?? null;
     void runNativePlaybackCommand(role, engine, () => isSessionCurrent(role, generation), () => {
       selectNativeAudio(selectedAudio, selectedAudio ? null : getPreferredAudioLanguage());
       if (textTrack == null) selectNativeSubtitle(null, null);
@@ -399,9 +399,9 @@ export function StreamPlayer({
   useEffect(() => {
     const generation = generationRef.current;
     if (!playbackFocused || !generation || audioTrack == null) return;
-    const selected = tracksRef.current.audio.find((track) => String(track.id) === String(audioTrack)) ?? null;
+    const selected = tracksRef.current.audio.find((track) => track.isSupported !== false && String(track.id) === String(audioTrack)) ?? null;
     void runNativePlaybackCommand(role, engine, () => isSessionCurrent(role, generation), () => {
-      selectNativeAudio(selected, null);
+      selectNativeAudio(selected, selected ? null : getPreferredAudioLanguage());
     }).catch(() => undefined);
   }, [audioTrack, engine, playbackFocused, role]);
 

@@ -30,7 +30,7 @@ class CharmVodWelcomeView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val logo = BitmapFactory.decodeResource(resources, R.drawable.charm_living_room,
+    private val logo = BitmapFactory.decodeResource(resources, R.drawable.charm_refined,
         BitmapFactory.Options().apply { inSampleSize = 2 })
     private val logoBounds = RectF(358f, 70f, 602f, 314f)
     private val logoShader = BitmapShader(logo, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {

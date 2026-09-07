@@ -59,6 +59,12 @@ internal class EpgUpdateWorker(
     var retryNeeded = false
     var refreshed = false
     for (source in dao.enabledSources()) {
+      if (!EpgImportCoordinator.canStartBackground()) { retryNeeded = true; break }
+      val importLease = updater.acquireImport(source)
+      try {
+      // A foreground import may have held the lease while the app resumed.
+      if (!EpgImportCoordinator.canStartBackground()) { retryNeeded = true; break }
+      if (dao.source(source.playlistId) != source) continue
       // Zero is the explicit manual-only schedule. Keep the source enabled for
       // Guide reads while excluding it from durable background work.
       if (source.refreshHours <= 0) continue
@@ -124,6 +130,7 @@ internal class EpgUpdateWorker(
         dao.finishUpdateHistory(historyId, "failed", finishedMs / 1000L, 0L, message)
         retryNeeded = true
       }
+      } finally { importLease.close() }
     }
     dao.trimUpdateHistory(100)
     applicationContext.getSharedPreferences("charm_epg_scheduler", Context.MODE_PRIVATE)

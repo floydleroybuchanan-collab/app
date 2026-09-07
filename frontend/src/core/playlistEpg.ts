@@ -9,7 +9,7 @@ import { managedEpgUrl } from "@/src/auth/managedContentAccess";
 import { configureNativeUserGuideSources, refreshAssociatedPlaylistGuide, replaceAutomaticPlaylistBindings } from "@/src/nativeEpg";
 
 /** Associations are independent of feeds. Manual Room bindings always override these derived exact-ID bindings. */
-export async function syncPlaylistEpg(channels: Channel[], refresh = false, onlyPlaylistId?: string, onSourceReady?: () => void | Promise<void>): Promise<void> {
+export async function syncPlaylistEpg(channels: Channel[], refresh = false, onlyPlaylistId?: string, onSourceReady?: () => void | Promise<void>, canStartNext: () => boolean = () => true): Promise<void> {
   await discoverPlaylistEpg();
   const [playlists, extras, prefs] = await Promise.all([listPlaylists(), getMultiEpgSources(), getEpgSourcePreferences()]);
   const sources = [
@@ -33,6 +33,7 @@ export async function syncPlaylistEpg(channels: Channel[], refresh = false, only
   const used = new Set(refreshBindings.flatMap((binding) => binding.sourceIds));
   const downloaded = new Set<string>();
   for (const source of sources) {
+    if (!canStartNext()) break;
     if (!source.enabled || !used.has(source.id)) continue;
     // Each source is shared by every associated playlist, never fetched per playlist.
     if (downloaded.has(source.id)) continue;

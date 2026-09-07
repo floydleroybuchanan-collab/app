@@ -4,19 +4,19 @@
     "slug": "charm-iptv-purple-next",
     "version": "2.1.0-rc.6",
     "orientation": "default",
-    "icon": "./assets/images/charm-living-room.png",
+    "icon": "./assets/images/charm-refined.png",
     "scheme": "charmiptv-purple",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/charm-living-room.png",
+        "foregroundImage": "./assets/images/charm-refined-foreground.png",
         "backgroundColor": "#10051F"
       },
       "edgeToEdgeEnabled": true,
       "allowBackup": false,
       "package": "com.charmiptv.app.purple.next.vodtest1",
-      "versionCode": 12,
+      "versionCode": 13,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",

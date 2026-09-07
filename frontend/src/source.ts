@@ -104,11 +104,13 @@ export async function loadGuideProgramsForChannelIds(
 ): Promise<Record<string, Program[]>> {
   return {};
 }
-export async function refreshEpgOnly(_includeAdditional = true): Promise<SourceStatus> {
+export async function refreshEpgOnly(_includeAdditional = true, canStartNext: () => boolean = () => true): Promise<SourceStatus> {
+  if (!canStartNext()) return sourceStatus();
   return refreshSource(true);
 }
 
-export async function refreshSourcesIfDue(): Promise<SourceStatus> {
+export async function refreshSourcesIfDue(canStartNext: () => boolean = () => true): Promise<SourceStatus> {
+  if (!canStartNext()) return sourceStatus();
   return refreshSource(false);
 }
 

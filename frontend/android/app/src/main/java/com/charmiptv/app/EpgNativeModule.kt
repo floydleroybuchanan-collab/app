@@ -372,6 +372,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
     }
     refreshExecutor.execute {
       val startedMs = System.currentTimeMillis()
+      database.acquireImport().use {
       val previousState = runCatching { controlDao.importState(DEFAULT_PLAYLIST_ID) }.getOrNull()
       val attempt = (previousState?.attemptCount ?: 0) + 1
       val historyId = runCatching { controlDao.addUpdateHistory(EpgUpdateHistoryEntity(sourceId = DEFAULT_PLAYLIST_ID, kind = "epg", state = "running", trigger = "manual", attempt = attempt, startedAtSeconds = startedMs / 1000L)) }.getOrDefault(0L)
@@ -540,6 +541,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
           }
         }
         promise.reject("EPG_REFRESH_FAILED", t.message ?: "Native EPG refresh failed", t)
+      }
       }
     }
   }
@@ -763,7 +765,10 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
             )
           )
         }
-        promise.resolve(database.replacePlaylistEpgMatches(rows, guideEpoch.toLong()))
+        database.replacePlaylistEpgMatches(rows, guideEpoch.toLong())
+        // Database false means unchanged, not failed. The bridge reports
+        // synchronization success; actual write failures still reject below.
+        promise.resolve(true)
       } catch (t: Throwable) {
         promise.reject("EPG_MATCH_UPSERT_FAILED", t.message ?: "Could not upsert EPG matches", t)
       }
@@ -812,6 +817,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   @ReactMethod
   fun refreshUserGuide(url: String, promise: Promise) {
     refreshExecutor.execute {
+      userDatabase.acquireImport().use {
       try {
         val sourceUrl = url.trim()
         if (sourceUrl.isEmpty()) throw IllegalArgumentException("Custom EPG URL is empty")
@@ -847,6 +853,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         })
       } catch (t: Throwable) {
         promise.reject("USER_EPG_REFRESH_FAILED", t.message ?: "Custom Guide refresh failed", t)
+      }
       }
     }
   }

@@ -141,7 +141,7 @@ test("Guide fixed start preference is entry-scoped and explicit jumps override i
 
 test("EPG-only refresh coalesces with active source work and avoids cold-start promise cycles", async () => {
   const source = (await readFile(join(root, "src/source.native.ts"), "utf8")).replace(/\r\n/g, "\n");
-  const epgOnly = source.match(/export async function refreshEpgOnly\(includeAdditional = true\)[\s\S]*?\n}\n\nexport function sourceStatus/)?.[0] || "";
+  const epgOnly = source.match(/export async function refreshEpgOnly\(includeAdditional = true,[^\n]+[\s\S]*?\n}\n\nexport function sourceStatus/)?.[0] || "";
   assert.match(epgOnly, /if \(refreshPromise\) \{[\s\S]{0,160}await refreshPromise;[\s\S]{0,120}return sourceStatus\(\)/);
   assert.match(epgOnly, /const cached = MEM \|\| \(await readChannelCache\(\)\)/);
   assert.match(epgOnly, /if \(!cached\?\.channels\?\.length\) \{[\s\S]{0,160}await refreshInternal\(true\);[\s\S]{0,100}return sourceStatus\(\)/);

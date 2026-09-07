@@ -298,6 +298,15 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   private fun refreshSourceGuideInternal(rawSourceId: String, url: String, promise: Promise, candidates: Set<String> = emptySet()) {
+    try {
+      val target = CustomEpgStoreRegistry.database(reactContext, rawSourceId)
+      target.acquireImport().use { refreshSourceGuideLocked(rawSourceId, url, promise, candidates) }
+    } catch (failure: Exception) {
+      promise.reject("CUSTOM_EPG_REFRESH_FAILED", EpgDiagnosticSafety.message(failure))
+    }
+  }
+
+  private fun refreshSourceGuideLocked(rawSourceId: String, url: String, promise: Promise, candidates: Set<String>) {
     val sourceId = CustomEpgStoreRegistry.normalizeSourceId(rawSourceId)
     val startedMs = System.currentTimeMillis()
     val previousState = runCatching { controlDao.importState(sourceId) }.getOrNull()

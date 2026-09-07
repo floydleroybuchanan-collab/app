@@ -93,13 +93,14 @@ test('host and VOD support API 24 without dropping current framework or HTTP sou
 });
 
 test('launcher and circular VOD welcome use the exact same supplied full-resolution artwork', () => {
-  const asset = readFileSync(new URL('../assets/images/charm-living-room.png', import.meta.url));
-  const native = readFileSync(new URL('../android/vod/app/src/main/res/drawable-nodpi/charm_living_room.png', import.meta.url));
+  const asset = readFileSync(new URL('../assets/images/charm-refined.png', import.meta.url));
+  const native = readFileSync(new URL('../android/vod/app/src/main/res/drawable-nodpi/charm_refined.png', import.meta.url));
   assert.equal(createHash('sha256').update(asset).digest('hex'), createHash('sha256').update(native).digest('hex'));
-  assert.equal(asset.readUInt32BE(16), 1254);
-  assert.equal(asset.readUInt32BE(20), 1254);
+  assert.equal(asset.readUInt32BE(16), 1024);
+  assert.equal(asset.readUInt32BE(20), 1024);
+  assert.equal(asset[25], 6, 'PNG contains RGBA, not a painted JPEG checkerboard');
   const welcome = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodWelcomeView.kt');
-  assert.match(welcome, /R.drawable.charm_living_room/);
+  assert.match(welcome, /R.drawable.charm_refined/);
   assert.match(welcome, /BitmapShader/);
   assert.match(welcome, /canvas.drawCircle\(logoBounds.centerX\(\)/);
   assert.doesNotMatch(welcome, /canvas.drawBitmap\(logo/);
@@ -107,5 +108,8 @@ test('launcher and circular VOD welcome use the exact same supplied full-resolut
   assert.match(manifest, /android:icon="@drawable\/charm_launcher"/);
   assert.match(manifest, /android:banner="@drawable\/charm_tv_banner"/);
   for (const name of ['drawable/charm_launcher.xml', 'drawable-v26/charm_launcher.xml', 'drawable/charm_tv_banner.xml'])
-    assert.match(read(`android/app/src/main/res/${name}`), /@drawable\/charm_living_room/);
+    assert.match(read(`android/app/src/main/res/${name}`), /@drawable\/charm_refined/);
+  const adaptive = read('android/app/src/main/res/drawable-v26/charm_launcher.xml');
+  assert.match(adaptive, /@drawable\/charm_refined_foreground/);
+  assert.doesNotMatch(adaptive, /<inset/, 'prepared foreground must not be padded twice');
 });

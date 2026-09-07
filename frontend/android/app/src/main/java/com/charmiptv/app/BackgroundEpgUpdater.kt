@@ -30,6 +30,19 @@ internal class BackgroundEpgUpdater(private val context: Context) {
   private val dao = EpgControlDatabase.get(context).dao()
 
   fun refresh(source: EpgSourceEntity): BackgroundEpgResult {
+    val threadId = android.os.Process.myTid()
+    val previousPriority = android.os.Process.getThreadPriority(threadId)
+    try {
+      android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+      return acquireImport(source).use { refreshLocked(source) }
+    } finally { android.os.Process.setThreadPriority(previousPriority) }
+  }
+
+  fun acquireImport(source: EpgSourceEntity): AutoCloseable =
+    (if (source.playlistId == PRIMARY_SOURCE) EpgDatabase.shared(context)
+      else CustomEpgStoreRegistry.database(context, source.playlistId)).acquireImport()
+
+  private fun refreshLocked(source: EpgSourceEntity): BackgroundEpgResult {
     val sourceId = source.playlistId
     val primary = sourceId == PRIMARY_SOURCE
     val database = if (primary) EpgDatabase.shared(context) else CustomEpgStoreRegistry.database(context, sourceId)
