@@ -21,9 +21,9 @@ object RealDebrid {
     val accountLabel get() = vault.read()?.optString("label") ?: "Not connected"
 
     suspend fun connectToken(token: String) = authLock.withLock {
-        require(token.trim().isNotEmpty()) { "Enter your personal Real-Debrid API token." }
-        val user = JSONObject(api("user", token = token.trim()))
-        vault.write(JSONObject().put("access_token", token.trim()).put("label",
+        val checked = DebridInput.token(token)
+        val user = JSONObject(api("user", token = checked))
+        vault.write(JSONObject().put("access_token", checked).put("label",
             "${user.optString("username", "Connected")} · ${user.optString("type", "account")}"))
         generation++
         owned.clear()
@@ -55,7 +55,7 @@ object RealDebrid {
                         429 -> "Real-Debrid is busy. Wait a moment before trying again."
                         else -> "Real-Debrid could not complete this request (HTTP ${response.code})."
                     })
-                    return response.body?.string().orEmpty()
+                    return VodHttp.text(response)
                 }
             }
         }

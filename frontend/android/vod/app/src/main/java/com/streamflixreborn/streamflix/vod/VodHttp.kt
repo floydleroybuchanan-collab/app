@@ -13,6 +13,14 @@ import kotlin.coroutines.resumeWithException
 
 /** Separate client: no provider interceptors, cookies, credential logging, or cross-host redirects. */
 internal object VodHttp {
+    fun text(response: Response, limit: Long = 2_000_000): String {
+        val body = response.body ?: return ""
+        if (body.contentLength() > limit) throw IOException("Source response is too large.")
+        val source = body.source()
+        source.request(limit + 1)
+        if (source.buffer.size > limit) throw IOException("Source response is too large.")
+        return source.readUtf8()
+    }
     val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS).callTimeout(40, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()

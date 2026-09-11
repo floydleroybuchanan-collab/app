@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Modified for CharmIPTV, 2026-09-11: removed the unused SMB proxy integration.
 package com.archos.medialib;
 
 import android.content.ContentResolver;
