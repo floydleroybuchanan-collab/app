@@ -1,11 +1,13 @@
 import html from "./index.html";
 import css from "./styles.css";
 import script from "./panel.client.js";
+import botScript from './bot.client.js';
+import appScript from './app-settings.client.js';
 
 export default {
   async fetch(request) {
     const path = new URL(request.url).pathname;
-    const asset = { "/": [html, "text/html"], "/styles.css": [css, "text/css"], "/panel.js": [script, "text/javascript"] }[path];
+    const asset = { "/": [html, "text/html"], "/styles.css": [css, "text/css"], "/panel.js": [script, "text/javascript"], '/bot.js':[botScript,'text/javascript'], '/app-settings.js':[appScript,'text/javascript'] }[path];
     if (!asset || !["GET", "HEAD"].includes(request.method)) return new Response("Not found", { status: 404 });
     return new Response(request.method === "HEAD" ? null : asset[0], { headers: {
       "Content-Type": asset[1] + "; charset=utf-8",

@@ -7,6 +7,8 @@
   <title>CharmIPTV · Account control</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/panel.js" defer></script>
+  <script src="/bot.js" defer></script>
+  <script src="/app-settings.js" defer></script>
 </head>
 <body>
   <section id="login" class="login">
@@ -25,9 +27,11 @@
       <nav id="nav" aria-label="Administration">
         <button data-view="dashboard">Overview</button>
         <button data-view="users">Users</button>
+        <button data-view="bot" data-permission="can_manage_bot">Mr. Charm</button>
         <button data-view="create" data-permission="can_create_invites">Create invitation</button>
         <button data-view="invites">Invitations</button>
         <button data-view="admins" id="adminsTab">Admins · owner only</button>
+        <button data-view="app-settings" id="appSettingsTab" hidden>App controls · owner only</button>
         <button data-view="activity" data-permission="can_view_audit">Activity</button>
       </nav>
       <main><div id="notice" role="status" aria-live="polite"></div><section id="content" aria-live="polite"></section></main>

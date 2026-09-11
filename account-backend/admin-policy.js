@@ -2,7 +2,7 @@ export const DAY = 86400;
 export const ADMIN_FLAGS = [
   "can_create_invites", "can_manage_all", "can_change_time", "can_change_sessions",
   "can_suspend", "can_delete_users", "can_reset_password", "can_force_logout",
-  "can_revoke_invites", "can_delete_invites", "can_view_audit",
+  "can_revoke_invites", "can_delete_invites", "can_view_audit", "can_manage_bot",
 ];
 export const ADMIN_LIMITS = {
   max_duration_days: [1, 3650, 90], max_sessions: [1, 20, 2],

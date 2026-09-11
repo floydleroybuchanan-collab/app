@@ -2,6 +2,7 @@
 const API = document.querySelector('meta[name="api"]').content;
 const $ = id => document.getElementById(id);
 const FLAGS = {
+  can_manage_bot:'Manage Mr. Charm content, settings and all Telegram member links (global access)',
   can_create_invites:"Create invitation codes",can_manage_all:"Access every administrator's viewer accounts (otherwise own accounts only)",
   can_change_time:"Change account timers",can_change_sessions:"Change simultaneous session allowance",
   can_suspend:"Disable / re-enable viewer accounts",can_delete_users:"Permanently delete / expire viewer accounts",
@@ -58,6 +59,7 @@ async function openApp() {
   sessionStorage.setItem("charm_admin_token",token);localStorage.removeItem("charm_admin_token");
   $("identity").textContent=admin.username+(admin.is_owner?" · Owner":" · Administrator");
   $("adminsTab").hidden=!admin.is_owner;
+  $("appSettingsTab").hidden=!admin.is_owner;
   document.querySelectorAll("[data-permission]").forEach(n=>n.hidden=!permitted(n.dataset.permission));
   creators=(await api("/admin/creators")).creators;
   $("login").hidden=true;$("app").hidden=false;await navigate("dashboard");
@@ -70,6 +72,8 @@ async function navigate(next) {
 }
 async function loadView() {
   const ticket=++generation;
+  if(view==='app-settings'){await loadAppSettings();return;}
+  if(view==="bot"){await loadBot();return;}
   if(view==="create"){createInvitation();return;}
   if(view==="dashboard"){
     const section=heading("Overview","Viewer accounts and invitations within your permitted scope.");
@@ -90,7 +94,7 @@ async function loadView() {
   const section=heading(...titles[view]),toolbar=el("div",undefined,"toolbar");section.append(toolbar);
   if(view==="admins")toolbar.append(button("Add administrator",()=>editAdmin(),"primary"));
   if(view!=="activity"){
-    const search=field(toolbar,"Search","search",listState.search,"search");search.parentElement.classList.add("search");
+    const search=field(toolbar,["invites","users"].includes(view)?"Search account, token or Telegram":"Search","search",listState.search,"search");search.parentElement.classList.add("search");
     let debounce;search.addEventListener("input",()=>{clearTimeout(debounce);debounce=setTimeout(()=>{listState.search=search.value;listState.page=1;run(()=>loadView());},400);});
     const statuses=view==="users"?["all","active","disabled","unlimited","expiring7","expiring14","expiring30"]:view==="admins"?["all","enabled","disabled"]:["all","unused","used","disabled","expired"];
     const status=select(toolbar,"Status","status",statuses.map(x=>[x,({expiring7:"Expiring in 7 days",expiring14:"Expiring in 14 days",expiring30:"Expiring in 30 days"})[x]||x]),listState.status);
@@ -112,7 +116,7 @@ async function loadView() {
   listState.page=pagination.page;
   const columns={
     users:["Account","Status","Account time","Sessions","Created by","Created / last login",""],
-    invites:["Code","Status","Account allowance","Created by","Created","Code expires / redeemed",""],
+    invites:["Code","Status","Used by","Account allowance","Created by","Created","Code expires / redeemed",""],
     admins:["Administrator","Access","Accounts created / active","Ended accounts","Invites / referrals","Last login",""],
     activity:["When","Administrator","Action","Viewer"],
   };
@@ -131,14 +135,31 @@ async function loadView() {
 }
 function userRow(u) {
   const actions=el("div",undefined,"actions");actions.append(button("Manage",()=>editUser(u)));
-  return [cell(u.username,u.email),badge(u.status),cell(remaining(u.expires_at),date(u.expires_at)),String(u.active_sessions)+" / "+u.max_sessions,
+  return [cell(u.username,u.email+(u.telegram_id?" · Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · "+u.telegram_id:"")),badge(u.status),cell(remaining(u.expires_at),date(u.expires_at)),String(u.active_sessions)+" / "+u.max_sessions,
     cell(u.created_by_admin_name||"Unknown historical creator",u.origin==="referral"?"Via family / friend":u.origin==="admin_invite"?"Direct admin invite":"No surviving attribution"),cell(date(u.created_at),"Last login: "+date(u.last_login_at)),actions];
 }
 function inviteRow(i) {
-  const actions=el("div",undefined,"actions");actions.append(button("Copy",()=>copy(i.invite_code)));
-  if(permitted("can_revoke_invites")&&i.status==="unused")actions.append(button("Revoke",async()=>{if(confirm("Revoke this unused invitation?")){await api("/admin/invites/"+i.id+"/revoke","POST",{});await loadView();}}));
-  if(permitted("can_delete_invites"))actions.append(button("Delete",async()=>{if(confirm("Delete this invitation record? Existing accounts and their creator attribution will remain.")){await api("/admin/invites/"+i.id,"DELETE");await loadView();}},"danger"));
-  return [cell(i.invite_code),badge(i.status),cell(i.account_duration_days==null?"Unlimited":i.account_duration_days+" days",i.max_sessions+" simultaneous sessions"),i.created_by_admin_name||"—",date(i.created_at),cell(date(i.expires_at),"Redeemed: "+date(i.redeemed_at)),actions];
+  const actions=el("div",undefined,"actions");actions.append(button("Copy",()=>copy(i.invite_code)),button("Manage",()=>editInvite(i)));
+  const usedBy=i.redeemed_by_username?cell(i.redeemed_by_username,i.redeemed_user_status==="disabled"?"Banned":i.redeemed_user_status):cell(i.redeemed_at?"Account no longer available":"Not used");
+  return [cell(i.invite_code,i.telegram_id?"Telegram: "+(i.telegram_username?"@"+i.telegram_username:i.telegram_name)+" · "+i.telegram_id:"Manual / Admin"),badge(i.status),usedBy,cell(i.account_duration_days==null?"Unlimited":i.account_duration_days+" days",i.max_sessions+" simultaneous sessions"),i.created_by_admin_name||"—",date(i.created_at),cell(date(i.expires_at),"Redeemed: "+date(i.redeemed_at)),actions];
+}
+function editInvite(i) {
+  const body=openDialog("Manage invitation","Revoking an unused token stops registration. A redeemed token cannot be reused; manage its account to stop access.");
+  body.append(el("p",i.invite_code,"code"),el("p","Status: "+i.status),el("p","Created: "+date(i.created_at)),el("p","Redeemed: "+date(i.redeemed_at)),el("p","Used by: "+(i.redeemed_by_username||(i.redeemed_at?"Account no longer available":"Not used"))));
+  const actions=el("div",undefined,"form-actions");body.append(actions);
+  if(permitted("can_revoke_invites")&&i.status==="unused")actions.append(button("Revoke token",async()=>{
+    if(!confirm("Revoke this unused invitation token? It will no longer create an account."))return;
+    const result=await api("/admin/invites/"+i.id+"/revoke","POST",{});await saved(result.message);
+  },"danger"));
+  if(i.redeemed_by_username&&i.redeemed_user_role==="user")actions.append(button("Manage account",async()=>{
+    const result=await api("/admin/users/"+encodeURIComponent(i.redeemed_by_user_id));
+    $("dialog").close();editUser(result.user);
+  },"primary"));
+  else if(i.redeemed_user_role==="admin")body.append(el("p","This user is now an administrator. The owner can manage their access under Admins.","help"));
+  if(permitted("can_delete_invites"))actions.append(button("Delete invitation history",async()=>{
+    if(!confirm("Delete this invitation record? This does not cancel the account and cannot be undone."))return;
+    const result=await api("/admin/invites/"+i.id,"DELETE");await saved(result.message);
+  },"danger"));
 }
 function adminRow(a) {
   const actions=el("div",undefined,"actions");if(!a.is_owner)actions.append(button("Permissions",()=>editAdmin(a)),button("Viewing access",()=>editViewing(a)),button("Reset password",()=>resetAdmin(a)));
@@ -167,6 +188,7 @@ function createInvitation() {
 }
 function editUser(u) {
   const body=openDialog("Manage "+u.username,"Viewer account controls. Changes affect only this account; deleted personal information cannot be restored.");
+  if(u.telegram_id)body.append(el("p","Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · ID "+u.telegram_id+" · "+u.telegram_status));
   const f=form(body,async()=>{
     const changes={};
     if(status&&!status.disabled&&status.value!==u.status)changes.status=status.value;
@@ -180,7 +202,7 @@ function editUser(u) {
     const result=await api("/admin/users/"+u.id+(deleting?"?confirm_expire=yes":""),"PATCH",changes);await saved(result.message);
   });
   const grid=el("div",undefined,"form-grid");f.append(grid);
-  const status=select(grid,"Status","status",[["active","Active"],["disabled","Disabled"],...(permitted("can_delete_users")?[["expired","Expire and permanently delete"]]:[])],u.status);status.disabled=!permitted("can_suspend")&&!permitted("can_delete_users");
+  const status=select(grid,"Status","status",[["active","Active"],["disabled","Banned (disabled)"],...(permitted("can_delete_users")?[["expired","Expire and permanently delete"]]:[])],u.status);status.disabled=!permitted("can_suspend")&&!permitted("can_delete_users");
   const sessions=field(grid,"Simultaneous sessions","sessions",u.max_sessions,"number",{min:1,max:admin.is_owner?20:admin.permissions.max_sessions,required:true,disabled:!permitted("can_change_sessions")});
   const timeAllowed=permitted("can_change_time")&&(admin.is_owner||u.expires_at!==null);
   const initialDate=u.expires_at===null?"":new Date(u.expires_at*1000-new Date(u.expires_at*1000).getTimezoneOffset()*60000).toISOString().slice(0,16);
@@ -192,6 +214,12 @@ function editUser(u) {
   f.append(el("p","Current access: "+remaining(u.expires_at)+". Use either an expiration date or an extension. Delegated administrators cannot exceed their maximum resulting days remaining.","help"));
   submit(f,"Save account changes");
   const actions=el("div",undefined,"form-actions");body.append(actions);
+  if(permitted("can_suspend"))actions.append(button(u.status==="disabled"?"Unban account":"Ban account",async()=>{
+    const banning=u.status!=="disabled";
+    if(!confirm((banning?"Ban ":"Unban ")+u.username+(banning?"? All current sessions will be revoked and login blocked.":"? They can sign in again while their account time remains valid.")))return;
+    await api("/admin/users/"+u.id,"PATCH",{status:banning?"disabled":"active"});
+    await saved(banning?"Account banned and all sessions revoked.":"Account unbanned. The user can sign in again.");
+  },u.status==="disabled"?"primary":"danger"));
   if(admin.is_owner)actions.append(button("Give this user admin access",()=>{$("dialog").close();editAdmin(undefined,u.username);}));
   if(permitted("can_force_logout"))actions.append(button("Sign out all sessions",async()=>{if(confirm("Sign out every session for "+u.username+"?")){await api("/admin/users/"+u.id+"/logout","POST",{});await saved("All sessions revoked.");}}));
   if(permitted("can_reset_password"))actions.append(button("Reset password",()=>{ $("dialog").close();const target=openDialog("Reset viewer password",u.username+" will be signed out on all sessions.");const rf=form(target,async()=>{await api("/admin/users/"+u.id+"/reset-password","POST",{new_password:password.value});await saved("Password changed.");});const password=field(rf,"New password","password","","password",{required:true,minLength:8,maxLength:256,autocomplete:"new-password"});submit(rf,"Reset password");}));

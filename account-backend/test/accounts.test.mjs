@@ -195,3 +195,24 @@ test("new shared login grants explicit finite viewing and duplicate account deta
  assert.equal((await f.request("/content/access",{token:login.body.token})).status,200);
  assert.ok(login.body.user.expires_at<=NOW()+30*DAY);
 });
+
+test("invitation list identifies redeemer and scoped detail supports ban and unban",async()=>{
+ const f=fixture(),s=await f.staff("tokenstaff",{can_suspend:1}),other=await f.staff("otherstaff");
+ const i=await f.invite(s.token),r=await f.redeem(i.body.invite.invite_code,"linkedviewer");
+ const id=r.body.user.id;
+ const list=await f.request("/admin/invites?search=linkedviewer",{token:s.token});
+ assert.equal(list.status,200);assert.equal(list.body.invites.length,1);
+ assert.equal(list.body.invites[0].redeemed_by_username,"linkedviewer");
+ assert.equal(list.body.invites[0].redeemed_by_user_id,id);
+ assert.equal((await f.request("/admin/invites?search=linkedviewer",{token:other.token})).body.invites.length,0);
+ const detail=await f.request("/admin/users/"+id,{token:s.token});
+ assert.equal(detail.status,200);assert.equal(detail.body.user.username,"linkedviewer");
+ assert.equal(JSON.stringify(detail.body).includes("password_hash"),false);
+ assert.equal((await f.request("/admin/users/"+id,{token:other.token})).status,404);
+ assert.equal((await f.request("/admin/users/"+id,{method:"PATCH",token:s.token,body:{status:"disabled"}})).status,200);
+ assert.equal((await f.request("/me",{token:r.body.token})).status,401);
+ assert.equal((await f.request("/admin/invites?search=linkedviewer",{token:s.token})).body.invites[0].redeemed_user_status,"disabled");
+ assert.equal((await f.request("/admin/users/"+id,{method:"PATCH",token:s.token,body:{status:"active"}})).status,200);
+ assert.equal((await f.request("/auth/login",{method:"POST",body:{login:"linkedviewer",password:PASSWORD}})).status,200);
+ assert.equal((await f.request("/me",{token:r.body.token})).status,401);
+});

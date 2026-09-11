@@ -8,7 +8,7 @@ const staff=await f.staff("testadmin",{can_change_time:1,max_accounts_total:20,m
 for(let n=1;n<=32;n++)f.user("viewer"+String(n).padStart(2,"0"),{expires_at:n===1?null:NOW()+n*DAY});
 const invitation=await f.invite(staff.token);
 await f.redeem(invitation.body.invite.invite_code,"staffviewer");
-const assets={"/":["index.html","text/html"],"/styles.css":["styles.css","text/css"],"/panel.js":["panel.client.js","text/javascript"]};
+const assets={"/app-settings.js":["app-settings.client.js","text/javascript"],"/bot.js":["bot.client.js","text/javascript"],"/":["index.html","text/html"],"/styles.css":["styles.css","text/css"],"/panel.js":["panel.client.js","text/javascript"]};
 createServer(async(req,res)=>{
   try{
     if(assets[req.url]){

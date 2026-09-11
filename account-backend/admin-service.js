@@ -1,5 +1,7 @@
 import { ADMIN_FLAGS, ADMIN_LIMITS, DAY, demandPermission, integer, invitationTerms, listingOptions, normalizeAdminProfile, policyError } from "./admin-policy.js";
 
+import { botAdmin } from './bot-admin.js';
+import { appControlsAdmin } from './app-controls.js';
 const PROFILE_KEYS = ["enabled", ...ADMIN_FLAGS, ...Object.keys(ADMIN_LIMITS)];
 const USER_SORTS = { newest: "u.created_at DESC,u.id", oldest: "u.created_at,u.id", alphabetical: "u.username COLLATE NOCASE,u.id", alphabetical_desc: "u.username COLLATE NOCASE DESC,u.id", expires_soon: "u.expires_at IS NULL,u.expires_at,u.id", most_time: "u.expires_at IS NULL DESC,u.expires_at DESC,u.id", last_login: "u.last_login_at DESC,u.id" };
 const INVITE_SORTS = { newest: "i.created_at DESC,i.id", oldest: "i.created_at,i.id", expires_soon: "i.expires_at IS NULL,i.expires_at,i.id", duration: "i.account_duration_days IS NULL,i.account_duration_days,i.id", creator: "creator.username COLLATE NOCASE,i.created_at DESC,i.id" };
@@ -66,6 +68,8 @@ export async function handleAdminRequest(request, env, helpers) {
   const auth = { ...session, ...await resolveAdminAccess(env, session.user) };
   const url = new URL(request.url), path = url.pathname, method = request.method;
   const now = Math.floor(Date.now() / 1000);
+  if (path === '/admin/app-settings') return appControlsAdmin(request,env,auth,helpers);
+  if (path.startsWith('/admin/bot/')) return botAdmin(request,env,auth,helpers);
   if (path === "/admin/me" && method === "GET") return json({ success: true, admin: { ...publicUser(auth.user), is_owner: auth.isOwner, permissions: permissionProfile(auth.profile) } });
 
   if (path === "/admin/creators" && method === "GET") {
@@ -74,20 +78,20 @@ export async function handleAdminRequest(request, env, helpers) {
   }
   if (path === "/admin/users" && method === "GET") {
     const options = listingOptions(url, USER_SORTS), values = [now], where = ["?1>=0", "u.role='user'", scope(auth, "a.admin_user_id", values)];
-    searchWhere(options, where, values, ["u.username", "u.email"]);
+    searchWhere(options, where, values, ["u.username", "u.email", "tm.username", "tm.telegram_id", "ti.invite_code"]);
     creatorWhere(url, auth, where, values, "a.admin_user_id");
     const status = url.searchParams.get("status") || "all";
     if (["active", "disabled", "expired"].includes(status)) { values.push(status); where.push(`u.status=?${values.length}`); }
     else if (status === "unlimited") where.push("u.expires_at IS NULL");
     else if (["expiring7", "expiring14", "expiring30"].includes(status)) { values.push(now + Number(status.slice(8)) * DAY); where.push(`u.expires_at>?1 AND u.expires_at<=?${values.length}`); }
     else if (status !== "all") throw policyError("Invalid account status filter.", 400);
-    const result = await paged(env, options, "FROM users u LEFT JOIN admin_user_attribution a ON a.user_id=u.id LEFT JOIN users creator ON creator.id=a.admin_user_id", where, values,
-      "u.id,u.username,u.email,u.role,u.status,u.max_sessions,u.created_at,u.activated_at,u.expires_at,u.last_login_at,a.admin_user_id AS created_by_admin_id,a.origin,creator.username AS created_by_admin_name,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.revoked=0 AND s.expires_at>?1) AS active_sessions");
+    const result = await paged(env, options, "FROM users u LEFT JOIN admin_user_attribution a ON a.user_id=u.id LEFT JOIN users creator ON creator.id=a.admin_user_id LEFT JOIN bot_members tm ON tm.account_id=u.id LEFT JOIN invites ti ON ti.id=tm.invite_id", where, values,
+      "tm.telegram_id,tm.username AS telegram_username,tm.name AS telegram_name,tm.status AS telegram_status,u.id,u.username,u.email,u.role,u.status,u.max_sessions,u.created_at,u.activated_at,u.expires_at,u.last_login_at,a.admin_user_id AS created_by_admin_id,a.origin,creator.username AS created_by_admin_name,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.revoked=0 AND s.expires_at>?1) AS active_sessions");
     return json({ success: true, users: result.data, pagination: result.pagination });
   }
   if (path === "/admin/invites" && method === "GET") {
     const options = listingOptions(url, INVITE_SORTS), values = [], where = [scope(auth, "i.created_by_user_id", values)];
-    searchWhere(options, where, values, ["i.invite_code"]);
+    searchWhere(options, where, values, ["i.invite_code", "redeemer.username", "tm.username", "tm.telegram_id"]);
     creatorWhere(url, auth, where, values, "i.created_by_user_id");
     const status = url.searchParams.get("status") || "all";
     if (["unused", "used", "disabled", "expired"].includes(status)) {
@@ -96,8 +100,8 @@ export async function handleAdminRequest(request, env, helpers) {
       else if (status === "expired") where.push(`(i.status='expired' OR (i.status='unused' AND i.expires_at<=${timestamp}))`);
       else { values.pop(); values.push(status); where.push(`i.status=?${values.length}`); }
     } else if (status !== "all") throw policyError("Invalid invitation status filter.", 400);
-    const result = await paged(env, options, "FROM invites i LEFT JOIN users creator ON creator.id=i.created_by_user_id", where, values,
-      "i.id,i.invite_code,i.status,i.account_duration_days,i.max_sessions,i.created_at,i.expires_at,i.redeemed_at,i.redeemed_by_user_id,i.created_by_user_id,creator.username AS created_by_admin_name");
+    const result = await paged(env, options, "FROM invites i LEFT JOIN users creator ON creator.id=i.created_by_user_id LEFT JOIN users redeemer ON redeemer.id=i.redeemed_by_user_id LEFT JOIN bot_members tm ON tm.invite_id=i.id", where, values,
+      "tm.telegram_id,tm.username AS telegram_username,tm.name AS telegram_name,i.id,i.invite_code,i.status,i.account_duration_days,i.max_sessions,i.created_at,i.expires_at,i.redeemed_at,i.redeemed_by_user_id,i.created_by_user_id,creator.username AS created_by_admin_name,redeemer.username AS redeemed_by_username,redeemer.status AS redeemed_user_status,redeemer.role AS redeemed_user_role");
     return json({ success: true, invites: result.data.map(i => ({ ...i, status: i.status === "unused" && i.expires_at != null && i.expires_at <= now ? "expired" : i.status })), pagination: result.pagination });
   }
   if (path === "/admin/invites" && method === "POST") {
@@ -124,6 +128,11 @@ export async function handleAdminRequest(request, env, helpers) {
   const userMatch = path.match(/^\/admin\/users\/([^/]+)(?:\/(logout|reset-password))?$/);
   if (userMatch) {
     const user = await targetUser(env, auth, userMatch[1]);
+    if (!userMatch[2] && method === "GET") {
+      const safe = Object.fromEntries(["id", "username", "email", "role", "status", "max_sessions", "created_at", "activated_at", "expires_at", "last_login_at"].map(key => [key, user[key]]));
+      const tm=await first(env,"SELECT telegram_id,username AS telegram_username,name AS telegram_name,status AS telegram_status FROM bot_members WHERE account_id=?1",[user.id]);
+      return json({ success: true, user: {...safe,...tm} });
+    }
     if (userMatch[2] === "logout" && method === "POST") {
       demandPermission(auth, "can_force_logout");
       await stmt(env, "UPDATE sessions SET revoked=1 WHERE user_id=?1", [user.id]).run();

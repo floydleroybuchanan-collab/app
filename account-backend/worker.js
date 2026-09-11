@@ -1,4 +1,6 @@
 import { handleAdminRequest } from "./admin-service.js";
+import { appControls, recordServiceError } from './app-controls.js';
+import { webhook, botScheduled } from './bot-telegram.js';
 import { registerInvitedAccount } from "./registration-service.js";
 import { buildReferralSummary, createReferralInvitation, deleteReferralHistory, releaseReferralForAccount } from "./referral-service.js";
 const DAY = 86400;
@@ -12,11 +14,12 @@ const MANAGED_SOURCE_SLOTS = [
 ];
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
       if (request.method === "OPTIONS") return corsResponse(null, 204);
       const url = new URL(request.url);
       const path = url.pathname;
+      if(path === '/telegram/webhook') return await webhook(request,env);
       await purgeExpiredAccounts(env, 50);
 
       if (path === "/" && request.method === "GET") {
@@ -94,13 +97,17 @@ export default {
       return json({ success: false, error: "Route not found." }, 404);
     } catch (error) {
       const status = Number(error?.status || 500);
-      if (status >= 500) console.error("Account request failed", error?.name || "Error");
+      if (status >= 500) {
+        console.error(JSON.stringify({event:'account_service_error',status}));
+        if(ctx) ctx.waitUntil(recordServiceError(env)); else await recordServiceError(env);
+      }
       return json({ success: false, error: status >= 500 ? "The account service could not complete this request." : error.message }, status);
     }
   },
 
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(purgeExpiredAccounts(env, 1000));
+    ctx.waitUntil(botScheduled(env));
   },
 };
 
@@ -251,6 +258,7 @@ async function createContentAccess(request, env) {
     success: true,
     content: {
       expires_at: expiresAt,
+      app_policy: await appControls(env),
       sources: contentSources,
       // Named pairs keep already-issued two-source APKs compatible while the
       // scalable array lets this and future APKs consume up to four slots.
@@ -383,13 +391,13 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: {
     "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Setup-Key",
-    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   } });
 }
 
 function corsResponse(body, status = 204) {
   return new Response(body, { status, headers: {
     "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Setup-Key",
-    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS", "Access-Control-Max-Age": "86400",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS", "Access-Control-Max-Age": "86400",
   } });
 }
