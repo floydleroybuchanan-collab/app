@@ -31,10 +31,10 @@ test("track commands use the ownership queue and lifecycle resume leaves fullscr
   }
 });
 
-test("real-device defaults use Media3 only without alternate-engine controls", async () => {
+test("live-TV defaults retain Media3 while settings explain optional Nova for VOD", async () => {
   const [store, layout, settings, quickActions, packageJson, appJson, player, preference, coordinator] = await Promise.all([readFile(join(root, "src/store.tsx"), "utf8"), readFile(join(root, "src/core/guideLayoutDefault.ts"), "utf8"), readFile(join(root, "app/(tabs)/settings.tsx"), "utf8"), readFile(join(root, "src/components/TvQuickActionsOverlay.tsx"), "utf8"), readFile(join(root, "package.json"), "utf8"), readFile(join(root, "app.json"), "utf8"), readFile(join(root, "src/components/StreamPlayer.tsx"), "utf8"), readFile(join(root, "src/playerEnginePreference.ts"), "utf8"), readFile(join(root, "src/core/serializedPlaybackCoordinator.ts"), "utf8")]);
   assert.match(store, /useState<SafePreviewMode>\("delayed"\)/); assert.match(store, /SAFE_PREVIEW_MODE_KEY, "delayed"/); assert.match(store, /useState<DeviceLayoutMode>\("tv"\)/); assert.match(layout, /return "cinematic"/);
-  assert.match(settings, /All supported streams play in Media3\/ExoPlayer/); assert.doesNotMatch(settings, /Player engine|VLC|useVlcPlaybackPreferences/);
+  assert.match(settings, /Live TV and multiview use Media3\/ExoPlayer/); assert.match(settings, /VOD also offers optional Nova playback/); assert.doesNotMatch(settings, /Player engine|VLC|useVlcPlaybackPreferences/);
   assert.match(preference, /return "media3"/); assert.match(preference, /migrateMedia3OnlyPreferences/);
   assert.doesNotMatch(player, /tryAutomaticVlcFallback|NativeVlc/); assert.match(player, /activateNativePlaybackEngine/); assert.match(coordinator, /await native\.stop\(active\.engine, active\.role, active\.engine !== engine\)/); assert.match(coordinator, /await native\.stop\(active\.engine, active\.role, true\)/); assert.doesNotMatch(coordinator, /Promise\.all|Promise\.allSettled/);
   assert.doesNotMatch(quickActions, /Player engine|ENGINE_ORDER|usePlayerEnginePreference/); assert.doesNotMatch(packageJson, /react-native-vlc-media-player|expo-video|patch-package/); assert.doesNotMatch(appJson, /react-native-vlc-media-player|expo-video/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);

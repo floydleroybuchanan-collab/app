@@ -1,4 +1,5 @@
 import { Stack, usePathname, useRouter } from "expo-router";
+import { AppUpdateNotice } from "@/src/components/AppUpdateNotice";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect } from "react";
@@ -168,6 +169,7 @@ export default function RootLayout() {
                     <SourceRefreshScheduler />
                     <ReminderCleanup />
                     <StartScreenRedirect />
+                    <AppUpdateNotice />
                     <ErrorBoundary>
                       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#070711" } }}>
                         <Stack.Screen name="(tabs)" />

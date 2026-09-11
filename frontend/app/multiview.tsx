@@ -17,11 +17,14 @@ import { useSubtitlePreferences } from "@/src/core/subtitlePreferences";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
+import { useAppPolicy } from "@/src/core/useAppPolicy";
+import { getAppPolicy } from "@/src/core/appPolicy";
 
 const Surface = Platform.OS === "android" && multiview ? requireNativeComponent<ViewProps & { slot: number; session: string }>("CharmMultiviewSurface") : View;
 let sequence = 0;
 export default function MultiviewScreen() {
   const router = useRouter();
+  const appPolicy = useAppPolicy();
   const params = useLocalSearchParams<{ channelId?: string; returnGuideGroup?: string }>();
   const { channels, addRecent, sleepTimerMinutes, setSleepTimerMinutes } = useStore();
   const catalog = useRef(channels); catalog.current = channels;
@@ -56,7 +59,9 @@ export default function MultiviewScreen() {
       const playlists = await listPlaylists();
       if (!active.current || revisions.current[slot] !== revision) return;
       const record = playlists.find(row => row.id === channel.playlist_id);
-      const reason = multiviewAdmission(paneRef.current, slot, channel, record?.account?.maxConnections);
+      const policy=getAppPolicy();
+      if(slot>=policy.multiview_max) {setNotice(policy.multiview_max===0?"Multiview is disabled by the administrator.":`Your multiview allowance is ${policy.multiview_max} panes.`);return;}
+      const reason = multiviewAdmission(paneRef.current, slot, channel, policy.provider_limits[channel.playlist_id||"charm-primary"] || record?.account?.maxConnections);
       if (reason) { setNotice(reason); return; }
       const source = parsePipeHeaders(channel.url);
       const kind = detectStreamKind(source.uri, channel.stream_type);
@@ -68,7 +73,11 @@ export default function MultiviewScreen() {
       multiview.listen(token,slot); audibleRef.current = slot; setAudible(slot); setSelected(slot); setPicker(null); setQuery("");
       setNotice(record?.account?.activeConnections && record.account.maxConnections && record.account.activeConnections >= record.account.maxConnections
         ? "Your provider last reported all connections in use. Another device may need to stop playback." : "Each pane uses one provider connection. Tap a pane to listen.");
-    } catch { if (active.current && revisions.current[slot] === revision) setNotice("Could not open this channel. Check your connection or try another channel."); }
+    } catch { if (active.current && revisions.current[slot] === revision) {
+      const reason = "Could not open this channel. Check your connection or try another channel.";
+      setNotice(reason);
+      if (paneRef.current[slot]?.revision === revision) setStates(current => ({...current, [slot]: {session:token,slot,revision,state:"error",reason}}));
+    } }
   }, [token, writePanes]);
   const chooseRef = useRef(choose); chooseRef.current = choose;
   useFocusEffect(useCallback(() => {
@@ -95,9 +104,11 @@ export default function MultiviewScreen() {
       } catch { if (!cancelled) setNotice("Multiview could not start. Close playback and try again."); }
     })();
     return () => {
-      cancelled = true; active.current = false; unregister();
-      void multiview?.end(token);
+      cancelled = true; active.current = false;
+      // Keep the registered native close in the ownership barrier until it settles.
       if (isSessionCurrent("fullscreen", sessionGeneration.current)) void stopFullscreenSession("superseded");
+      else void multiview?.end(token).catch(() => {});
+      unregister();
       resetRemoteContextIfOwned("default", "default");
     };
   }, [params.channelId, token]));
@@ -129,6 +140,23 @@ export default function MultiviewScreen() {
   }, [params.returnGuideGroup, router, selected, token]);
   const exitRef = useRef(exit); exitRef.current = exit;
   useEffect(() => {
+    if(!ready) return;
+    if(appPolicy.multiview_max===0) {void exitRef.current();return;}
+    const used: Record<string,number>={};
+    const next=paneRef.current.map((pane,slot)=>{
+      if(!pane)return null;
+      const owner=pane.channel.playlist_id||"charm-primary";
+      used[owner]=(used[owner]||0)+1;
+      if(slot>=appPolicy.multiview_max || (appPolicy.provider_limits[owner]>0&&used[owner]>appPolicy.provider_limits[owner])) {
+        multiview?.remove(token,slot,++revisions.current[slot]);return null;
+      }
+      return pane;
+    });
+    writePanes(next);
+    const nextAudio=nextAudiblePane(next,audibleRef.current);audibleRef.current=nextAudio;setAudible(nextAudio);
+    if(nextAudio>=0)multiview?.listen(token,nextAudio);
+  },[appPolicy,ready,token,writePanes]);
+  useEffect(() => {
     if (picker == null && priorPicker.current != null) requestAnimationFrame(() => requestNativeFocus(paneNodes.current[selected]));
     priorPicker.current=picker;
   }, [picker,selected]);
@@ -155,21 +183,21 @@ export default function MultiviewScreen() {
   };
   const action = (label: string, run: () => void, disabled = false) => <Pressable key={label} disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
   return <View style={[styles.page, {paddingTop: Math.max(insets.top,12), paddingBottom: Math.max(insets.bottom,12)}]}>
-    <Text style={styles.title}>Multiview · up to 4 channels</Text>
+    <Text style={styles.title}>Multiview · up to {appPolicy.multiview_max} channels</Text>
     <Text style={styles.notice}>{notice || (ready ? "Choose channels below. Tap a pane to listen." : "Opening multiview…")}</Text>
     <View style={styles.grid}>
       {panes.map((pane, slot) => <Pressable key={slot} ref={node => { paneNodes.current[slot]=node; }} focusable={picker == null} hasTVPreferredFocus={slot === 0 && picker == null} onFocus={() => setSelected(slot)} onPress={() => {
         setSelected(slot);
         if (pane) { multiview?.listen(token,slot); audibleRef.current=slot; setAudible(slot); }
-        else if (ready) setPicker(slot);
+        else if (ready && slot<appPolicy.multiview_max) setPicker(slot);
       }} style={({ focused }: any) => [styles.pane, slot === selected && styles.selected, focused && styles.focus]}>
         <View style={styles.video} pointerEvents="none">{ready && pane && <Surface session={token} slot={slot} style={StyleSheet.absoluteFill} />}</View>
-        <Text numberOfLines={1} style={styles.channel}>{audible === slot ? "🔊 " : ""}{pane?.channel.name || `+ Add channel ${slot+1}`}</Text>
+        <Text numberOfLines={1} style={styles.channel}>{audible === slot ? "🔊 " : ""}{pane?.channel.name || (slot<appPolicy.multiview_max?`+ Add channel ${slot+1}`:"Unavailable under current allowance")}</Text>
         {pane && states[slot]?.state !== "playing" && <Text numberOfLines={2} style={styles.status}>{states[slot]?.reason || (states[slot]?.state === "ended" ? "Stream ended" : "Loading…")}</Text>}
       </Pressable>)}
     </View>
     <ScrollView horizontal style={styles.actions} contentContainerStyle={{gap:8}}>
-      {action(panes[selected] ? "Change channel" : "Add channel", () => { setQuery(""); setPicker(selected); }, !ready)}
+      {action(panes[selected] ? "Change channel" : "Add channel", () => { setQuery(""); setPicker(selected); }, !ready || selected>=appPolicy.multiview_max)}
       {action("Retry", () => { const pane = panes[selected]; if (pane) void choose(selected,pane.channel,true); }, !ready || !panes[selected])}
       {action("Audio", () => { multiview?.listen(token,selected); audibleRef.current=selected; setAudible(selected); multiview?.tracks(token,selected,false); }, !panes[selected])}
       {action("Captions", () => multiview?.tracks(token,selected,true), !panes[selected])}

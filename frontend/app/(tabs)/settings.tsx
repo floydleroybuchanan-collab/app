@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { supportReport } from "@/src/core/supportReport";
+import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -321,6 +323,7 @@ function SettingsScreenContent() {
   );
 
   const appVersion = Constants.expoConfig?.version || "2.0.0-purple";
+  const appPolicy=useAppPolicy();
   const versionCode = (Constants.expoConfig as any)?.android?.versionCode;
   const selected = useMemo(() => TILES.find((item) => item.id === section), [section]);
 
@@ -641,7 +644,7 @@ function SettingsScreenContent() {
               <SettingsCard title="Playback" icon="play-circle-outline">
                 <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
-                  All supported streams play in Media3/ExoPlayer. Brief source buffering keeps the current player; recoverable network errors retry within Media3. No alternate player is installed.
+                  Live TV and multiview use Media3/ExoPlayer. VOD also offers optional Nova playback in its settings. Device capabilities determine which formats play smoothly.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"
@@ -784,6 +787,15 @@ function SettingsScreenContent() {
                   setBackupStatus(`Removed ${report.removedFiles} old cache files (${(report.removedBytes / 1048576).toFixed(1)} MiB).`);
                 })()} />
                 <Action label={busy ? "Working…" : "Export diagnostics"} icon="document-text-outline" onPress={exportDiagnostics} disabled={busy} />
+                <Action label="Share private support report" icon="share-outline" onPress={()=>{
+                  Alert.alert('Optional support report','Includes the app version and recent numeric live-player measurements and error codes. Excludes account details, passwords, tokens, channel names and stream URLs. You choose who receives it.',[
+                    {text:'Cancel',style:'cancel'},
+                    {text:'Preview report',onPress:()=>{void (async()=>{
+                      const body=supportReport(appVersion,Number(versionCode||0),await getNativePlaybackHealth());
+                      Alert.alert('Support report preview',body,[{text:'Close',style:'cancel'},{text:'Share',onPress:()=>{void Share.share({message:body,title:'CharmIPTV support report'}).catch(()=>setBackupStatus('Sharing is unavailable on this device.'));}}]);
+                    })().catch(()=>setBackupStatus('Support report could not be prepared.'));}}
+                  ]);
+                }} />
                 <Text style={styles.help}>Includes recent playback, decoder, buffer and guide-import activity. Kept locally in a short rolling history; no source addresses or login credentials.</Text>
                 {backupStatus && section === "health" ? <Text style={styles.status}>{backupStatus}</Text> : null}
                 {failedChannelRows.length ? (
@@ -1161,6 +1173,10 @@ function SettingsScreenContent() {
               <SettingsCard title="About CharmIPTV" icon="information-circle-outline">
                 <InfoRow label="Version" value={appVersion} />
                 <InfoRow label="Android build" value={versionCode ? String(versionCode) : "—"} />
+                {appPolicy.update.version_code>Number(versionCode||0)&&appPolicy.update.url ? <>
+                  <Text style={styles.help}>{appPolicy.update.message}</Text>
+                  <Action label="Open update download page" icon="download-outline" onPress={()=>{void Linking.openURL(appPolicy.update.url).catch(()=>setBackupStatus('Could not open the update page.'));}} />
+                </>:null}
                 <InfoRow label="Interface" value="Purple TV experiment" />
                 <InfoRow label="Install package" value="Purple / side-by-side" />
                 <InfoRow label="Core" value="perf/opt-fix performance grade" />

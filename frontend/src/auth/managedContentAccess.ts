@@ -1,3 +1,4 @@
+import { configureAppPolicy, type AppPolicy } from "../core/appPolicy.ts";
 export const MANAGED_CONTENT_SOURCE_IDS = ["primary", "secondary", "tertiary", "quaternary"] as const;
 export type ManagedContentSourceId = typeof MANAGED_CONTENT_SOURCE_IDS[number];
 
@@ -12,6 +13,7 @@ export type ManagedContentSource = {
  * APK can restore against the two-source Worker deployed before this contract.
  */
 export type ManagedContentAccess = {
+  app_policy?: AppPolicy;
   expires_at: number;
   sources?: ManagedContentSource[];
   primary?: Omit<ManagedContentSource, "id">;
@@ -78,11 +80,13 @@ export function configureManagedContentAccess(value: ManagedContentAccess): bool
   // last complete catalog untouched rather than stranding one playlist.
   if (!normalized) return false;
   current = normalized;
+  configureAppPolicy(value.app_policy);
   return true;
 }
 
 export function clearManagedContentAccess(): void {
   current = EMPTY_ACCESS;
+  configureAppPolicy();
 }
 
 export function managedContentSources(): readonly ManagedContentSource[] {

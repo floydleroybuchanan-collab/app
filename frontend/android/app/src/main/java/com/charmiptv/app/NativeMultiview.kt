@@ -99,6 +99,8 @@ internal object NativeMultiview {
       player.addListener(object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
           if (panes[slot] !== pane || pane.player !== player) return
+          // This is a startup deadline, not a deadline for a later live rebuffer.
+          if (state == Player.STATE_READY) main.removeCallbacksAndMessages(pane)
           emit(slot, pane.revision, when (state) { Player.STATE_READY -> "playing"; Player.STATE_ENDED -> "ended"; else -> "loading" })
         }
         override fun onPlayerError(error: PlaybackException) {
@@ -158,6 +160,7 @@ internal object NativeMultiview {
           val builder = player.trackSelectionParameters.buildUpon().clearOverridesOfType(type)
           if (index == 0) builder.setTrackTypeDisabled(type, subtitles)
           else tracks.getOrNull(index-1)?.let { (group,track) -> builder.setTrackTypeDisabled(type,false).addOverride(TrackSelectionOverride(group.mediaTrackGroup,track)) }
+          if (!subtitles) builder.setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, slot != audible)
           player.trackSelectionParameters = builder.build()
         }
       }.setNegativeButton("Close",null).show()
@@ -242,7 +245,11 @@ class MultiviewSurface(context: Context) : FrameLayout(context) {
   var token: String? = null
   val playerView = LayoutInflater.from(context).inflate(R.layout.charm_multiview_surface, this, false) as PlayerView
   init { addView(playerView, LayoutParams(-1,-1)); playerView.useController = false; playerView.isFocusable = false; keepScreenOn = true }
-  override fun onAttachedToWindow() { super.onAttachedToWindow(); NativeMultiview.bind(this) }
+  override fun onAttachedToWindow() { super.onAttachedToWindow(); unclipVideoAncestors(this); NativeMultiview.bind(this) }
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w,h,oldw,oldh)
+    if (w > 0 && h > 0 && (oldw <= 0 || oldh <= 0)) NativeMultiview.bind(this)
+  }
   fun changed() { NativeMultiview.bind(this) }
 }
 class MultiviewSurfaceManager : SimpleViewManager<MultiviewSurface>() {

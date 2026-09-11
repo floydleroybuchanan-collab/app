@@ -30,6 +30,22 @@ and caption selection, provider connection checks and device-specific validation
 
 ## Review boundaries
 
+The owner additionally approved an owner-only App controls panel: multiview
+allowance 0–4, per-supplied-playlist pane limits (0 means unknown), an optional
+version-code update notice, and aggregate account-service error counts. These
+settings do not change account session limits or older app behavior. They apply
+within a device; the provider remains responsible for enforcing its total across
+devices or multiple playlists using the same credentials. Defaults do not invent
+provider connection allowances. New app policy rides alongside the existing
+content-access response and refreshes with account validation.
+
+The bot has editable playback help without overwriting existing guide content.
+Settings → Health offers an optional support report preview and system share
+sheet, with only app version and allowlisted numeric live-player measurements.
+No automatic upload, credential, channel-name or stream-address field is included.
+Update notices are optional and never force an update. Publish a notice only
+after the referenced owner-signed build is available through its intended channel.
+
 Preserve Cloudflare/D1, bot and admin changes already present in the workspace;
 do not include those unrelated changes in this app release commit. Keep the
 existing scraper/provider implementations and source-integrity manifest. Record

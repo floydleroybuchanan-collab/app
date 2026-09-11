@@ -46,6 +46,7 @@ import { usePlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import * as FileSystem from "expo-file-system/legacy";
 import type { Channel } from "@/src/api";
 import { multiview } from "@/src/multiview";
+import { useAppPolicy } from "@/src/core/useAppPolicy";
 
 const SWITCH_NOTICE_MS = 1800;
 const STABLE_HISTORY_DELAY_MS = 5000;
@@ -70,6 +71,7 @@ function AutoScrollProgramDescription({ text }: { text: string; activeKey: strin
 }
 
 export default function PlayerScreen() {
+  const appPolicy=useAppPolicy();
   const router = useRouter();
   const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
   const insets = useSafeAreaInsets();
@@ -574,7 +576,7 @@ export default function PlayerScreen() {
             <View style={styles.progressRow}><Text style={styles.edgeTime}>{current ? fmtTime(current.start) : "LIVE"}</Text><View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View><Text style={styles.edgeTime}>{current?.stop ? fmtTime(current.stop) : "LIVE"}</Text></View>
 
             <View style={styles.controlsRow}>
-              {multiview && <Pressable onPress={() => {
+              {multiview && appPolicy.multiview_max>0 && <Pressable onPress={() => {
                 if (exitInFlightRef.current) return;
                 exitInFlightRef.current = true;
                 void stopAllPlaybackSessions("superseded").then(() => router.replace({ pathname: "/multiview" as any, params: { channelId, returnGuideGroup: params.returnGuideGroup } })).catch(() => { exitInFlightRef.current = false; showNotice("The current player could not close. Try again."); });
