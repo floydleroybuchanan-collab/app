@@ -21,5 +21,13 @@ class DebridInputTest {
             .protocol(Protocol.HTTP_1_1).code(200).message("OK").body(body.toResponseBody()).build()
         response("small").use { assertEquals("small", VodHttp.text(it, 5)) }
         response("oversized").use { assertNotNull(runCatching { VodHttp.text(it, 5) }.exceptionOrNull()) }
+        val unknownLength = object : okhttp3.ResponseBody() {
+            override fun contentType(): okhttp3.MediaType? = null
+            override fun contentLength() = -1L
+            override fun source(): okio.BufferedSource = okio.Buffer().writeUtf8("oversized")
+        }
+        response("").newBuilder().body(unknownLength).build().use {
+            assertNotNull(runCatching { VodHttp.text(it, 5) }.exceptionOrNull())
+        }
     }
 }

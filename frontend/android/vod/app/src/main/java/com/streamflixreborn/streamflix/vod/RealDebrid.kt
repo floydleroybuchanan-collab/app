@@ -16,6 +16,7 @@ object RealDebrid {
     private val vault by lazy { DebridVault(StreamFlixApp.instance) }
     private val authLock = Mutex()
     @Volatile private var generation = 0L
+    val sessionRevision get() = generation
     private val owned = java.util.concurrent.ConcurrentHashMap<String, String>()
     val connected get() = vault.read()?.optString("access_token")?.isNotBlank() == true
     val accountLabel get() = vault.read()?.optString("label") ?: "Not connected"
@@ -35,9 +36,10 @@ object RealDebrid {
         vault.clear()
     }
 
-    private fun credentials(): Pair<Long, String> =
+    private suspend fun credentials(): Pair<Long, String> = authLock.withLock {
         generation to (vault.read()?.optString("access_token")?.takeIf { it.isNotBlank() }
             ?: throw IOException("Connect your Real-Debrid account in VOD Settings."))
+    }
 
     private suspend fun api(path: String, fields: Map<String, String>? = null, token: String): String {
         repeat(3) { attempt ->
@@ -105,13 +107,17 @@ object RealDebrid {
         if (id == null) {
             checkSession(epoch)
             id = JSONObject(api("torrents/addMagnet", mapOf("magnet" to "magnet:?xt=urn:btih:$hash"), token)).getString("id")
-            if (owned.size < 100) owned[hash] = id
+            authLock.withLock {
+                checkSession(epoch)
+                if (owned.size < 100) owned[hash] = id
+            }
             created = true
         }
         require(id.matches(Regex("[A-Za-z0-9_-]+")))
         repeat(20) {
             checkSession(epoch)
             val info = JSONObject(api("torrents/info/$id", token = token))
+            checkSession(epoch)
             val files = info.optJSONArray("files") ?: JSONArray()
             val candidates = (0 until files.length()).map { files.getJSONObject(it) }
             val file = TorrentFiles.choose(candidates.map {

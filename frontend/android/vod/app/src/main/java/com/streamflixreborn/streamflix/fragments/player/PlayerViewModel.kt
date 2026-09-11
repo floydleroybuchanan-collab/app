@@ -43,6 +43,7 @@ class PlayerViewModel(
     private var resolveJob: Job? = null
     private var serversJob: Job? = null
     private var debridJob: Job? = null
+    private var debridAccountRevision = -1L
     private var subtitleJob: Job? = null
     private var generation = 0
     private val attempted = mutableSetOf<String>()
@@ -57,7 +58,8 @@ class PlayerViewModel(
             ?.let { group -> (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) } }
             ?: return
         val audio = tracks.groups.firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO && it.isSelected }
-            ?.getTrackFormat(0)?.sampleMimeType?.substringAfter('/')
+            ?.let { group -> (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) } }
+            ?.sampleMimeType?.substringAfter('/')
         val details = (server.details ?: SourceDetails()).copy(
             height = video.height.takeIf { it > 0 },
             codec = when (video.sampleMimeType) { "video/hevc" -> "HEVC"; "video/av01" -> "AV1"; "video/avc" -> "H.264"; else -> video.sampleMimeType?.substringAfter('/') },
@@ -67,6 +69,14 @@ class PlayerViewModel(
     }
 
     fun discoverDebrid() {
+        val accountRevision = RealDebrid.sessionRevision
+        if (accountRevision != debridAccountRevision || !RealDebrid.connected || !VodPreferences.debridSearch) {
+            debridJob?.cancel()
+            debridJob = null
+            debridAccountRevision = accountRevision
+            _sources.update { rows -> rows.filter { it.details?.kind != SourceDetails.Kind.REAL_DEBRID } }
+            sourceStatus.value = ""
+        }
         if (!RealDebrid.connected || !VodPreferences.debridSearch || debridJob != null) return
         val epoch = generation
         val type = contentType
@@ -74,12 +84,12 @@ class PlayerViewModel(
             sourceStatus.value = "Searching Real-Debrid sources…"
             try {
                 val added = SourceDiscovery.debrid(type)
-                if (epoch == generation) {
+                if (epoch == generation && accountRevision == RealDebrid.sessionRevision) {
                     _sources.update { rows -> (rows + added.sortedBy { DeviceCompatibility.rank(it.details) }).distinctBy { it.id } }
                     sourceStatus.value = if (added.isEmpty()) "No matching torrent sources" else ""
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (epoch == generation) { sourceStatus.value = e.message ?: "Search unavailable"; debridJob = null } }
+            catch (e: Exception) { if (epoch == generation && accountRevision == RealDebrid.sessionRevision) { sourceStatus.value = e.message ?: "Search unavailable"; debridJob = null } }
         }
     }
 

@@ -16,7 +16,7 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
-    "sha256": "4bfa67b714abf1768b03c2d28b907501ffc7d034103501fa0d6afd07658e00d1",
+    "sha256": "8e7818b6aeba4d8614101a6cfee83742f4a5b71b4d97d45167e7c052be760689",
     "reason": "Unified direct/debrid discovery and resolution, stale request cancellation, format reporting and bounded fallback."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsMobileView.kt": {
