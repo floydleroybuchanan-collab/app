@@ -22,12 +22,20 @@ export async function appControls(env) {
  const row=await env.DB.prepare('SELECT json,revision FROM app_controls WHERE id=1').first();
  return {...validateControls(JSON.parse(row.json)),revision:row.revision};
 }
+async function readSettings(request) {
+ const reader=request.body?.getReader();if(!reader) fail('A JSON object is required.');
+ let length=0;const chunks=[];
+ try {while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>8192){await reader.cancel();fail('App settings are too large.',413);}chunks.push(value);}}
+ finally {reader.releaseLock();}
+ const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ try {return JSON.parse(new TextDecoder().decode(bytes));}catch{fail('A valid JSON object is required.');}
+}
 export async function appControlsAdmin(request,env,auth,helpers) {
- const {json,safeJson,audit}=helpers;
+ const {json,audit}=helpers;
  if(!auth.isOwner) fail('Only the owner can manage global app settings.',403);
  if(request.method==='GET') return json({success:true,settings:await appControls(env),errors:(await env.DB.prepare('SELECT day,count,last_at FROM app_service_errors WHERE day>=?1 ORDER BY day DESC LIMIT 7').bind(Math.floor(Date.now()/86400000)-6).all()).results||[]});
  if(request.method!=='PUT') fail('Method not allowed.',405);
- const body=await safeJson(request),settings=validateControls(body);
+ const body=await readSettings(request),settings=validateControls(body);
  if(!Number.isInteger(body.revision)||body.revision<0) fail('Refresh the app settings before saving.');
  const result=await env.DB.prepare('UPDATE app_controls SET json=?1,revision=revision+1,updated_at=?2 WHERE id=1 AND revision=?3').bind(JSON.stringify(settings),Math.floor(Date.now()/1000),body.revision).run();
  if(!result.meta?.changes) fail('These settings changed in another tab. Refresh and try again.',409);

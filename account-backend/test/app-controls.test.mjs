@@ -20,6 +20,7 @@ test('owner-only settings preserve account session allowance and old content fie
 test('invalid limits, unsafe links and stale saves cannot overwrite controls',async()=>{
  const f=fixture(),put=body=>f.request('/admin/app-settings',{method:'PUT',token:f.ownerToken,body});
  assert.equal((await put({...value,revision:0,multiview_max:5})).status,400);
+ assert.equal((await put({...value,revision:0,extra:'x'.repeat(9000)})).status,413);
  assert.equal((await put({...value,revision:0,provider_limits:{...value.provider_limits,primary:-1}})).status,400);
  assert.equal((await put({...value,revision:0,update:{...value.update,url:'javascript:alert(1)'}})).status,400);
  assert.equal((await put({...value,revision:0,update:{...value.update,url:'https://name:secret@example.test/'}})).status,400);
