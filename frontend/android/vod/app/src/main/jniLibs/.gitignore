@@ -1,0 +1,2 @@
+# Reproducible, checksum-verified dependency output; see scripts/prepare-nova.py.
+*/lib*.so

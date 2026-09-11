@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote name="github" fetch="."/>
+  
+  <default remote="github" revision="master"/>
+  
+  <project name="aos-AVP" path="AVP" revision="9c5842b74ab180c99441ed23fdd5d508448388a7" upstream="nova" dest-branch="nova">
+    <copyfile src="Makefile" dest="Makefile"/>
+  </project>
+  <project name="aos-FileCoreLibrary" path="FileCoreLibrary" revision="b0b6716bf8c9c2c672eca1dd2b842c1b05556fd5" upstream="v6.4" dest-branch="v6.4"/>
+  <project name="aos-MediaLib" path="MediaLib" revision="53ba67259afa100e0898d7b6500413fb027d4b6f" upstream="v6.4" dest-branch="v6.4"/>
+  <project name="aos-Video" path="Video" revision="f53a1fc055d1d550a2edad4992bf82f9d12a7872" upstream="v6.4" dest-branch="v6.4"/>
+  <project name="aos-audiocompress" path="native/audiocompress" revision="3a3f9324d2550bd305060e1c52b803121ea09aad" upstream="master" dest-branch="master"/>
+  <project name="aos-avos" path="native/avos" revision="2cf21c486c7bf244c49b78d2220197a6d75396dd" upstream="android_sync_back" dest-branch="android_sync_back"/>
+  <project name="aos-boost-android-builder" path="native/boost" revision="43daa8621f4b74239d8fd52a545fe3344f0ff43c" upstream="master" dest-branch="master"/>
+  <project name="aos-libnativehelper" path="native/libnativehelper" revision="ab46fb536b594b25f93611ad7ef0f27b8fc24edb" upstream="master" dest-branch="master"/>
+  <project name="aos-libtorrent-android-builder" path="native/libtorrent-android-builder" revision="f30c887f14eb61f7fe1dc1a7208610eebd251f59" upstream="main" dest-branch="main"/>
+  <project name="aos-libyuv" path="native/libyuv" revision="650963473a2568eb81218f6e2703d3efaad6300e" upstream="master" dest-branch="master"/>
+  <project name="dav1d-android-builder-nobin" path="native/dav1d-android-builder" revision="d6c1a350295aaf4458e698f681503e7b6a051d1a" upstream="v1_4" dest-branch="v1_4"/>
+  <project name="ffmpeg-android-builder-nobin" path="native/ffmpeg-android-builder" revision="7d8da228b213bc13d2bbd9fc5fb69fa6ff1042a1" upstream="v8_0" dest-branch="v8_0"/>
+  <project name="libmysofa-android-builder" path="native/libmysofa-android-builder" revision="dc97741d01fa3cee8c81312b24bb4414c3f85d5c" upstream="main" dest-branch="main"/>
+  <project name="openssl-android-builder-nobin" path="native/openssl-android-builder" revision="524a99ffdf139844d5817ec2fe94dc63a4277087" upstream="v3_5_2" dest-branch="v3_5_2"/>
+  <project name="opus-android-builder-nobin" path="native/opus-android-builder" revision="72b91b1fa45fc036406e9a96d4d78bf5ce698a2c" upstream="20241012" dest-branch="20241012"/>
+  <project name="prebuilt-dav1d" path="native/prebuilt/dav1d" revision="f89559d62f671881431146b94c4364e568a623c8" upstream="v1_5" dest-branch="v1_5"/>
+  <project name="prebuilt-ffmpeg" path="native/prebuilt/ffmpeg" revision="6ba0e9340cf725bede2e2f29d30c290a2ab8130e" upstream="v8_0" dest-branch="v8_0"/>
+  <project name="prebuilt-libmysofa" path="native/prebuilt/libmysofa" revision="adf0d8278382a631d67dc3764d62d6ceece3789b" upstream="v1_3" dest-branch="v1_3"/>
+  <project name="prebuilt-openssl" path="native/prebuilt/openssl" revision="78631105380190806182d77943b5524e81609f65" upstream="v3_5" dest-branch="v3_5"/>
+  <project name="prebuilt-opus" path="native/prebuilt/opus" revision="27544063be93ee55c6ba58a2ebb32c106eb2e37b" upstream="main" dest-branch="main"/>
+  <project name="prebuilt-torrentd" path="native/prebuilt/torrentd" revision="4a516e32c5e57fa1305540e7b622ba5e39080abe" upstream="main" dest-branch="main"/>
+  <project name="torrentd-nobin" path="native/torrentd" revision="49bd6a6aeb783fae0089e04e2e84c50112acb5c3" upstream="master" dest-branch="master"/>
+</manifest>

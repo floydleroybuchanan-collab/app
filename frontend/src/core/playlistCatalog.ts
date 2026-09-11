@@ -47,6 +47,8 @@ export type PlaylistRecord = {
   autoEpgSourceIds?: string[];
   epgDiscoveryStatus?: string;
   tombstoneCount?: number;
+  kind?: "m3u" | "xtream";
+  account?: import("./xtream").XtreamAccount;
 };
 
 export function playlistOwner(channel: Pick<Channel, "id" | "playlist_id">): string {

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as catalog from "../src/core/playlistCatalog.ts";
+import * as xtream from "../src/core/xtream.ts";
 import { createPlaylistPlaybackRefresher } from "../src/core/playlistPlaybackRefresh.ts";
 import { remapStoredChannelIds } from "../src/utils/channelIdentityMigrate.ts";
 import { readFileSync } from "node:fs";
@@ -58,6 +59,7 @@ function registryHarness() {
     deleteAsync: async path => { files.delete(path); },
   };
   const mocks = {
+    "./xtream": xtream,
     "expo-file-system/legacy": filesystem,
     "expo-secure-store": { getItemAsync: async key => secrets.get(key) || null, setItemAsync: async (key, value) => { secrets.set(key, value); }, deleteItemAsync: async key => { secrets.delete(key); } },
     react: { useState: () => {}, useEffect: () => {} },

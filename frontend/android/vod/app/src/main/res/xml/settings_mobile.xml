@@ -2,6 +2,21 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceScreen android:key="screen_vod_sources" android:title="VOD Sources and Real-Debrid"
+        android:summary="Playback choices, private account connection and torrent sources" app:iconSpaceReserved="false">
+        <SwitchPreferenceCompat android:key="vod_choose_first" android:title="Choose source before playing"
+            android:summary="When off, Quick Play starts a direct source automatically" app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat android:key="vod_debrid_search" android:title="Find Real-Debrid sources"
+            android:summary="Search Torrentio by title ID when you open Sources; your token is sent only to Real-Debrid"
+            app:iconSpaceReserved="false" />
+        <ListPreference android:key="vod_engine" android:title="VOD player"
+            android:entries="@array/charm_vod_engines" android:entryValues="@array/charm_vod_engine_values"
+            android:summary="Media3 or embedded Nova playback" app:iconSpaceReserved="false" />
+        <Preference android:key="vod_rd_account" android:title="Real-Debrid account" app:iconSpaceReserved="false" />
+        <Preference android:key="vod_rd_disconnect" android:title="Disconnect Real-Debrid" app:iconSpaceReserved="false" />
+        <Preference android:key="vod_playback_licenses" android:title="Playback licenses and source" app:iconSpaceReserved="false" />
+    </PreferenceScreen>
+
     <PreferenceScreen
         android:key="screen_content"
         android:title="@string/settings_section_content_title"

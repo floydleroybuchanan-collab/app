@@ -11,7 +11,13 @@ import com.streamflixreborn.streamflix.utils.EpisodeManager
 import com.streamflixreborn.streamflix.utils.OpenSubtitles
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import com.streamflixreborn.streamflix.utils.format
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
+import com.streamflixreborn.streamflix.vod.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +38,63 @@ class PlayerViewModel(
 
     private val _playPreviousOrNextEpisode = MutableSharedFlow<Video.Type.Episode>()
     val playPreviousOrNextEpisode: SharedFlow<Video.Type.Episode> = _playPreviousOrNextEpisode
+    private var lastVideoType: Video.Type? = null
+    private var lastId: String? = null
+    private var resolveJob: Job? = null
+    private var serversJob: Job? = null
+    private var debridJob: Job? = null
+    private var subtitleJob: Job? = null
+    private var generation = 0
+    private val attempted = mutableSetOf<String>()
+    private val _sources = MutableStateFlow<List<Video.Server>>(emptyList())
+    val sources: kotlinx.coroutines.flow.StateFlow<List<Video.Server>> = _sources
+    val sourceStatus = MutableStateFlow("")
+    private val initialType = videoType
+    val contentType: Video.Type get() = lastVideoType ?: initialType
+
+    fun reportTracks(server: Video.Server, tracks: androidx.media3.common.Tracks) {
+        val video = tracks.groups.firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO && it.isSelected }
+            ?.let { group -> (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) } }
+            ?: return
+        val audio = tracks.groups.firstOrNull { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO && it.isSelected }
+            ?.getTrackFormat(0)?.sampleMimeType?.substringAfter('/')
+        val details = (server.details ?: SourceDetails()).copy(
+            height = video.height.takeIf { it > 0 },
+            codec = when (video.sampleMimeType) { "video/hevc" -> "HEVC"; "video/av01" -> "AV1"; "video/avc" -> "H.264"; else -> video.sampleMimeType?.substringAfter('/') },
+            hdr = when (video.colorInfo?.colorTransfer) { androidx.media3.common.C.COLOR_TRANSFER_ST2084 -> "HDR (PQ)"; androidx.media3.common.C.COLOR_TRANSFER_HLG -> "HLG"; else -> null },
+            audio = audio, detected = true)
+        _sources.update { rows -> rows.map { if (it.id == server.id) it.copy(details = details) else it } }
+    }
+
+    fun discoverDebrid() {
+        if (!RealDebrid.connected || !VodPreferences.debridSearch || debridJob != null) return
+        val epoch = generation
+        val type = contentType
+        debridJob = viewModelScope.launch(Dispatchers.IO) {
+            sourceStatus.value = "Searching Real-Debrid sources…"
+            try {
+                val added = SourceDiscovery.debrid(type)
+                if (epoch == generation) {
+                    _sources.update { rows -> (rows + added.sortedBy { DeviceCompatibility.rank(it.details) }).distinctBy { it.id } }
+                    sourceStatus.value = if (added.isEmpty()) "No matching torrent sources" else ""
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { if (epoch == generation) { sourceStatus.value = e.message ?: "Search unavailable"; debridJob = null } }
+        }
+    }
+
+    fun selectSource(server: Video.Server) { attempted.clear(); getVideo(server) }
+
+    fun fallback(failed: Video.Server?): Boolean {
+        failed?.let { attempted.add(it.id) }
+        val next = _sources.value.firstOrNull {
+            it.id !in attempted && it.details?.kind != SourceDetails.Kind.REAL_DEBRID
+        } ?: return false
+        if (attempted.size >= 5) return false
+        getVideo(next)
+        return true
+    }
+
     init {
         getServers(videoType, id)
         getSubtitles(videoType)
@@ -94,32 +157,42 @@ class PlayerViewModel(
         getSubtitles(episode)
     }
 
-    private fun getServers(videoType: Video.Type, id: String) = viewModelScope.launch(Dispatchers.IO) {
-        Log.d("PlayerViewModel", "Inizio ricerca server per ID: $id")
+    private fun getServers(videoType: Video.Type, id: String) {
+        generation++
+        resolveJob?.cancel()
+        serversJob?.cancel()
+        debridJob?.cancel()
+        debridJob = null
+        attempted.clear()
+        _sources.value = emptyList()
         lastVideoType = videoType
         lastId = id
-        _state.emit(State.LoadingServers)
-        try {
-            val servers = UserPreferences.currentProvider!!.getServers(id, videoType)
-            if (servers.isEmpty()) throw Exception("No servers found")
-            
-            // LOG POTENZIATO: Mostra tutti i server disponibili per il player
-            Log.i("StreamFlixES", "[SERVERS LIST] -> Provider: ${UserPreferences.currentProvider!!.name}")
-            Log.i("StreamFlixES", "[SERVERS LIST] -> Found ${servers.size} servers: ${servers.joinToString { it.name }}")
-
-            Log.d("PlayerViewModel", "Ricerca server completata: ${servers.size} server trovati")
-            _state.emit(State.SuccessLoadingServers(servers))
-        } catch (e: Exception) {
-            Log.e("PlayerViewModel", "Errore ricerca server: ", e)
-            _state.emit(State.FailedLoadingServers(e))
+        serversJob = viewModelScope.launch(Dispatchers.IO) {
+            _state.emit(State.LoadingServers)
+            try {
+                val provider = UserPreferences.currentProvider ?: throw Exception("Select a provider.")
+                val servers = provider.getServers(id, videoType)
+                coroutineContext.ensureActive()
+                _sources.value = servers
+                _state.emit(State.SuccessLoadingServers(servers))
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                if (RealDebrid.connected) _state.emit(State.SuccessLoadingServers(emptyList()))
+                else _state.emit(State.FailedLoadingServers(e))
+            }
         }
     }
 
-    fun getVideo(server: Video.Server) = viewModelScope.launch(Dispatchers.IO) {
+    fun getVideo(server: Video.Server): Job {
+        resolveJob?.cancel()
+        attempted.add(server.id)
+        return viewModelScope.launch(Dispatchers.IO) {
         Log.d("PlayerViewModel", "Inizio estrazione video dal server: ${server.name}")
         _state.emit(State.LoadingVideo(server))
         try {
-            val video = UserPreferences.currentProvider!!.getVideo(server)
+            val video = if (server.details?.kind == SourceDetails.Kind.REAL_DEBRID)
+                RealDebrid.resolve(server, contentType) else UserPreferences.currentProvider!!.getVideo(server)
+            coroutineContext.ensureActive()
             if (video.source.isEmpty()) throw Exception("No source found")
 
             // LOGICA SOTTOTITOLI GLOBALE: 
@@ -139,13 +212,17 @@ class PlayerViewModel(
 
             Log.d("PlayerViewModel", "Estrazione video completata con successo")
             _state.emit(State.SuccessLoadingVideo(video, server))
+        } catch (e: CancellationException) { throw e
         } catch (e: Exception) {
-            Log.e("PlayerViewModel", "Errore estrazione video: ", e)
+            // Never log resolved URLs or credentials.
             _state.emit(State.FailedLoadingVideo(e, server))
         }
+        }.also { resolveJob = it }
     }
 
-    fun getSubtitles(videoType: Video.Type) = viewModelScope.launch(Dispatchers.IO) {
+    fun getSubtitles(videoType: Video.Type): Job {
+        subtitleJob?.cancel()
+        return viewModelScope.launch(Dispatchers.IO) {
         Log.d("PlayerViewModel", "Inizio ricerca sottotitoli")
         _subtitleState.emit(SubtitleState.Loading)
 
@@ -167,8 +244,8 @@ class PlayerViewModel(
                 
                 Log.d("PlayerViewModel", "Ricerca OpenSubtitles completata: ${subtitles.size} risultati")
                 _subtitleState.emit(SubtitleState.SuccessOpenSubtitles(subtitles))
+            } catch (e: CancellationException) { throw e
             } catch (e: Exception) {
-                Log.e("PlayerViewModel", "Errore OpenSubtitles: ", e)
                 _subtitleState.emit(SubtitleState.FailedOpenSubtitles(e))
             }
         }
@@ -195,11 +272,12 @@ class PlayerViewModel(
                 
                 Log.d("PlayerViewModel", "Ricerca SubDL completata: ${subtitles.size} risultati")
                 _subtitleState.emit(SubtitleState.SuccessSubDLSubtitles(subtitles))
+            } catch (e: CancellationException) { throw e
             } catch (e: Exception) {
-                Log.e("PlayerViewModel", "Errore SubDL: ", e)
                 _subtitleState.emit(SubtitleState.FailedSubDLSubtitles(e))
             }
         }
+        }.also { subtitleJob = it }
     }
 
     fun downloadSubtitle(subtitle: OpenSubtitles.Subtitle) = viewModelScope.launch(Dispatchers.IO) {
@@ -251,8 +329,6 @@ class PlayerViewModel(
         data class SuccessDownloadingSubDLSubtitle(val subtitle: SubDL.Subtitle, val uri: Uri) : SubtitleState()
         data class FailedDownloadingSubDLSubtitle(val error: Exception, val subtitle: SubDL.Subtitle) : SubtitleState()
     }
-    private var lastVideoType: Video.Type? = null
-    private var lastId: String? = null
     fun reloadServersAfterBypass() {
         val type = lastVideoType ?: return
         val id = lastId ?: return

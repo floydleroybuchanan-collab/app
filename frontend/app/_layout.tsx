@@ -172,6 +172,7 @@ export default function RootLayout() {
                       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#070711" } }}>
                         <Stack.Screen name="(tabs)" />
                         <Stack.Screen name="player" options={{ animation: "none", contentStyle: { backgroundColor: "#000" } }} />
+                        <Stack.Screen name="multiview" options={{ animation: "none", contentStyle: { backgroundColor: "#000" } }} />
                       </Stack>
                     </ErrorBoundary>
                     <ErrorBoundary>

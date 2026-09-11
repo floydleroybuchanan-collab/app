@@ -18,9 +18,10 @@ android {
     ndkVersion rootProject.ext.ndkVersion
     defaultConfig {
         minSdk 24
+        consumerProguardFiles 'nova-consumer-rules.pro'
         buildConfigField 'String', 'APPLICATION_ID', '"com.charmiptv.app.purple.next.vodtest1"'
-        buildConfigField 'int', 'VERSION_CODE', '8'
-        buildConfigField 'String', 'VERSION_NAME', '"2.1.0-rc.5-vod-test-1"'
+        buildConfigField 'int', 'VERSION_CODE', '14'
+        buildConfigField 'String', 'VERSION_NAME', '"2.1.0-rc.7"'
         buildConfigField 'String', 'APP_LAYOUT', '"tv"'
         buildConfigField 'boolean', 'CHARM_VOD_EMBEDDED', 'true'
         ['TMDB_API_KEY', 'SUBDL_API_KEY', 'RABBITSTREAM_SOURCE_API'].each { key ->
@@ -63,6 +64,8 @@ def generateVodKeys = tasks.register('generateVodKeys') {
 tasks.configureEach { if (name.startsWith('configureCMake') || name == 'preBuild') dependsOn(generateVodKeys) }
 
 dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+    runtimeOnly 'org.slf4j:slf4j-nop:2.0.17'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 
     implementation 'androidx.media3:media3-datasource-okhttp:1.8.0'

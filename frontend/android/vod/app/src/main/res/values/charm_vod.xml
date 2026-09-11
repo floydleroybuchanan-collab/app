@@ -1,0 +1,4 @@
+<resources>
+    <string-array name="charm_vod_engines"><item>Media3</item><item>Nova (embedded)</item></string-array>
+    <string-array name="charm_vod_engine_values"><item>media3</item><item>nova</item></string-array>
+</resources>

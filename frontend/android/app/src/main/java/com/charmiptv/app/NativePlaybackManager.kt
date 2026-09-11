@@ -369,6 +369,7 @@ object NativePlaybackManager {
   }
 
   fun prepare(requestedOwner: Owner, channelKey: String, uri: String, headers: Map<String, String>, contentType: String?, bufferProfile: String? = null) = runOnMain {
+    if (NativeMultiview.active) { publishState("error", "owner-reserved"); return@runOnMain }
     if (requestedOwner == Owner.PREVIEW && owner == Owner.FULLSCREEN) {
       pendingPrepare = null
       publishState("error", "owner-reserved")

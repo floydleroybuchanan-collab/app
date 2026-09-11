@@ -63,6 +63,7 @@ data class Video(
         val id: String,
         val name: String,
         val src: String = "",
+        val details: com.streamflixreborn.streamflix.vod.SourceDetails? = null,
     ) : Serializable {
         var video: Video? = null
     }

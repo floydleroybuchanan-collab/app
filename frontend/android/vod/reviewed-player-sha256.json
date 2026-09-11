@@ -1,0 +1,32 @@
+{
+  "app/src/main/java/com/streamflixreborn/streamflix/models/Video.kt": {
+    "upstream": "3f69bdc78d32771c5be2ffc3426fbd8ad2de5bb50afcb9987a1cca35f2da9502",
+    "sha256": "c251cc7d241f8139b305bb16064d4d3bc2dd53553c14813af2534894f8f07e85",
+    "reason": "Optional serializable source metadata; preserve existing provider constructor compatibility."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt": {
+    "upstream": "567f17a971b1bef0ff4e9607031c0bcb4f5ddb20348c9a512ad97b61459ccca2",
+    "sha256": "44efac7ee34df0d26925680781f02da26f1b683654a844a30e5ea5ce630cdbea",
+    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
+    "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
+    "sha256": "01dd19ab5d5f927e92d3a00ee4649d1e1001a99a8f8050d4821e17b6306ce7bf",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
+    "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
+    "sha256": "4bfa67b714abf1768b03c2d28b907501ffc7d034103501fa0d6afd07658e00d1",
+    "reason": "Unified direct/debrid discovery and resolution, stale request cancellation, format reporting and bounded fallback."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsMobileView.kt": {
+    "upstream": "b78a9e8624dcf1ae7f0f2298a829b93b97392e6787e904ab18c32a02ceeaed4a",
+    "sha256": "777b0d831d5c3b70a39c0aae05af79a8a902827d1220f43fcf3a53e150118025",
+    "reason": "Expose existing server settings page for the source control."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsTvView.kt": {
+    "upstream": "ebbd01156c747f4caf6b8e90e32f12d99eaa16c5aa6ec8e1ad54b5dc359e506c",
+    "sha256": "b70ae3d2050921d7b3a695abb587e288adec73a401097c91ece56a45db10c306",
+    "reason": "Expose existing server settings page for the source control on TV."
+  }
+}

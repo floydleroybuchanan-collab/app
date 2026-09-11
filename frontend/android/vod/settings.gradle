@@ -16,3 +16,7 @@ rootProject.name = "Streamflix"
 include ':app'
 include ':retrofit-jsoup-converter'
 include ':navigation'
+include ':vod-navigation'
+project(':vod-navigation').projectDir = file('navigation')
+include ':vod-jsoup'
+project(':vod-jsoup').projectDir = file('retrofit-jsoup-converter')

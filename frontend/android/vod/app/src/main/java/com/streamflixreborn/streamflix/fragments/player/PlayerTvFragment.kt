@@ -1,5 +1,6 @@
 package com.streamflixreborn.streamflix.fragments.player
 
+import com.streamflixreborn.streamflix.vod.*
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -192,7 +193,8 @@ class PlayerTvFragment : Fragment() {
 
         val fileName = uri.getFileName(requireContext()) ?: uri.toString()
 
-        val currentPosition = player.currentPosition
+        val currentPosition = savedSourcePosition ?: player.currentPosition
+        savedSourcePosition = null
         val currentSubtitleConfigurations =
             player.currentMediaItem?.localConfiguration?.subtitleConfigurations?.map {
                 MediaItem.SubtitleConfiguration.Builder(it.uri)
@@ -340,7 +342,7 @@ class PlayerTvFragment : Fragment() {
                         val isTmdb = providerName.contains("TMDb", ignoreCase = true)
                         val isAD = providerName.contains("AfterDark", ignoreCase = true)
 
-                        if (servers.isEmpty()) {
+                        if (servers.isEmpty() && !RealDebrid.connected) {
                             val message = if (isTmdb || isAD) {
                                 val langCode = providerName.substringAfter("(").substringBefore(")")
                                 val locale = Locale.forLanguageTag(langCode)
@@ -370,12 +372,13 @@ class PlayerTvFragment : Fragment() {
                             })
                             .build()
                         binding.settings.setOnServerSelectedListener { server ->
-                            viewModel.getVideo(state.servers.find { server.id == it.id }!!)
+                            viewModel.sources.value.find { server.id == it.id }?.let { viewModel.selectSource(it) }
                         }
                         val preferredServer = state.servers.firstOrNull {
                             it.name.equals(args.preferredServerName, ignoreCase = true)
                         }
-                        viewModel.getVideo(preferredServer ?: state.servers.first())
+                        if (VodPreferences.chooseFirst || state.servers.isEmpty()) showSourcePicker()
+                            else viewModel.getVideo(preferredServer ?: state.servers.first())
 
                     }
                         is PlayerViewModel.State.FailedLoadingServers -> {
@@ -388,16 +391,8 @@ class PlayerTvFragment : Fragment() {
                         }
 
                         is PlayerViewModel.State.LoadingVideo -> {
-                            player.setMediaItem(
-                                MediaItem.Builder()
-                                    .setUri("".toUri())
-                                    .setMediaMetadata(
-                                        MediaMetadata.Builder()
-                                            .setMediaServerId(state.server.id)
-                                            .build()
-                                    )
-                                    .build()
-                            )
+                        // Keep the current media and position while another source resolves.
+
                         }
 
                         is PlayerViewModel.State.SuccessLoadingVideo -> {
@@ -407,43 +402,11 @@ class PlayerTvFragment : Fragment() {
                         }
 
                         is PlayerViewModel.State.FailedLoadingVideo -> {
-                            val nextServer = servers.getOrNull(servers.indexOf(state.server) + 1)
-                            if (nextServer != null) {
-                                viewModel.getVideo(nextServer)
-                            } else {
-                                val providerName = UserPreferences.currentProvider?.name ?: ""
-                                val isTmdb = providerName.contains("TMDb", ignoreCase = true)
-                                val isAD = providerName.contains("AfterDark", ignoreCase = true)
-
-                                val message = if (isTmdb || isAD) {
-                                    val langCode =
-                                        providerName.substringAfter("(").substringBefore(")")
-                                    val locale = Locale.forLanguageTag(langCode)
-                                    val langDisplayName =
-                                        locale.getDisplayLanguage(Locale.getDefault())
-                                            .replaceFirstChar {
-                                                if (it.isLowerCase()) it.titlecase(
-                                                    Locale.getDefault()
-                                                ) else it.toString()
-                                            }
-
-                                    if (isTmdb) getString(
-                                        R.string.player_not_available_lang_message,
-                                        langDisplayName
-                                    )
-                                    else getString(R.string.player_retry_later_message)
-                                } else {
-                                    "All servers failed to load the video."
-                                }
-
-                                Toast.makeText(
-                                    requireContext(),
-                                    message,
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                findNavController().navigateUp()
-                            }
+                        if (state.server.details?.kind == SourceDetails.Kind.REAL_DEBRID || !viewModel.fallback(state.server)) {
+                            Toast.makeText(requireContext(), state.error.message ?: "Choose another source.", Toast.LENGTH_LONG).show()
+                            showSourcePicker()
                         }
+                    }
                     }
                 }
             }
@@ -464,7 +427,8 @@ class PlayerTvFragment : Fragment() {
                             is PlayerViewModel.SubtitleState.SuccessDownloadingOpenSubtitle -> {
                                 val fileName =
                                     state.uri.getFileName(requireContext()) ?: state.uri.toString()
-                                val currentPosition = player.currentPosition
+                                val currentPosition = savedSourcePosition ?: player.currentPosition
+        savedSourcePosition = null
                                 val currentSubtitleConfigurations =
                                     player.currentMediaItem?.localConfiguration?.subtitleConfigurations?.map {
                                         MediaItem.SubtitleConfiguration.Builder(it.uri)
@@ -514,7 +478,8 @@ class PlayerTvFragment : Fragment() {
                             is PlayerViewModel.SubtitleState.SuccessDownloadingSubDLSubtitle -> {
                                 val fileName =
                                     state.uri.getFileName(requireContext()) ?: state.uri.toString()
-                                val currentPosition = player.currentPosition
+                                val currentPosition = savedSourcePosition ?: player.currentPosition
+        savedSourcePosition = null
                                 val currentSubtitleConfigurations =
                                     player.currentMediaItem?.localConfiguration?.subtitleConfigurations?.map {
                                         MediaItem.SubtitleConfiguration.Builder(it.uri)
@@ -615,7 +580,16 @@ class PlayerTvFragment : Fragment() {
         hideNextEpisodeOverlay()
     }
 
-        override fun onDestroyView() {
+        private var forceMedia3 = false
+    private var nativeResumePosition: Long? = null
+    private var playbackListener: Player.Listener? = null
+    private var savedSourcePosition: Long? = null
+    private fun showSourcePicker() {
+        if (!isAdded || view == null) return
+        SourcePicker.show(this, viewModel, currentServer?.id) { viewModel.selectSource(it) }
+    }
+
+    override fun onDestroyView() {
             super.onDestroyView()
             nextEpisodePrefetchJob?.cancel()
             clearBypassSession(dismissDialog = true)
@@ -841,6 +815,10 @@ class PlayerTvFragment : Fragment() {
                 binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
                 binding.settings.show()
             }
+            binding.pvPlayer.controller.binding.btnExoSources.setOnClickListener {
+                binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
+                showSourcePicker()
+            }
 
             binding.pvPlayer.controller.binding.btnSkipIntro.setOnClickListener {
                 player.seekTo(player.currentPosition + 85000)
@@ -1033,6 +1011,27 @@ class PlayerTvFragment : Fragment() {
             startPositionMs: Long? = null,
             shouldPlay: Boolean = true,
         ) {
+        val keepPlaying = if (player.currentMediaItem != null) player.playWhenReady else true
+        player.pause()
+        playbackListener?.let { player.removeListener(it) }
+        playbackListener = null
+
+        if (!forceMedia3 && VodPreferences.engine == "nova") {
+            val resume = player.currentPosition
+            currentVideo = video
+            currentServer = server
+            player.stop()
+            player.clearMediaItems()
+            NovaPlayback.show(this, viewModel, video, server, resume, { v, selected, position ->
+                forceMedia3 = true
+                nativeResumePosition = position
+                displayVideo(v, selected)
+            }, { if (isAdded) findNavController().navigateUp() })
+            return
+        }
+
+        savedSourcePosition = nativeResumePosition ?: player.currentPosition
+        nativeResumePosition = null
             currentVideo = video
             currentServer = server
             updatePlayerHeader()
@@ -1181,7 +1180,8 @@ class PlayerTvFragment : Fragment() {
                 }
             }
 
-            player.addListener(object : Player.Listener {
+            playbackListener?.let { player.removeListener(it) }
+        playbackListener = object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     super.onPlaybackStateChanged(playbackState)
 
@@ -1194,6 +1194,7 @@ class PlayerTvFragment : Fragment() {
 
                 override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                     super.onTracksChanged(tracks)
+                    viewModel.reportTracks(server, tracks)
                     val videoGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }
                     val videoTracks = videoGroups.sumOf { it.length }
                     val selectedHeights = buildList {
@@ -1310,13 +1311,10 @@ class PlayerTvFragment : Fragment() {
                     super.onPlayerError(error)
                     Log.e("PlayerTvFragment", "onPlayerError: ", error)
 
-                    val nextServer = servers.getOrNull(servers.indexOf(currentServer) + 1)
-                    if (nextServer != null) {
-                        Log.i("PlayerTvFragment", "Playback failed, trying next server: ${nextServer.name}")
-                        viewModel.getVideo(nextServer)
-                    }
+                    if (!viewModel.fallback(currentServer)) showSourcePicker()
                 }
-            })
+            }
+        player.addListener(playbackListener!!)
 
             if (startPositionMs != null) {
                 player.seekTo(startPositionMs)

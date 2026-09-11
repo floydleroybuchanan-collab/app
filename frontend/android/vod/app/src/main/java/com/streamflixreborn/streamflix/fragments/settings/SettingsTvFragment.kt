@@ -238,6 +238,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     private fun displaySettings() {
         updateOverviewLabels()
         updateProviderVisibilityState()
+        com.streamflixreborn.streamflix.vod.DebridSettings.bind(this)
         SupabaseSettingsController.bind(this, lifecycleScope) { key ->
             findPreference(key)
         }

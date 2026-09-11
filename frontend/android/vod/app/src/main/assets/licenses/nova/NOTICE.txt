@@ -1,0 +1,33 @@
+CharmIPTV optional Nova/AVOS VOD playback
+
+Based on Nova Video Player v6.4.63, released by the Nova Video Player project.
+https://github.com/nova-video-player/aos-AVP/releases/tag/v6.4.63
+
+AVOS and Java media interfaces: Copyright 2017 Archos SA and contributors.
+Licensed under Apache License 2.0. Java adapters were modified for CharmIPTV:
+unused SMB proxy dependencies and optional audio-transformer bindings removed.
+Native playback libraries are unmodified upstream release binaries.
+
+FFmpeg: Copyright the FFmpeg developers. LGPL 2.1 or later (LGPL-only build).
+AudioCompress: (c)2002-2007 busybee (http://beesbuzz.biz/), LGPL.
+dav1d: Copyright VideoLAN and dav1d authors; BSD 2-Clause.
+Opus: Copyright Xiph.Org and the contributors listed in opus-COPYING.txt; BSD 3-Clause.
+libmysofa: Copyright the contributors listed in libmysofa-LICENSE.txt; BSD 3-Clause.
+OpenSSL: Copyright the OpenSSL Project Authors; Apache License 2.0.
+
+License texts accompany this notice. The exact source/build revisions for this
+release are in nova-v6.4.63-manifest.xml. Corresponding repositories:
+https://github.com/nova-video-player/aos-avos
+https://github.com/nova-video-player/aos-MediaLib
+https://github.com/nova-video-player/aos-audiocompress
+https://github.com/nova-video-player/ffmpeg-android-builder-nobin
+https://github.com/nova-video-player/dav1d-android-builder-nobin
+https://github.com/nova-video-player/opus-android-builder-nobin
+https://github.com/nova-video-player/libmysofa-android-builder
+https://github.com/nova-video-player/openssl-android-builder-nobin
+
+CharmIPTV source, JNI adapter changes and packaging instructions:
+https://github.com/floydleroybuchanan-collab/app
+frontend/scripts/prepare-nova.py verifies the pinned release checksum and packages
+the playback libraries for the selected Android ABIs. Source references do not
+imply endorsement by Archos, Nova, or any third-party project.

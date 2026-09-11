@@ -99,6 +99,11 @@ class PlayerSettingsMobileView @JvmOverloads constructor(
         displaySettings(Setting.MAIN)
     }
 
+    fun showServers() {
+        this.visibility = View.VISIBLE
+        displaySettings(Setting.SERVERS)
+    }
+
     private fun displaySettings(setting: Setting) {
         currentSettings = setting
 

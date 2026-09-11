@@ -1,5 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
+import { decodeXtream, previewXtream, type XtreamAccount } from "./xtream";
 import { useEffect, useState } from "react";
 import type { Channel } from "@/src/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -8,7 +9,7 @@ import { managedContentSources, managedPlaylistUrl } from "@/src/auth/managedCon
 import { combinePlaylistCatalogs, MANAGED_PLAYLISTS, PRIMARY_PLAYLIST,
   managedPlaylistDefinition, scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
-export type PlaylistPreview = Channel[] & { epgUrls?: string[] };
+export type PlaylistPreview = Channel[] & { epgUrls?: string[]; account?: XtreamAccount };
 
 const KEY = "charm_playlist_registry_v1";
 const ROOT = `${FileSystem.documentDirectory}playlists/`;
@@ -104,7 +105,7 @@ async function writeCatalog(row: PlaylistRecord, channels: PlaylistPreview): Pro
   for (const channel of previous) if (!liveIds.has(channel.id)) byId.set(channel.id, { ...channel, deletedAt: Date.now() });
   const tombstones = Array.from(byId.values()).sort((a, b) => b.deletedAt - a.deletedAt).slice(0, 25_000);
   await FileSystem.writeAsStringAsync(tombstonePath, JSON.stringify(tombstones));
-  const next = { ...row, discoveredEpgUrls: channels.epgUrls || row.discoveredEpgUrls || [], previousRevision: row.revision, revision: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+  const next = { ...row, account: channels.account || row.account, discoveredEpgUrls: channels.epgUrls || row.discoveredEpgUrls || [], previousRevision: row.revision, revision: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     count: channels.length, tombstoneCount: tombstones.length, refreshedAt: Date.now(), status: `${channels.length.toLocaleString()} channels ready` };
   await FileSystem.writeAsStringAsync(pathFor(next), JSON.stringify(channels));
   const check = await FileSystem.getInfoAsync(pathFor(next));
@@ -115,12 +116,15 @@ export async function getPlaylistUrl(row: PlaylistRecord): Promise<string> {
   return row.managed ? managedUrl(row.id) : await SecureStore.getItemAsync(`playlist-${row.id}`) || "";
 }
 export function validatePlaylistUrl(url: string) {
+  if (decodeXtream(url)) return;
   if (/^content:\/\/\S+$/.test(url)) return;
   if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2048) throw new Error("Enter a complete http:// or https:// M3U URL (up to 2,048 characters).");
   try { new URL(url); } catch { throw new Error("The playlist URL is invalid."); }
 }
 export async function previewPlaylist(url: string) {
   validatePlaylistUrl(url.trim());
+  const xtream = decodeXtream(url);
+  if (xtream) return previewXtream(xtream);
   try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return Object.assign(parsed.channels, { epgUrls: parsed.epgUrls || [] }); }
   catch (error) {
     // Never surface provider URLs/credentials from fetch/transport exceptions.
@@ -182,7 +186,7 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
         await finishNativeUpdateJob(jobId, "succeeded", fresh.length).catch(() => undefined);
       } catch (error) {
         catalogs.set(row.id, previous);
-        const safeReason = error instanceof Error && /^(Enabled playlists exceed|Playlist contains|Playlist exceeds|No playable)/.test(error.message)
+        const safeReason = error instanceof Error && /^(Enabled playlists exceed|Playlist contains|Playlist exceeds|No playable|Your provider account|The provider rejected|Could not contact the Xtream provider)/.test(error.message)
           ? error.message : "Refresh failed — previous channels kept. Check source and connection.";
         rows = previousRows.map((item) => item.id === row.id ? { ...item, status: safeReason } : item);
         await commit(rows);
@@ -201,10 +205,11 @@ export function savePersonalPlaylist(name: string, url: string, preview: Channel
     const old = existingId ? rows.find((row) => row.id === existingId) : undefined;
     if (existingId && (!old || old.managed)) throw new Error("This supplied playlist cannot be replaced.");
     validatePlaylistUrl(url); validatePlaylistImport({ channels: preview, rejected: 0, truncated: false });
-    const row = { ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist" };
+    const row = { kind: (decodeXtream(url) ? "xtream" : "m3u") as "xtream" | "m3u", ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist" };
     const catalogs = await allCatalogs(rows); catalogs.set(row.id, scopePlaylistChannels(row, preview));
     const proposed = old ? rows.map((item) => item.id === row.id ? row : item) : [...rows, row];
     combinePlaylistCatalogs(proposed, catalogs);
+    row.kind = decodeXtream(url) ? "xtream" : "m3u";
     const next = await writeCatalog(row, preview);
     const previousUrl = old ? await getPlaylistUrl(old) : null;
     await SecureStore.setItemAsync(`playlist-${row.id}`, url);

@@ -7,10 +7,10 @@ import com.facebook.react.uimanager.ViewManager
 
 class NativePlaybackPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-    return listOf(NativePlaybackModule(reactContext))
+    return listOf(NativePlaybackModule(reactContext), MultiviewModule(reactContext))
   }
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
-    return listOf(NativePlaybackSurfaceManager())
+    return listOf(NativePlaybackSurfaceManager(), MultiviewSurfaceManager())
   }
 }

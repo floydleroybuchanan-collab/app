@@ -45,6 +45,7 @@ import { pickPreferredAudioTrack, useAudioTrackPreferences } from "@/src/core/au
 import { usePlaybackBufferProfile } from "@/src/core/playbackBufferProfile";
 import * as FileSystem from "expo-file-system/legacy";
 import type { Channel } from "@/src/api";
+import { multiview } from "@/src/multiview";
 
 const SWITCH_NOTICE_MS = 1800;
 const STABLE_HISTORY_DELAY_MS = 5000;
@@ -573,6 +574,11 @@ export default function PlayerScreen() {
             <View style={styles.progressRow}><Text style={styles.edgeTime}>{current ? fmtTime(current.start) : "LIVE"}</Text><View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View><Text style={styles.edgeTime}>{current?.stop ? fmtTime(current.stop) : "LIVE"}</Text></View>
 
             <View style={styles.controlsRow}>
+              {multiview && <Pressable onPress={() => {
+                if (exitInFlightRef.current) return;
+                exitInFlightRef.current = true;
+                void stopAllPlaybackSessions("superseded").then(() => router.replace({ pathname: "/multiview" as any, params: { channelId, returnGuideGroup: params.returnGuideGroup } })).catch(() => { exitInFlightRef.current = false; showNotice("The current player could not close. Try again."); });
+              }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="grid-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Multiview</Text></Pressable>}
               <Pressable onPress={goGuide} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="information-circle-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Guide</Text></Pressable>
               <Pressable ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; setTracksOpen(false); setChannelsOpen((value) => !value); scheduleHide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
               <View style={styles.controlsSpacer} />
@@ -646,7 +652,7 @@ const styles = StyleSheet.create({
   edgeTime: { width: 42, color: "#fff", fontFamily: fonts.medium, fontSize: 7.5 },
   track: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },
   fill: { height: 3, backgroundColor: tvColors.purpleBright },
-  controlsRow: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 6 },
+  controlsRow: { minHeight: 42, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   textControl: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
   controlActive: { backgroundColor: tvColors.purpleDeep },
   controlLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },

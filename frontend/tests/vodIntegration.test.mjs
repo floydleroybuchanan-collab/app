@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 const read=name=>readFileSync(new URL(`../${name}`,import.meta.url),'utf8');
 
-test('VOD retains every upstream provider, extractor, player and data implementation',()=>{
+test('VOD retains upstream implementations except exact reviewed player changes',()=>{
   execFileSync(process.execPath,['scripts/verify-vod-source.mjs']);
 });
 test('VOD enters through the host after Live TV releases its decoders',()=>{

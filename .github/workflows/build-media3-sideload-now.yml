@@ -1,4 +1,4 @@
-name: Build CharmIPTV RC.6 Sideload APK
+name: Build CharmIPTV RC.7 Sideload APK
 
 on:
   workflow_dispatch:
@@ -28,12 +28,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: charmiptv-rc6-${{ github.ref }}
+  group: charmiptv-rc7-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build CharmIPTV RC.6 universal sideload APK
+    name: Build CharmIPTV RC.7 universal sideload APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -93,6 +93,9 @@ jobs:
 
       - name: Verify preserved VOD source
         run: node scripts/verify-vod-source.mjs
+
+      - name: Prepare pinned Nova playback libraries
+        run: python3 scripts/prepare-nova.py
 
       - name: Configure owner release signing
         run: |
@@ -158,7 +161,7 @@ jobs:
       - name: Compile sideload Kotlin and Java
         run: |
           chmod +x android/gradlew
-          ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac :app:testSideloadUnitTest --no-daemon --max-workers=1 --stacktrace
+          ./android/gradlew -p android :app:compileSideloadKotlin :app:compileSideloadJavaWithJavac :app:testSideloadUnitTest :vod:testSideloadUnitTest --no-daemon --max-workers=1 --stacktrace
 
       - name: Check Android 7 native API compatibility
         # Lint before packaging catches calls that compile with API 36 but crash
@@ -191,8 +194,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/CharmIPTV.RC-6-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/CharmIPTV.RC-6-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/CharmIPTV.RC-7-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV.RC-7-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -204,7 +207,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: CharmIPTV.RC-6-Sideload-Encrypted-${{ github.run_number }}
+          name: CharmIPTV.RC-7-Sideload-Encrypted-${{ github.run_number }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json

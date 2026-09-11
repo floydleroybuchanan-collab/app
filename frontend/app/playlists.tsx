@@ -1,3 +1,4 @@
+import { encodeXtream, decodeXtream } from "@/src/core/xtream";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -37,6 +38,11 @@ export default function PlaylistsScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
+  const [sourceKind, setSourceKind] = useState<"m3u" | "xtream">("m3u");
+  const [xcUser, setXcUser] = useState("");
+  const [xcPassword, setXcPassword] = useState("");
+  const [xcOutput, setXcOutput] = useState<"ts" | "m3u8">("ts");
+  const sourceValue = () => sourceKind === "xtream" ? encodeXtream({ server: url, username: xcUser, password: xcPassword, output: xcOutput }) : url.trim();
   const [preview, setPreview] = useState<PlaylistPreview | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,7 +62,7 @@ export default function PlaylistsScreen() {
     setHealth(Object.fromEntries(rows.map((row) => [row.playlistId, row])));
   }, []);
   useEffect(() => { void loadHealth(); }, [loadHealth, playlists]);
-  const back = useCallback(() => { if (editing !== null) { setEditing(null); setPreview(null); setUrl(""); } else router.replace("/settings" as any); return true; }, [editing, router]);
+  const back = useCallback(() => { if (editing !== null) { setEditing(null); setPreview(null); setUrl(""); setXcPassword(""); setXcUser(""); } else router.replace("/settings" as any); return true; }, [editing, router]);
   useTvBackHandler(back);
   const run = async (action: () => Promise<void>) => {
     if (operationInFlight.current) return;
@@ -72,7 +78,7 @@ export default function PlaylistsScreen() {
     </View>
     {/* The shell boundary includes the fixed header; a nested upward trap blocks it. */}
     <View style={styles.scrollWrap}><ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
-      <Text style={styles.help}>Use CharmIPTV’s supplied playlists, your own M3U playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
+      <Text style={styles.help}>Use CharmIPTV’s supplied playlists, your own M3U or Xtream Codes playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
       {!!notice && <Text accessibilityLiveRegion="polite" style={styles.message}>{notice}</Text>}
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
         <Text style={styles.text}>Enter your parental PIN to manage playlists.</Text>
@@ -81,28 +87,36 @@ export default function PlaylistsScreen() {
       </View> : editing !== null ? <View style={styles.card}>
         <Text style={styles.heading}>{editing ? "Edit personal playlist" : "Add personal playlist"}</Text>
         <TextInput accessibilityLabel="Playlist name" placeholder="Playlist name" placeholderTextColor="#a99cbc" value={name} onChangeText={setName} maxLength={60} style={styles.input} editable={!busy} />
-        <TextInput accessibilityLabel="M3U URL" placeholder="https://provider.example/playlist.m3u" placeholderTextColor="#a99cbc" value={url} onChangeText={(value) => { setUrl(value); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry style={styles.input} editable={!busy} />
+        <TextInput accessibilityLabel={sourceKind === "xtream" ? "Provider server address" : "M3U URL"} placeholder={sourceKind === "xtream" ? "http://provider.example:8080" : "https://provider.example/playlist.m3u"} placeholderTextColor="#a99cbc" value={url} onChangeText={(value) => { setUrl(value); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry={sourceKind === "m3u"} style={styles.input} editable={!busy} />
+        {sourceKind === "xtream" && <>
+          <TextInput accessibilityLabel="Provider username" placeholder="Username" placeholderTextColor="#a99cbc" value={xcUser} onChangeText={(v) => { setXcUser(v); setPreview(null); }} autoCapitalize="none" autoCorrect={false} style={styles.input} editable={!busy} />
+          <TextInput accessibilityLabel="Provider password" placeholder="Password" placeholderTextColor="#a99cbc" value={xcPassword} onChangeText={(v) => { setXcPassword(v); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry style={styles.input} editable={!busy} />
+          <Action label={"Stream format: " + (xcOutput === "ts" ? "MPEG-TS" : "HLS")} disabled={busy} onPress={() => { setXcOutput(xcOutput === "ts" ? "m3u8" : "ts"); setPreview(null); }} />
+          <Text style={styles.help}>Use the login supplied by your IPTV provider. Credentials are saved in secure device storage. A provider using HTTP sends its login without transport encryption.</Text>
+        </>}
         {!!editing && <Action label="Save name only (no download)" disabled={busy} onPress={() => void run(async () => {
           await updatePlaylist(editing, { name: name.trim().slice(0, 60) || "My playlist" });
-          await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setPreview(null); setUrl("");
+          await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setPreview(null); setUrl(""); setXcPassword(""); setXcUser("");
         })} />}
-        <Action label="Choose local M3U file / USB" disabled={busy} onPress={() => void run(async () => {
+        {sourceKind === "m3u" && <Action label="Choose local M3U file / USB" disabled={busy} onPress={() => void run(async () => {
           if (!NativeModules.CharmPlaylistDocument?.pick) throw new Error("Local file picker requires the updated Android app.");
           const chosen = await NativeModules.CharmPlaylistDocument.pick();
           if (chosen) { setUrl(chosen); setPreview(null); }
-        })} />
-        <Action label="Validate playlist" disabled={busy} onPress={() => void run(async () => { const rows = await previewPlaylist(url.trim()); setPreview(rows); })} />
-        {preview && <><Text style={styles.text}>{preview.length.toLocaleString()} channels found. Nothing changes until you choose Save.</Text>
+        })} />}
+        <Action label="Validate playlist" disabled={busy} onPress={() => void run(async () => { const rows = await previewPlaylist(sourceValue()); setPreview(rows); })} />
+        {preview && <>{preview.account && <Text style={styles.text}>{preview.account.status} · {preview.account.expires ? "Expires " + new Date(preview.account.expires).toLocaleDateString() : "No expiry supplied"} · Connections {preview.account.activeConnections}/{preview.account.maxConnections || "unspecified"}</Text>}<Text style={styles.text}>{preview.length.toLocaleString()} channels found. Nothing changes until you choose Save.</Text>
           <Text style={styles.help}>{preview.epgUrls?.length || 0} EPG URL(s) detected in the playlist header. Save will associate available feeds without replacing manual settings.</Text>
           <Text style={styles.help}>{preview.slice(0, 5).map((channel) => channel.name).join(" · ")}</Text>
-          <Action label="Save validated playlist" disabled={busy} onPress={() => void run(async () => { await savePersonalPlaylist(name, url.trim(), preview, editing || undefined); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setUrl(""); setPreview(null); })} /></>}
+          <Action label="Save validated playlist" disabled={busy} onPress={() => void run(async () => { await savePersonalPlaylist(name, sourceValue(), preview, editing || undefined); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); })} /></>}
       </View> : <>
-        <Action label="Add M3U playlist" disabled={busy} onPress={() => { setEditing(""); setName("My playlist"); setUrl(""); setPreview(null); }} />
+        <Action label="Add M3U playlist" disabled={busy} onPress={() => { setSourceKind("m3u"); setEditing(""); setName("My playlist"); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); }} />
+        <Action label="Add Xtream Codes account" disabled={busy} onPress={() => { setSourceKind("xtream"); setEditing(""); setName("My Xtream account"); setUrl(""); setXcUser(""); setXcPassword(""); setXcOutput("ts"); setPreview(null); }} />
         <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => router.push("/epg-sources" as any)} />
         {playlists.map((source) => <View key={source.id} style={styles.card}>
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
           <Text style={styles.help}>{source.enabled ? "Enabled" : "Disabled — saved channels retained"} · {source.count.toLocaleString()} channels · {source.status}</Text>
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
+          {source.kind === "xtream" && source.account && <Text style={styles.help}>Xtream · Last validation: {source.account.status} · {source.account.expires ? "Expires " + new Date(source.account.expires).toLocaleDateString() : "No expiry supplied"} · Last reported connections {source.account.activeConnections}/{source.account.maxConnections || "unspecified"}</Text>}
           {!!source.tombstoneCount && <Text style={styles.help}>{source.tombstoneCount.toLocaleString()} temporarily missing channel record(s) retained so favorites, ordering, groups, and EPG assignments can return if the provider restores them.</Text>}
           {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
           <Text style={styles.health}>{!source.enabled ? "Disabled — saved catalog retained; not included in the active guide." : health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
@@ -117,7 +131,8 @@ export default function PlaylistsScreen() {
             <Action label="Move down" disabled={busy} onPress={() => void run(async () => { await movePlaylist(source.id, 1); await reloadPlaylistCatalog(); })} />
           </View>
           {!source.managed && <View style={styles.row}>
-            <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { setUrl(await getPlaylistUrl(source)); setName(source.name); setPreview(null); setEditing(source.id); })} />
+            <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { const saved = await getPlaylistUrl(source); const xc = decodeXtream(saved);
+              setSourceKind(xc ? "xtream" : "m3u"); setUrl(xc?.server || saved); setXcUser(xc?.username || ""); setXcPassword(xc?.password || ""); setXcOutput(xc?.output || "ts"); setName(source.name); setPreview(null); setEditing(source.id); })} />
             <Action label={removeArmed === source.id ? "Confirm remove playlist" : "Remove playlist"} disabled={busy} onPress={() => { if (removeArmed !== source.id) { setRemoveArmed(source.id); return; } void run(async () => { await removePlaylist(source.id); await reloadPlaylistCatalog(); setRemoveArmed(""); }); }} />
           </View>}
           {<>

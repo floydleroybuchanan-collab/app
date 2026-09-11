@@ -2,6 +2,8 @@
 
 buildscript {
     ext.kotlin_version = '2.2.10'
+    // Keep native CMake builds pinned to the NDK installed for this project.
+    ext.ndkVersion = '27.1.12297006'
 
     repositories {
         google()
