@@ -60,7 +60,7 @@ export function recordAudioDiagnostics(
   lastSnapshot = snapshot;
   try {
     console.info(
-      "[CharmIPTV audio]",
+      "[Charming MediaLab audio]",
       [
         `engine=${snapshot.engine}`,
         `role=${snapshot.role}`,

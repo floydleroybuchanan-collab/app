@@ -1,3 +1,4 @@
+import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -203,17 +204,7 @@ export function usePurpleTvDrawer(): DrawerContextValue {
 }
 
 function SmallBrand() {
-  return (
-    <View style={styles.brand} pointerEvents="none">
-      <View style={styles.brandMark}>
-        <Ionicons name="sparkles" size={13} color={tvColors.purpleSoft} />
-      </View>
-      <View>
-        <Text style={styles.brandTop}>CHARM</Text>
-        <Text style={styles.brandBottom}>IPTV</Text>
-      </View>
-    </View>
-  );
+  return <View pointerEvents="none" style={{ alignItems: "center", marginBottom: 8 }}><MediaLabArt kind="wordmark" width={122} height={60} /></View>;
 }
 
 function WatchingDot({ testID }: { testID?: string }) {
@@ -727,8 +718,8 @@ export function PurpleTvShell({
       {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
       {showIconRail ? (
         <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
-          <View style={styles.iconRailBrand}>
-            <Ionicons name="sparkles" size={18} color={tvColors.purpleSoft} />
+          <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>
+            <MediaLabArt kind="rail" width={43} height={59} />
           </View>
           <View style={styles.iconRailItems}>
             {NAV.map((item) => {
@@ -808,20 +799,20 @@ const styles = StyleSheet.create({
     height: "100%",
     flexShrink: 0,
     alignItems: "center",
-    backgroundColor: "#0A0916",
+    backgroundColor: "#150B21",
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
     paddingTop: 10,
     paddingBottom: 8,
   },
   iconRailBrand: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 48,
+    height: 62,
+    borderRadius: 0,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: tvColors.purpleDeep,
-    marginBottom: 7,
+    backgroundColor: "transparent",
+    marginBottom: 4,
   },
   iconRailItems: { flex: 1, minHeight: 0, alignItems: "center", gap: 2 },
   iconRailItem: {
@@ -850,7 +841,7 @@ const styles = StyleSheet.create({
   sidebar: {
     width: PURPLE_SIDEBAR_WIDTH,
     height: "100%",
-    backgroundColor: "#0A0916",
+    backgroundColor: "#150B21",
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
     paddingHorizontal: 10,
@@ -952,7 +943,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: tvColors.line,
     paddingTop: 6,
-    backgroundColor: "#0A0916",
+    backgroundColor: "#150B21",
   },
   sidebarFooterRow: { flexDirection: "row", gap: 4 },
   power: {

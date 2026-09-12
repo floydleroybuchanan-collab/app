@@ -1311,7 +1311,7 @@ class PlayerTvFragment : Fragment() {
                     super.onPlayerError(error)
                     Log.e("PlayerTvFragment", "onPlayerError: ", error)
 
-                    if (!viewModel.fallback(currentServer)) showSourcePicker()
+                    if (!viewModel.recoverDebridLink(currentServer, error) && !viewModel.fallback(currentServer)) showSourcePicker()
                 }
             }
         player.addListener(playbackListener!!)

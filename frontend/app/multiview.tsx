@@ -136,7 +136,7 @@ export default function MultiviewScreen() {
       const channel = paneRef.current[selected]?.channel;
       if (fullscreen && channel) router.replace({ pathname: "/player", params: { channelId: channel.id, returnToGuide: "1", returnGuideGroup: params.returnGuideGroup } });
       else { if (channel) requestGuideJump({channelId:channel.id,group:params.returnGuideGroup || "All"}); router.replace("/guide" as any); }
-    } catch { leaving.current = false; setNotice("A player could not close. Restart CharmIPTV before opening more streams."); }
+    } catch { leaving.current = false; setNotice("A player could not close. Restart Charming MediaLab before opening more streams."); }
   }, [params.returnGuideGroup, router, selected, token]);
   const exitRef = useRef(exit); exitRef.current = exit;
   useEffect(() => {

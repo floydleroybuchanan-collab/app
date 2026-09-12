@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CharmIPTV</string>
+    <string name="app_name">Charming MediaLab</string>
 
     <string name="loading_error_title">Ha ocurrido un error</string>
     <string name="loading_error_retry">Reintentar</string>
@@ -35,7 +35,7 @@
     <string name="main_menu_all_channels">Todos los canales</string>
     <string name="main_menu_settings">Ajustes</string>
     <string name="main_menu_theme_change">Cambiar tema</string>
-    <string name="theme_default">CharmIPTV Purple</string>
+    <string name="theme_default">Charming MediaLab Purple</string>
     <string name="theme_nero_amoled_oled">Nero Amoled/Oled</string>
     <string name="theme_sunset_cinema">Sunset Cinema</string>
     <string name="theme_steel_blue">Steel Blue</string>
@@ -261,7 +261,7 @@
     <string name="settings_screen_network_summary">DNS, bypass para TV y claves de servicios de subtitulos</string>
     <string name="settings_scan_resolver_qr_title">Escanear QR de bypass TV</string>
     <string name="settings_scan_resolver_qr_summary">Abre la cámara y escanea el código QR mostrado en la TV</string>
-    <string name="settings_scan_resolver_invalid_qr">Este código QR no es un enlace de bypass de CharmIPTV.</string>
+    <string name="settings_scan_resolver_invalid_qr">Este código QR no es un enlace de bypass de Charming MediaLab.</string>
     <string name="settings_scan_resolver_failed">No se pudo iniciar el escáner QR en este dispositivo.</string>
     <string name="settings_scan_resolver_camera_permission_denied">Se necesita permiso de la cámara para escanear el codigo QR.</string>
     <string name="settings_scan_resolver_camera_unavailable">No hay una cámara disponible en este dispositivo.</string>

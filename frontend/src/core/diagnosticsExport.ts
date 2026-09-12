@@ -11,7 +11,7 @@ export function formatDiagnosticsExport(input: {
 }): string {
   const d = input.diagnostics;
   const lines: string[] = [
-    "CharmIPTV diagnostics",
+    "Charming MediaLab diagnostics",
     `exportedAt=${new Date().toISOString()}`,
     `appVersion=${input.appVersion || "unknown"}`,
     "",

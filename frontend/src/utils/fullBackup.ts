@@ -8,7 +8,7 @@ import { clearNativeEpgBindings, readNativeEpgBindings, setNativeEpgBinding, typ
 
 const FORMAT = "charmiptv-full-backup";
 const VERSION = 2;
-const PREFIX = "CharmIPTV-Full-Backup-";
+const PREFIX = "Charming MediaLab-Full-Backup-";
 const ROOT = `${FileSystem.documentDirectory || ""}full-backups/`;
 const PLAYLIST_ROOT = `${FileSystem.documentDirectory || ""}playlists/`;
 const MAX_PLAYLIST_BACKUP_BYTES = 96 * 1024 * 1024;
@@ -67,7 +67,7 @@ async function capture(): Promise<Omit<FullBackupPayload, "checksum">> {
 }
 function parse(raw: string): FullBackupPayload {
   const value = JSON.parse(raw) as FullBackupPayload;
-  if (value?.format !== FORMAT || value.version !== VERSION || typeof value.settings !== "object" || typeof value.personalPlaylistUrls !== "object" || typeof value.playlistFiles !== "object" || !value.customization || typeof value.manualEpgBindings !== "object") throw new Error("This is not a supported CharmIPTV full backup.");
+  if (value?.format !== FORMAT || value.version !== VERSION || typeof value.settings !== "object" || typeof value.personalPlaylistUrls !== "object" || typeof value.playlistFiles !== "object" || !value.customization || typeof value.manualEpgBindings !== "object") throw new Error("This is not a supported Charming MediaLab full backup.");
   const { checksum: supplied, ...body } = value;
   if (!supplied || checksum(withoutChecksum(body)) !== supplied) throw new Error("Backup integrity check failed. The file may be incomplete or changed.");
   return value;
@@ -166,17 +166,17 @@ export async function writeFullBackup() {
 }
 export async function restoreFullBackup() {
   const candidates: { uri: string; name: string }[] = [];
-  try { for (const name of await FileSystem.readDirectoryAsync(ROOT)) if (name.startsWith(PREFIX) && name.endsWith(".json")) candidates.push({ uri: `${ROOT}${name}`, name }); } catch {}
+  try { for (const name of await FileSystem.readDirectoryAsync(ROOT)) if ((name.startsWith(PREFIX) || name.startsWith("CharmIPTV-Full-Backup-")) && name.endsWith(".json")) candidates.push({ uri: `${ROOT}${name}`, name }); } catch {}
   if (!candidates.length && Platform.OS === "android") {
     const permission = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
     if (!permission.granted) throw new Error("Backup folder selection was cancelled.");
     for (const uri of await FileSystem.StorageAccessFramework.readDirectoryAsync(permission.directoryUri)) {
       let name = uri; try { name = decodeURIComponent(uri).split("/").pop() || uri; } catch {}
-      if (name.includes(PREFIX) && name.endsWith(".json")) candidates.push({ uri, name });
+      if ((name.includes(PREFIX) || name.includes("CharmIPTV-Full-Backup-")) && name.endsWith(".json")) candidates.push({ uri, name });
     }
   }
-  candidates.sort((a, b) => b.name.localeCompare(a.name));
-  if (!candidates.length) throw new Error("No CharmIPTV full backup was found.");
+  candidates.sort((a, b) => b.name.replace(/^.*Backup-/, "").localeCompare(a.name.replace(/^.*Backup-/, "")));
+  if (!candidates.length) throw new Error("No Charming MediaLab full backup was found.");
   const selected = candidates[0];
   await apply(parse(await FileSystem.readAsStringAsync(selected.uri)));
   return selected.name;

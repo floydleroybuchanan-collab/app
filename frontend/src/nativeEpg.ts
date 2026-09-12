@@ -248,7 +248,7 @@ export async function clearNativeSourceGuide(sourceId: string): Promise<void> { 
 export async function setNativeGuideChannelBinding(channelId: string, xmltvId: string | null): Promise<number> {
   const bindingModule = customEpgModule?.setGuideChannelBinding ? customEpgModule : nativeModule; if (!bindingModule?.setGuideChannelBinding) return 0; const normalizedXmltvId = xmltvId?.trim() || "";
   const count = Math.max(0, Math.round(await bindingModule.setGuideChannelBinding(channelId, normalizedXmltvId))); ownershipRequiresSqlite = !primaryGuideEnabled || (userGuideEnabled && count > 0);
-  if (normalizedXmltvId && userGuideEnabled && userGuideUrl) void refreshNativeUserGuide(userGuideUrl).catch((error) => console.warn("CharmIPTV deferred custom EPG hydration failed", error));
+  if (normalizedXmltvId && userGuideEnabled && userGuideUrl) void refreshNativeUserGuide(userGuideUrl).catch((error) => console.warn("Charming MediaLab deferred custom EPG hydration failed", error));
   if (ramModule) await ramModule.clearMemory().catch(() => undefined); return count;
 }
 export async function listNativeUserGuideChannels(query = "", offset = 0, limit = 50): Promise<{ total: number; rows: { id: string; name: string }[] }> { const directoryModule = customEpgModule?.listUserGuideChannels ? customEpgModule : nativeModule; if (!directoryModule?.listUserGuideChannels) return { total: 0, rows: [] }; return directoryModule.listUserGuideChannels(query, Math.max(0, offset), Math.max(1, Math.min(100, limit))); }

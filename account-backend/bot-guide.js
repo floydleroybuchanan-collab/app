@@ -1,7 +1,7 @@
-export const GUIDE = `💜 YOUR CHARMIPTV GUIDE
+export const GUIDE = `💜 YOUR Charming MediaLab GUIDE
 PART 1 OF 2 — WATCHING & PERSONALIZING
 
-CharmIPTV combines live television, programme guides, on-demand entertainment, and personalized channel management.
+Charming MediaLab combines live television, programme guides, on-demand entertainment, and personalized channel management.
 
 Use the supplied playlists, your own compatible sources, or both.
 
@@ -77,7 +77,7 @@ Only use authorized sources. Keep private playlist addresses confidential.
 
 ➡️ Continue with Part 2 for playback, accounts, invitations, and support.
 
-💜 YOUR CHARMIPTV GUIDE
+💜 YOUR Charming MediaLab GUIDE
 PART 2 OF 2 — PLAYBACK, ACCOUNTS & HELP
 
 🎛️ PLAYBACK OPTIONS
@@ -156,7 +156,7 @@ When reporting a problem, include:
 Never post passwords or private source addresses.
 
 Community help:
-Settings → About → Open CharmIPTV Telegram
+Settings → About → Open Charming MediaLab Telegram
 
 ⚠️ SIGNING OUT OR CANCELING
 
@@ -173,4 +173,4 @@ To permanently cancel:
 
 Cancellation deletes your account and ends access. It cannot be undone. Returning requires a new invitation.
 
-💜 Enjoy exploring CharmIPTV, and welcome to the community!`;
+💜 Enjoy exploring Charming MediaLab, and welcome to the community!`;

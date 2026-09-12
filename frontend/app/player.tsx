@@ -402,7 +402,7 @@ export default function PlayerScreen() {
       ].filter((line): line is string => !!line);
       const root = FileSystem.documentDirectory || "";
       if (!root || Platform.OS === "web") { showNotice("Diagnostics unavailable"); return; }
-      const path = `${root}charmiptv-audio-${Date.now()}.txt`;
+      const path = `${root}charming-medialab-audio-${Date.now()}.txt`;
       await FileSystem.writeAsStringAsync(path, lines.join("\n")); showNotice("Diagnostics saved");
     } catch { showNotice("Diagnostics failed"); }
   }, [channelMeta?.name, failReason, showNotice]);

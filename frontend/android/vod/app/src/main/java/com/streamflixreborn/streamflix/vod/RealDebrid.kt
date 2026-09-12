@@ -25,10 +25,10 @@ object RealDebrid {
     val accountLabel get() = vault.read()?.let { data ->
         data.optString("label") + data.optString("expiration").takeIf { it.isNotBlank() }?.let { " · Expires " + it.take(10) }.orEmpty()
     } ?: "Not connected"
-    val deviceLabel get() = vault.read()?.optString("device_label")?.takeIf { it.isNotBlank() } ?: "CharmIPTV"
+    val deviceLabel get() = vault.read()?.optString("device_label")?.takeIf { it.isNotBlank() && it != "CharmIPTV" } ?: "Charming MediaLab"
     private val oauth = DebridOAuth()
     suspend fun setLabel(label: String) = authLock.withLock {
-        vault.read()?.let { vault.write(it.put("device_label", label.filter { c -> !c.isISOControl() }.take(80).ifBlank { "CharmIPTV" })) }
+        vault.read()?.let { vault.write(it.put("device_label", label.filter { c -> !c.isISOControl() }.take(80).ifBlank { "Charming MediaLab" })) }
     }
     private fun account(data: JSONObject, user: JSONObject): JSONObject = data
         .put("label", user.optString("username", "Connected") + " · " + user.optString("type", "account"))
@@ -39,7 +39,7 @@ object RealDebrid {
         authLock.withLock {
             coroutineContext.ensureActive()
             if (generation != expectedRevision) throw IOException("Account changed. Start linking again.")
-            vault.write(account(data, user).put("device_label", "CharmIPTV"))
+            vault.write(account(data, user).put("device_label", "Charming MediaLab"))
             generation++; owned.clear()
         }
     }
@@ -82,7 +82,7 @@ object RealDebrid {
         generation to data.getString("access_token")
     }
 
-    private class ApiFailure(val status: Int, message: String) : IOException(message)
+    private class ApiFailure(val status: Int, val code: Int, message: String) : IOException(message)
     private suspend fun api(path: String, fields: Map<String, String>? = null, token: String, epoch: Long? = null): String {
         try { return rawApi(path, fields, token) }
         catch (error: ApiFailure) {
@@ -110,7 +110,7 @@ object RealDebrid {
                 } else {
                     if (!response.isSuccessful) {
                         val code = runCatching { JSONObject(VodHttp.text(response)).optInt("error_code") }.getOrDefault(0)
-                        throw ApiFailure(response.code, DebridErrors.message(response.code, code))
+                        throw ApiFailure(response.code, code, DebridErrors.message(response.code, code))
                     }
                     return VodHttp.text(response)
                 }
@@ -140,7 +140,12 @@ object RealDebrid {
         val details = server.details ?: return server
         val id = details.cloudTorrentId?.takeIf { it.matches(Regex("[A-Za-z0-9_-]+")) } ?: return server
         val (epoch, token) = credentials()
-        val info = JSONObject(api("torrents/info/$id", token = token, epoch = epoch))
+        val info = try { JSONObject(api("torrents/info/$id", token = token, epoch = epoch)) }
+        catch (e: ApiFailure) {
+            if (DebridErrors.missingCloudItem(e.status, e.code)) return server.copy(details = details.copy(
+                cloudTorrentId = null, availability = SourceDetails.Availability.UNKNOWN))
+            throw e
+        }
         checkSession(epoch)
         if (info.optString("status") != "downloaded") return server
         val files = info.optJSONArray("files") ?: return server
@@ -171,7 +176,7 @@ object RealDebrid {
         val hash = detail.infoHash?.lowercase()?.takeIf { it.matches(Regex("[a-f0-9]{40}")) }
             ?: throw IOException("This torrent has no valid info hash.")
         val (epoch, token) = credentials()
-        var id = detail.cloudTorrentId ?: owned[hash]
+        var id = owned[hash] ?: detail.cloudTorrentId
         var created = id != null && owned[hash] == id
         if (id == null) {
             checkSession(epoch)
@@ -183,9 +188,22 @@ object RealDebrid {
             created = true
         }
         require(id.matches(Regex("[A-Za-z0-9_-]+")))
+        var replacedMissingItem = false
         repeat(20) {
             checkSession(epoch)
-            val info = JSONObject(api("torrents/info/$id", token = token, epoch = epoch))
+            val info = try { JSONObject(api("torrents/info/$id", token = token, epoch = epoch)) }
+            catch (e: ApiFailure) {
+                // Only a confirmed missing cloud record can be recreated. Never retry blocked files.
+                if (replacedMissingItem || !(DebridErrors.missingCloudItem(e.status, e.code))) throw e
+                checkSession(epoch)
+                owned.remove(hash, id)
+                id = JSONObject(api("torrents/addMagnet", mapOf("magnet" to "magnet:?xt=urn:btih:$hash"), token, epoch)).getString("id")
+                require(id.matches(Regex("[A-Za-z0-9_-]+")))
+                authLock.withLock { checkSession(epoch); if (owned.size < 100) owned[hash] = id }
+                created = true
+                replacedMissingItem = true
+                return@repeat
+            }
             checkSession(epoch)
             val files = info.optJSONArray("files") ?: JSONArray()
             val candidates = (0 until files.length()).map { files.getJSONObject(it) }

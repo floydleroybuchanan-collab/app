@@ -23,7 +23,7 @@ export default {
       await purgeExpiredAccounts(env, 50);
 
       if (path === "/" && request.method === "GET") {
-        return json({ success: true, service: "CharmIPTV Account API", status: "online", referral_active_limit: 6 });
+        return json({ success: true, service: "Charming MediaLab Account API", status: "online", referral_active_limit: 6 });
       }
       if (path === "/health" && request.method === "GET") {
         const sources = managedSourceConfiguration(env);
@@ -132,7 +132,7 @@ async function setupAdmin(request, env) {
     VALUES (?1, ?2, ?3, ?4, 'admin', 'active', 5, ?5, ?5)`)
     .bind(id, username, email, await hashPassword(password), now).run();
   await audit(env, id, id, "initial_admin_created", null);
-  return json({ success: true, message: "CharmIPTV administrator created successfully.", admin: { id, username, email } }, 201);
+  return json({ success: true, message: "Charming MediaLab administrator created successfully.", admin: { id, username, email } }, 201);
 }
 
 async function registerWithInvite(request, env) {
@@ -147,10 +147,10 @@ async function login(request, env) {
   const user = await env.DB.prepare("SELECT * FROM users WHERE lower(username) = ?1 OR lower(email) = ?1 LIMIT 1").bind(loginValue).first();
   if (!user || !(await verifyPassword(password, user.password_hash))) return json({ success: false, error: "Invalid username/email or password." }, 401);
   const now = unixNow();
-  if (user.role !== "admin" && user.status === "disabled") return json({ success: false, error: "This CharmIPTV account has been disabled." }, 403);
+  if (user.role !== "admin" && user.status === "disabled") return json({ success: false, error: "This Charming MediaLab account has been disabled." }, 403);
   if (user.role !== "admin" && (user.status === "expired" || (user.expires_at !== null && Number(user.expires_at) <= now))) {
     await deleteAccountData(env, user.id, "account_expired");
-    return json({ success: false, error: "This CharmIPTV account expired and was permanently removed." }, 403);
+    return json({ success: false, error: "This Charming MediaLab account expired and was permanently removed." }, 403);
   }
   await env.DB.prepare("UPDATE sessions SET revoked = 1 WHERE user_id = ?1 AND revoked = 0 AND expires_at <= ?2").bind(user.id, now).run();
   const countRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?1 AND revoked = 0 AND expires_at > ?2").bind(user.id, now).first();
@@ -241,7 +241,7 @@ async function createContentAccess(request, env) {
   // failed with zero health. Slots three/four can be enabled later, but each
   // configured slot must always contain both its playlist and Guide address.
   if (!sources.ready) {
-    return json({ success: false, error: "The supplied CharmIPTV playlist and Guide sources are not fully configured." }, 503);
+    return json({ success: false, error: "The supplied Charming MediaLab playlist and Guide sources are not fully configured." }, 503);
   }
   const expiresAt = Number(auth.session.expires_at);
   // The APK never contains provider URLs. Release them only after a valid

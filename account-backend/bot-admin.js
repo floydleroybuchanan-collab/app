@@ -1,3 +1,4 @@
+import {brandedContent} from './branding.js';
 import {DEFAULT_CONTENT} from './bot-defaults.js';
 import {q,rows,settings,content,event,now,fail} from './bot-store.js';
 import {telegram} from './bot-telegram.js';
@@ -42,7 +43,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
  if(path==='/content'&&method==='GET')return json({success:true,content:await Promise.all(Object.keys(DEFAULT_CONTENT).map(k=>content(env,k)))});
  const cm=path.match(/^\/content\/([a-z_]+)(\/history)?$/);
  if(cm){const key=cm[1];if(!Object.hasOwn(DEFAULT_CONTENT,key))fail('Unknown content.');
-  if(cm[2]&&method==='GET')return json({success:true,history:await rows(env,'SELECT * FROM bot_content_history WHERE key=?1 ORDER BY id DESC LIMIT 20',key)});
+  if(cm[2]&&method==='GET')return json({success:true,history:(await rows(env,'SELECT * FROM bot_content_history WHERE key=?1 ORDER BY id DESC LIMIT 20',key)).map(brandedContent)});
   if(method==='PUT'&&!cm[2]){
    const b=await safeJson(request),old=await content(env,key);if(b.revision!==old.revision)fail('Content changed. Refresh before saving.',409);
    if(typeof b.body!=='string'||b.body.length>50000||typeof b.enabled!=='boolean')fail('Use text up to 50,000 characters and a valid enabled choice.');

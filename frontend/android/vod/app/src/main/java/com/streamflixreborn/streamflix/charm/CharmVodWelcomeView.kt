@@ -5,14 +5,10 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.RadialGradient
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.provider.Settings
@@ -21,26 +17,16 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import com.streamflixreborn.streamflix.R
-import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.sin
 
 /** Local, finite entrance animation: no network, player, timer loop, or loading dependency. */
 class CharmVodWelcomeView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val logo = BitmapFactory.decodeResource(resources, R.drawable.charm_refined,
-        BitmapFactory.Options().apply { inSampleSize = 2 })
-    private val logoBounds = RectF(358f, 70f, 602f, 314f)
-    private val logoShader = BitmapShader(logo, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-        setLocalMatrix(Matrix().apply {
-            setRectToRect(RectF(0f, 0f, logo.width.toFloat(), logo.height.toFloat()), logoBounds, Matrix.ScaleToFit.CENTER)
-        })
-    }
-    private val orbit = RectF(340f, 52f, 620f, 332f)
-    private val glow = RadialGradient(480f, 215f, 370f,
-        intArrayOf(Color.rgb(58, 23, 100), Color.rgb(7, 7, 17)), null, Shader.TileMode.CLAMP)
+    // A single bounded bitmap, decoded once for this finite entrance view.
+    private val entrance = BitmapFactory.decodeResource(resources, R.drawable.medialab_vod_entrance)
+    private val artBounds = RectF(0f, 0f, 960f, 540f)
     private val regular = Typeface.create("sans-serif", Typeface.NORMAL)
     private val bold = Typeface.create("sans-serif", Typeface.BOLD)
     private var progress = 0f
@@ -48,14 +34,13 @@ class CharmVodWelcomeView @JvmOverloads constructor(
     private var completion: (() -> Unit)? = null
     private val welcome = context.getString(R.string.charm_vod_welcome)
     private val title = context.getString(R.string.charm_vod_control_center)
-    private val caption = context.getString(R.string.charm_vod_welcome_caption)
     private val skip = context.getString(R.string.charm_vod_skip)
 
     init {
         isFocusable = true
         isFocusableInTouchMode = true
         isClickable = true
-        contentDescription = "CharmIPTV. $welcome $title. $skip"
+        contentDescription = "Charming MediaLab. $welcome $title. $skip"
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         setOnClickListener { dismiss() }
     }
@@ -133,45 +118,28 @@ class CharmVodWelcomeView @JvmOverloads constructor(
         canvas.save()
         canvas.translate((width - 960f * scale) / 2f, (height - 540f * scale) / 2f)
         canvas.scale(scale, scale)
-        paint.shader = glow
+        paint.shader = null
         paint.style = Paint.Style.FILL
         paint.alpha = 255
-        canvas.drawRect(0f, 0f, 960f, 540f, paint)
-        paint.shader = null
-        // Sparse orbiting points and two light trails stay inexpensive on TV hardware.
-        paint.color = Color.rgb(183, 108, 255)
-        for (i in 0 until 18) {
-            val angle = i * 2.39996 + progress * 0.45
-            val radius = 150f + (i % 5) * 30f
-            paint.alpha = 45 + (i % 4) * 25
-            canvas.drawCircle(480f + cos(angle).toFloat() * radius * 1.6f,
-                210f + sin(angle).toFloat() * radius * 0.68f, 1.3f + i % 2, paint)
+        canvas.drawBitmap(entrance, null, artBounds, paint)
+        // Glints travel inward along the artwork's purple lanes; no extra decoder or surface.
+        val travel = (progress * 2f) % 1f
+        paint.color = Color.rgb(243, 208, 255)
+        for (lane in 0..2) {
+            val x = 70f + travel * 380f
+            val y = 192f + lane * 10f
+            paint.alpha = ((1f - travel) * 150).toInt()
+            canvas.drawCircle(x, y, 1.8f, paint)
+            canvas.drawCircle(960f - x, y, 1.8f, paint)
         }
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.5f
-        paint.alpha = 160
-        canvas.drawArc(orbit, -130f + progress * 85f, 94f, false, paint)
-        paint.color = Color.rgb(244, 197, 104)
-        canvas.drawArc(orbit, 65f + progress * 85f, 34f, false, paint)
-        paint.style = Paint.Style.FILL
-        paint.alpha = (255 * (progress / 0.18f).coerceIn(0f, 1f)).toInt()
-        canvas.save()
-        val zoom = 0.94f + 0.06f * (progress / 0.28f).coerceIn(0f, 1f)
-        canvas.scale(zoom, zoom, 480f, 192f)
-        // Render the supplied artwork through an antialiased circle, not a square bitmap.
-        // The source image remains unchanged; its rectangular corners never paint.
-        paint.shader = logoShader
-        canvas.drawCircle(logoBounds.centerX(), logoBounds.centerY(), logoBounds.width() / 2f, paint)
-        paint.shader = null
-        canvas.restore()
-        val reveal = ((progress - 0.10f) / 0.20f).coerceIn(0f, 1f)
-        drawText(canvas, welcome, 338f, 16f, Color.rgb(193, 170, 225), reveal)
-        drawText(canvas, title, 375f, 28f, Color.WHITE, reveal, true)
-        drawText(canvas, caption, 409f, 14f, Color.rgb(170, 163, 189), reveal)
-        paint.color = Color.rgb(168, 85, 247)
-        paint.alpha = (reveal * 180).toInt()
-        canvas.drawRoundRect(430f, 438f, 530f, 440f, 1f, 1f, paint)
-        drawText(canvas, skip, 490f, 11f, Color.rgb(134, 126, 151), reveal)
+        val reveal = (progress / .15f).coerceIn(0f, 1f)
+        drawText(canvas, title, 466f, 22f, Color.WHITE, reveal, true)
+        paint.color = Color.rgb(80, 43, 100)
+        paint.alpha = 230
+        canvas.drawRoundRect(345f, 483f, 615f, 486f, 1.5f, 1.5f, paint)
+        paint.color = Color.rgb(213, 152, 255)
+        canvas.drawRoundRect(345f, 483f, 345f + 270f * progress, 486f, 1.5f, 1.5f, paint)
+        drawText(canvas, skip, 511f, 11f, Color.rgb(199, 181, 214), reveal)
         canvas.restore()
     }
 

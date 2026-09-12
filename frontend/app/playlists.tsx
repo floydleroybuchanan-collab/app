@@ -78,7 +78,7 @@ export default function PlaylistsScreen() {
     </View>
     {/* The shell boundary includes the fixed header; a nested upward trap blocks it. */}
     <View style={styles.scrollWrap}><ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
-      <Text style={styles.help}>Use CharmIPTV’s supplied playlists, your own M3U or Xtream Codes playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
+      <Text style={styles.help}>Use Charming MediaLab’s supplied playlists, your own M3U or Xtream Codes playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
       {!!notice && <Text accessibilityLiveRegion="polite" style={styles.message}>{notice}</Text>}
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
         <Text style={styles.text}>Enter your parental PIN to manage playlists.</Text>

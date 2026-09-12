@@ -1,3 +1,4 @@
+import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,7 +17,8 @@ import { fonts, radius, tvColors } from "@/src/theme";
 
 export function AccountGate({ children }: { children: React.ReactNode }) {
   const { status, user, notice, signIn, register, signOut, retryRestore } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const wide = width >= 800 && width > height;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,8 +97,8 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   if (status === "restoring") {
     return (
       <View style={styles.screen} testID="account-session-restoring">
-        <ActivityIndicator color={tvColors.purpleBright} size="large" />
-        <Text style={styles.loadingText}>Checking your CharmIPTV account…</Text>
+        <MediaLabArt kind="circle" width={120} /><ActivityIndicator color={tvColors.purpleBright} size="large" />
+        <Text style={styles.loadingText}>Checking your Charming MediaLab account…</Text>
       </View>
     );
   }
@@ -104,7 +106,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   if (status === "unavailable") {
     return (
       <View style={styles.screen} testID="account-session-unavailable">
-        <View style={[styles.card, width < 700 && styles.cardCompact]}>
+        <View style={[styles.card, wide && mode === "login" && { width: Math.min(480, width * .46) }, width < 700 && styles.cardCompact]}>
           <View style={styles.brandMark}><Ionicons name="cloud-offline-outline" size={30} color="#fff" /></View>
           <Text style={styles.title}>Account check unavailable</Text>
           <Text style={styles.message}>{notice || "Unable to verify your account right now."}</Text>
@@ -132,24 +134,21 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <View style={{ flex: 1 }}><MediaLabBackdrop />
     <ScrollView
       style={styles.screenScroll}
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={[styles.screenContent, wide && mode === "login" && { flexDirection: "row", gap: 32 }]}
       keyboardShouldPersistTaps="handled"
       testID="account-login-screen"
     >
-      <View style={[styles.card, width < 700 && styles.cardCompact]}>
-        <View style={styles.brandRow}>
-          <View style={styles.brandMark}><Ionicons name="sparkles" size={27} color="#fff" /></View>
-          <View>
-            <Text style={styles.brand}>CHARM IPTV</Text>
-            <Text style={styles.kicker}>ACCOUNT SIGN IN</Text>
-          </View>
-        </View>
+      {wide && mode === "login" && <View style={{ width: Math.min(560, width * .38), alignItems: "center" }}><MediaLabArt width={Math.min(560, width * .38)} /><Text style={styles.kicker}>LIVE TELEVISION  /  VIDEO ON DEMAND</Text></View>}
+      <View style={[styles.card, wide && mode === "login" && { width: Math.min(480, width * .46) }, width < 700 && styles.cardCompact]}>
+        {(!wide || mode === "register") && <View style={styles.brandRow}><MediaLabArt width={320} /></View>}
+        <Text style={styles.kicker}>YOUR ACCOUNT</Text>
         <Text style={styles.title}>{mode === "login" ? "Welcome back" : "Create your account"}</Text>
         <Text style={styles.message}>
           {mode === "login"
-            ? "Sign in with your CharmIPTV username and password."
+            ? "Sign in with your Charming MediaLab username and password."
             : "A valid invitation code is required. There is no open public registration."}
         </Text>
 
@@ -268,7 +267,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           </Text>
         </Pressable>
       </View>
-    </ScrollView>
+    </ScrollView></View>
   );
 }
 
@@ -292,7 +291,7 @@ const styles = StyleSheet.create({
   },
   expiryNoticeUrgent: { borderColor: "#FF7272", backgroundColor: "rgba(120, 23, 35, 0.97)" },
   expiryNoticeText: { flex: 1, color: "#fff", fontFamily: fonts.semibold, fontSize: 9, lineHeight: 13 },
-  screenScroll: { flex: 1, backgroundColor: tvColors.canvas },
+  screenScroll: { flex: 1, backgroundColor: "transparent" },
   screenContent: {
     flexGrow: 1,
     alignItems: "center",
@@ -315,7 +314,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: tvColors.lineStrong,
-    backgroundColor: tvColors.panel,
+    backgroundColor: "rgba(28, 19, 38, .82)",
   },
   cardCompact: { paddingHorizontal: 24, paddingVertical: 24 },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 13, marginBottom: 24 },

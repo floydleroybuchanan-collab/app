@@ -196,7 +196,7 @@ internal class BackgroundEpgUpdater(private val context: Context) {
         connection.connectTimeout = 15_000
         connection.readTimeout = 60_000
         connection.instanceFollowRedirects = false
-        connection.setRequestProperty("User-Agent", "CharmIPTV/2 AndroidTV")
+        connection.setRequestProperty("User-Agent", "Charming MediaLab/2 AndroidTV")
         connection.setRequestProperty("Accept-Encoding", "gzip")
         connection.connect()
         val code = connection.responseCode

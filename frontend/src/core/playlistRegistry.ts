@@ -34,7 +34,13 @@ function reconcileManagedRows(saved: PlaylistRecord[]): PlaylistRecord[] {
   const configured = new Set(managedContentSources().map((source) => source.id));
   // Source availability is not deletion. Keep revision pointers, ordering and
   // user choices during a missing configuration or a session transition.
-  const next = [...saved];
+  const next = saved.map((row) => {
+    const supplied = row.managed ? managedPlaylistDefinition(row.id) : undefined;
+    if (!supplied) return row;
+    const oldDefault = /^(?:Charm\s?IPTV|Charming MediaLab)(?: [1-4])?$/i;
+    return { ...row, name: oldDefault.test(row.name) ? supplied.name : row.name,
+      groupLabel: oldDefault.test(row.groupLabel || "") ? supplied.name : row.groupLabel };
+  });
   for (const supplied of MANAGED_PLAYLISTS) {
     if (!configured.has(supplied.sourceId) || next.some((item) => item.id === supplied.playlistId)) continue;
     const priorManaged = MANAGED_PLAYLISTS.slice(0, MANAGED_PLAYLISTS.indexOf(supplied))

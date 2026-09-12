@@ -8,3 +8,8 @@ keep_vars = true
 type = "Text"
 globs = ["**/*.html", "**/*.css", "**/*.client.js"]
 fallthrough = true
+
+[[rules]]
+type = "Data"
+globs = ["**/*.png"]
+fallthrough = true

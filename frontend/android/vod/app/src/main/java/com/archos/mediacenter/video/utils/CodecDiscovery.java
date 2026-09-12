@@ -4,7 +4,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Build;
 
-/** CharmIPTV implementation of the three callbacks used by the pinned AVOS JNI. */
+/** Charming MediaLab implementation of the three callbacks used by the pinned AVOS JNI. */
 public final class CodecDiscovery {
     private static boolean software(MediaCodecInfo codec) {
         return Build.VERSION.SDK_INT >= 29 ? codec.isSoftwareOnly() :

@@ -254,7 +254,7 @@ export async function handleAdminRequest(request, env, helpers) {
       if (["username","email","password","viewing_days"].some(key => Object.hasOwn(body,key)))
         throw policyError("Choose an existing account or a new account, not both.",400);
       const existing=await first(env,"SELECT * FROM users WHERE username=?1 COLLATE NOCASE",[String(body.existing_username).trim()]);
-      if (!existing) throw policyError("Existing user not found. Enter their current CharmIPTV username.",404);
+      if (!existing) throw policyError("Existing user not found. Enter their current Charming MediaLab username.",404);
       if (existing.role !== "user") throw policyError("This account already has an administrator identity. Use its Permissions or Viewing access button.",409);
       const profile=normalizeAdminProfile(body.permissions || {});
       await env.DB.batch([

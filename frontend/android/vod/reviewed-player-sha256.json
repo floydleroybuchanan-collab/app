@@ -6,18 +6,18 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt": {
     "upstream": "567f17a971b1bef0ff4e9607031c0bcb4f5ddb20348c9a512ad97b61459ccca2",
-    "sha256": "44efac7ee34df0d26925680781f02da26f1b683654a844a30e5ea5ce630cdbea",
-    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff."
+    "sha256": "5ddfb1edf4d659739b33aa2f1fff1f558505fb5f6b6efe59ab89e06519354b2e",
+    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "01dd19ab5d5f927e92d3a00ee4649d1e1001a99a8f8050d4821e17b6306ce7bf",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff."
+    "sha256": "42eeef238432583436750f41df24a6eb78d627c9227ce879e67030ce9faa3878",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
-    "sha256": "3a1e292f4ed3c4acc0fd5d64a452642269cb5e7e222e0358f59b309bbe6231a4",
-    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume."
+    "sha256": "d36156f1dfa3ded9119c2cd73b22df5c2f2e59af37e8c6a12a1ae6d2bceca750",
+    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsMobileView.kt": {
     "upstream": "b78a9e8624dcf1ae7f0f2298a829b93b97392e6787e904ab18c32a02ceeaed4a",

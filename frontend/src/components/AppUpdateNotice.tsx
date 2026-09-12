@@ -11,7 +11,7 @@ export function AppUpdateNotice() {
   if(!['/','/index','/home','/settings'].includes(path))return;
   if(update.version_code<=Number(Constants.expoConfig?.android?.versionCode||0)||shown.current===update.version_code||!update.url)return;
   shown.current=update.version_code;
-  Alert.alert('CharmIPTV update available',update.message,[{text:'Later',style:'cancel'},{text:'Open download page',onPress:()=>{void Linking.openURL(update.url).catch(()=>Alert.alert('Download page unavailable','Try again from Settings → About.'));}}]);
+  Alert.alert('Charming MediaLab update available',update.message,[{text:'Later',style:'cancel'},{text:'Open download page',onPress:()=>{void Linking.openURL(update.url).catch(()=>Alert.alert('Download page unavailable','Try again from Settings → About.'));}}]);
  },[path,update]);
  return null;
 }

@@ -267,7 +267,7 @@
 	<string name="settings_enable_tmdb_disabled">تم تعطيل TMDB</string>
     <string name="main_menu_all_channels">جميع القنوات</string>
     <string name="main_menu_theme_change">تغيير السمة</string>
-    <string name="theme_default">CharmIPTV Purple</string>
+    <string name="theme_default">Charming MediaLab Purple</string>
     <string name="theme_nero_amoled_oled">أسود AMOLED/OLED</string>
     <string name="player_not_available_it_message">غير متوفر على الخوادم الإيطالية، ابحث عنه على TMDB بلغات أخرى</string>
     <string name="player_not_available_lang_message">غير متوفر باللغة %s، ابحث عنه على TMDB بلغات أخرى</string>
@@ -368,7 +368,7 @@
     <string name="settings_category_streamingcommunity_dnsOverHttps">استخدام DNS آمن</string>
     <string name="settings_scan_resolver_qr_title">مسح رمز تجاوز التلفاز</string>
     <string name="settings_scan_resolver_qr_summary">افتح الكاميرا وامسح رمز QR المعروض على التلفاز</string>
-    <string name="settings_scan_resolver_invalid_qr">رمز QR هذا ليس رابط تجاوز CharmIPTV.</string>
+    <string name="settings_scan_resolver_invalid_qr">رمز QR هذا ليس رابط تجاوز Charming MediaLab.</string>
     <string name="settings_scan_resolver_failed">تعذر تشغيل ماسح QR على هذا الجهاز.</string>
     <string name="settings_category_provider_url_manual">إدخال يدوي</string>
     <string name="settings_autoplay_buffer_title">مهلة التشغيل التلقائي</string>

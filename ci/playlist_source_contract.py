@@ -11,14 +11,15 @@ The build-166 stability follow-up adds per-stage scheduling gates, reports
 match-write failures honestly, and leases native imports through metadata
 publication. URLs, parsers, request headers and payload delivery are unchanged.
 Regression coverage: stability166Regression.test.mjs and EpgImportCoordinatorTest.
+RC9 changes display/log brand strings only; transport is unchanged.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': '0abc1004f35dea9ca5220cb645610120ebf9f237e85eda779cd5abec63382945',
-    'frontend/src/nativeEpg.ts': 'd461decc33083a30f2f727f77eac010815f033b0ec14b1a6a3051d80b7ed7f23',
+    'frontend/src/source.native.ts': '46cda3e8fde5ad80158c6c9accf8ca45620415d45168b9eaa0754c8a912fa7f4',
+    'frontend/src/nativeEpg.ts': 'dd9bae6d41e03939a979c86b8bcc8594b56216e8309a3dcfb5ce60422d9c4456',
     'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }
 

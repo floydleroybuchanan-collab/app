@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Modified for CharmIPTV, 2026-09-11: removed unused audio-transformer JNI bindings.
+// Modified for Charming MediaLab, 2026-09-11: removed unused audio-transformer JNI bindings.
 package com.archos.medialib;
 
 import java.io.File;
@@ -354,7 +354,7 @@ public class LibAvos {
         nativeSetDynamicAudioDelay(enable);
     }
 
-    // CharmIPTV: optional external AudioTransformer is not bundled.
+    // Charming MediaLab: optional external AudioTransformer is not bundled.
 
     private static native void nativeInit(String pkgName, boolean isPluginAvailable);
 

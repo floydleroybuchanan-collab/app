@@ -67,7 +67,7 @@ object DebridSettings {
             setOnPreferenceClickListener {
                 val input = EditText(fragment.requireContext()).apply { setText(RealDebrid.deviceLabel); maxLines = 1 }
                 AlertDialog.Builder(fragment.requireContext()).setTitle("Connection label")
-                    .setMessage("This label is saved in CharmIPTV. Manage the website connection name on Real-Debrid.")
+                    .setMessage("This label is saved in Charming MediaLab. Manage the website connection name on Real-Debrid.")
                     .setView(input).setPositiveButton("Save") { _, _ ->
                         fragment.lifecycleScope.launch {
                             try { withContext(Dispatchers.IO) { RealDebrid.setLabel(input.text.toString()) } }

@@ -33,7 +33,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
         context.runOnUiQueueThread {
             val activity = context.currentActivity
             if (activity == null || activity.isFinishing) {
-                promise.reject("E_VOD_ACTIVITY", "CharmIPTV is not ready to open Video OnDemand.")
+                promise.reject("E_VOD_ACTIVITY", "Charming MediaLab is not ready to open Video OnDemand.")
                 return@runOnUiQueueThread
             }
             if (pending != null) {
@@ -51,7 +51,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     }
 
     override fun invalidate() {
-        pending?.reject("E_VOD_CLOSED", "CharmIPTV's screen was recreated.")
+        pending?.reject("E_VOD_CLOSED", "Charming MediaLab's screen was recreated.")
         pending = null
         super.invalidate()
     }

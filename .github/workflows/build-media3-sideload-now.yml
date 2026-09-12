@@ -1,4 +1,4 @@
-name: Build CharmIPTV RC.8 Sideload APK
+name: Build Charming MediaLab RC.9 Sideload APK
 
 on:
   workflow_dispatch:
@@ -28,12 +28,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: charmiptv-rc8-${{ github.ref }}
+  group: medialab-rc9-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build CharmIPTV RC.8 universal sideload APK
+    name: Build Charming MediaLab RC.9 universal sideload APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -195,8 +195,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/CharmIPTV.RC-8-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/CharmIPTV.RC-8-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/Charming.MediaLab.RC-9-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/Charming.MediaLab.RC-9-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -208,7 +208,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: CharmIPTV.RC-8-Sideload-Encrypted-${{ github.run_number }}
+          name: Charming.MediaLab.RC-9-Sideload-Encrypted-${{ github.run_number }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json

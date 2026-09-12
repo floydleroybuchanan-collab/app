@@ -13,7 +13,7 @@ import {
 export { resolveFavoritesBackup, serializeFavoritesBackup };
 export type { FavoritesRestoreResult, FavoritesRestoreUnavailable };
 
-const FILE_PREFIX = "CharmIPTV-Favorites-";
+const FILE_PREFIX = "Charming MediaLab-Favorites-";
 const FILE_SUFFIX = ".json";
 
 function timestampForFile(date = new Date()): string {
@@ -77,7 +77,7 @@ export async function writeFavoritesBackup(raw: string): Promise<{ fileName: str
       }
     } catch (error) {
       // Local copy already succeeded; portable export is best-effort.
-      console.warn("CharmIPTV portable favorites export skipped", error);
+      console.warn("Charming MediaLab portable favorites export skipped", error);
     }
   }
 
@@ -90,8 +90,8 @@ export async function readLatestFavoritesBackup(): Promise<{ fileName: string; r
   try {
     const dir = await ensureLocalBackupDir();
     const names = (await FileSystem.readDirectoryAsync(dir))
-      .filter((name) => name.includes(FILE_PREFIX) && name.toLowerCase().endsWith(FILE_SUFFIX))
-      .sort((a, b) => b.localeCompare(a));
+      .filter((name) => (name.includes(FILE_PREFIX) || name.includes("CharmIPTV-Favorites-")) && name.toLowerCase().endsWith(FILE_SUFFIX))
+      .sort((a, b) => b.replace(/^.*Favorites-/, "").localeCompare(a.replace(/^.*Favorites-/, "")));
     for (const name of names) {
       const hit = await readValidBackupCandidate(`${dir}${name}`, name);
       if (hit) return hit;
@@ -108,12 +108,12 @@ export async function readLatestFavoritesBackup(): Promise<{ fileName: string; r
         try { decoded = decodeURIComponent(uri); } catch {}
         return { uri, name: decoded.split("/").pop() || decoded };
       })
-      .filter(({ name }) => name.includes(FILE_PREFIX) && name.toLowerCase().endsWith(FILE_SUFFIX))
-      .sort((a, b) => b.name.localeCompare(a.name));
+      .filter(({ name }) => (name.includes(FILE_PREFIX) || name.includes("CharmIPTV-Favorites-")) && name.toLowerCase().endsWith(FILE_SUFFIX))
+      .sort((a, b) => b.name.replace(/^.*Favorites-/, "").localeCompare(a.name.replace(/^.*Favorites-/, "")));
     for (const candidate of candidates) {
       const hit = await readValidBackupCandidate(candidate.uri, candidate.name);
       if (hit) return hit;
     }
   }
-  throw new Error("No CharmIPTV favorites backup was found. Create one with Back Up Favorites first.");
+  throw new Error("No Charming MediaLab favorites backup was found. Create one with Back Up Favorites first.");
 }

@@ -92,7 +92,7 @@ async function accountRequest(
         success: false,
         error: timedOut
           ? "The account service took too long to respond."
-          : "Unable to reach the CharmIPTV account service.",
+          : "Unable to reach the Charming MediaLab account service.",
       },
     };
   } finally {

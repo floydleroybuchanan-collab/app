@@ -99,7 +99,19 @@ class PlayerViewModel(
         }
     }
 
-    fun selectSource(server: Video.Server) { attempted.clear(); getVideo(server) }
+    private val refreshedDebridLinks = mutableSetOf<String>()
+    fun selectSource(server: Video.Server) { attempted.clear(); refreshedDebridLinks.clear(); getVideo(server) }
+
+    /** One fresh resolution for an expired HTTP playback URL; no loop or provider switch. */
+    fun recoverDebridLink(server: Video.Server?, error: Throwable): Boolean {
+        if (server?.details?.isDebrid != true) return false
+        val code = generateSequence(error) { it.cause }.take(8)
+            .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>()
+            .firstOrNull()?.responseCode
+        if (code !in listOf(404, 410) || !refreshedDebridLinks.add(server.id)) return false
+        getVideo(server)
+        return true
+    }
 
     fun fallback(failed: Video.Server?): Boolean {
         failed?.let { attempted.add(it.id) }
@@ -181,6 +193,7 @@ class PlayerViewModel(
         debridJob?.cancel()
         debridJob = null
         attempted.clear()
+        refreshedDebridLinks.clear()
         _sources.value = emptyList()
         lastVideoType = videoType
         lastId = id

@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "CharmIPTV.RC-6",
+    "name": "Charming.MediaLab.RC-9",
     "slug": "charm-iptv-purple-next",
-    "version": "2.1.0-rc.8",
+    "version": "2.1.0-rc.9",
     "orientation": "default",
-    "icon": "./assets/images/charm-refined.png",
+    "icon": "./assets/medialab/medialab_launcher.png",
     "scheme": "charmiptv-purple",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/charm-refined-foreground.png",
+        "foregroundImage": "./assets/medialab/medialab_launcher_foreground.png",
         "backgroundColor": "#10051F"
       },
       "edgeToEdgeEnabled": true,
       "allowBackup": false,
       "package": "com.charmiptv.app.purple.next.vodtest1",
-      "versionCode": 15,
+      "versionCode": 16,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -31,7 +31,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/medialab/medialab_launcher.png"
     },
     "plugins": [
       [
@@ -44,7 +44,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-image.png",
+          "image": "./assets/medialab/medialab_launcher.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000000"

@@ -11,10 +11,10 @@ export const MANAGED_PLAYLISTS: readonly {
   name: string;
   epgSourceId: string;
 }[] = [
-  { sourceId: "primary", playlistId: PRIMARY_PLAYLIST, name: "CharmIPTV", epgSourceId: "primary" },
-  { sourceId: "secondary", playlistId: SECOND_PLAYLIST, name: "CharmIPTV 2", epgSourceId: "owner-secondary" },
-  { sourceId: "tertiary", playlistId: THIRD_PLAYLIST, name: "CharmIPTV 3", epgSourceId: "owner-tertiary" },
-  { sourceId: "quaternary", playlistId: FOURTH_PLAYLIST, name: "CharmIPTV 4", epgSourceId: "owner-quaternary" },
+  { sourceId: "primary", playlistId: PRIMARY_PLAYLIST, name: "Playlist 1", epgSourceId: "primary" },
+  { sourceId: "secondary", playlistId: SECOND_PLAYLIST, name: "Playlist 2", epgSourceId: "owner-secondary" },
+  { sourceId: "tertiary", playlistId: THIRD_PLAYLIST, name: "Playlist 3", epgSourceId: "owner-tertiary" },
+  { sourceId: "quaternary", playlistId: FOURTH_PLAYLIST, name: "Playlist 4", epgSourceId: "owner-quaternary" },
 ];
 
 export function managedPlaylistDefinition(playlistId: string) {

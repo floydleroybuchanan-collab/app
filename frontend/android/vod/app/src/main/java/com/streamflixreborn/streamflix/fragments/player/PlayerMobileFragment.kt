@@ -1148,7 +1148,7 @@ class PlayerMobileFragment : Fragment() {
                 super.onPlayerError(error)
                 Log.e("PlayerMobileFragment", "onPlayerError: ", error)
                 
-                if (!viewModel.fallback(currentServer)) showSourcePicker()
+                if (!viewModel.recoverDebridLink(currentServer, error) && !viewModel.fallback(currentServer)) showSourcePicker()
             }
         }
         player.addListener(playbackListener!!)

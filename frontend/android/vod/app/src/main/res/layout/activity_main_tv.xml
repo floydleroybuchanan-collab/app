@@ -37,7 +37,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:navGraph="@navigation/nav_main_graph_tv" />
 
-    <!-- Finite, skippable CharmIPTV welcome; catalog loads underneath. -->
+    <!-- Finite, skippable Charming MediaLab welcome; catalog loads underneath. -->
     <com.streamflixreborn.streamflix.charm.CharmVodWelcomeView
         android:id="@+id/iv_splash_overlay"
         android:layout_width="match_parent"

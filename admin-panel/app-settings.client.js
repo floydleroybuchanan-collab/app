@@ -9,7 +9,7 @@ async function loadAppSettings() {
  const cap=select(f,'Maximum multiview panes','multiview_max',[[0,'Disabled'],[1,'1'],[2,'2'],[3,'3'],[4,'4']],settings.multiview_max);
  f.append(el('p','One app session can play several channels. Every pane uses a provider connection. Limits below apply within one device; your provider enforces the total across devices. Separate playlists using the same provider account must share its overall allowance.','help'));
  const limits={};
- for(const [id,label] of [['primary','CharmIPTV'],['secondary','CharmIPTV 2'],['tertiary','CharmIPTV 3'],['quaternary','CharmIPTV 4']]) limits[id]=select(f,label+' provider pane limit',id,[[0,'Unknown / no extra app cap'],[1,'1'],[2,'2'],[3,'3'],[4,'4']],settings.provider_limits[id]);
+ for(const [id,label] of [['primary','Charming MediaLab'],['secondary','Charming MediaLab 2'],['tertiary','Charming MediaLab 3'],['quaternary','Charming MediaLab 4']]) limits[id]=select(f,label+' provider pane limit',id,[[0,'Unknown / no extra app cap'],[1,'1'],[2,'2'],[3,'3'],[4,'4']],settings.provider_limits[id]);
  f.append(el('h2','Optional update notice'),el('p','Use the Android version code of an available build. Set 0 to turn the notice off. Older apps keep working; this never forces an update.','help'));
  const version=field(f,'New Android version code','version',settings.update.version_code,'number',{min:0,max:2100000000});
  const note=field(f,'Message','update_message',settings.update.message,'text',{maxLength:500});

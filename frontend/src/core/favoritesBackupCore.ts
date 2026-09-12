@@ -69,7 +69,7 @@ export function resolveFavoritesBackup(raw: string, channels: Channel[]): Favori
     payload?.format !== FAVORITES_BACKUP_FORMAT ||
     payload.version !== FAVORITES_BACKUP_VERSION ||
     !Array.isArray(payload.favorites)
-  ) throw new Error("This is not a supported CharmIPTV favorites backup.");
+  ) throw new Error("This is not a supported Charming MediaLab favorites backup.");
 
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
   const byTvgId = new Map<string, Channel[]>();

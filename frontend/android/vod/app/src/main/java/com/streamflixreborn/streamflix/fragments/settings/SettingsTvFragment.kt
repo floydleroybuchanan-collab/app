@@ -1087,7 +1087,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                     val values = ContentValues().apply {
                         put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                         put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CharmIPTV")
+                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Charming MediaLab")
                     }
                     val uri = requireContext().contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                         ?: error("Unable to create download entry")
@@ -1097,7 +1097,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
 
                     Toast.makeText(
                         requireContext(),
-                        getString(R.string.backup_export_saved_to, "Downloads/CharmIPTV/$fileName"),
+                        getString(R.string.backup_export_saved_to, "Downloads/Charming MediaLab/$fileName"),
                         Toast.LENGTH_LONG
                     ).show()
                 }.onFailure { error ->
@@ -1158,7 +1158,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                     val values = ContentValues().apply {
                         put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                         put(MediaStore.Downloads.MIME_TYPE, "application/zip")
-                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CharmIPTV")
+                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Charming MediaLab")
                     }
                     val uri = requireContext().contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                         ?: error("Unable to create download entry")
@@ -1168,7 +1168,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
 
                     Toast.makeText(
                         requireContext(),
-                        getString(R.string.backup_export_saved_to, "Downloads/CharmIPTV/$fileName"),
+                        getString(R.string.backup_export_saved_to, "Downloads/Charming MediaLab/$fileName"),
                         Toast.LENGTH_LONG
                     ).show()
                 }.onFailure { error ->

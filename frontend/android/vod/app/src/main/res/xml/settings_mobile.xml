@@ -14,7 +14,7 @@
             android:summary="Media3 or embedded Nova playback" app:iconSpaceReserved="false" />
         <Preference android:key="vod_rd_account" android:title="Real-Debrid account" app:iconSpaceReserved="false" />
         <Preference android:key="vod_rd_refresh" android:title="Refresh account status" app:iconSpaceReserved="false" />
-        <Preference android:key="vod_rd_label" android:title="Connection label" android:summary="Name this device in CharmIPTV" app:iconSpaceReserved="false" />
+        <Preference android:key="vod_rd_label" android:title="Connection label" android:summary="Name this device in Charming MediaLab" app:iconSpaceReserved="false" />
         <Preference android:key="vod_rd_manage" android:title="Manage Real-Debrid connections" android:summary="Open your devices on Real-Debrid" app:iconSpaceReserved="false" />
         <Preference android:key="vod_rd_disconnect" android:title="Disconnect Real-Debrid" app:iconSpaceReserved="false" />
         <Preference android:key="vod_playback_licenses" android:title="Playback licenses and source" app:iconSpaceReserved="false" />

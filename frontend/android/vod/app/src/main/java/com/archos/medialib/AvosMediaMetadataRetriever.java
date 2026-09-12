@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Modified for CharmIPTV, 2026-09-11: removed the unused SMB proxy integration.
+// Modified for Charming MediaLab, 2026-09-11: removed the unused SMB proxy integration.
 package com.archos.medialib;
 
 import android.content.ContentResolver;
@@ -37,7 +37,7 @@ public class AvosMediaMetadataRetriever implements IMediaMetadataRetriever
     // The field below is accessed by native methods
     private long mMediaMetadataRetrieverHandle;
 
-    // CharmIPTV: HTTP metadata only; network-folder proxies are not bundled.
+    // Charming MediaLab: HTTP metadata only; network-folder proxies are not bundled.
  
     private static final int EMBEDDED_PICTURE_TYPE_ANY = 0xFFFF;
 

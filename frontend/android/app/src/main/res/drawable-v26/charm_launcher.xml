@@ -2,7 +2,7 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/charm_icon_background" />
     <foreground>
-        <!-- Foreground PNG already includes the adaptive-icon safe-area padding. -->
-        <bitmap android:src="@drawable/charm_refined_foreground" android:gravity="fill" android:filter="true" />
+        <!-- Circle fills the 72dp round viewport in the 108dp layer; padding is baked once. -->
+        <bitmap android:src="@drawable/medialab_launcher_foreground" android:gravity="fill" android:filter="true" />
     </foreground>
 </adaptive-icon>

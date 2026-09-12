@@ -17,10 +17,10 @@ test('VOD enters through the host after Live TV releases its decoders',()=>{
   assert.match(manifest,/MainTvActivity" android:exported="false" android:process=":vod"/);
   assert.doesNotMatch(manifest,/category.LAUNCHER|category.LEANBACK_LAUNCHER/);
 });
-test('VOD navigation uses a transparent proportional CharmIPTV header mark',()=>{
+test('VOD navigation uses a transparent proportional Charming MediaLab header mark',()=>{
   const activity=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/activities/main/MainTvActivity.kt');
   const header=read('android/vod/app/src/main/res/layout/content_header_menu_main_tv.xml');
-  assert.match(activity,/R\.drawable\.charm_vod_brand_header/);
+  assert.match(activity,/R\.drawable\.medialab_rail/);
   assert.match(header,/android:adjustViewBounds="true"/);
   assert.match(header,/android:scaleType="fitCenter"/);
 });

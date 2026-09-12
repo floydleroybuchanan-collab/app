@@ -25,9 +25,9 @@ async function send(env,id,text,reply_markup){let result;const chunks=splitText(
  if(env.BOT_GROUP_REPLY&&result?.message_id)await q(env,"INSERT INTO bot_jobs(kind,chat_id,message_id,body,due_at) VALUES('delete',?1,?2,'',?3)",env.BOT_GROUP_REPLY.chat_id,result.message_id,now()+600).run();
  }return result;}
 async function show(env,id,key,s){const c=await content(env,key);if(!c.enabled||!c.body.trim())return send(env,id,'This information is currently unavailable. Please contact an Admin.');
- if(key==='guide'){const marker='💜 YOUR CHARMIPTV GUIDE\nPART 2 OF 2',pos=c.body.indexOf(marker);if(pos>0){await send(env,id,c.body.slice(0,pos).trim());await send(env,id,c.body.slice(pos));}else await send(env,id,c.body);}
+ if(key==='guide'){const marker='💜 YOUR Charming MediaLab GUIDE\nPART 2 OF 2',pos=c.body.indexOf(marker);if(pos>0){await send(env,id,c.body.slice(0,pos).trim());await send(env,id,c.body.slice(pos));}else await send(env,id,c.body);}
  else if(key==='rules'){
-  const warning='VIOLATION OF ANY OF THESE RULES IS A LIFETIME BAN FROM THE CHARMIPTV APP AND THE TELEGRAM GROUP.';
+  const warning='VIOLATION OF ANY OF THESE RULES IS A LIFETIME BAN FROM THE Charming MediaLab APP AND THE TELEGRAM GROUP.';
   if(c.body.trim().endsWith(warning)){await send(env,id,c.body.slice(0,c.body.lastIndexOf(warning)).trim());
    try{await telegram(env,'sendRichMessage',{chat_id:id,rich_message:{html:'<h1><b>'+warning+'</b></h1>'}});}catch(e){if(e.telegramCode!==400)throw e;await telegram(env,'sendMessage',{chat_id:id,text:warning,entities:[{type:'bold',offset:0,length:warning.length}]});}
   }
@@ -51,7 +51,7 @@ export function intent(text){
  if(/admin|support/.test(t))return 'contact';if(/status/.test(t))return 'status';if(/about/.test(t))return 'about';return 'help';
 }
 async function help(env,id,s){
- const items=[['📖 CharmIPTV User Guide','guide'],['📥 Download CharmIPTV','downloads'],['🔑 Account Help','account'],['🛠 Troubleshooting','troubleshooting'],['📜 Rules & Information','rules'],['👤 Contact an Admin','contact'],['❓ About Mr. Charm','about']];
+ const items=[['📖 Charming MediaLab User Guide','guide'],['📥 Download Charming MediaLab','downloads'],['🔑 Account Help','account'],['🛠 Troubleshooting','troubleshooting'],['📜 Rules & Information','rules'],['👤 Contact an Admin','contact'],['❓ About Mr. Charm','about']];
  for(const [key,label] of [['app_help','▶ Sources & Multiview Help'],['whats_new','✨ What’s New'],['status','Service Status']]){const c=await content(env,key);if(c.enabled&&c.body.trim())items.push([label,key]);}
  const result=await send(env,id,'Here’s what I can help you with. Click one of the buttons below.',keyboard(items));
  await event(env,id,'help_menu_delivered');return result;
@@ -64,7 +64,7 @@ async function account(env,id,s,tokenOnly){
  if(m.blocked||u&&(u.status!=='active'||u.expires_at!==null&&u.expires_at<=now()))return send(env,id,'Your account is inactive or blocked. Please contact an Admin.');
  if(tokenOnly){
   if(!inv||['disabled','expired'].includes(inv.status)||inv.status==='unused'&&inv.expires_at!==null&&inv.expires_at<=now())return send(env,id,'Your invitation is unavailable. An Admin can check your account; requesting again will not create a replacement.');
-  return send(env,id,'Your CharmIPTV invitation token:\n'+inv.invite_code+'\n\n'+(inv.status==='used'?'Already used to register. Sign in using your app username and password.':'Use this once to register in the app.')+'\nKeep this token private.');
+  return send(env,id,'Your Charming MediaLab invitation token:\n'+inv.invite_code+'\n\n'+(inv.status==='used'?'Already used to register. Sign in using your app username and password.':'Use this once to register in the app.')+'\nKeep this token private.');
  }
  const count=u?await q(env,'SELECT COUNT(*) n FROM sessions WHERE user_id=?1 AND revoked=0 AND expires_at>?2',u.id,now()).first():null;
  return send(env,id,u?`My Account\nUsername: ${u.username}\nStatus: ${u.status}\nExpiration: ${u.expires_at===null?'Unlimited':new Date(u.expires_at*1000).toISOString()}\nTime remaining: ${u.expires_at===null?'Unlimited':Math.max(0,Math.ceil((u.expires_at-now())/86400))+' days'}\nActive logins: ${count.n} of ${u.max_sessions}\nTelegram: Linked\nInvitation: ${inv?.status||'No surviving record'}`:'Your Telegram is linked. '+(inv?'Your invitation is '+inv.status+'. Register in the app to activate your account.':'An Admin must check or link your existing account.'),keyboard([['🔑 My Token','token'],['Login help','issue:Login / Token'],['Account FAQ','faq'],['Contact an Admin','contact']]));
@@ -76,7 +76,7 @@ async function contact(env,id,s){
  catch(e){await event(env,id,'support_admin_lookup_failed',e.telegramMethod+' '+(e.telegramCode||'network'));return send(env,id,'I could not retrieve the group admin list just now. Please try again shortly or open a support ticket.',{inline_keyboard:[[support]]});}
  const configured=await rows(env,'SELECT * FROM bot_support_admins');
  const people=live.filter(a=>!a.user.is_bot&&(!configured.length||configured.some(p=>p.telegram_id===String(a.user.id)&&p.enabled))).map(a=>({name:[a.user.first_name,a.user.last_name].filter(Boolean).join(' '),username:a.user.username||''}));
- const text=people.length?'CharmIPTV Support Admins\n\n'+people.map(p=>p.name+(p.username?' (@'+p.username+')':' — contact through the group member list')).join('\n')+'\n\nPlease contact one Admin at a time.':'Support Admin contacts are being configured. You can open a support ticket below.';
+ const text=people.length?'Charming MediaLab Support Admins\n\n'+people.map(p=>p.name+(p.username?' (@'+p.username+')':' — contact through the group member list')).join('\n')+'\n\nPlease contact one Admin at a time.':'Support Admin contacts are being configured. You can open a support ticket below.';
  // Numeric mention buttons depend on each admin's privacy settings. Always
  // display names and use only current public usernames for contact buttons.
  const markup={inline_keyboard:[...people.filter(p=>/^[a-zA-Z0-9_]{1,32}$/.test(p.username)).map(p=>[{text:p.name,url:'https://t.me/'+p.username}]),[support]]};
@@ -85,7 +85,7 @@ async function contact(env,id,s){
 }
 async function inviteCommand(env,id,text,m,s,updateId){
  const actor=await telegram(env,'getChatMember',{chat_id:s.group_id,user_id:Number(id)});
- if(!['administrator','creator'].includes(actor.status)||actor.user?.is_bot)return send(env,id,'Only current CharmIPTV group admins can create group invites.');
+ if(!['administrator','creator'].includes(actor.status)||actor.user?.is_bot)return send(env,id,'Only current Charming MediaLab group admins can create group invites.');
  if(/^\s*mr\.?\s*charm\s+invites\s*$/i.test(text)){
   const list=await rows(env,'SELECT * FROM bot_group_invites WHERE group_id=?1 ORDER BY created_at DESC,id DESC LIMIT 15',s.group_id);
   return send(env,id,list.length?'Recent group invites\n\n'+list.map(i=>i.id.slice(0,8)+' · '+i.recipient_label+' · '+(i.expires_at!==null&&i.expires_at<=now()&&['active','pending'].includes(i.status)?'expired':i.status)+'\nExpires: '+(i.expires_at?new Date(i.expires_at*1000).toISOString():'Never')).join('\n\n')+'\n\nCancel one with Mr. Charm Revoke INVITE_ID. Full links and join history are in the admin panel.':'No group invites yet. Use Mr. Charm Invite John Smith 60.');
@@ -118,7 +118,7 @@ async function conversation(env,id,text,data){
  const d=JSON.parse(c.json);let next,prompt;
  if(c.state==='device'){if(!text&&!data?.startsWith('answer:'))return false;d.device=(text||data.slice(7)).slice(0,300);next='scope';prompt='Does it affect everything or only some channels?';}
  else if(c.state==='scope'){d.scope=(data||text||'').replace('answer:','').slice(0,300);next='audio';prompt='Do you hear audio when the problem happens?';}
- else if(c.state==='audio'){d.audio=(data||text||'').replace('answer:','').slice(0,300);next='result';prompt='Try these steps:\n1. Close and reopen CharmIPTV.\n2. Check another channel and your internet connection.\n3. Restart your device.\n'+(/Guide/.test(d.topic)?'4. In Settings, clear the guide cache and reload the guide.':/Login/.test(d.topic)?'4. Check your username and password. Invitation codes are only used for initial registration.':/Install|Update/.test(d.topic)?'4. Use the current download and allow installation from Downloader in your device settings.':'4. Note which channels fail and any error shown.')+'\n\nDid that fix the issue?';}
+ else if(c.state==='audio'){d.audio=(data||text||'').replace('answer:','').slice(0,300);next='result';prompt='Try these steps:\n1. Close and reopen Charming MediaLab.\n2. Check another channel and your internet connection.\n3. Restart your device.\n'+(/Guide/.test(d.topic)?'4. In Settings, clear the guide cache and reload the guide.':/Login/.test(d.topic)?'4. Check your username and password. Invitation codes are only used for initial registration.':/Install|Update/.test(d.topic)?'4. Use the current download and allow installation from Downloader in your device settings.':'4. Note which channels fail and any error shown.')+'\n\nDid that fix the issue?';}
  else if(c.state==='result'){
   if(data==='answer:Yes'){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();await send(env,id,'Glad that helped. Type Mr. Charm Help anytime.');return true;}
   next='details';prompt=env.BOT_GROUP_REPLY?'Would you like me to send your answers to the Admins as a support ticket?':'Describe what happened and any error message. Do not include passwords or tokens. I’ll include your earlier answers in a support ticket.';
@@ -138,15 +138,15 @@ async function conversation(env,id,text,data){
 async function handleCommand(env,id,cmd,s){
  if(cmd==='help')return help(env,id,s);
  if(['account','token','downloads'].includes(cmd)||cmd.startsWith('issue:')||cmd==='troubleshooting'){
-  if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Your join request must be approved and you must still be in the CharmIPTV group.');
+  if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Your join request must be approved and you must still be in the Charming MediaLab group.');
  }
  if(cmd==='account'||cmd==='token')return account(env,id,s,cmd==='token');
  if(cmd==='downloads'){
-  if(!s.downloads_enabled)return send(env,id,'A new CharmIPTV download is being prepared. Please check back shortly.');
+  if(!s.downloads_enabled)return send(env,id,'A new Charming MediaLab download is being prepared. Please check back shortly.');
   const codes=(s.download_codes||[{label:'Primary',code:'2977459',enabled:true}]).filter(c=>c.enabled&&c.code.trim());
   if(!codes.length&&!s.download_url)return send(env,id,'The download is currently unavailable. Please contact an Admin.');
   await event(env,id,'downloads_viewed');
-  return send(env,id,'Download CharmIPTV'+(s.app_version?' · '+s.app_version:'')+'\n\nOpen the Downloader app and enter:\n'+codes.map(c=>(c.label||'Downloader code')+': '+c.code).join('\n')+'\n\nFollow the download and installation prompts. Your personal invitation token is separate.',s.download_url?{inline_keyboard:[[{text:'Download CharmIPTV',url:s.download_url}]]}:undefined);
+  return send(env,id,'Download Charming MediaLab'+(s.app_version?' · '+s.app_version:'')+'\n\nOpen the Downloader app and enter:\n'+codes.map(c=>(c.label||'Downloader code')+': '+c.code).join('\n')+'\n\nFollow the download and installation prompts. Your personal invitation token is separate.',s.download_url?{inline_keyboard:[[{text:'Download Charming MediaLab',url:s.download_url}]]}:undefined);
  }
  if(cmd==='contact')return contact(env,id,s);
  if(cmd==='troubleshooting')return troubleshooting(env,id);

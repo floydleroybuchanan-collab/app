@@ -532,7 +532,7 @@ function notifyProgress(snapshot: EpgProgress): void {
     try {
       listener(snapshot);
     } catch (error) {
-      console.warn("CharmIPTV progress listener failed", error);
+      console.warn("Charming MediaLab progress listener failed", error);
     }
   }
 }
@@ -542,7 +542,7 @@ export function subscribeProgress(listener: (value: EpgProgress) => void): () =>
   try {
     listener(progress);
   } catch (error) {
-    console.warn("CharmIPTV initial progress listener failed", error);
+    console.warn("Charming MediaLab initial progress listener failed", error);
   }
   return () => {
     progressListeners.delete(listener);
@@ -613,7 +613,7 @@ function emit(): void {
       try {
         listener();
       } catch (error) {
-        console.warn("CharmIPTV source listener failed", error);
+        console.warn("Charming MediaLab source listener failed", error);
       }
     }
   });
@@ -892,7 +892,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
         return MEM;
       }
       const primaryEpgUrl = managedEpgUrl("primary");
-      if (!primaryEpgUrl) throw new Error("The protected CharmIPTV EPG source is not available.");
+      if (!primaryEpgUrl) throw new Error("The protected Charming MediaLab EPG source is not available.");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
       const activeBindings = activeEpgBindings(channels, ownership.customOwnedChannelIds);
       await configureNativeEpgSource(sourceUrl(primaryEpgUrl), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
@@ -1402,7 +1402,7 @@ export async function refreshEpgOnly(includeAdditional = true, canStartNext: () 
         return MEM || cached;
       }
       const primaryEpgUrl = managedEpgUrl("primary");
-      if (!primaryEpgUrl) throw new Error("The protected CharmIPTV EPG source is not available.");
+      if (!primaryEpgUrl) throw new Error("The protected Charming MediaLab EPG source is not available.");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
       const activeBindings = activeEpgBindings(cached.channels, ownership.customOwnedChannelIds);
       await configureNativeEpgSource(sourceUrl(primaryEpgUrl), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);

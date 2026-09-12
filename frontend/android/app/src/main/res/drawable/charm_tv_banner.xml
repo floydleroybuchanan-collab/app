@@ -3,7 +3,7 @@
     <item android:width="320dp" android:height="180dp">
         <shape><solid android:color="@color/charm_icon_background" /></shape>
     </item>
-    <item android:width="176dp" android:height="176dp" android:gravity="center">
-        <bitmap android:src="@drawable/charm_refined" android:gravity="fill" android:filter="true" />
+    <item android:width="310dp" android:height="104dp" android:gravity="center">
+        <bitmap android:src="@drawable/medialab_banner_blend" android:gravity="fill" android:filter="true" />
     </item>
 </layer-list>

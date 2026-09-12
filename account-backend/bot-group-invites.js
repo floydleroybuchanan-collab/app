@@ -26,7 +26,7 @@ async function alertAdmins(env,s,invite,requester){
  try{administrators=await telegram(env,'getChatAdministrators',{chat_id:s.group_id});}catch{await event(env,null,'group_invite_alert_lookup_failed',invite.id);return;}
  const permitted=administrators.filter(a=>!a.user.is_bot&&(!configured.length||configured.some(p=>p.telegram_id===String(a.user.id))));
  const started=await rows(env,`SELECT telegram_id FROM bot_members WHERE dm_started=1 AND telegram_id IN (${permitted.map(()=>'?').join(',')||"''"})`,...permitted.map(a=>String(a.user.id)));
- const text='CharmIPTV invite request waiting for approval\n\nRecipient: '+invite.recipient_label+'\nRequester: '+requester.telegram_id+(requester.username?' (@'+requester.username+')':'')+'\n\nOpen Mr. Charm → Group Invites in the panel to verify and approve or revoke it.';
+ const text='Charming MediaLab invite request waiting for approval\n\nRecipient: '+invite.recipient_label+'\nRequester: '+requester.telegram_id+(requester.username?' (@'+requester.username+')':'')+'\n\nOpen Mr. Charm → Group Invites in the panel to verify and approve or revoke it.';
  for(const admin of started){
   try{await telegram(env,'sendMessage',{chat_id:Number(admin.telegram_id),text});await event(env,requester.telegram_id,'group_invite_admin_alerted',invite.id,admin.telegram_id);}
   catch{await event(env,requester.telegram_id,'group_invite_admin_alert_failed',invite.id,admin.telegram_id);}

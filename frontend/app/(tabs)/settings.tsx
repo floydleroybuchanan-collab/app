@@ -402,7 +402,7 @@ function SettingsScreenContent() {
         setBackupStatus("Diagnostics ready (copy unavailable on this platform).");
         return;
       }
-      const path = `${root}charmiptv-diagnostics-${Date.now()}.txt`;
+      const path = `${root}charming-medialab-diagnostics-${Date.now()}.txt`;
       await FileSystem.writeAsStringAsync(path, body);
       setBackupStatus(`Diagnostics saved to ${path.split("/").pop()}`);
     } catch (error) {
@@ -474,7 +474,7 @@ function SettingsScreenContent() {
       return;
     }
     setBusy(true);
-    setBackupStatus("Looking for the newest CharmIPTV favorites backup…");
+    setBackupStatus("Looking for the newest Charming MediaLab favorites backup…");
     try {
       const { fileName, raw } = await readLatestFavoritesBackup();
       const restored = resolveFavoritesBackup(raw, channels);
@@ -501,7 +501,7 @@ function SettingsScreenContent() {
 
   const backupEverything = useCallback(async () => {
     if (busy) return;
-    setBusy(true); setBackupStatus("Creating a complete CharmIPTV backup…");
+    setBusy(true); setBackupStatus("Creating a complete Charming MediaLab backup…");
     try {
       const result = await writeFullBackup();
       setBackupStatus(`${result.portable ? "Exported" : "Saved"} ${result.fileName}. It includes settings, playlists, source addresses, EPG assignments, hidden/order choices, and custom groups. Keep it private.`);
@@ -514,7 +514,7 @@ function SettingsScreenContent() {
     setBusy(true); setBackupStatus("Validating and restoring the newest complete backup…");
     try {
       const name = await restoreFullBackup();
-      setBackupStatus(`Restored ${name} with integrity checks and rollback protection. Restart CharmIPTV once so every restored setting is reloaded.`);
+      setBackupStatus(`Restored ${name} with integrity checks and rollback protection. Restart Charming MediaLab once so every restored setting is reloaded.`);
     } catch (error) { setBackupStatus(error instanceof Error ? error.message : "Full restore failed; previous settings were kept."); }
     finally { setBusy(false); }
   }, [busy]);
@@ -792,7 +792,7 @@ function SettingsScreenContent() {
                     {text:'Cancel',style:'cancel'},
                     {text:'Preview report',onPress:()=>{void (async()=>{
                       const body=supportReport(appVersion,Number(versionCode||0),await getNativePlaybackHealth());
-                      Alert.alert('Support report preview',body,[{text:'Close',style:'cancel'},{text:'Share',onPress:()=>{void Share.share({message:body,title:'CharmIPTV support report'}).catch(()=>setBackupStatus('Sharing is unavailable on this device.'));}}]);
+                      Alert.alert('Support report preview',body,[{text:'Close',style:'cancel'},{text:'Share',onPress:()=>{void Share.share({message:body,title:'Charming MediaLab support report'}).catch(()=>setBackupStatus('Sharing is unavailable on this device.'));}}]);
                     })().catch(()=>setBackupStatus('Support report could not be prepared.'));}}
                   ]);
                 }} />
@@ -1076,7 +1076,7 @@ function SettingsScreenContent() {
                 <InfoRow label="Account expires" value={formatAccountExpiry(accountUser?.expires_at)} />
                 <InfoRow label="Account time remaining" value={formatTimeRemaining(accountUser?.expires_at)} />
                 <InfoRow label="Simultaneous sessions" value={accountUser?.max_sessions != null ? String(accountUser.max_sessions) : "Managed by account"} />
-                <Text style={styles.help}>Session limits and expired or revoked access are enforced by the CharmIPTV account service.</Text>
+                <Text style={styles.help}>Session limits and expired or revoked access are enforced by the Charming MediaLab account service.</Text>
                 <Action label="Sign Out" icon="log-out-outline" onPress={() => void signOut()} />
                 <View style={styles.divider} />
                 <Text style={styles.dangerTitle}>Permanently cancel account</Text>
@@ -1170,7 +1170,7 @@ function SettingsScreenContent() {
             ) : null}
 
             {section === "about" ? (
-              <SettingsCard title="About CharmIPTV" icon="information-circle-outline">
+              <SettingsCard title="About Charming MediaLab" icon="information-circle-outline">
                 <InfoRow label="Version" value={appVersion} />
                 <InfoRow label="Android build" value={versionCode ? String(versionCode) : "—"} />
                 {appPolicy.update.version_code>Number(versionCode||0)&&appPolicy.update.url ? <>
@@ -1183,10 +1183,10 @@ function SettingsScreenContent() {
                 <Text style={styles.help}>This branch changes presentation and navigation while preserving the optimized playback, guide, cache, and source architecture underneath.</Text>
                 <View style={styles.divider} />
                 <Text style={styles.help}>Questions, announcements, and community help:</Text>
-                <Action label="Open CharmIPTV Telegram" icon="paper-plane-outline" onPress={() => void Linking.openURL(TELEGRAM_COMMUNITY_URL)} />
+                <Action label="Open Charming MediaLab Telegram" icon="paper-plane-outline" onPress={() => void Linking.openURL(TELEGRAM_COMMUNITY_URL)} />
                 <View style={styles.divider} />
                 <Text style={styles.settingLabel}>Account privacy</Text>
-                <Text style={styles.help}>CharmIPTV keeps the username, email, password hash, account timer, and session records needed to operate your account. Canceling or reaching the account expiration time permanently removes that account data. A referring user may retain only an anonymous Invite number, status, and dates—never your username, email, or password.</Text>
+                <Text style={styles.help}>Charming MediaLab keeps the username, email, password hash, account timer, and session records needed to operate your account. Canceling or reaching the account expiration time permanently removes that account data. A referring user may retain only an anonymous Invite number, status, and dates—never your username, email, or password.</Text>
               </SettingsCard>
             ) : null}
           </ScrollView>

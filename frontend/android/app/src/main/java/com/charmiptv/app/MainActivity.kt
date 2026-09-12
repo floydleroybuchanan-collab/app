@@ -448,7 +448,7 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     // Prevent the Onn box / Android TV from dimming or launching a screensaver
-    // while CharmIPTV is active.
+    // while Charming MediaLab is active.
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
     // Set the theme to AppTheme BEFORE onCreate to support

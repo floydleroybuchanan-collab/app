@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Modified for CharmIPTV, 2026-09-11: removed the unused SMB proxy integration.
+// Modified for Charming MediaLab, 2026-09-11: removed the unused SMB proxy integration.
 package com.archos.medialib;
 
 
@@ -58,7 +58,7 @@ public class AvosMediaPlayer implements IMediaPlayer {
     private boolean mScreenOnWhilePlaying;
     private SurfaceHolder mSurfaceHolder;
     private boolean mStayAwake;
-    // CharmIPTV: HTTP playback only; SMB proxy is not bundled.
+    // Charming MediaLab: HTTP playback only; SMB proxy is not bundled.
 
     private native void create(Object weakReference);
 

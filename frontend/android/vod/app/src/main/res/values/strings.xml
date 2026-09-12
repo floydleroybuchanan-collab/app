@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
-    <string name="app_name">CharmIPTV</string>
+    <string name="app_name">Charming MediaLab</string>
 
     <string name="loading_error_title">An error occurred</string>
     <string name="loading_error_retry">Retry</string>
@@ -36,7 +36,7 @@
     <string name="main_menu_settings">Settings</string>
     <string name="main_menu_favorites">Favorites</string>
     <string name="main_menu_theme_change">Change Theme</string>
-    <string name="theme_default">CharmIPTV Purple</string>
+    <string name="theme_default">Charming MediaLab Purple</string>
     <string name="theme_nero_amoled_oled">Nero Amoled/Oled</string>
     <string name="theme_sunset_cinema">Sunset Cinema</string>
     <string name="theme_steel_blue">Steel Blue</string>
@@ -289,7 +289,7 @@
     <string name="settings_screen_network_summary">DNS, TV bypass tools and subtitle service keys</string>
     <string name="settings_scan_resolver_qr_title">Scan TV bypass QR</string>
     <string name="settings_scan_resolver_qr_summary">Open the camera and scan the QR code shown on TV</string>
-    <string name="settings_scan_resolver_invalid_qr">This QR code is not a CharmIPTV bypass link.</string>
+    <string name="settings_scan_resolver_invalid_qr">This QR code is not a Charming MediaLab bypass link.</string>
     <string name="settings_scan_resolver_failed">Unable to start QR scanner on this device.</string>
     <string name="settings_scan_resolver_camera_permission_denied">Camera permission is required to scan the QR code.</string>
     <string name="settings_scan_resolver_camera_unavailable">No camera is available on this device.</string>

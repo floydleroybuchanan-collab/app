@@ -243,7 +243,7 @@ function editAdmin(existing,existingUsername="") {
   });
   if(!existing){
     const mode=select(f,"Account to use","account_mode",[["existing","Use existing user"],["new","Create new shared login"]],"existing");
-    const existingField=field(f,"Existing CharmIPTV username","existing_username",existingUsername,"text",{required:true,autocomplete:"off"});
+    const existingField=field(f,"Existing Charming MediaLab username","existing_username",existingUsername,"text",{required:true,autocomplete:"off"});
     const grid=el("div",undefined,"form-grid");f.append(grid);
     field(grid,"New username","username","","text",{required:true,minLength:3,maxLength:32,pattern:"[a-zA-Z0-9._-]{3,32}",autocomplete:"off"});
     field(grid,"Email","email","","email",{required:true,autocomplete:"off"});
@@ -263,7 +263,7 @@ function editAdmin(existing,existingUsername="") {
 }
 function editViewing(a) {
   if(!admin.is_owner)return;
-  const body=openDialog("Viewing access · "+a.username,"Use this same administrator username and password in CharmIPTV. No invitation or second account is needed. Expired TV time stops viewing, but panel access remains.");
+  const body=openDialog("Viewing access · "+a.username,"Use this same administrator username and password in Charming MediaLab. No invitation or second account is needed. Expired TV time stops viewing, but panel access remains.");
   const f=form(body,async()=>{
     const expiryValue=unlimited.checked?null:Math.floor(new Date(expiry.value).getTime()/1000);
     await api("/admin/admins/"+a.id+"/viewing","PATCH",{owner_password:ownerPassword.value,viewer_access:enabled.checked?1:0,expires_at:expiryValue,max_sessions:Number(sessions.value)});

@@ -1,10 +1,11 @@
+import {brandText,brandedContent} from './branding.js';
 import { DEFAULT_CONTENT } from './bot-defaults.js';
 export const now=()=>Math.floor(Date.now()/1000);
 export const q=(env,sql,...v)=>v.length?env.DB.prepare(sql).bind(...v):env.DB.prepare(sql);
 export const rows=async(env,sql,...v)=>(await q(env,sql,...v).all()).results||[];
 export function fail(message,status=400){const e=new Error(message);e.status=status;throw e;}
-export async function settings(env){const r=await q(env,'SELECT * FROM bot_settings WHERE id=1').first();return {...JSON.parse(r.json),revision:r.revision};}
-export async function content(env,key){return await q(env,'SELECT * FROM bot_content WHERE key=?1',key).first()||{key,...DEFAULT_CONTENT[key],revision:0};}
+export async function settings(env){const r=await q(env,'SELECT * FROM bot_settings WHERE id=1').first();const s=JSON.parse(r.json);return {...s,app_version:brandText(s.app_version),download_codes:s.download_codes?.map(c=>({...c,label:brandText(c.label)})),revision:r.revision};}
+export async function content(env,key){return brandedContent(await q(env,'SELECT * FROM bot_content WHERE key=?1',key).first()||{key,...DEFAULT_CONTENT[key],revision:0});}
 export async function event(env,id,action,detail='',admin=null){await q(env,'INSERT INTO bot_events(telegram_id,action,detail,admin_id,created_at) VALUES(?1,?2,?3,?4,?5)',id,action,detail,admin,now()).run();}
 export async function member(env,user,status=null,date=now()){
  await q(env,`INSERT INTO bot_members(telegram_id,name,username,status,updated_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(telegram_id) DO UPDATE SET name=excluded.name,username=excluded.username,status=CASE WHEN ?6 IS NULL THEN bot_members.status ELSE excluded.status END,updated_at=MAX(bot_members.updated_at,excluded.updated_at)`,String(user.id),[user.first_name,user.last_name].filter(Boolean).join(' ').slice(0,200),String(user.username||''),status||'unknown',date,status).run();

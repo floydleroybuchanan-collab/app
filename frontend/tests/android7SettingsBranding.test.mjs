@@ -92,24 +92,25 @@ test('host and VOD support API 24 without dropping current framework or HTTP sou
   assert.match(read('android/app/src/main/AndroidManifest.xml'), /usesCleartextTraffic="\$\{allowCleartextStreams\}"/);
 });
 
-test('launcher and circular VOD welcome use the exact same supplied full-resolution artwork', () => {
-  const asset = readFileSync(new URL('../assets/images/charm-refined.png', import.meta.url));
-  const native = readFileSync(new URL('../android/vod/app/src/main/res/drawable-nodpi/charm_refined.png', import.meta.url));
+test('launcher uses RGBA circle artwork while VOD has a finite skippable cinematic entrance', () => {
+  const asset = readFileSync(new URL('../assets/medialab/medialab_launcher.png', import.meta.url));
+  const native = readFileSync(new URL('../android/app/src/main/res/drawable-nodpi/medialab_launcher.png', import.meta.url));
   assert.equal(createHash('sha256').update(asset).digest('hex'), createHash('sha256').update(native).digest('hex'));
   assert.equal(asset.readUInt32BE(16), 1024);
   assert.equal(asset.readUInt32BE(20), 1024);
-  assert.equal(asset[25], 6, 'PNG contains RGBA, not a painted JPEG checkerboard');
+  assert.equal(asset[25], 6, 'launcher keeps an actual alpha channel');
   const welcome = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodWelcomeView.kt');
-  assert.match(welcome, /R.drawable.charm_refined/);
-  assert.match(welcome, /BitmapShader/);
-  assert.match(welcome, /canvas.drawCircle\(logoBounds.centerX\(\)/);
-  assert.doesNotMatch(welcome, /canvas.drawBitmap\(logo/);
+  assert.match(welcome, /R.drawable.medialab_vod_entrance/);
+  assert.match(welcome, /duration = 2600L/);
+  assert.match(welcome, /onDetachedFromWindow/);
+  assert.match(welcome, /removeAllUpdateListeners/);
+  assert.match(welcome, /setOnClickListener \{ dismiss\(\) \}/);
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   assert.match(manifest, /android:icon="@drawable\/charm_launcher"/);
   assert.match(manifest, /android:banner="@drawable\/charm_tv_banner"/);
-  for (const name of ['drawable/charm_launcher.xml', 'drawable-v26/charm_launcher.xml', 'drawable/charm_tv_banner.xml'])
-    assert.match(read(`android/app/src/main/res/${name}`), /@drawable\/charm_refined/);
-  const adaptive = read('android/app/src/main/res/drawable-v26/charm_launcher.xml');
-  assert.match(adaptive, /@drawable\/charm_refined_foreground/);
-  assert.doesNotMatch(adaptive, /<inset/, 'prepared foreground must not be padded twice');
+  for (const name of ['drawable/charm_launcher.xml', 'drawable-v26/charm_launcher.xml']) {
+    assert.match(read(`android/app/src/main/res/${name}`), /@drawable\/medialab_launcher/);
+    assert.doesNotMatch(read(`android/app/src/main/res/${name}`), /<inset/, 'do not pad the fitted icon twice');
+  }
+  assert.match(read('android/app/src/main/res/drawable/charm_tv_banner.xml'), /@drawable\/medialab_banner_blend/);
 });

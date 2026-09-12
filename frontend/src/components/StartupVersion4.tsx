@@ -1,3 +1,4 @@
+import { MediaLabBackdrop, MediaLabStartupArt } from "@/src/components/MediaLabBrand";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { subscribeProgress, type EpgProgress } from "@/src/source";
@@ -42,9 +43,9 @@ export function StartupVersion4() {
   if (completedForSession) return null;
   return (
     <View style={styles.overlay} testID="startup-version-4">
-      <View style={styles.mark}><Text style={styles.markText}>C</Text></View>
-      <Text style={styles.title}>Charm IPTV</Text>
-      <Text style={styles.version}>STARTUP · VERSION 4</Text>
+      <MediaLabBackdrop /><MediaLabStartupArt />
+      <Text style={styles.version}>STARTING YOUR TELEVISION EXPERIENCE</Text>
+      <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.round(elapsedMs / STARTUP_SEQUENCE_MS * 100)}%` }]} /></View>
       <View style={styles.dots} accessibilityLabel="Startup milestones">
         {milestones.map((item) => <View key={item.label} style={[styles.dot, item.ready && styles.dotReady]} />)}
       </View>
@@ -65,10 +66,12 @@ const styles = StyleSheet.create({
   markText: { color: "#fff", fontFamily: fonts.bold, fontSize: 30 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 22 },
   version: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, letterSpacing: 1.4 },
-  dots: { width: 240, flexDirection: "row", gap: 8, justifyContent: "center", marginVertical: 5 },
+  dots: { width: 320, flexDirection: "row", gap: 8, justifyContent: "center", marginVertical: 5 },
   dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "#686078", backgroundColor: "transparent" },
   dotReady: { borderColor: tvColors.purpleBright, backgroundColor: tvColors.purpleBright },
-  row: { width: 240, flexDirection: "row", alignItems: "center", gap: 8 },
+  row: { width: 320, flexDirection: "row", alignItems: "center", gap: 8 },
   state: { color: "#686078", fontSize: 10 }, stateReady: { color: tvColors.purpleBright },
-  label: { color: "#c9c9d5", fontFamily: fonts.medium, fontSize: 10 },
+  label: { color: "#c9c9d5", fontFamily: fonts.medium, fontSize: 12 },
+  progressTrack: { width: 320, height: 3, backgroundColor: "#442453", marginVertical: 10 },
+  progressFill: { height: 3, backgroundColor: "#D793FF" },
 });
