@@ -1,8 +1,8 @@
 {
   "app/src/main/java/com/streamflixreborn/streamflix/models/Video.kt": {
     "upstream": "3f69bdc78d32771c5be2ffc3426fbd8ad2de5bb50afcb9987a1cca35f2da9502",
-    "sha256": "c251cc7d241f8139b305bb16064d4d3bc2dd53553c14813af2534894f8f07e85",
-    "reason": "Optional serializable source metadata; preserve existing provider constructor compatibility."
+    "sha256": "23113bce4facc3efc6884e739607513ae424994f5ffcccde952954ea79d419a3",
+    "reason": "Optional source metadata and original host link; preserve provider constructors and serialization."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt": {
     "upstream": "567f17a971b1bef0ff4e9607031c0bcb4f5ddb20348c9a512ad97b61459ccca2",
@@ -16,8 +16,8 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
-    "sha256": "8e7818b6aeba4d8614101a6cfee83742f4a5b71b4d97d45167e7c052be760689",
-    "reason": "Unified direct/debrid discovery and resolution, stale request cancellation, format reporting and bounded fallback."
+    "sha256": "3a1e292f4ed3c4acc0fd5d64a452642269cb5e7e222e0358f59b309bbe6231a4",
+    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsMobileView.kt": {
     "upstream": "b78a9e8624dcf1ae7f0f2298a829b93b97392e6787e904ab18c32a02ceeaed4a",
@@ -28,5 +28,20 @@
     "upstream": "ebbd01156c747f4caf6b8e90e32f12d99eaa16c5aa6ec8e1ad54b5dc359e506c",
     "sha256": "b70ae3d2050921d7b3a695abb587e288adec73a401097c91ece56a45db10c306",
     "reason": "Expose existing server settings page for the source control on TV."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/extractors/Extractor.kt": {
+    "upstream": "4fc0423770f80db4345e892426c8df1de60476bb31e9f72c8bdcc755dad232b7",
+    "sha256": "7937df56f5a5ba2bf71be7f092793c0d6aca619c1295c264a20e2db664b8c3f4",
+    "reason": "User-authorized SendVid/EarnVids/VK routing and bounded fallback for existing hosts; retain registry and original host URL; remove playback URL logging."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/extractors/GenericPackedSourceExtractor.kt": {
+    "upstream": "0859562ab573828497b8703e64d80d59fbd875bb753b178ec927f63be1f19a29",
+    "sha256": "cef994452fbfdaac88c7cdcc39358ea06295c0bcb9ecf7de9438561195781d3c",
+    "reason": "Resolve explicit root-relative or protocol-relative player sources against the final host page."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/providers/TmdbProvider.kt": {
+    "upstream": "b325f2970b9b9832157b64279e3ca9181a1f49f47c991a0c2441ddf29a78ddf2",
+    "sha256": "3f808a6826ed28dd4e1d69c6ca2ce095a402c244fac1980a96833c040b3b92cc",
+    "reason": "Remove original and resolved video URL logging; preserve existing discovery and extraction behavior."
   }
 }

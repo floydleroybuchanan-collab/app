@@ -20,9 +20,11 @@ object DebridSettings {
     fun bind(fragment: PreferenceFragmentCompat) {
         fragment.findPreference<Preference>("vod_playback_licenses")?.setOnPreferenceClickListener {
             val context = fragment.requireContext()
-            val files = context.assets.list("licenses/nova").orEmpty().sorted()
+            val files = listOf("nova", "host-extractors").flatMap { folder ->
+                context.assets.list("licenses/" + folder).orEmpty().map { folder + "/" + it }
+            }.sorted()
             AlertDialog.Builder(context).setTitle("Playback licenses and source").setItems(files.toTypedArray()) { _, index ->
-                val text = context.assets.open("licenses/nova/${files[index]}").bufferedReader().use { it.readText() }
+                val text = context.assets.open("licenses/" + files[index]).bufferedReader().use { it.readText() }
                 AlertDialog.Builder(context).setTitle(files[index]).setMessage(text).setPositiveButton("Close", null).show()
             }.setNegativeButton("Close",null).show()
             true
@@ -45,7 +47,41 @@ object DebridSettings {
         }
         fragment.findPreference<Preference>("vod_rd_account")?.apply {
             summary = if (RealDebrid.connected) RealDebrid.accountLabel else "Connect your own Real-Debrid account"
-            setOnPreferenceClickListener { connect(fragment); true }
+            setOnPreferenceClickListener { chooseConnection(fragment); true }
+        }
+        fragment.findPreference<Preference>("vod_rd_refresh")?.apply {
+            isEnabled = RealDebrid.connected
+            setOnPreferenceClickListener {
+                isEnabled = false
+                fragment.lifecycleScope.launch {
+                    try { withContext(Dispatchers.IO) { RealDebrid.refreshAccount() } }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Toast.makeText(fragment.context, e.message ?: "Account unavailable", Toast.LENGTH_LONG).show() }
+                    finally { if (fragment.isAdded) bind(fragment) }
+                }; true
+            }
+        }
+        fragment.findPreference<Preference>("vod_rd_label")?.apply {
+            isEnabled = RealDebrid.connected
+            summary = RealDebrid.deviceLabel
+            setOnPreferenceClickListener {
+                val input = EditText(fragment.requireContext()).apply { setText(RealDebrid.deviceLabel); maxLines = 1 }
+                AlertDialog.Builder(fragment.requireContext()).setTitle("Connection label")
+                    .setMessage("This label is saved in CharmIPTV. Manage the website connection name on Real-Debrid.")
+                    .setView(input).setPositiveButton("Save") { _, _ ->
+                        fragment.lifecycleScope.launch {
+                            try { withContext(Dispatchers.IO) { RealDebrid.setLabel(input.text.toString()) } }
+                            catch (e: CancellationException) { throw e }
+                            catch (_: Exception) { Toast.makeText(fragment.context, "Could not save the connection label.", Toast.LENGTH_LONG).show() }
+                            if (fragment.isAdded) bind(fragment)
+                        }
+                    }.setNegativeButton("Cancel", null).show(); true
+            }
+        }
+        fragment.findPreference<Preference>("vod_rd_manage")?.setOnPreferenceClickListener {
+            runCatching { fragment.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://real-debrid.com/devices"))) }
+                .onFailure { Toast.makeText(fragment.context, "Open real-debrid.com/devices on your phone.", Toast.LENGTH_LONG).show() }
+            true
         }
         fragment.findPreference<Preference>("vod_rd_disconnect")?.apply {
             isEnabled = RealDebrid.connected
@@ -56,6 +92,12 @@ object DebridSettings {
                 }; true
             }
         }
+    }
+    private fun chooseConnection(fragment: PreferenceFragmentCompat) {
+        AlertDialog.Builder(fragment.requireContext()).setTitle("Connect Real-Debrid")
+            .setItems(arrayOf("Sign in on this device", "Link with a code", "Advanced: enter API token")) { _, which ->
+                if (which == 2) connect(fragment) else DebridLinkDialog.show(fragment, which == 0)
+            }.setNegativeButton("Cancel", null).show()
     }
     private fun connect(fragment: PreferenceFragmentCompat) {
         val context = fragment.requireContext()
@@ -69,6 +111,8 @@ object DebridSettings {
             .setMessage("Open your Real-Debrid account, copy your personal API token and paste it here. It stays encrypted on this device.")
             .setView(input).setPositiveButton("Connect", null)
             .setNeutralButton("Get my token", null).setNegativeButton("Cancel", null).create()
+        var connectJob: kotlinx.coroutines.Job? = null
+        dialog.setOnDismissListener { connectJob?.cancel(); input.text.clear() }
         dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         dialog.setOnShowListener {
             dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -80,7 +124,7 @@ object DebridSettings {
                 val token = input.text.toString().trim()
                 input.text.clear()
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                fragment.lifecycleScope.launch {
+                connectJob = fragment.lifecycleScope.launch {
                     try {
                         withContext(Dispatchers.IO) { RealDebrid.connectToken(token) }
                         if (fragment.isAdded) { bind(fragment); dialog.dismiss() }

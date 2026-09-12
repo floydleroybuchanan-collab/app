@@ -1,4 +1,4 @@
-name: Build CharmIPTV RC.7 Sideload APK
+name: Build CharmIPTV RC.8 Sideload APK
 
 on:
   workflow_dispatch:
@@ -28,12 +28,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: charmiptv-rc7-${{ github.ref }}
+  group: charmiptv-rc8-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build CharmIPTV RC.7 universal sideload APK
+    name: Build CharmIPTV RC.8 universal sideload APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -41,6 +41,7 @@ jobs:
         working-directory: frontend
     env:
       CI: "1"
+      REAL_DEBRID_CLIENT_ID: ${{ vars.REAL_DEBRID_CLIENT_ID }}
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       SUBDL_API_KEY: ${{ secrets.SUBDL_API_KEY }}
       RABBITSTREAM_SOURCE_API: ${{ secrets.RABBITSTREAM_SOURCE_API }}
@@ -194,8 +195,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/CharmIPTV.RC-7-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/CharmIPTV.RC-7-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/CharmIPTV.RC-8-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/CharmIPTV.RC-8-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -207,7 +208,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: CharmIPTV.RC-7-Sideload-Encrypted-${{ github.run_number }}
+          name: CharmIPTV.RC-8-Sideload-Encrypted-${{ github.run_number }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json

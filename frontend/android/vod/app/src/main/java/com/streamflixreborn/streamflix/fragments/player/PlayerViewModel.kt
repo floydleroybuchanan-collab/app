@@ -43,6 +43,7 @@ class PlayerViewModel(
     private var resolveJob: Job? = null
     private var serversJob: Job? = null
     private var debridJob: Job? = null
+    private var hostJob: Job? = null
     private var debridAccountRevision = -1L
     private var subtitleJob: Job? = null
     private var generation = 0
@@ -72,9 +73,10 @@ class PlayerViewModel(
         val accountRevision = RealDebrid.sessionRevision
         if (accountRevision != debridAccountRevision || !RealDebrid.connected || !VodPreferences.debridSearch) {
             debridJob?.cancel()
+            hostJob?.cancel()
             debridJob = null
             debridAccountRevision = accountRevision
-            _sources.update { rows -> rows.filter { it.details?.kind != SourceDetails.Kind.REAL_DEBRID } }
+            _sources.update { rows -> rows.filter { it.details?.isDebrid != true } }
             sourceStatus.value = ""
         }
         if (!RealDebrid.connected || !VodPreferences.debridSearch || debridJob != null) return
@@ -83,10 +85,14 @@ class PlayerViewModel(
         debridJob = viewModelScope.launch(Dispatchers.IO) {
             sourceStatus.value = "Searching Real-Debrid sources…"
             try {
+                val hosts = try { DebridHosts.sources(_sources.value) } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { emptyList() }
+                if (epoch == generation && accountRevision == RealDebrid.sessionRevision)
+                    _sources.update { rows -> (rows + hosts).distinctBy { it.id } }
                 val added = SourceDiscovery.debrid(type)
                 if (epoch == generation && accountRevision == RealDebrid.sessionRevision) {
                     _sources.update { rows -> (rows + added.sortedBy { DeviceCompatibility.rank(it.details) }).distinctBy { it.id } }
-                    sourceStatus.value = if (added.isEmpty()) "No matching torrent sources" else ""
+                    sourceStatus.value = if (added.isEmpty() && hosts.isEmpty()) "No matching Real-Debrid sources" else ""
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (epoch == generation && accountRevision == RealDebrid.sessionRevision) { sourceStatus.value = e.message ?: "Search unavailable"; debridJob = null } }
@@ -98,7 +104,7 @@ class PlayerViewModel(
     fun fallback(failed: Video.Server?): Boolean {
         failed?.let { attempted.add(it.id) }
         val next = _sources.value.firstOrNull {
-            it.id !in attempted && it.details?.kind != SourceDetails.Kind.REAL_DEBRID
+            it.id !in attempted && it.details?.isDebrid != true
         } ?: return false
         if (attempted.size >= 5) return false
         getVideo(next)
@@ -171,6 +177,7 @@ class PlayerViewModel(
         generation++
         resolveJob?.cancel()
         serversJob?.cancel()
+        hostJob?.cancel()
         debridJob?.cancel()
         debridJob = null
         attempted.clear()
@@ -200,8 +207,11 @@ class PlayerViewModel(
         Log.d("PlayerViewModel", "Inizio estrazione video dal server: ${server.name}")
         _state.emit(State.LoadingVideo(server))
         try {
-            val video = if (server.details?.kind == SourceDetails.Kind.REAL_DEBRID)
-                RealDebrid.resolve(server, contentType) else UserPreferences.currentProvider!!.getVideo(server)
+            val video = when (server.details?.kind) {
+                SourceDetails.Kind.REAL_DEBRID -> RealDebrid.resolve(server, contentType)
+                SourceDetails.Kind.REAL_DEBRID_HOST -> RealDebrid.resolveHost(server)
+                else -> UserPreferences.currentProvider!!.getVideo(server)
+            }
             coroutineContext.ensureActive()
             if (video.source.isEmpty()) throw Exception("No source found")
 
@@ -222,6 +232,22 @@ class PlayerViewModel(
 
             Log.d("PlayerViewModel", "Estrazione video completata con successo")
             _state.emit(State.SuccessLoadingVideo(video, server))
+            if (server.details?.isDebrid != true && RealDebrid.connected && VodPreferences.debridSearch) {
+                val original = video.originalHostUrl
+                val epoch = generation
+                val account = RealDebrid.sessionRevision
+                if (original != null) {
+                    hostJob?.cancel()
+                    hostJob = viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            val added = DebridHosts.sources(listOf(server.copy(src = original)))
+                            if (epoch == generation && account == RealDebrid.sessionRevision && RealDebrid.connected && VodPreferences.debridSearch)
+                                _sources.update { rows -> (rows + added).distinctBy { it.id } }
+                        } catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { /* Host suggestions must never interrupt playback. */ }
+                    }
+                }
+            }
         } catch (e: CancellationException) { throw e
         } catch (e: Exception) {
             // Never log resolved URLs or credentials.

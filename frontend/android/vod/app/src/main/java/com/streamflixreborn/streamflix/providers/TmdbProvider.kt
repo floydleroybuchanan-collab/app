@@ -876,7 +876,6 @@ class TmdbProvider(override val language: String) : Provider {
 
     override suspend fun getVideo(server: Video.Server): Video {
         val url = server.src.ifEmpty { server.id }
-        Log.i("StreamFlixES", "[SERVER] -> Using: ${server.name} (URL: $url)")
         
         val video = when {
             server.video != null -> server.video!!
@@ -908,7 +907,6 @@ class TmdbProvider(override val language: String) : Provider {
             }
         }
         
-        Log.i("StreamFlixES", "[VIDEO] -> Final source: ${video.source}")
         return video
     }
 

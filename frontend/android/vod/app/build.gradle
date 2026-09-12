@@ -20,10 +20,11 @@ android {
         minSdk 24
         consumerProguardFiles 'nova-consumer-rules.pro'
         buildConfigField 'String', 'APPLICATION_ID', '"com.charmiptv.app.purple.next.vodtest1"'
-        buildConfigField 'int', 'VERSION_CODE', '14'
-        buildConfigField 'String', 'VERSION_NAME', '"2.1.0-rc.7"'
+        buildConfigField 'int', 'VERSION_CODE', '15'
+        buildConfigField 'String', 'VERSION_NAME', '"2.1.0-rc.8"'
         buildConfigField 'String', 'APP_LAYOUT', '"tv"'
         buildConfigField 'boolean', 'CHARM_VOD_EMBEDDED', 'true'
+        buildConfigField 'String', 'REAL_DEBRID_CLIENT_ID', quote(setting('REAL_DEBRID_CLIENT_ID') ?: 'X245A4XAIBGVM')
         ['TMDB_API_KEY', 'SUBDL_API_KEY', 'RABBITSTREAM_SOURCE_API'].each { key ->
             buildConfigField 'String', key, quote(setting(key))
         }
@@ -120,6 +121,7 @@ dependencies {
     implementation "io.github.jan-tennert.supabase:realtime-kt"
     implementation "io.ktor:ktor-client-okhttp:3.2.2"
     testImplementation "junit:junit:4.13.2"
+    testImplementation "org.json:json:20230227"
     implementation 'org.conscrypt:conscrypt-android:2.5.2'
     implementation "androidx.browser:browser:1.7.0"
     implementation "org.nanohttpd:nanohttpd:2.3.1"

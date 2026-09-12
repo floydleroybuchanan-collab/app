@@ -63,7 +63,7 @@ abstract class GenericPackedSourceExtractor : Extractor() {
         val playbackBaseUrl = URL(currentUrl).let { "${it.protocol}://${it.host}" }
 
         return Video(
-            source = videoSource,
+            source = URL(URL(currentUrl), videoSource).toString(),
             headers = mapOf(
                 "Referer" to "$playbackBaseUrl/",
                 "Origin" to playbackBaseUrl,
@@ -86,7 +86,7 @@ abstract class GenericPackedSourceExtractor : Extractor() {
         return sourcePatterns
             .asSequence()
             .mapNotNull { it.find(decoded)?.groupValues?.getOrNull(1) }
-            .firstOrNull { it.startsWith("http") }
+            .firstOrNull { it.startsWith("http") || it.startsWith("/") }
     }
 
     private fun normalize(text: String): String {
@@ -134,8 +134,8 @@ abstract class GenericPackedSourceExtractor : Extractor() {
         )
 
         private val sourcePatterns = listOf(
-            Regex("""(?i)(?:file|src)\s*[:=]\s*["'](https?://[^"']+\.(?:m3u8|mp4)(?:\?[^"']*)?)["']"""),
-            Regex("""(?i)sources?\s*[:=]\s*\[\s*["'](https?://[^"']+\.(?:m3u8|mp4)(?:\?[^"']*)?)["']"""),
+            Regex("""(?i)(?:file|src)\s*[:=]\s*["']((?:https?://|/)[^"']+\.(?:m3u8|mp4)(?:\?[^"']*)?)["']"""),
+            Regex("""(?i)sources?\s*[:=]\s*\[\s*["']((?:https?://|/)[^"']+\.(?:m3u8|mp4)(?:\?[^"']*)?)["']"""),
             Regex("""(?i)["'](https?://[^"']+\.(?:m3u8|mp4)(?:\?[^"']*)?)["']""")
         )
     }

@@ -122,6 +122,7 @@ abstract class Extractor {
         )
 
         suspend fun extract(link: String, server: Video.Server? = null): Video {
+            ReviewedHostExtractor.added(link)?.let { return it.extract(link) }
             var finalLink = link
             
             // 1. RISOLUZIONE BRIDGE UNIVERSALE (StreamHG/Sync/Cuevana)
@@ -147,13 +148,14 @@ abstract class Extractor {
                         .ifEmpty { responseBody.substringAfter("src=\"", "").substringBefore("\"") }
                     
                     if (redirectUrl.isNotEmpty() && redirectUrl.startsWith("http")) {
-                        Log.d("Extractor", "Universal Bridge resolved: $link -> $redirectUrl")
                         finalLink = redirectUrl
                     }
                 } catch (e: Exception) {
                     Log.e("Extractor", "Universal Bridge error: ${e.message}")
                 }
             }
+
+            if (finalLink != link) ReviewedHostExtractor.added(finalLink)?.let { return it.extract(finalLink) }
 
             val urlRegex = Regex("^(https?://)?(www\\.)?")
             val compareUrl = finalLink.lowercase().replace(urlRegex, "")
@@ -223,10 +225,10 @@ abstract class Extractor {
             }
 
             if (foundExtractor != null) {
-                Log.i("StreamFlixES", "[EXTRACTOR] -> Starting: ${foundExtractor.name} (URL: $finalLink)")
-                val video = foundExtractor.extract(finalLink)
-                Log.i("StreamFlixES", "[VIDEO] -> Extracted: ${video.source}")
-                return video
+                val video = try { foundExtractor.extract(finalLink) }
+                    catch (e: Exception) { ReviewedHostExtractor.fallback(finalLink, e) }
+                Log.i("StreamFlixES", "[VIDEO] -> Extracted successfully")
+                return video.copy(originalHostUrl = video.originalHostUrl ?: finalLink)
             }
 
             throw Exception("No extractors found for URL: $finalLink")

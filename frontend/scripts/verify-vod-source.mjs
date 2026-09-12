@@ -9,7 +9,8 @@ const reviewed=JSON.parse(readFileSync(resolve(vod,'reviewed-player-sha256.json'
 const prefix='app/src/main/java/com/streamflixreborn/streamflix/';
 const allowed=new Set(['models/Video.kt','fragments/player/PlayerMobileFragment.kt',
   'fragments/player/PlayerTvFragment.kt','fragments/player/PlayerViewModel.kt',
-  'fragments/player/settings/PlayerSettingsMobileView.kt','fragments/player/settings/PlayerSettingsTvView.kt'].map(name=>prefix+name));
+  'fragments/player/settings/PlayerSettingsMobileView.kt','fragments/player/settings/PlayerSettingsTvView.kt',
+  'extractors/Extractor.kt','extractors/GenericPackedSourceExtractor.kt','providers/TmdbProvider.kt'].map(name=>prefix+name));
 for (const [name,entry] of Object.entries(reviewed)) {
   if (!allowed.has(name) || entry.upstream !== hashes[name] || !/^[a-f0-9]{64}$/.test(entry.sha256) || !entry.reason)
     throw new Error(`Invalid reviewed VOD change: ${name}`);
@@ -20,4 +21,4 @@ for(const [name,expected] of Object.entries(hashes)) {
   if(actual!==(reviewed[name]?.sha256 ?? expected)) failures.push(name);
 }
 if(failures.length) throw new Error(`Upstream provider/extractor/player/data implementation changed:\n${failures.join('\n')}`);
-console.log(`Verified ${Object.keys(hashes).length} VOD files: unchanged upstream ff970d3 code plus ${Object.keys(reviewed).length} exact reviewed player changes. No provider/extractor exceptions are allowed.`);
+console.log(`Verified ${Object.keys(hashes).length} VOD files: unchanged upstream ff970d3 code plus ${Object.keys(reviewed).length} exact reviewed changes. Provider/extractor exceptions are limited to the explicitly authorized RC8 adapters and URL-log removal.`);
