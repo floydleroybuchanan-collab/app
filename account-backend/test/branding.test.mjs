@@ -27,6 +27,8 @@ test('pre-upgrade queued announcements are rebranded before delivery and splitti
   await q(f.env,'UPDATE bot_settings SET json=?1',JSON.stringify({enabled:true,group_id:'-100123456789',reminder_enabled:false})).run();
   const old=('CharmIPTV news. ').repeat(350)+' https://charmiptv.example/app @CharmIPTVAssistantBot';
   await q(f.env,"INSERT INTO bot_jobs(kind,chat_id,body,due_at) VALUES('broadcast',?1,?2,?3)",'-100123456789',old,now()-1).run();
+  const dashboard=await f.request('/admin/bot/dashboard',{token:f.ownerToken});
+  assert.equal(dashboard.body.jobs[0].body,brandText(old));
   await botScheduled(f.env);
   assert.ok(sent.length>1);
   assert.ok(sent.every(message=>message.text.length<=4000));

@@ -1,4 +1,4 @@
-# CharmIPTV accounts, referrals and delegated administration
+# Charming MediaLab accounts, referrals and delegated administration
 
 ## Owner administration update
 

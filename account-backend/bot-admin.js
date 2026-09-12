@@ -56,7 +56,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
    ]);if(!r[1].meta.changes)fail('Content changed. Refresh.',409);await event(env,null,'content_updated',key,id);return json({success:true});
   }
  }
- if(path==='/dashboard'&&method==='GET')return json({success:true,members:await q(env,'SELECT COUNT(*) n FROM bot_members').first(),tickets:await q(env,"SELECT COUNT(*) n FROM bot_support WHERE status<>'closed'").first(),analytics:await rows(env,'SELECT action,COUNT(*) n FROM bot_events GROUP BY action ORDER BY n DESC'),jobs:await rows(env,'SELECT * FROM bot_jobs ORDER BY id DESC LIMIT 30')});
+ if(path==='/dashboard'&&method==='GET')return json({success:true,members:await q(env,'SELECT COUNT(*) n FROM bot_members').first(),tickets:await q(env,"SELECT COUNT(*) n FROM bot_support WHERE status<>'closed'").first(),analytics:await rows(env,'SELECT action,COUNT(*) n FROM bot_events GROUP BY action ORDER BY n DESC'),jobs:(await rows(env,'SELECT * FROM bot_jobs ORDER BY id DESC LIMIT 30')).map(brandedContent)});
  if(path==='/members'&&method==='GET'){
   const page=Math.max(1,Number(url.searchParams.get('page'))||1),search='%'+String(url.searchParams.get('search')||'').slice(0,100)+'%';
   const data=await rows(env,`SELECT m.*,u.username account_username,u.status account_status,u.expires_at,u.max_sessions,i.invite_code,i.status invite_status FROM bot_members m LEFT JOIN users u ON u.id=m.account_id LEFT JOIN invites i ON i.id=m.invite_id WHERE m.telegram_id LIKE ?1 OR m.name LIKE ?1 OR m.username LIKE ?1 OR u.username LIKE ?1 OR i.invite_code LIKE ?1 ORDER BY m.updated_at DESC LIMIT 50 OFFSET ?2`,search,(page-1)*50);
