@@ -1,8 +1,10 @@
+import {brandText,brandedTelegramBody} from './branding.js';
 import {now,q,rows,settings,content,event,member,assignToken,fail} from './bot-store.js';
 import {handleGroupJoinRequest,recordGroupAdmission,maintainGroupInvites,createGroupInvite,revokeGroupInvite} from './bot-group-invites.js';
 export const isMember=m=>['member','administrator','creator'].includes(m.status)||(m.status==='restricted'&&m.is_member===true);
 export async function telegram(env,method,body){
  if(!env.TELEGRAM_BOT_TOKEN)fail('Save TELEGRAM_BOT_TOKEN in Cloudflare first.',503);
+ body=brandedTelegramBody(body);
  // Request-local routing: personal replies never fall back to public group messages.
  const target=env.BOT_GROUP_REPLY;
  if(target&&['sendMessage','sendRichMessage'].includes(method)&&String(body.chat_id)===target.user_id){
@@ -18,7 +20,7 @@ const activate=s=>({inline_keyboard:[[{text:'Activate Mr. Charm',url:'https://t.
 const groupHelp=()=>keyboard([['💜 Mr. Charm Help','help']]);
 export function splitText(text,max=3500){const out=[];while(text.length>max){let n=text.lastIndexOf('\n',max);if(n<max/2)n=max;out.push(text.slice(0,n));text=text.slice(n).replace(/^\n/,'');}if(text)out.push(text);return out;}
 const plain=text=>text.replace(/^#{1,6} /gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
-async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(text),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
+async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(brandText(text)),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
  // Group replies are personal when Telegram supports them. If Telegram falls
  // back to a visible group message, remove it after ten minutes so help,
  // rules and guides do not permanently clutter the discussion.
