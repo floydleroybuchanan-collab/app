@@ -74,6 +74,29 @@ class NativeGuideView(context: Context) : View(context) {
   private val settleSelectionRunnable = Runnable {
     if (enabled && !disposed && rows.isNotEmpty()) emitSelection(true)
   }
+  private var focusEntryPending = false
+  private var focusEntryAttempts = 0
+  private val focusEntryRunnable = object : Runnable {
+    override fun run() {
+      if (!focusEntryPending || !enabled || disposed) return
+      if (isAttachedToWindow && isShown && hasWindowFocus() && rows.isNotEmpty() &&
+          TvRemoteModule.remoteContext == "guide" && TvRemoteModule.guideNavigationActive && requestFocus()) {
+        focusEntryPending = false
+        return
+      }
+      // Route attachment and the remote owner can arrive after the active prop.
+      // Bound retries; a menu/preview owner must never lose focus to this view.
+      focusEntryAttempts += 1
+      if (focusEntryAttempts < 6) postDelayed(this, 80L)
+    }
+  }
+
+  private fun requestEntryFocus() {
+    removeCallbacks(focusEntryRunnable)
+    focusEntryPending = true
+    focusEntryAttempts = 0
+    post(focusEntryRunnable)
+  }
 
   private val unregisterMemoryListener = CharmMemoryCoordinator.register { level, _ ->
     if (level != CharmTrimLevel.CRITICAL) return@register
@@ -164,7 +187,7 @@ class NativeGuideView(context: Context) : View(context) {
       // setActive cannot focus an empty canvas and Android otherwise falls back
       // to the first React Pressable (Guide Play). Claim once when the Guide
       // becomes focusable; later EPG/channel updates never steal focus.
-      if (wasEmpty) requestFocus()
+      if (wasEmpty) requestEntryFocus()
       emitSelection(true)
     }
   }
@@ -206,6 +229,8 @@ class NativeGuideView(context: Context) : View(context) {
     val wasEnabled = enabled
     enabled = value
     if (!value) {
+      focusEntryPending = false
+      removeCallbacks(focusEntryRunnable)
       stopLiveClock()
       removeCallbacks(settleSelectionRunnable)
       navigationKeyDown = false
@@ -220,7 +245,7 @@ class NativeGuideView(context: Context) : View(context) {
     // Only a real inactive -> active ownership transition may take Android focus
     // back into the Guide; otherwise keep the user's current focused surface.
     if (!wasEnabled && rows.isNotEmpty()) {
-      requestFocus()
+      requestEntryFocus()
       emitSelection(true)
     }
   }
@@ -376,6 +401,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   override fun onDetachedFromWindow() {
     stopLiveClock()
+    removeCallbacks(focusEntryRunnable)
     removeCallbacks(settleSelectionRunnable)
     navigationKeyDown = false
     selectKeyDown = false
@@ -388,14 +414,22 @@ class NativeGuideView(context: Context) : View(context) {
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    if (focusEntryPending && enabled) requestEntryFocus()
     scheduleLiveClock()
     applyPendingRestoreChannel()
     loadPrograms()
   }
 
+  override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+    super.onWindowFocusChanged(hasWindowFocus)
+    if (hasWindowFocus && focusEntryPending && enabled) requestEntryFocus()
+  }
+
   fun dispose() {
     if (disposed) return
     stopLiveClock()
+    focusEntryPending = false
+    removeCallbacks(focusEntryRunnable)
     removeCallbacks(settleSelectionRunnable)
     navigationKeyDown = false
     moveVelocity = 0
@@ -688,5 +722,3 @@ class NativeGuideView(context: Context) : View(context) {
     private const val LOW_RAM_PAINT_CACHE_CHANNELS = 64
   }
 }
-
-

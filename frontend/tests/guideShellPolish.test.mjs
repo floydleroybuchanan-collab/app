@@ -460,7 +460,28 @@ test("native Guide only takes focus on an inactive-to-active ownership transitio
   const setActive = native.match(/fun setActive\(value: Boolean\) \{[\s\S]*?\n  \}/)?.[0] || "";
   assert.match(setActive, /val wasEnabled = enabled/);
   assert.match(setActive, /if \(!wasEnabled && rows\.isNotEmpty\(\)\) \{/);
-  assert.ok(setActive.indexOf('if (!wasEnabled && rows.isNotEmpty())') < setActive.indexOf('requestFocus()'));
+  assert.ok(setActive.indexOf('if (!wasEnabled && rows.isNotEmpty())') < setActive.indexOf('requestEntryFocus()'));
+});
+
+test("fullscreen guide return clears retained focus blockers and drawer focus restores remote ownership", async () => {
+  const [guide, shell, native] = await Promise.all([
+    source("app/(tabs)/guide.tsx"), source("src/components/PurpleTvShell.tsx"),
+    source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"),
+  ]);
+  const jump = guide.slice(guide.indexOf('const jump = consumeGuideJump();'));
+  const restore = jump.indexOf('resetGuideSelection(jump.channelId)');
+  for (const release of ['closeDrawer({ force: true })', 'setGroupDrawerOpen(false)', 'setPreviewActionsFocused(false)', 'setQuickActionsOpen(false)']) {
+    assert.ok(jump.indexOf(release) > 0 && jump.indexOf(release) < restore, release);
+  }
+  const drawer = shell.slice(shell.indexOf('<FocusGuide style={styles.sidebar}'), shell.indexOf('<SmallBrand />'));
+  assert.match(drawer, /if \(!isFocused \|\| !drawerOpen\) return/);
+  assert.match(drawer, /setRemoteContext\("main_drawer"\)/);
+  const retry = native.slice(native.indexOf('private val focusEntryRunnable'), native.indexOf('private fun requestEntryFocus'));
+  for (const guard of ['!focusEntryPending', '!enabled', 'disposed', 'isAttachedToWindow', 'isShown', 'hasWindowFocus()', 'remoteContext == "guide"', 'guideNavigationActive', 'focusEntryAttempts < 6']) assert.ok(retry.includes(guard), guard);
+  for (const method of ['setActive', 'onDetachedFromWindow', 'dispose']) {
+    const body = native.slice(native.indexOf(`fun ${method}(`));
+    assert.ok(body.slice(0, body.indexOf('\n  }')).includes('removeCallbacks(focusEntryRunnable)'), method);
+  }
 });
 
 test("Guide preview actions have a deterministic D-pad Down return to the native Guide", async () => {

@@ -610,6 +610,12 @@ export function PurpleTvShell({
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
         <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={() => {
+          if (!isFocused || !drawerOpen) return;
+          // Android can restore a drawer child after Player changes the remote
+          // owner. Reconcile real focus, otherwise Right is never sent to JS.
+          iconRailFocusOwnerRef.current = null;
+          setRemoteContext("main_drawer");
+          if (active === "/guide") setGuideNavigationActive(false);
           drawerFocusConfirmedRef.current = true;
           setDrawerAutoFocus(false);
           setDrawerPreferredRoute(null);

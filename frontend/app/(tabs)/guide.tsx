@@ -974,6 +974,13 @@ function PurpleGuideScreenContent() {
     useCallback(() => {
       const jump = consumeGuideJump();
       if (!jump) return;
+      // A fullscreen/search return targets a channel, not the retained drawer.
+      // Clear every stale focus blocker before NativeGuideCanvas becomes active.
+      closeDrawer({ force: true });
+      setGroupDrawerOpen(false);
+      setPreviewActionsFocused(false);
+      setQuickActionsOpen(false);
+      consumeGuideGroupsOnEntry();
       selectPlaylist(playlistOwner({ id: jump.channelId }));
       startPreferenceAppliedRef.current = true;
       const nextGroup = jump.group || guideSessionGroup || "All";
@@ -996,7 +1003,7 @@ function PurpleGuideScreenContent() {
       if (ch) {
         schedulePreview(jump.channelId, previewDelay + surfSettleExtraMs, !!ch.url);
       }
-    }, [channelById, hasPin, isGroupLocked, openPinPrompt, previewDelay, quiesceGuideForTransition, schedulePreview, surfSettleExtraMs]),
+    }, [channelById, closeDrawer, hasPin, isGroupLocked, openPinPrompt, previewDelay, quiesceGuideForTransition, schedulePreview, surfSettleExtraMs]),
   );
 
   const onPreviewStatus = useCallback((status: StreamStatus) => {

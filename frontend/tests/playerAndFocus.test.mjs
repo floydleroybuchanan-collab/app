@@ -110,7 +110,7 @@ test("Guide action strip walks all six actions before returning to the native Gu
 test("active native Guide claims initial focus when its first channel rows arrive", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(view, /val wasEmpty = rows\.isEmpty\(\)/);
-  assert.match(view, /if \(wasEmpty\) requestFocus\(\)/);
+  assert.match(view, /if \(wasEmpty\) requestEntryFocus\(\)/);
 });
 
 test("main drawer cleanup cannot steal the Guide Groups drawer owner", async () => {
