@@ -267,9 +267,9 @@ export default function MultiviewScreen() {
   // A pending destination is not the selected playback screen. Cancel keeps
   // the original pane's menu/actions; choose() selects the destination on success.
   const openPicker = (slot: number) => { setMenu(false); setQuery(""); setPicker(slot); };
-  const action = (label: string, run: () => void, disabled = false, pickerEntry = false) => {
+  const action = (label: string, run: () => void, disabled = false, pickerEntry = false, controlKey = label) => {
     const menuEntry = label === "Change channel" || label === "Add channel";
-    return <Pressable key={pickerEntry ? "picker-entry" : label} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
+    return <Pressable key={pickerEntry ? "picker-entry" : controlKey} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
       focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && (pickerEntry || (picker == null && menuEntry))}
       disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
   };
@@ -315,9 +315,9 @@ export default function MultiviewScreen() {
     {picker != null && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
       <Text style={styles.title}>Channel for screen {picker+1}</Text>
       <TextInput accessibilityLabel="Search channels" value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
-      <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All"))}</View>
-      {action(`Playlist: ${sources.find(([id])=>id===sourceFilter)?.[1] || "All Playlists"}`, () => {const ids=["all",...sources.map(([id])=>id)];setSourceFilter(ids[(ids.indexOf(sourceFilter)+1)%ids.length]);setGroupFilter("all");})}
-      {action(`Group: ${groupFilter === "all" ? "All groups" : groupFilter}`, () => {const ids=["all",...groups];setGroupFilter(ids[(ids.indexOf(groupFilter)+1)%ids.length]);})}
+      <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All",name))}</View>
+      {action(`Playlist: ${sources.find(([id])=>id===sourceFilter)?.[1] || "All Playlists"}`, () => {const ids=["all",...sources.map(([id])=>id)];setSourceFilter(ids[(ids.indexOf(sourceFilter)+1)%ids.length]);setGroupFilter("all");},false,false,"playlist-filter")}
+      {action(`Group: ${groupFilter === "all" ? "All groups" : groupFilter}`, () => {const ids=["all",...groups];setGroupFilter(ids[(ids.indexOf(groupFilter)+1)%ids.length]);},false,false,"group-filter")}
       <Text style={styles.notice}>{results.length} channels · Each screen uses a provider connection</Text>
       <FlatList data={results} keyExtractor={channel => channel.id} keyboardShouldPersistTaps="handled"
         initialNumToRender={10} maxToRenderPerBatch={10} windowSize={5}

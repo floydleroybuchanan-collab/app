@@ -25,4 +25,8 @@ test('picker, menu and pane share one bounded focus handoff with late ref resolu
   assert.match(screen, /onFocusCapture=\{confirmOverlayFocus\}/);
   assert.match(screen, /onFocus=\{\(\) => \{ if \(overlay\) return/);
   assert.match(screen, /searchFocused && styles\.focus/);
+  assert.match(screen, /key=\{pickerEntry \? "picker-entry" : controlKey\}/);
+  assert.match(screen, /false,name === "All",name/);
+  assert.match(screen, /false,false,"playlist-filter"/);
+  assert.match(screen, /false,false,"group-filter"/);
 });
