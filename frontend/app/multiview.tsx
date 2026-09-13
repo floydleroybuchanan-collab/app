@@ -19,7 +19,7 @@ import { useAudioTrackPreferences } from "@/src/core/audioTrackPreferences";
 import { useSubtitlePreferences } from "@/src/core/subtitlePreferences";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
-import { requestNativeFocus } from "@/src/utils/tvFocus";
+import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { getAppPolicy } from "@/src/core/appPolicy";
 
@@ -55,6 +55,7 @@ export default function MultiviewScreen() {
   const audibleRef = useRef(-1);
   const [picker, setPicker] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [notice, setNotice] = useState("");
   const [states, setStates] = useState<Record<number, MultiviewEvent>>({});
   const active = useRef(false);
@@ -62,7 +63,9 @@ export default function MultiviewScreen() {
   const sessionGeneration = useRef(0);
   const recordedHistory = useRef(new Map<number,number>());
   const paneNodes = useRef<any[]>([]);
-  const priorPicker = useRef<number | null>(null);
+  const focusConfirmed = useRef(false);
+  const firstPicker = useRef<any>(null);
+  const [preferOverlayFocus, setPreferOverlayFocus] = useState(false);
   const writePanes = useCallback((next: MultiviewPane[]) => { paneRef.current = next; setPanes(next); }, []);
   const choose = useCallback(async (slot: number, supplied: Channel, refresh = false) => {
     if (!active.current || !multiview) return;
@@ -197,10 +200,6 @@ export default function MultiviewScreen() {
     if(nextAudio>=0)multiview?.listen(token,nextAudio);
   },[appPolicy,ready,token,writePanes]);
   useEffect(() => {
-    if (picker == null && priorPicker.current != null) requestAnimationFrame(() => requestNativeFocus(paneNodes.current[selected]));
-    priorPicker.current=picker;
-  }, [picker,selected]);
-  useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (picker != null) { setPicker(null); setQuery(""); setMenu(true); }
       else if (menu) setMenu(false);
@@ -228,10 +227,16 @@ export default function MultiviewScreen() {
   const overlay = menu || picker != null;
   const firstMenu = useRef<any>(null);
   useEffect(() => {
-    if (picker != null) return;
-    const frame = requestAnimationFrame(() => requestNativeFocus(menu && picker == null ? firstMenu.current : paneNodes.current[selected]));
-    return () => cancelAnimationFrame(frame);
-  }, [menu, picker, enlarged, selected]);
+    focusConfirmed.current = false;
+    setPreferOverlayFocus(menu || picker != null);
+    // Only the visible owner may request focus. Resolve refs at retry time:
+    // the new picker/menu may not have mounted on the first frame.
+    return requestNativeFocusWithRetry(
+      () => picker != null ? firstPicker.current : menu ? firstMenu.current : paneNodes.current[selected],
+      [0, 80, 160, 300, 560], () => focusConfirmed.current,
+    );
+  }, [menu, picker, enlarged, selected, ready]);
+  const confirmOverlayFocus = () => { focusConfirmed.current = true; setPreferOverlayFocus(false); };
   useEffect(() => {
     setLabels(true);
     if (overlay || !preferences.hideLabels) return;
@@ -259,8 +264,15 @@ export default function MultiviewScreen() {
     (!query || `${c.name} ${c.source_group || c.group}`.toLowerCase().includes(query.toLowerCase()))),
     [channels, sourceFilter, groupFilter, filter, favoriteIds, recentIds, query, hidden]);
   const listen = (slot: number) => { if (!paneRef.current[slot]) return; multiview?.listen(token, slot); audibleRef.current=slot; setAudible(slot); };
-  const openPicker = (slot: number) => { setMenu(false); setQuery(""); setSelected(slot); setPicker(slot); };
-  const action = (label: string, run: () => void, disabled = false) => <Pressable key={label} ref={label === "Change channel" || label === "Add channel" ? firstMenu : undefined} disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
+  // A pending destination is not the selected playback screen. Cancel keeps
+  // the original pane's menu/actions; choose() selects the destination on success.
+  const openPicker = (slot: number) => { setMenu(false); setQuery(""); setPicker(slot); };
+  const action = (label: string, run: () => void, disabled = false, pickerEntry = false) => {
+    const menuEntry = label === "Change channel" || label === "Add channel";
+    return <Pressable key={pickerEntry ? "picker-entry" : label} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
+      focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && (pickerEntry || (picker == null && menuEntry))}
+      disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
+  };
   return <View style={styles.page}>
     <View style={styles.grid}>
       {panes.map((pane, slot) => {
@@ -269,7 +281,7 @@ export default function MultiviewScreen() {
         return <Pressable key={slot} ref={node => { paneNodes.current[slot]=node; }}
           accessibilityLabel={`${pane?.channel.name || "Empty pane"}. Press to open options.`}
           focusable={shown && !overlay} accessible={shown && !overlay} hasTVPreferredFocus={slot === selected && shown && !overlay}
-          onFocus={() => { setSelected(slot); if (preferences.audioFollowsFocus && !overlay && swapFrom == null) listen(slot); }}
+          onFocus={() => { if (overlay) return; focusConfirmed.current = true; setSelected(slot); if (preferences.audioFollowsFocus && swapFrom == null) listen(slot); }}
           onPress={() => {
             setSelected(slot); setLabels(true);
             if (swapFrom != null) { setOrder(old => old.map(id => id === slot ? swapFrom : id === swapFrom ? slot : id)); setSwapFrom(null); }
@@ -284,7 +296,7 @@ export default function MultiviewScreen() {
       })}
     </View>
     {labels && !overlay && <Text pointerEvents="none" numberOfLines={2} style={styles.hint}>{swapFrom != null ? "Select another pane to swap. Back cancels." : notice || "Press OK on a pane for options. Back returns to the guide."}</Text>}
-    {menu && picker == null && <FocusGuide trapFocusUp trapFocusDown trapFocusLeft trapFocusRight autoFocus style={styles.menu}>
+    {menu && picker == null && <FocusGuide key="pane-menu" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.menu}>
       <Text style={styles.title}>{panes[selected]?.channel.name || "Multiview"}</Text>
       <ScrollView>
       {action(panes[selected] ? "Change channel" : "Add channel", () => openPicker(selected), !ready)}
@@ -300,10 +312,10 @@ export default function MultiviewScreen() {
       {action("Return to TV Guide", () => void exit())}
       </ScrollView>
     </FocusGuide>}
-    {picker != null && <FocusGuide trapFocusUp trapFocusDown trapFocusLeft trapFocusRight autoFocus style={styles.picker}>
+    {picker != null && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
       <Text style={styles.title}>Channel for screen {picker+1}</Text>
-      <TextInput accessibilityLabel="Search channels" value={query} onChangeText={setQuery} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={styles.search} />
-      <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name)))}</View>
+      <TextInput accessibilityLabel="Search channels" value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
+      <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All"))}</View>
       {action(`Playlist: ${sources.find(([id])=>id===sourceFilter)?.[1] || "All Playlists"}`, () => {const ids=["all",...sources.map(([id])=>id)];setSourceFilter(ids[(ids.indexOf(sourceFilter)+1)%ids.length]);setGroupFilter("all");})}
       {action(`Group: ${groupFilter === "all" ? "All groups" : groupFilter}`, () => {const ids=["all",...groups];setGroupFilter(ids[(ids.indexOf(groupFilter)+1)%ids.length]);})}
       <Text style={styles.notice}>{results.length} channels · Each screen uses a provider connection</Text>
@@ -328,5 +340,5 @@ const styles = StyleSheet.create({
   filterRow:{flexDirection:"row",flexWrap:"wrap",gap:4},
   button:{paddingHorizontal:12,paddingVertical:10,borderWidth:2,borderColor:"transparent",borderRadius:8,marginBottom:4,backgroundColor:"#272035"},
   focus:{borderColor:tvColors.purple,backgroundColor:"#403052"},disabled:{opacity:.4},
-  search:{backgroundColor:"#272035",color:"#fff",padding:12,borderRadius:8,fontSize:17},row:{padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8}
+  search:{backgroundColor:"#272035",color:"#fff",padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8,fontSize:17},row:{padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8}
 });
