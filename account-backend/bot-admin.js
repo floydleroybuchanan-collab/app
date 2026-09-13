@@ -1,3 +1,4 @@
+import {telegramUsername} from './telegram-contacts.js';
 import {brandedContent} from './branding.js';
 import {DEFAULT_CONTENT} from './bot-defaults.js';
 import {q,rows,settings,content,event,now,fail} from './bot-store.js';
@@ -59,7 +60,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
  if(path==='/dashboard'&&method==='GET')return json({success:true,members:await q(env,'SELECT COUNT(*) n FROM bot_members').first(),tickets:await q(env,"SELECT COUNT(*) n FROM bot_support WHERE status<>'closed'").first(),analytics:await rows(env,'SELECT action,COUNT(*) n FROM bot_events GROUP BY action ORDER BY n DESC'),jobs:(await rows(env,'SELECT * FROM bot_jobs ORDER BY id DESC LIMIT 30')).map(brandedContent)});
  if(path==='/members'&&method==='GET'){
   const page=Math.max(1,Number(url.searchParams.get('page'))||1),search='%'+String(url.searchParams.get('search')||'').slice(0,100)+'%';
-  const data=await rows(env,`SELECT m.*,u.username account_username,u.status account_status,u.expires_at,u.max_sessions,i.invite_code,i.status invite_status FROM bot_members m LEFT JOIN users u ON u.id=m.account_id LEFT JOIN invites i ON i.id=m.invite_id WHERE m.telegram_id LIKE ?1 OR m.name LIKE ?1 OR m.username LIKE ?1 OR u.username LIKE ?1 OR i.invite_code LIKE ?1 ORDER BY m.updated_at DESC LIMIT 50 OFFSET ?2`,search,(page-1)*50);
+  const data=await rows(env,`SELECT m.*,(SELECT group_concat(cu.username, ', ') FROM account_telegram_contacts c JOIN users cu ON cu.id=c.user_id WHERE c.telegram_id=m.telegram_id OR (c.telegram_id IS NULL AND c.username<>'' AND lower(c.username)=lower(m.username))) AS directory_accounts,u.username account_username,u.status account_status,u.expires_at,u.max_sessions,i.invite_code,i.status invite_status FROM bot_members m LEFT JOIN users u ON u.id=m.account_id LEFT JOIN invites i ON i.id=m.invite_id WHERE m.telegram_id LIKE ?1 OR m.name LIKE ?1 OR m.username LIKE ?1 OR u.username LIKE ?1 OR i.invite_code LIKE ?1 ORDER BY m.updated_at DESC LIMIT 50 OFFSET ?2`,search,(page-1)*50);
   return json({success:true,members:data,page});
  }
  const mm=path.match(/^\/members\/(\d+)(\/timeline)?$/);
@@ -88,8 +89,8 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
   for(const a of list.filter(a=>!a.user.is_bot))await q(env,'INSERT INTO bot_support_admins(telegram_id,name,username) VALUES(?1,?2,?3) ON CONFLICT(telegram_id) DO UPDATE SET name=excluded.name,username=excluded.username',String(a.user.id),[a.user.first_name,a.user.last_name].filter(Boolean).join(' '),a.user.username||'').run();
   await event(env,null,'support_admins_synced','',id);return json({success:true});
  }
- if(path==='/support-admins'&&method==='GET')return json({success:true,admins:await rows(env,'SELECT * FROM bot_support_admins ORDER BY name')});
- const sa=path.match(/^\/support-admins\/(\d+)$/);if(sa&&method==='PATCH'){const b=await safeJson(request);if(typeof b.enabled!=='boolean')fail('Invalid enabled choice.');await q(env,'UPDATE bot_support_admins SET enabled=?1 WHERE telegram_id=?2',b.enabled?1:0,sa[1]).run();await event(env,null,'support_admin_updated',sa[1],id);return json({success:true});}
+ if(path==='/support-admins'&&method==='GET')return json({success:true,admins:await rows(env,`SELECT s.*,c.username AS account_contact_username,u.username AS app_username FROM bot_support_admins s LEFT JOIN account_telegram_contacts c ON c.telegram_id=s.telegram_id LEFT JOIN users u ON u.id=c.user_id ORDER BY s.name`)});
+ const sa=path.match(/^\/support-admins\/(\d+)$/);if(sa&&method==='PATCH'){const b=await safeJson(request);if(typeof b.enabled!=='boolean')fail('Invalid enabled choice.');const contact=b.contact_username===undefined?undefined:telegramUsername(b.contact_username);const result=contact===undefined?await q(env,'UPDATE bot_support_admins SET enabled=?1 WHERE telegram_id=?2',b.enabled?1:0,sa[1]).run():await q(env,'UPDATE bot_support_admins SET enabled=?1,contact_username=?2 WHERE telegram_id=?3',b.enabled?1:0,contact,sa[1]).run();if(!result.meta.changes)fail('Support admin not found.',404);await event(env,null,'support_admin_updated',sa[1],id);return json({success:true});}
  if(path==='/support'&&method==='GET')return json({success:true,tickets:await rows(env,'SELECT t.*,m.name,m.username FROM bot_support t LEFT JOIN bot_members m ON m.telegram_id=t.telegram_id ORDER BY t.id DESC LIMIT 100')});
  const st=path.match(/^\/support\/(\d+)$/);if(st&&method==='PATCH'){const b=await safeJson(request);if(!['open','in_progress','closed'].includes(b.status))fail('Invalid ticket status.');await q(env,'UPDATE bot_support SET status=?1,updated_at=?2 WHERE id=?3',b.status,now(),Number(st[1])).run();await event(env,null,'support_updated',st[1],id);return json({success:true});}
  if(path==='/events'&&method==='GET')return json({success:true,events:await rows(env,'SELECT * FROM bot_events ORDER BY id DESC LIMIT 100')});

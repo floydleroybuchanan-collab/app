@@ -1,3 +1,4 @@
+import {supportContacts} from './telegram-contacts.js';
 import {brandText,brandedTelegramBody} from './branding.js';
 import {now,q,rows,settings,content,event,member,assignToken,fail} from './bot-store.js';
 import {handleGroupJoinRequest,recordGroupAdmission,maintainGroupInvites,createGroupInvite,revokeGroupInvite} from './bot-group-invites.js';
@@ -71,19 +72,24 @@ async function account(env,id,s,tokenOnly){
  const count=u?await q(env,'SELECT COUNT(*) n FROM sessions WHERE user_id=?1 AND revoked=0 AND expires_at>?2',u.id,now()).first():null;
  return send(env,id,u?`My Account\nUsername: ${u.username}\nStatus: ${u.status}\nExpiration: ${u.expires_at===null?'Unlimited':new Date(u.expires_at*1000).toISOString()}\nTime remaining: ${u.expires_at===null?'Unlimited':Math.max(0,Math.ceil((u.expires_at-now())/86400))+' days'}\nActive logins: ${count.n} of ${u.max_sessions}\nTelegram: Linked\nInvitation: ${inv?.status||'No surviving record'}`:'Your Telegram is linked. '+(inv?'Your invitation is '+inv.status+'. Register in the app to activate your account.':'An Admin must check or link your existing account.'),keyboard([['🔑 My Token','token'],['Login help','issue:Login / Token'],['Account FAQ','faq'],['Contact an Admin','contact']]));
 }
-async function contact(env,id,s){
+async function contact(env,id,s,selected=null){
  let live;
  const support={text:'Open support ticket',callback_data:'issue:Other'};
  try{live=await telegram(env,'getChatAdministrators',{chat_id:s.group_id});}
  catch(e){await event(env,id,'support_admin_lookup_failed',e.telegramMethod+' '+(e.telegramCode||'network'));return send(env,id,'I could not retrieve the group admin list just now. Please try again shortly or open a support ticket.',{inline_keyboard:[[support]]});}
- const configured=await rows(env,'SELECT * FROM bot_support_admins');
- const people=live.filter(a=>!a.user.is_bot&&(!configured.length||configured.some(p=>p.telegram_id===String(a.user.id)&&p.enabled))).map(a=>({name:[a.user.first_name,a.user.last_name].filter(Boolean).join(' '),username:a.user.username||''}));
- const text=people.length?'Charming MediaLab Support Admins\n\n'+people.map(p=>p.name+(p.username?' (@'+p.username+')':' — contact through the group member list')).join('\n')+'\n\nPlease contact one Admin at a time.':'Support Admin contacts are being configured. You can open a support ticket below.';
- // Numeric mention buttons depend on each admin's privacy settings. Always
- // display names and use only current public usernames for contact buttons.
- const markup={inline_keyboard:[...people.filter(p=>/^[a-zA-Z0-9_]{1,32}$/.test(p.username)).map(p=>[{text:p.name,url:'https://t.me/'+p.username}]),[support]]};
+ const people=await supportContacts(env,live);
+ const back={text:'Back to support admins',callback_data:'contact'};
+ if(selected){
+  const person=people.find(p=>p.id===selected);
+  if(!person)return send(env,id,'This support contact is no longer available.',{inline_keyboard:[[back],[support]]});
+  const text=person.name+(person.username?'\n@'+person.username:'\nNo public Telegram username is set. Open the group, tap its name, open the member list and select '+person.name+'. You can also open a support ticket below.');
+  return send(env,id,text,{inline_keyboard:[...(person.username?[[{text:'Contact '+person.name,url:'https://t.me/'+person.username}]]:[]),[back],[support]]});
+ }
+ const text=people.length?'Charming MediaLab Support Admins ('+people.length+')\n\n'+people.map(p=>p.name+(p.username?' (@'+p.username+')':' — select below for contact help')).join('\n')+'\n\nPlease contact one Admin at a time.':'Support Admin contacts are being configured. You can open a support ticket below.';
+ // Every enabled live human admin receives a button, even without a public username.
+ const markup={inline_keyboard:[...people.map(p=>[{text:p.name,...(p.username?{url:'https://t.me/'+p.username}:{callback_data:'contact-admin:'+p.id})}]),[support]]};
  try{return await send(env,id,text,markup);}
- catch(e){if(e.telegramCode!==400)throw e;await event(env,id,'support_admin_buttons_rejected',e.telegramMethod||'sendMessage');return send(env,id,text,{inline_keyboard:[[support]]});}
+ catch(e){if(e.telegramCode!==400)throw e;await event(env,id,'support_admin_buttons_rejected',e.telegramMethod||'sendMessage');return send(env,id,text,{inline_keyboard:[...people.map(p=>[{text:p.name,callback_data:'contact-admin:'+p.id}]),[support]]});}
 }
 async function inviteCommand(env,id,text,m,s,updateId){
  const actor=await telegram(env,'getChatMember',{chat_id:s.group_id,user_id:Number(id)});
@@ -151,6 +157,7 @@ async function handleCommand(env,id,cmd,s){
   return send(env,id,'Download Charming MediaLab'+(s.app_version?' · '+s.app_version:'')+'\n\nOpen the Downloader app and enter:\n'+codes.map(c=>(c.label||'Downloader code')+': '+c.code).join('\n')+'\n\nFollow the download and installation prompts. Your personal invitation token is separate.',s.download_url?{inline_keyboard:[[{text:'Download Charming MediaLab',url:s.download_url}]]}:undefined);
  }
  if(cmd==='contact')return contact(env,id,s);
+ if(/^contact-admin:[1-9]\d{4,19}$/.test(cmd))return contact(env,id,s,cmd.slice(14));
  if(cmd==='troubleshooting')return troubleshooting(env,id);
  if(cmd.startsWith('issue:')){
   const topic=cmd.slice(6);if(!topics.includes(topic))return;

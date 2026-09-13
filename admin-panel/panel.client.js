@@ -134,8 +134,8 @@ async function loadView() {
   if(view==="admins")section.append(el("p","Created/active/ended counts refer to direct admin-invite accounts. Referrals are shown separately. Deleted viewers leave anonymous totals only. Historical creator attribution is recovered only where the original invitation record still exists.","help"));
 }
 function userRow(u) {
-  const actions=el("div",undefined,"actions");actions.append(button("Manage",()=>editUser(u)));
-  return [cell(u.username,u.email+(u.telegram_id?" · Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · "+u.telegram_id:"")),badge(u.status),cell(remaining(u.expires_at),date(u.expires_at)),String(u.active_sessions)+" / "+u.max_sessions,
+  const actions=el("div",undefined,"actions");actions.append(button("Manage",()=>editUser(u)));if(permitted("can_manage_bot"))actions.append(button("Telegram",()=>editTelegramContact(u,"users")));
+  return [cell(u.username,u.email+(u.telegram_contact_username?" · Saved Telegram: @"+u.telegram_contact_username:"")+(u.telegram_id?" · Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · "+u.telegram_id:"")),badge(u.status),cell(remaining(u.expires_at),date(u.expires_at)),String(u.active_sessions)+" / "+u.max_sessions,
     cell(u.created_by_admin_name||"Unknown historical creator",u.origin==="referral"?"Via family / friend":u.origin==="admin_invite"?"Direct admin invite":"No surviving attribution"),cell(date(u.created_at),"Last login: "+date(u.last_login_at)),actions];
 }
 function inviteRow(i) {
@@ -162,8 +162,8 @@ function editInvite(i) {
   },"danger"));
 }
 function adminRow(a) {
-  const actions=el("div",undefined,"actions");if(!a.is_owner)actions.append(button("Permissions",()=>editAdmin(a)),button("Viewing access",()=>editViewing(a)),button("Reset password",()=>resetAdmin(a)));
-  return [cell(a.username,a.email),cell(a.is_owner?"Owner":a.enabled?"Panel enabled":"Panel disabled",a.is_owner?"Owner TV access":a.viewer_access?"TV: "+remaining(a.expires_at):"TV: not enabled"),cell(a.accounts_created+" created",a.active_accounts+" active · "+a.disabled_accounts+" disabled"),
+  const actions=el("div",undefined,"actions");actions.append(button("Telegram",()=>editTelegramContact(a,"admins")));if(!a.is_owner)actions.append(button("Permissions",()=>editAdmin(a)),button("Viewing access",()=>editViewing(a)),button("Reset password",()=>resetAdmin(a)));
+  return [cell(a.username,a.email+(a.telegram_contact_username?" · Telegram: @"+a.telegram_contact_username:"")+(a.telegram_contact_id?" · ID "+a.telegram_contact_id:"")),cell(a.is_owner?"Owner":a.enabled?"Panel enabled":"Panel disabled",a.is_owner?"Owner TV access":a.viewer_access?"TV: "+remaining(a.expires_at):"TV: not enabled"),cell(a.accounts_created+" created",a.active_accounts+" active · "+a.disabled_accounts+" disabled"),
     cell(a.accounts_expired+" expired",a.accounts_canceled+" canceled · "+a.accounts_deleted+" deleted"),
     cell(a.pending_invites+" pending · "+a.invites_created+" codes ever",a.referred_accounts+" current referred accounts"),date(a.last_login_at),actions];
 }
@@ -260,6 +260,23 @@ function editAdmin(existing,existingUsername="") {
   for(const [key,[label,min,max,fallback]] of Object.entries(LIMITS))field(grid,label,key,existing?.permissions[key]??fallback,"number",{min,max,required:true});
   field(f,"Your current owner password to authorize these changes","owner_password","","password",{required:true,autocomplete:"current-password"});
   f.append(el("p","Changing permissions or disabling access revokes this administrator's current sessions. Existing viewer accounts and their expiration dates are unchanged.","help"));submit(f,existing?"Save permissions":"Create administrator");
+}
+async function editTelegramContact(person,kind){
+  const path='/admin/'+kind+'/'+encodeURIComponent(person.id)+'/telegram',data=await api(path);
+  const body=openDialog('Telegram contact · '+person.username,'Keep the app login and Telegram identity together, even when their usernames differ.');
+  body.append(el('p','App login: '+person.username+' · Email: '+person.email));
+  if(data.linked)body.append(el('p','Verified bot link: '+data.linked.name+' · ID '+data.linked.telegram_id+(data.linked.username?' · @'+data.linked.username:'')));
+  const f=form(body,async()=>{await api(path,'PUT',{username:username.value,telegram_id:telegramId.value,...(ownerPassword?{owner_password:ownerPassword.value}:{})});await saved('Telegram contact saved.');});
+  const username=field(f,'Telegram username (optional; @name)','telegram_username',data.contact.username,'text',{maxLength:33,autocomplete:'off'});
+  const telegramId=field(f,'Recorded Telegram ID (optional)','telegram_id',data.contact.telegram_id||'','text',{inputMode:'numeric',pattern:'[1-9][0-9]{4,19}'});
+  const matches=el('div',undefined,'card');f.append(matches);
+  const showMatches=list=>{matches.replaceChildren();for(const m of list){const row=el('p',m.name+(m.username?' · @'+m.username:' · no public username')+' · ID '+m.telegram_id);row.append(button('Use this ID',()=>{telegramId.value=m.telegram_id;}));matches.append(row);}if(!list.length)matches.append(el('p','No matching recorded member. You can save the username now and add their ID after Mr. Charm sees them.','help'));};
+  showMatches(data.matches);
+  f.append(button('Find recorded member by username',async()=>{const result=await api(path+'?username='+encodeURIComponent(username.value));showMatches(result.matches);}));
+  if(data.support_members?.length){const chosen=select(f,'Or choose a known support admin','support_person',[['','Select a person'],...data.support_members.map(m=>[m.telegram_id,m.name+(m.username?' (@'+m.username+')':'')])],'');chosen.addEventListener('change',()=>{if(chosen.value)telegramId.value=chosen.value;});}
+  f.append(el('p','The ID keeps this contact identifiable if their username changes. Contact details help identify records; they do not change verified account links, tokens, passwords or admin permissions. Clear both fields to remove the saved contact.','help'));
+  const ownerPassword=kind==='admins'?field(f,'Your owner password','owner_password','','password',{required:true,autocomplete:'current-password'}):null;
+  submit(f,'Save Telegram contact');
 }
 function editViewing(a) {
   if(!admin.is_owner)return;

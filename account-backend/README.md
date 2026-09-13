@@ -141,3 +141,11 @@ The app keeps the returned addresses in memory rather than persistent storage.
 
 The app contains no device registration, device name, advertising identifier,
 or location fields. Do not add any while integrating these routes.
+
+## Telegram contact directory
+
+Apply `0008_telegram_contacts.sql` before deploying the updated account Worker and panel. It adds a separate contact directory and a manual support-contact username, preserving existing account/token links. Back up and rehearse the migration first.
+
+Users and Admins have a Telegram action for saving an independent username and an optional recorded numeric ID. Admin contact changes require the owner password; delegated viewer changes require bot permission and account scope. Contact aliases identify directory records only; they never authenticate, grant roles, link tokens or override a verified account identity. User deletion cascades to contact records. A current Telegram username takes priority over a manual support alias or mapped administrator contact.
+
+Every selected current human group admin receives a Contact an Admin button. Admins without public usernames receive a contact-help callback instead of being omitted; callbacks recheck the current group and enabled list. Telegram remains authoritative for group administrator rights.

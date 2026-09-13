@@ -1,5 +1,6 @@
 import { ADMIN_FLAGS, ADMIN_LIMITS, DAY, demandPermission, integer, invitationTerms, listingOptions, normalizeAdminProfile, policyError } from "./admin-policy.js";
 
+import {accountContact,saveAccountContact} from './telegram-contacts.js';
 import { botAdmin } from './bot-admin.js';
 import { appControlsAdmin } from './app-controls.js';
 const PROFILE_KEYS = ["enabled", ...ADMIN_FLAGS, ...Object.keys(ADMIN_LIMITS)];
@@ -72,21 +73,35 @@ export async function handleAdminRequest(request, env, helpers) {
   if (path.startsWith('/admin/bot/')) return botAdmin(request,env,auth,helpers);
   if (path === "/admin/me" && method === "GET") return json({ success: true, admin: { ...publicUser(auth.user), is_owner: auth.isOwner, permissions: permissionProfile(auth.profile) } });
 
+  const contactRoute=path.match(/^\/admin\/(users|admins)\/([^/]+)\/telegram$/);
+  if(contactRoute&&['GET','PUT'].includes(method)){
+    const isAdmin=contactRoute[1]==='admins',targetId=contactRoute[2];
+    if(isAdmin){
+      if(!auth.isOwner)throw policyError('Only the owner can manage administrator Telegram contacts.');
+      if(!await first(env,"SELECT id FROM users WHERE id=?1 AND role='admin'",[targetId]))throw policyError('Administrator not found.',404);
+    }else {await targetUser(env,auth,targetId);demandPermission(auth,'can_manage_bot');}
+    if(method==='GET')return json({success:true,...await accountContact(env,targetId,url.searchParams.has('username')?url.searchParams.get('username'):undefined),support_members:isAdmin?await rows(env,'SELECT telegram_id,name,username FROM bot_support_admins ORDER BY name'):[]});
+    const body=await safeJson(request);allowedBody(body,['username','telegram_id','owner_password']);
+    if(isAdmin)await ownerRecheck(auth,body,verifyPassword);
+    const result=await saveAccountContact(env,targetId,body);
+    await audit(env,isAdmin?null:targetId,auth.user.id,'telegram_contact_updated',isAdmin?JSON.stringify({admin_id:targetId}):null);
+    return json({success:true,...result,message:'Telegram contact saved. Verified account and token links are unchanged.'});
+  }
   if (path === "/admin/creators" && method === "GET") {
     const list = await rows(env, `SELECT u.id,u.username FROM users u JOIN admin_profiles p ON p.user_id=u.id WHERE ${auth.isOwner || auth.profile.can_manage_all ? "1=1" : "u.id=?1"} ORDER BY u.username`, auth.isOwner || auth.profile.can_manage_all ? [] : [auth.user.id]);
     return json({ success: true, creators: list });
   }
   if (path === "/admin/users" && method === "GET") {
     const options = listingOptions(url, USER_SORTS), values = [now], where = ["?1>=0", "u.role='user'", scope(auth, "a.admin_user_id", values)];
-    searchWhere(options, where, values, ["u.username", "u.email", "tm.username", "tm.telegram_id", "ti.invite_code"]);
+    searchWhere(options, where, values, ["u.username", "u.email", "tm.username", "tm.telegram_id", "ti.invite_code", "tc.username", "tc.telegram_id"]);
     creatorWhere(url, auth, where, values, "a.admin_user_id");
     const status = url.searchParams.get("status") || "all";
     if (["active", "disabled", "expired"].includes(status)) { values.push(status); where.push(`u.status=?${values.length}`); }
     else if (status === "unlimited") where.push("u.expires_at IS NULL");
     else if (["expiring7", "expiring14", "expiring30"].includes(status)) { values.push(now + Number(status.slice(8)) * DAY); where.push(`u.expires_at>?1 AND u.expires_at<=?${values.length}`); }
     else if (status !== "all") throw policyError("Invalid account status filter.", 400);
-    const result = await paged(env, options, "FROM users u LEFT JOIN admin_user_attribution a ON a.user_id=u.id LEFT JOIN users creator ON creator.id=a.admin_user_id LEFT JOIN bot_members tm ON tm.account_id=u.id LEFT JOIN invites ti ON ti.id=tm.invite_id", where, values,
-      "tm.telegram_id,tm.username AS telegram_username,tm.name AS telegram_name,tm.status AS telegram_status,u.id,u.username,u.email,u.role,u.status,u.max_sessions,u.created_at,u.activated_at,u.expires_at,u.last_login_at,a.admin_user_id AS created_by_admin_id,a.origin,creator.username AS created_by_admin_name,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.revoked=0 AND s.expires_at>?1) AS active_sessions");
+    const result = await paged(env, options, "FROM users u LEFT JOIN admin_user_attribution a ON a.user_id=u.id LEFT JOIN users creator ON creator.id=a.admin_user_id LEFT JOIN account_telegram_contacts tc ON tc.user_id=u.id LEFT JOIN bot_members tm ON tm.account_id=u.id LEFT JOIN invites ti ON ti.id=tm.invite_id", where, values,
+      "tc.username AS telegram_contact_username,tc.telegram_id AS telegram_contact_id,tm.telegram_id,tm.username AS telegram_username,tm.name AS telegram_name,tm.status AS telegram_status,u.id,u.username,u.email,u.role,u.status,u.max_sessions,u.created_at,u.activated_at,u.expires_at,u.last_login_at,a.admin_user_id AS created_by_admin_id,a.origin,creator.username AS created_by_admin_name,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.revoked=0 AND s.expires_at>?1) AS active_sessions");
     return json({ success: true, users: result.data, pagination: result.pagination });
   }
   if (path === "/admin/invites" && method === "GET") {
@@ -234,12 +249,12 @@ export async function handleAdminRequest(request, env, helpers) {
   if (path === "/admin/admins" && method === "GET") {
     if (!auth.isOwner) throw policyError("Only the owner can view and manage the administrator directory.");
     const options = listingOptions(url, ADMIN_SORTS), values = [now], where = ["?1>=0", "u.role='admin'"];
-    searchWhere(options, where, values, ["u.username", "u.email"]);
+    searchWhere(options, where, values, ["u.username", "u.email", "tc.username", "tc.telegram_id"]);
     const status = url.searchParams.get("status") || "all";
     if (["enabled", "disabled"].includes(status)) { values.push(status === "enabled" ? 1 : 0); where.push(`p.enabled=?${values.length}`); }
     else if (status !== "all") throw policyError("Invalid administrator filter.", 400);
-    const result = await paged(env, options, "FROM users u JOIN admin_profiles p ON p.user_id=u.id JOIN admin_account_stats st ON st.admin_user_id=u.id LEFT JOIN admin_owner o ON o.user_id=u.id", where, values,
-      `u.id,u.username,u.email,u.status,u.created_at,u.last_login_at,u.expires_at,u.max_sessions AS viewer_max_sessions,p.*,st.accounts_created,st.accounts_expired,st.accounts_canceled,st.accounts_deleted,st.invites_created,st.tracking_started_at,CASE WHEN o.user_id=u.id THEN 1 ELSE 0 END AS is_owner,
+    const result = await paged(env, options, "FROM users u LEFT JOIN account_telegram_contacts tc ON tc.user_id=u.id JOIN admin_profiles p ON p.user_id=u.id JOIN admin_account_stats st ON st.admin_user_id=u.id LEFT JOIN admin_owner o ON o.user_id=u.id", where, values,
+      `tc.username AS telegram_contact_username,tc.telegram_id AS telegram_contact_id,u.id,u.username,u.email,u.status,u.created_at,u.last_login_at,u.expires_at,u.max_sessions AS viewer_max_sessions,p.*,st.accounts_created,st.accounts_expired,st.accounts_canceled,st.accounts_deleted,st.invites_created,st.tracking_started_at,CASE WHEN o.user_id=u.id THEN 1 ELSE 0 END AS is_owner,
       (SELECT COUNT(*) FROM admin_user_attribution a JOIN users v ON v.id=a.user_id WHERE a.admin_user_id=u.id AND a.origin='admin_invite' AND v.status='active' AND (v.expires_at IS NULL OR v.expires_at>?1)) AS active_accounts,
       (SELECT COUNT(*) FROM admin_user_attribution a JOIN users v ON v.id=a.user_id WHERE a.admin_user_id=u.id AND a.origin='admin_invite' AND v.status='disabled') AS disabled_accounts,
       (SELECT COUNT(*) FROM admin_user_attribution a WHERE a.admin_user_id=u.id AND a.origin='referral') AS referred_accounts,
