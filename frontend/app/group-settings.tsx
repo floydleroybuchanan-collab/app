@@ -1,3 +1,5 @@
+import { providerGroupDisabled } from "@/src/core/groupVisibility";
+import { providerGroupKey } from "@/src/core/playlistGuideMenu";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -25,7 +27,7 @@ export default function GroupSettingsScreen() {
   const router = useRouter();
   const {playlistId} = useLocalSearchParams<{playlistId?:string}>();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
-  const { channels } = useStore();
+  const { allChannels: channels } = useStore();
   const guideUi = useGuideUiPreferences();
   const tabPrefs = useGuideGroupTabPreferences();
   const custom = useCustomGuideGroups();
@@ -193,9 +195,9 @@ export default function GroupSettingsScreen() {
           <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Playlist groups</Text>
-            <Text style={styles.help}>New groups appear after a successful refresh. Hide removes a group tab; its channels remain available in All Channels and search. Your saved visibility, display name and order survive refreshes.</Text>
+            <Text style={styles.help}>New groups appear after a successful refresh. Disabling a group removes its channels from All Channels, search, favorites views and multiview. Saved favorites and group data return when enabled. Your saved visibility, display name and order survive refreshes.</Text>
             {orderedProviderGroups.map((groupId) => {
-              const visible = !tabPrefs.hiddenSet.has(groupId);
+              const visible = !providerGroupDisabled(groupId,tabPrefs.hiddenSet) && !guideUi.hiddenGroups.includes(groupId);
               const display = getGuideGroupDisplayName(groupId, tabPrefs.aliases);
               const selectedProviderRow = selectedProvider === groupId;
               return (
@@ -216,7 +218,7 @@ export default function GroupSettingsScreen() {
                       <View style={styles.groupActions}>
                         <Pressable onPress={() => tabPrefs.move(groupId, -1, providerGroups)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Up</Text></Pressable>
                         <Pressable onPress={() => tabPrefs.move(groupId, 1, providerGroups)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Down</Text></Pressable>
-                        <Pressable onPress={() => tabPrefs.setVisible(groupId, !visible)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>{visible ? "Hide" : "Show"}</Text></Pressable>
+                        <Pressable onPress={() => { if (!visible) { tabPrefs.setVisible(groupId,true); guideUi.setHiddenGroups(guideUi.hiddenGroups.filter(id=>id!==groupId)); } tabPrefs.setVisible(providerGroupKey(groupId),!visible); }} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>{visible ? "Disable group" : "Enable group"}</Text></Pressable>
                         <Pressable onPress={() => tabPrefs.rename(groupId, groupId)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Reset name</Text></Pressable>
                       </View>
                     </View>
@@ -247,7 +249,7 @@ export default function GroupSettingsScreen() {
                     <View style={styles.groupActions}>
                       <Pressable onPress={() => custom.moveGroup(group.id, -1)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Up</Text></Pressable>
                       <Pressable onPress={() => custom.moveGroup(group.id, 1)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Down</Text></Pressable>
-                      <Pressable onPress={() => toggleCustomVisible(group.id)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>{visible ? "Hide" : "Show"}</Text></Pressable>
+                      <Pressable onPress={() => toggleCustomVisible(group.id)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>{visible ? "Disable group" : "Enable group"}</Text></Pressable>
                       <Pressable onPress={() => deleteSelectedGroup(group.id, group.name)} style={({ focused }: any) => [styles.mini, focused && styles.focused]}><Text style={styles.actionText}>Delete</Text></Pressable>
                     </View>
                   ) : null}

@@ -4,14 +4,14 @@ export type GuideGroupTabPreferences = {
   order: string[];
 };
 
-export const GUIDE_GROUP_TAB_MAX = 256;
+export const GUIDE_GROUP_TAB_MAX = 4096;
 export const GUIDE_GROUP_TAB_NAME_MAX = 48;
 export const GUIDE_GROUP_RESERVED_ID = "All";
 
 let snapshot: GuideGroupTabPreferences = { aliases: {}, hidden: [], order: [] };
 let reverseAliases: Record<string, string> = {};
 
-export function cleanGuideGroupName(value: unknown, max = 96): string {
+export function cleanGuideGroupName(value: unknown, max = 1024): string {
   return String(value || "").replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 

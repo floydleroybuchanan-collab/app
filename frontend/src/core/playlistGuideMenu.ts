@@ -1,3 +1,4 @@
+import { providerGroupDisabled } from "./groupVisibility.ts";
 import type { Channel } from "../api";
 import { playlistOwner, type PlaylistRecord } from "./playlistCatalog.ts";
 
@@ -23,10 +24,10 @@ export function buildPlaylistMenu(
     if (hiddenChannels.has(channel.id)) continue;
     const bucket = bySource.get(playlistOwner(channel));
     if (!bucket) continue;
+    const raw = channel.group || "";
+    if (providerGroupDisabled(raw,hiddenGroups)) continue;
     bucket.count++;
     if (favorites.has(channel.id)) bucket.favorites++;
-    const raw = channel.group || "";
-    if (hiddenGroups.has(raw)) continue;
     const key = providerGroupKey(raw);
     const existing = bucket.groups.get(key);
     if (existing) existing.count++;

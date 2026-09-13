@@ -14,7 +14,7 @@ let completedForSession = false;
 
 /** Real-event startup gate: never sleeps and never waits for a complete XMLTV import. */
 export function StartupVersion4() {
-  const { channels, loading, windowStart, windowEnd } = useStore();
+  const { allChannels: channels, loading, windowStart, windowEnd } = useStore();
   const [epg, setEpg] = useState(INITIAL);
   const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => subscribeProgress(setEpg), []);

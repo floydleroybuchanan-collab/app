@@ -115,5 +115,5 @@ export function useGuideGroupTabPreferences() {
 
   const reset = useCallback(() => commit({ aliases: {}, hidden: [], order: [] }), []);
   const hiddenSet = useMemo(() => new Set(value.hidden), [value.hidden]);
-  return { ...value, hiddenSet, rename, setVisible, move, remove, reset };
+  return { ...value, ready: loaded, hiddenSet, rename, setVisible, move, remove, reset };
 }

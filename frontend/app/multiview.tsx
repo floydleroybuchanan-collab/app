@@ -151,6 +151,19 @@ export default function MultiviewScreen() {
     });
     return () => sub.remove();
   }, [token]);
+  useEffect(() => {
+    if (!ready || !active.current) return;
+    const ids = new Set(channels.map(c=>c.id));
+    let changed = false;
+    const next = paneRef.current.map((pane,slot) => {
+      if (!pane || ids.has(pane.channel.id)) return pane;
+      changed = true; multiview?.remove(token,slot,++revisions.current[slot]); return null;
+    });
+    if (changed) {
+      writePanes(next);setEnlarged(null);setNotice("A channel is no longer enabled. Choose another channel.");
+      const slot = nextAudiblePane(next,audibleRef.current);audibleRef.current=slot;setAudible(slot);if(slot>=0)multiview?.listen(token,slot);
+    }
+  }, [channels, ready, token, writePanes]);
   const exit = useCallback(async (fullscreen = false) => {
     if (leaving.current) return;
     leaving.current = true; active.current = false;

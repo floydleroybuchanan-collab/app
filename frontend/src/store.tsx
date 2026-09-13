@@ -1,3 +1,6 @@
+import { activeGroupChannels } from "@/src/core/groupVisibility";
+import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
+import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import React, { createContext, startTransition, useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
 import { Platform } from "react-native";
 import dayjs from "dayjs";
@@ -137,6 +140,8 @@ export type ActiveProgram = { program: Program; channel: Channel } | null;
 
 export type Store = {
   channels: Channel[];
+  /** Management only: includes disabled groups so they can be re-enabled. */
+  allChannels: Channel[];
   windowStart: string;
   windowEnd: string;
   loading: boolean;
@@ -1035,12 +1040,21 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const closeProgram = useCallback(() => setActiveProgram(null), []);
 
+  const groupVisibility = useGuideGroupTabPreferences();
+  const legacyVisibility = useGuideUiPreferences();
+  const disabledGroups = useMemo(() => new Set([...groupVisibility.hidden,...legacyVisibility.hiddenGroups]), [groupVisibility.hidden,legacyVisibility.hiddenGroups]);
+  const visibleChannels = useMemo(() => groupVisibility.ready ? activeGroupChannels(channels,disabledGroups) : [], [channels,disabledGroups,groupVisibility.ready]);
+  const visibleIds = useMemo(() => new Set(visibleChannels.map(c=>c.id)), [visibleChannels]);
+  const visibleRecent = useMemo(() => recent.filter(c=>visibleIds.has(c.id)), [recent,visibleIds]);
+  const visibleRecentIds = useMemo(() => recentIds.filter(id=>visibleIds.has(id)), [recentIds,visibleIds]);
+  const visibleChannelById = useCallback((id:string) => visibleIds.has(id) ? channelById(id) : undefined, [channelById,visibleIds]);
+
   const value: Store = useMemo(() => ({
-    channels, windowStart, windowEnd, loading, refreshing, error, refresh, hardRefresh,
+    channels: visibleChannels, allChannels: channels, windowStart, windowEnd, loading, refreshing, error, refresh, hardRefresh,
     patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache,
-    selectedDate, setSelectedDate, channelById,
+    selectedDate, setSelectedDate, channelById: visibleChannelById,
     favorites, isFavorite, toggleFavorite, replaceFavorites,
-    recent, recentIds, lastChannelId, addRecent,
+    recent: visibleRecent, recentIds: visibleRecentIds, lastChannelId: lastChannelId && visibleIds.has(lastChannelId) ? lastChannelId : null, addRecent,
     reminders, hasReminder, addReminder, removeReminder, toggleReminder,
     activeProgram, openProgram, closeProgram,
     pointerMode, setPointerMode,
@@ -1056,11 +1070,12 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     guideWindowHours, setGuideWindowHours, clock24h, setClock24h,
     startScreen, setStartScreen, sleepTimerMinutes, setSleepTimerMinutes,
   }), [
+    visibleChannels,visibleRecent,visibleRecentIds,visibleChannelById,visibleIds,
     channels, windowStart, windowEnd, loading, refreshing, error, refresh, hardRefresh,
     patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache,
-    selectedDate, setSelectedDate, channelById,
+    selectedDate, setSelectedDate,
     favorites, isFavorite, toggleFavorite, replaceFavorites,
-    recent, recentIds, lastChannelId, addRecent,
+    lastChannelId, addRecent,
     reminders, hasReminder, addReminder, removeReminder, toggleReminder,
     activeProgram, openProgram, closeProgram,
     pointerMode, setPointerMode, guideLayout, setGuideLayout, guideDensity, setGuideDensity,
