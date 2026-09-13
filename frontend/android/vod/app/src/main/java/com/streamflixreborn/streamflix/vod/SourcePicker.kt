@@ -7,6 +7,9 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.HorizontalScrollView
+import android.text.TextUtils
 import android.widget.BaseAdapter
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -57,9 +60,29 @@ object SourcePicker {
         }
         root.addView(title)
         root.addView(status)
+        val controls = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        root.addView(HorizontalScrollView(context).apply { addView(controls) })
         root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(footer)
-        var rows = model.sources.value
+        var allRows = model.sources.value
+        var kind = 0
+        var resolution = 0
+        var readyOnly = false
+        fun filtered() = allRows.filter { row ->
+            val d = row.details
+            (kind == 0 || (kind == 1 && d?.isDebrid != true) || (kind == 2 && d?.isDebrid == true)) &&
+                (resolution == 0 || d?.height == resolution) &&
+                (!readyOnly || d?.availability == SourceDetails.Availability.READY)
+        }
+        var rows = filtered()
+        var detailsDialog: AlertDialog? = null
+        fun showDetails(index: Int) {
+            val row = rows.getOrNull(index) ?: return
+            detailsDialog?.dismiss()
+            detailsDialog = AlertDialog.Builder(context).setTitle("Source details")
+                .setMessage(listOfNotNull(row.name, row.details?.badges, DeviceCompatibility.badge(row.details)).joinToString("\n\n"))
+                .setPositiveButton("Close", null).show()
+        }
         val adapter = object : BaseAdapter() {
             override fun getCount() = rows.size
             override fun getItem(position: Int) = rows[position]
@@ -82,8 +105,8 @@ object SourcePicker {
                     text = (if (row.id == currentId) "✓ " else "") +
                         (if (details?.kind == SourceDetails.Kind.REAL_DEBRID) "🧲 " else "") + row.name
                     setTextColor(if (details?.kind == SourceDetails.Kind.REAL_DEBRID) 0xFFFF989E.toInt() else Color.WHITE)
-                    // No line truncation: long release names wrap and remain readable.
-                    maxLines = Int.MAX_VALUE
+                    // Keep the list scannable; full release names remain available in Details.
+                    maxLines = 2; ellipsize = TextUtils.TruncateAt.END
                 }
                 (item.getChildAt(1) as TextView).text = listOfNotNull(
                     details?.badges?.takeIf { it.isNotBlank() }, DeviceCompatibility.badge(details),
@@ -92,6 +115,30 @@ object SourcePicker {
             }
         }
         list.adapter = adapter
+        fun updateRows() {
+            val focusedId = rows.getOrNull(list.selectedItemPosition)?.id
+            rows = filtered()
+            adapter.notifyDataSetChanged()
+            val at = rows.indexOfFirst { it.id == focusedId }
+            if (rows.isNotEmpty()) list.setSelection(if (at >= 0) at else 0)
+            footer.text = "${rows.size} of ${allRows.size} sources · Hold OK / long press for full details. Ready means verified in your cloud, not guaranteed device compatibility."
+        }
+        fun filterButton(label: String, change: (Button) -> Unit) = Button(context).apply {
+            text = label; textSize = 16f; isAllCaps = false
+            setTextColor(Color.WHITE)
+            background = StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), surface(0xFF403052.toInt(), 0xFFCA82FF.toInt()))
+                addState(intArrayOf(), surface(0xFF272035.toInt(), Color.TRANSPARENT))
+            }
+            setOnClickListener { change(this); updateRows() }
+            controls.addView(this)
+        }
+        filterButton("Type: All") { button -> kind = (kind + 1) % 3; button.text = "Type: " + listOf("All", "Direct", "Real-Debrid")[kind] }
+        filterButton("Resolution: All") { button -> val heights = listOf(0,720,1080,2160); resolution = heights[(heights.indexOf(resolution)+1)%heights.size]; button.text = "Resolution: " + if(resolution==0) "All" else "${resolution}p" }
+        filterButton("Availability: All") { button -> readyOnly = !readyOnly; button.text = if(readyOnly) "Ready in cloud" else "Availability: All" }
+        list.setOnItemLongClickListener { _,_,index,_ -> showDetails(index); true }
+        val detailButton = Button(context).apply { text="Details for selected source"; textSize=16f; isAllCaps=false; setOnClickListener { showDetails(list.selectedItemPosition.coerceAtLeast(0)) } }
+        root.addView(detailButton)
         val dialog = AlertDialog.Builder(context).setView(root).setNegativeButton("Close", null).create()
         list.setOnItemClickListener { _, _, index, _ ->
             val server = rows.getOrNull(index) ?: return@setOnItemClickListener
@@ -100,12 +147,8 @@ object SourcePicker {
         }
         val job = fragment.lifecycleScope.launch {
             model.sources.collect {
-                val focusedId = rows.getOrNull(list.selectedItemPosition)?.id
-                rows = it
-                adapter.notifyDataSetChanged()
-                val restored = rows.indexOfFirst { row -> row.id == focusedId }
-                if (restored >= 0) list.setSelection(restored)
-                if (it.isEmpty()) status.text = "Searching for sources…"
+                allRows = it
+                updateRows()
             }
         }
         val statusJob = fragment.lifecycleScope.launch {
@@ -131,6 +174,7 @@ object SourcePicker {
         }
         fragment.lifecycle.addObserver(observer)
         dialog.setOnDismissListener {
+            detailsDialog?.dismiss(); detailsDialog = null
             job.cancel(); statusJob.cancel()
             fragment.lifecycle.removeObserver(observer)
             activityDecor.removeOnLayoutChangeListener(layoutListener)

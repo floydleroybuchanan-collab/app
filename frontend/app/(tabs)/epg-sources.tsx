@@ -35,6 +35,7 @@ type ActiveAction = "refresh-all" | "refresh-playlist" | "refresh-epg" | "rebuil
 
 function EpgSourcesScreenContent() {
   const router = useRouter();
+  const [advanced, setAdvanced] = useState(false);
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { refresh, channels, clock24h, epgGuideFilter, setEpgGuideFilter, guideWindowHours, setGuideWindowHours, preferTvgIdOnly, setPreferTvgIdOnly } = useStore();
   const sourceRefresh = useSourceRefreshPreferences();
@@ -211,15 +212,16 @@ function EpgSourcesScreenContent() {
                 onChange={guideUi.setStartGroup}
               />
               <Text style={styles.help}>Choose which Guide group opens first on a normal Guide entry. Last used keeps your previous Guide tab. Search and returning from fullscreen always open on the requested/current channel instead.</Text>
-              <Text style={styles.help}>Off keeps provider categories hidden while Charm still uses their names internally to classify channels into Sports, News, Movies, Kids, Entertainment and Miscellaneous.</Text>
+
               <Action label="Manage custom channel groups" icon="albums-outline" onPress={() => router.push("/group-settings" as any)} />
               <Action label="Custom EPG & channel assignments" icon="git-compare-outline" onPress={() => router.push("/epg-custom" as any)} />
               <ChoiceRow<EpgGuideFilter> label="Guide EPG filter" value={epgGuideFilter} options={[{ label: "All", value: "all" }, { label: "Matched", value: "matched" }, { label: "Unmatched", value: "unmatched" }]} onChange={setEpgGuideFilter} />
               <ChoiceRow<GuideWindowHours> label="Guide window" value={guideWindowHours} options={[{ label: "6h", value: 6 }, { label: "8h", value: 8 }, { label: "12h", value: 12 }, { label: "24h", value: 24 }]} onChange={setGuideWindowHours} />
-              <ToggleRow label="Prefer tvg-id matching only" value={preferTvgIdOnly} onChange={setPreferTvgIdOnly} />
-              <Text style={styles.help}>Use strict IDs for messy providers. Turn this off to allow conservative display-name matching; ambiguous names never invent a match.</Text>
+              <Action label={advanced ? "Hide Advanced guide settings" : "Advanced guide settings"} icon="options-outline" onPress={() => setAdvanced(!advanced)} />
+              {advanced && <><ToggleRow label="Prefer tvg-id matching only" value={preferTvgIdOnly} onChange={setPreferTvgIdOnly} />
+              <Text style={styles.help}>Use strict IDs for messy providers. Turn this off to allow conservative display-name matching; ambiguous names never invent a match.</Text></>}
             </Card>
-            <Card title="Refresh Schedule" icon="time-outline">
+            {advanced && <><Card title="Refresh Schedule" icon="time-outline">
               <ChoiceRow<SourceRefreshIntervalHours> label="Playlist auto refresh" value={sourceRefresh.playlistHours} options={REFRESH_OPTIONS} onChange={sourceRefresh.setPlaylistHours} />
               <ChoiceRow<SourceRefreshIntervalHours> label="EPG auto refresh" value={sourceRefresh.epgHours} options={REFRESH_OPTIONS} onChange={sourceRefresh.setEpgHours} />
               <ChoiceRow<1 | 3 | 7 | 14>
@@ -245,6 +247,7 @@ function EpgSourcesScreenContent() {
               <ChoiceRow<number> label="Primary playlist offset" value={guideTiming.source.playlistOffsetMinutes} options={[-120, -60, -30, 0, 30, 60, 120].map((value) => ({ label: value === 0 ? "0" : `${value > 0 ? "+" : ""}${value}m`, value }))} onChange={guideTiming.setPlaylistOffsetMinutes} />
               <Text style={styles.help}>Programme time is corrected in four layers: global, source/server, playlist, then any per-channel override. Corrections apply on the next EPG update.</Text>
             </Card>
+            </>}
             <Card title="Channel Logo Sources" icon="image-outline">
               <ChoiceRow<LogoPriority> label="Channel logos priority" value={logoPriority} options={[{ label: "Prefer playlist", value: "playlist" }, { label: "Prefer EPG", value: "epg" }, { label: "Prefer local folder", value: "local" }]} onChange={setLogoPriority} />
               <Text style={styles.help}>The preferred source wins; the other URL remains available as fallback.</Text>

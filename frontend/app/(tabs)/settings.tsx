@@ -1,3 +1,4 @@
+import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -111,7 +112,7 @@ const TILES: Tile[] = [
   { id: "playlists", label: "Playlists", icon: "list-outline" },
   { id: "epg", label: "EPG", icon: "calendar-outline" },
   { id: "appearance", label: "Appearance", icon: "color-palette-outline" },
-  { id: "health", label: "Health", icon: "pulse-outline" },
+  { id: "health", label: "Help & Health", icon: "pulse-outline" },
   { id: "channels", label: "Channels", icon: "list-circle-outline" },
   { id: "parental", label: "Parental", icon: "lock-closed-outline" },
   { id: "backup", label: "Backup & Restore", icon: "cloud-download-outline" },
@@ -204,6 +205,10 @@ function SettingsScreenContent() {
   const latestAudio = getLastAudioDiagnostics();
   const [section, setSection] = useState<Section | null>(null);
   const [busy, setBusy] = useState(false);
+  const multiviewPrefs = useMultiviewPreferences();
+  const [advancedPlayer, setAdvancedPlayer] = useState(false);
+  const [backupPassword, setBackupPassword] = useState("");
+  const [settingsOnly, setSettingsOnly] = useState(true);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [clearFavoritesArmed, setClearFavoritesArmed] = useState(false);
   const [codecCapabilities, setCodecCapabilities] = useState<DeviceCodecCapabilities | null>(null);
@@ -503,21 +508,23 @@ function SettingsScreenContent() {
     if (busy) return;
     setBusy(true); setBackupStatus("Creating a complete Charming MediaLab backup…");
     try {
-      const result = await writeFullBackup();
-      setBackupStatus(`${result.portable ? "Exported" : "Saved"} ${result.fileName}. It includes settings, playlists, source addresses, EPG assignments, hidden/order choices, and custom groups. Keep it private.`);
+      const result = await writeFullBackup(backupPassword, settingsOnly);
+      setBackupPassword("");
+      setBackupStatus(`${result.portable ? "Exported" : "Saved"} ${result.fileName}. ${settingsOnly ? "Includes basic Live TV settings and favorite channel IDs; no provider credentials." : "Encrypted Live TV backup. Save your password separately; it cannot be recovered."}`);
     } catch (error) { setBackupStatus(error instanceof Error ? error.message : "Full backup failed."); }
     finally { setBusy(false); }
-  }, [busy]);
+  }, [busy, backupPassword, settingsOnly]);
 
   const restoreEverything = useCallback(async () => {
     if (busy) return;
     setBusy(true); setBackupStatus("Validating and restoring the newest complete backup…");
     try {
-      const name = await restoreFullBackup();
+      const name = await restoreFullBackup(backupPassword);
+      setBackupPassword("");
       setBackupStatus(`Restored ${name} with integrity checks and rollback protection. Restart Charming MediaLab once so every restored setting is reloaded.`);
     } catch (error) { setBackupStatus(error instanceof Error ? error.message : "Full restore failed; previous settings were kept."); }
     finally { setBusy(false); }
-  }, [busy]);
+  }, [busy, backupPassword]);
 
   return (
     <PurpleTvShell active="/settings">
@@ -663,7 +670,8 @@ function SettingsScreenContent() {
                   onChange={remoteShortcuts.setLongDown}
                 />
                 <Text style={styles.help}>Long OK/Select is reserved for contextual Quick Actions. Directional D-pad keys remain deterministic; Long Down is the only remappable D-pad hold.</Text>
-                <ChoiceRow<PlaybackBufferProfile>
+                <Action label={advancedPlayer ? "Hide Advanced playback" : "Advanced playback"} icon="options-outline" onPress={() => setAdvancedPlayer(!advancedPlayer)} />
+                {advancedPlayer && <><ChoiceRow<PlaybackBufferProfile>
                   label="Buffer size"
                   value={playbackBufferProfile}
                   options={[
@@ -673,7 +681,7 @@ function SettingsScreenContent() {
                   ]}
                   onChange={setPlaybackBufferProfile}
                 />
-                <Text style={styles.help}>Small starts sooner; Medium balances startup and jitter; Large is the 48 MB-capped TV default.</Text>
+                <Text style={styles.help}>Small starts sooner; Medium balances startup and jitter; Large targets a 48 MiB buffer, excluding decoder and other app memory.</Text></>}
                 <ChoiceRow<SleepTimerMinutes>
                   label="Sleep timer"
                   value={sleepTimerMinutes}
@@ -736,12 +744,28 @@ function SettingsScreenContent() {
                   onChange={subtitles.setBackground}
                 />
                 <View style={styles.divider} />
+                <Text style={styles.settingLabel}>Multiview</Text>
+                <ToggleRow label="Automatically fit the number of screens" value={multiviewPrefs.automaticLayout} onChange={v => updateMultiviewPreferences({automaticLayout:v})} />
+                <ToggleRow label="Audio follows remote focus" value={multiviewPrefs.audioFollowsFocus} onChange={v => updateMultiviewPreferences({audioFollowsFocus:v})} />
+                <ToggleRow label="Hide channel labels after 5 seconds" value={multiviewPrefs.hideLabels} onChange={v => updateMultiviewPreferences({hideLabels:v})} />
+                <ToggleRow label="Remember last channel arrangement" value={multiviewPrefs.remember} onChange={v => updateMultiviewPreferences({remember:v})} />
+                <Text style={styles.help}>Up to four screens, subject to your provider and device limits. OK opens a screen menu. Back closes options or returns from an enlarged screen to the grid.</Text>
                 <Text style={styles.settingLabel}>Guide preview</Text>
                 <ToggleRow label="Mute preview by default" value={guideUi.mutePreview} onChange={guideUi.setMutePreview} />
                 <ToggleRow label="Hide preview by default" value={guideUi.hidePreview} onChange={guideUi.setHidePreview} />
               </SettingsCard>
             ) : null}
 
+            {section === "health" && <SettingsCard title="Help" icon="help-circle-outline">
+              <Text style={styles.help}>Missing channels? Enable the source in Playlists, then choose All Playlists → All Channels in the guide. Check the Guide EPG filter is All.</Text>
+              <Action label="Check playlists and downloads" icon="list-outline" onPress={() => router.push("/playlists" as any)} />
+              <Action label="Check guide sources and filters" icon="calendar-outline" onPress={() => router.push("/epg-sources" as any)} />
+              <Text style={styles.help}>Playback: try another channel or source. Multiview uses one provider connection per screen; close other screens if the device reports a decoder or memory limit.</Text>
+              <Text style={styles.help}>Real-Debrid: open VOD Settings → Sources & Real-Debrid. Reconnect an expired login. For an expired playback link, select the source again; an unavailable file may require another source.</Text>
+              <Action label="Open Video OnDemand" icon="film-outline" onPress={() => router.push("/vod" as any)} />
+              <Action label="Account and session details" icon="person-outline" onPress={() => setSection("account")} />
+              <Text style={styles.help}>Share the private report below only when you choose. It covers Live TV measurements, not a complete VOD report. Never send provider passwords or Real-Debrid tokens.</Text>
+            </SettingsCard>}
             {section === "health" ? (
               <SettingsCard title="Health" icon="pulse-outline">
                 <InfoRow
@@ -1037,10 +1061,12 @@ function SettingsScreenContent() {
 
             {section === "backup" ? (
               <SettingsCard title="Backup & Restore" icon="cloud-download-outline">
-                <Text style={styles.help}>Complete backups include source addresses and may contain provider credentials. Keep the file private. Restore validates the file first and rolls back live settings if any write fails.</Text>
+                <Text style={styles.help}>Settings-only exports include basic Live TV preferences and favorite channel IDs. Encrypted Live TV backups also include playlists, provider credentials, guide assignments, channel customizations and other Live TV preferences. Neither option includes VOD history, VOD preferences, app sign-in, or Real-Debrid login. Keep the backup password separately; it cannot be recovered. Older unencrypted backups remain readable. Restore uses the newest local backup, or asks for a folder if none exists.</Text>
+                <ToggleRow label="Settings and favorites only (no credentials)" value={settingsOnly} onChange={setSettingsOnly} />
+                <TextInput accessibilityLabel="Backup password" secureTextEntry value={backupPassword} onChangeText={setBackupPassword} maxLength={256} autoCorrect={false} autoCapitalize="none" placeholder="Password for encrypted backup / restore (10+ characters)" placeholderTextColor={tvColors.textMuted} style={styles.pinInput} />
                 <View style={styles.backupActions}>
-                  <Action label={busy ? "Working…" : "Back Up Complete App"} icon="archive-outline" onPress={backupEverything} disabled={busy} />
-                  <Action label={busy ? "Working…" : "Restore Complete App"} icon="reload-outline" onPress={restoreEverything} disabled={busy} />
+                  <Action label={busy ? "Working…" : settingsOnly ? "Export settings and favorites" : "Create encrypted Live TV backup"} icon="archive-outline" onPress={backupEverything} disabled={busy} />
+                  <Action label={busy ? "Working…" : "Restore backup"} icon="reload-outline" onPress={restoreEverything} disabled={busy} />
                 </View>
                 <View style={styles.divider} />
                 <Text style={styles.help}>Favorites backups are portable JSON files. Back Up writes a local copy and offers a shared folder (Downloads / USB) via the system picker so you can move the file off this device. They contain channel identity only—never stream URLs. Restore matches the current playlist and uses the current build&apos;s stream, logo and EPG data.</Text>

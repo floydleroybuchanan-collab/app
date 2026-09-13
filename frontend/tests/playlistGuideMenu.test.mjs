@@ -12,21 +12,21 @@ const channels = [
 
 test("every playlist gets its own All Channels, Favorites and provider groups", () => {
   const sections = buildPlaylistMenu(sources, channels, new Set(["two"]), new Set());
-  assert.deepEqual(sections.map(section => section.label), ["CharmIPTV", "CharmIPTV 2", "All Playlists"]);
-  assert.deepEqual(sections[0].groups.map(group => group.label), ["All Channels", "Favorites", "Provider News"]);
-  assert.equal(sections[0].groups[1].count, 0);
-  assert.equal(sections[1].groups[1].count, 1);
-  assert.notEqual(sections[0].groups[2].key, sections[1].groups[2].key);
-  assert.equal(sections[2].groups[0].count, 2);
+  assert.deepEqual(sections.map(section => section.label), ["All Playlists", "CharmIPTV", "CharmIPTV 2"]);
+  assert.deepEqual(sections[1].groups.map(group => group.label), ["All Channels", "Favorites", "Provider News"]);
+  assert.equal(sections[1].groups[1].count, 0);
   assert.equal(sections[2].groups[1].count, 1);
-  assert.ok(!sections[0].groups.some(group => ["HD Only", "Failed Streams", "24/7"].includes(group.label)));
+  assert.notEqual(sections[1].groups[2].key, sections[2].groups[2].key);
+  assert.equal(sections[0].groups[0].count, 2);
+  assert.equal(sections[0].groups[1].count, 1);
+  assert.ok(!sections[1].groups.some(group => ["HD Only", "Failed Streams", "24/7"].includes(group.label)));
 });
 
 test("disabled playlists and hidden channels do not appear in drawer counts", () => {
   const sections = buildPlaylistMenu([sources[0], { ...sources[1], enabled: false }], channels, new Set(["one"]), new Set(["one"]));
   assert.equal(sections.length, 2);
-  assert.equal(sections[0].count, 0);
-  assert.equal(sections[0].groups[1].count, 0);
+  assert.equal(sections[1].count, 0);
+  assert.equal(sections[1].groups[1].count, 0);
 });
 
 test("a provider group called Sports is exact, not the previous app-generated Sports category", () => {

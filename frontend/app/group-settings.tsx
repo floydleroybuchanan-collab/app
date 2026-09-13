@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { useStore } from "@/src/store";
@@ -23,6 +23,7 @@ function cleanGroupName(raw: string): string {
 
 export default function GroupSettingsScreen() {
   const router = useRouter();
+  const {playlistId} = useLocalSearchParams<{playlistId?:string}>();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { channels } = useStore();
   const guideUi = useGuideUiPreferences();
@@ -82,13 +83,14 @@ export default function GroupSettingsScreen() {
     const seen = new Set<string>();
     const out: string[] = [];
     for (const channel of channels) {
+      if (playlistId && (channel.playlist_id || "charm-primary") !== playlistId) continue;
       const raw = String(channel.group || "").trim();
       if (!raw || seen.has(raw)) continue;
       seen.add(raw);
       out.push(raw);
     }
     return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [channels]);
+  }, [channels, playlistId]);
 
   const orderedProviderGroups = useMemo(
     () => applyGuideGroupOrder(providerGroups, tabPrefs.order),
@@ -191,7 +193,7 @@ export default function GroupSettingsScreen() {
           <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Playlist groups</Text>
-            <Text style={styles.help}>TiViMate-style metadata: provider names stay untouched for playlist matching while your display name, visibility, and order are saved separately.</Text>
+            <Text style={styles.help}>New groups appear after a successful refresh. Hide removes a group tab; its channels remain available in All Channels and search. Your saved visibility, display name and order survive refreshes.</Text>
             {orderedProviderGroups.map((groupId) => {
               const visible = !tabPrefs.hiddenSet.has(groupId);
               const display = getGuideGroupDisplayName(groupId, tabPrefs.aliases);

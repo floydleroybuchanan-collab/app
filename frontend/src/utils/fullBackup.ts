@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Alert, NativeModules, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
@@ -11,12 +11,14 @@ const VERSION = 2;
 const PREFIX = "Charming MediaLab-Full-Backup-";
 const ROOT = `${FileSystem.documentDirectory || ""}full-backups/`;
 const PLAYLIST_ROOT = `${FileSystem.documentDirectory || ""}playlists/`;
-const MAX_PLAYLIST_BACKUP_BYTES = 96 * 1024 * 1024;
+const MAX_PLAYLIST_BACKUP_BYTES = 12 * 1024 * 1024;
+const SAFE_SETTINGS = new Set(["gs_favorites", "gs_pointer_mode", "gs_guide_layout", "gs_guide_density", "gs_safe_preview_mode", "gs_channel_numbers", "gs_channel_logos", "gs_device_layout_mode", "gs_player_timeout_ms", "gs_power_profile", "gs_logos_off_while_surfing", "gs_epg_guide_filter", "gs_guide_window_hours", "gs_clock_24h", "gs_start_screen", "gs_instant_guide"]);
 
 type FullBackupPayload = {
   format: typeof FORMAT;
   version: typeof VERSION;
   createdAt: string;
+  scope?: "settings" | "live-tv";
   settings: Record<string, string>;
   personalPlaylistUrls: Record<string, string>;
   playlistFiles: Record<string, string>;
@@ -55,6 +57,8 @@ async function capture(): Promise<Omit<FullBackupPayload, "checksum">> {
   try {
     for (const name of await FileSystem.readDirectoryAsync(PLAYLIST_ROOT)) {
       if (!/^[a-z0-9-]+\.json$/.test(name)) continue;
+      const info = await FileSystem.getInfoAsync(`${PLAYLIST_ROOT}${name}`);
+      if (info.exists && info.size && info.size > MAX_PLAYLIST_BACKUP_BYTES) throw new Error("Saved playlists are too large for a safe TV backup. Export settings only.");
       const raw = await FileSystem.readAsStringAsync(`${PLAYLIST_ROOT}${name}`);
       playlistBytes += raw.length * 2;
       if (playlistBytes > MAX_PLAYLIST_BACKUP_BYTES) throw new Error("Saved playlists are too large for a safe TV backup. Remove an unused playlist or old catalog and try again.");
@@ -68,6 +72,9 @@ async function capture(): Promise<Omit<FullBackupPayload, "checksum">> {
 function parse(raw: string): FullBackupPayload {
   const value = JSON.parse(raw) as FullBackupPayload;
   if (value?.format !== FORMAT || value.version !== VERSION || typeof value.settings !== "object" || typeof value.personalPlaylistUrls !== "object" || typeof value.playlistFiles !== "object" || !value.customization || typeof value.manualEpgBindings !== "object") throw new Error("This is not a supported Charming MediaLab full backup.");
+  if (value.scope != null && value.scope !== "settings" && value.scope !== "live-tv") throw new Error("Unsupported backup coverage.");
+  if (Object.entries(value.settings).some(([key,raw]) => !allowedKey(key) || typeof raw !== "string")) throw new Error("Invalid backup settings.");
+  if (Object.entries(value.personalPlaylistUrls).some(([id,url]) => !/^user-[a-z0-9-]+$/.test(id) || typeof url !== "string")) throw new Error("Invalid personal playlist backup.");
   const { checksum: supplied, ...body } = value;
   if (!supplied || checksum(withoutChecksum(body)) !== supplied) throw new Error("Backup integrity check failed. The file may be incomplete or changed.");
   return value;
@@ -103,6 +110,14 @@ async function applyBindings(next: NativeEpgBindingMap) {
   for (const [channelId, xmltvId] of Object.entries(next)) await setNativeEpgBinding(channelId, xmltvId);
 }
 async function apply(value: FullBackupPayload) {
+  if (value.scope === "settings") {
+    const entries = Object.entries(value.settings);
+    if (entries.some(([key, raw]) => !SAFE_SETTINGS.has(key) || typeof raw !== "string")) throw new Error("Invalid settings backup.");
+    const previous = await AsyncStorage.multiGet(entries.map(([key]) => key));
+    try { await AsyncStorage.multiSet(entries); }
+    catch (error) { await AsyncStorage.multiSet(previous.filter((entry): entry is [string,string] => entry[1] != null)); await AsyncStorage.multiRemove(previous.filter(([,v]) => v == null).map(([k])=>k)); throw error; }
+    return;
+  }
   const currentAllowedKeys = (await AsyncStorage.getAllKeys()).filter(allowedKey).slice(0, 300);
   const currentSettings = Object.fromEntries((await AsyncStorage.multiGet(currentAllowedKeys)).flatMap(([key, raw]) => raw == null ? [] : [[key, raw]]));
   const currentCustomization = await readNativeCustomization();
@@ -156,15 +171,25 @@ async function apply(value: FullBackupPayload) {
     throw error;
   }
 }
-export async function writeFullBackup() {
+export async function writeFullBackup(password: string, settingsOnly = false) {
   if (!ROOT) throw new Error("App storage is unavailable.");
-  const body = await capture();
-  const raw = JSON.stringify({ ...body, checksum: checksum(withoutChecksum(body)) }, null, 2);
-  const fileName = `${PREFIX}${timestamp()}.json`;
+  if (!settingsOnly && (password.length < 10 || password.length > 256)) throw new Error("Use a backup password of 10 to 256 characters.");
+  const body: Omit<FullBackupPayload,"checksum"> = settingsOnly ? {
+    format: FORMAT, version: VERSION, createdAt: new Date().toISOString(), scope:"settings",
+    settings: Object.fromEntries((await AsyncStorage.multiGet([...SAFE_SETTINGS])).filter((entry): entry is [string,string] => entry[1] != null)),
+    personalPlaylistUrls:{}, playlistFiles:{}, customization: {hiddenIds:[],customNumbers:{},customOrder:[],groups:[]} as NativeCustomizationSnapshot, manualEpgBindings:{}
+  } : {...await capture(),scope:"live-tv"};
+  let raw = JSON.stringify({ ...body, checksum: checksum(withoutChecksum(body)) });
+  if (raw.length > 16 * 1024 * 1024) throw new Error("Backup exceeds the safety limit. Export settings only or remove unused playlists.");
+  if (!settingsOnly) {
+    if (!NativeModules.CharmBackupCrypto) throw new Error("Install the updated Android app to create encrypted backups.");
+    raw = await NativeModules.CharmBackupCrypto.encrypt(raw,password);
+  }
+  const fileName = `${PREFIX}${timestamp()}-${settingsOnly ? "settings" : "encrypted"}.json`;
   const portable = await writePortable(raw, fileName);
   return { fileName, portable };
 }
-export async function restoreFullBackup() {
+export async function restoreFullBackup(password: string) {
   const candidates: { uri: string; name: string }[] = [];
   try { for (const name of await FileSystem.readDirectoryAsync(ROOT)) if ((name.startsWith(PREFIX) || name.startsWith("CharmIPTV-Full-Backup-")) && name.endsWith(".json")) candidates.push({ uri: `${ROOT}${name}`, name }); } catch {}
   if (!candidates.length && Platform.OS === "android") {
@@ -178,6 +203,19 @@ export async function restoreFullBackup() {
   candidates.sort((a, b) => b.name.replace(/^.*Backup-/, "").localeCompare(a.name.replace(/^.*Backup-/, "")));
   if (!candidates.length) throw new Error("No Charming MediaLab full backup was found.");
   const selected = candidates[0];
-  await apply(parse(await FileSystem.readAsStringAsync(selected.uri)));
+  const info = await FileSystem.getInfoAsync(selected.uri);
+  if (info.exists && info.size && info.size > 23 * 1024 * 1024) throw new Error("Backup exceeds the safety limit.");
+  let raw = await FileSystem.readAsStringAsync(selected.uri);
+  if (raw.length > 23 * 1024 * 1024) throw new Error("Backup exceeds the safety limit.");
+  if (raw.startsWith("CMLBACKUP1.")) {
+    if (!NativeModules.CharmBackupCrypto) throw new Error("Install the updated app to restore this encrypted backup.");
+    raw = await NativeModules.CharmBackupCrypto.decrypt(raw,password);
+  }
+  const parsed = parse(raw);
+  const accepted = await new Promise<boolean>(resolve => Alert.alert("Restore backup?",
+    `${selected.name}\nCreated: ${parsed.createdAt}\n${parsed.scope === "settings" ? "Replaces the included basic Live TV settings and favorites. Playlists and provider credentials stay unchanged." : "Replaces saved Live TV settings, playlists, provider addresses, channel customizations and guide assignments."}\nVOD data and account logins are not restored. Restart the app afterwards.`,
+    [{text:"Cancel",style:"cancel",onPress:()=>resolve(false)},{text:"Restore",onPress:()=>resolve(true)}],{cancelable:true,onDismiss:()=>resolve(false)}));
+  if (!accepted) throw new Error("Restore cancelled. No settings changed.");
+  await apply(parsed);
   return selected.name;
 }

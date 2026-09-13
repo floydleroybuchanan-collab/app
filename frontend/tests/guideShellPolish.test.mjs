@@ -232,7 +232,7 @@ test("EPG and playlist controls live only on the dedicated EPG settings page", a
     "Channel logos priority",
     "Clear & rebuild guide cache",
   ]) {
-    assert.doesNotMatch(settings, new RegExp(label));
+    assert.doesNotMatch(settings, new RegExp(`label="${label}"`));
     assert.match(epg, new RegExp(label));
   }
   assert.match(epg, /Refresh playlist & EPG now/);

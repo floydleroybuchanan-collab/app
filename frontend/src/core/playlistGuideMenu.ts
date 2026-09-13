@@ -45,5 +45,5 @@ export function buildPlaylistMenu(
   sections.push({ id: "all", label: "All Playlists", count, groups: [
     { key: "All", label: "All Channels", count }, { key: "Favorites", label: "Favorites", count: favoriteCount },
   ] });
-  return sections;
+  return [sections[sections.length-1], ...sections.slice(0,-1)];
 }

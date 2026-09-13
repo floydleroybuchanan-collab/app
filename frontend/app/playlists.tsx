@@ -27,6 +27,7 @@ function Action({ label, onPress, disabled = false }: { label: string; onPress: 
 
 export default function PlaylistsScreen() {
   const router = useRouter();
+  const [advanced, setAdvanced] = useState<string | null>(null);
   const { notice } = useAuth();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const playlists = usePlaylists();
@@ -114,13 +115,17 @@ export default function PlaylistsScreen() {
         <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => router.push("/epg-sources" as any)} />
         {playlists.map((source) => <View key={source.id} style={styles.card}>
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
+          <Action label="Manage groups / hide tabs" disabled={!source.enabled} onPress={() => router.push({pathname:"/group-settings" as any,params:{playlistId:source.id}})} />
           <Text style={styles.help}>{source.enabled ? "Enabled" : "Disabled — saved channels retained"} · {source.count.toLocaleString()} channels · {source.status}</Text>
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
           {source.kind === "xtream" && source.account && <Text style={styles.help}>Xtream · Last validation: {source.account.status} · {source.account.expires ? "Expires " + new Date(source.account.expires).toLocaleDateString() : "No expiry supplied"} · Last reported connections {source.account.activeConnections}/{source.account.maxConnections || "unspecified"}</Text>}
           {!!source.tombstoneCount && <Text style={styles.help}>{source.tombstoneCount.toLocaleString()} temporarily missing channel record(s) retained so favorites, ordering, groups, and EPG assignments can return if the provider restores them.</Text>}
           {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
           <Text style={styles.health}>{!source.enabled ? "Disabled — saved catalog retained; not included in the active guide." : health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
-          <Action label={`Playlist EPG detection: ${source.autoEpg === false ? "Off — manual" : "On"}`} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { autoEpg: source.autoEpg === false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
+          <Action label={advanced === source.id ? "Hide Advanced" : "Advanced: guide, schedule and ordering"} disabled={busy} onPress={() => setAdvanced(advanced === source.id ? null : source.id)} />
+          <Action label={source.enabled ? "Disable" : "Enable"} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id,{enabled:!source.enabled}); await reloadPlaylistCatalog(); })} />
+          <Action label="Refresh playlist + EPG" disabled={busy || !source.enabled} onPress={() => void run(() => refreshOnePlaylistAndGuide(source.id))} />
+          {advanced === source.id && <><Action label={`Playlist EPG detection: ${source.autoEpg === false ? "Off — manual" : "On"}`} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { autoEpg: source.autoEpg === false }); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); })} />
           <View style={styles.row}>
             <Action label={source.enabled ? "Disable" : "Enable"} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id, { enabled: !source.enabled }); await reloadPlaylistCatalog(); })} />
             <Action label="Refresh playlist only" disabled={busy || !source.enabled} onPress={() => void run(() => refreshOnePlaylistOnly(source.id))} />
@@ -130,12 +135,13 @@ export default function PlaylistsScreen() {
             <Action label="Move up" disabled={busy} onPress={() => void run(async () => { await movePlaylist(source.id, -1); await reloadPlaylistCatalog(); })} />
             <Action label="Move down" disabled={busy} onPress={() => void run(async () => { await movePlaylist(source.id, 1); await reloadPlaylistCatalog(); })} />
           </View>
+          </>}
           {!source.managed && <View style={styles.row}>
             <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { const saved = await getPlaylistUrl(source); const xc = decodeXtream(saved);
               setSourceKind(xc ? "xtream" : "m3u"); setUrl(xc?.server || saved); setXcUser(xc?.username || ""); setXcPassword(xc?.password || ""); setXcOutput(xc?.output || "ts"); setName(source.name); setPreview(null); setEditing(source.id); })} />
             <Action label={removeArmed === source.id ? "Confirm remove playlist" : "Remove playlist"} disabled={busy} onPress={() => { if (removeArmed !== source.id) { setRemoveArmed(source.id); return; } void run(async () => { await removePlaylist(source.id); await reloadPlaylistCatalog(); setRemoveArmed(""); }); }} />
           </View>}
-          {<>
+          {advanced === source.id && <>
             <Text style={styles.text}>Associated EPG feeds — the numbered order is the fallback priority. Manual channel assignments always win. Automatic matching uses exact IDs first, then unique names, guarded callsigns, unique logos, and conservative fuzzy matching.</Text>
             {source.epgSourceIds.map((epgId, index) => {
               const epg = availableEpg.find((item) => item.id === epgId);

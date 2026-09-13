@@ -138,3 +138,9 @@ export function useParentalPin() {
     }, []),
   };
 }
+
+/** Used by alternate playback entry points before opening a channel. */
+export async function isPlaybackGroupLocked(groups: string[]): Promise<boolean> {
+  const state = await load();
+  return !!state.pin && groups.some(group => state.lockedGroups.includes(group) && !sessionUnlocked.has(group));
+}

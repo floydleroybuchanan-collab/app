@@ -29,6 +29,9 @@ import java.lang.ref.WeakReference
 internal object NativeMultiview {
   private data class Pane(val revision: Int, val channel: String, val uri: String, val headers: Map<String,String>, val type: String?) {
     var player: ExoPlayer? = null
+    var audioChoice: Pair<String?, String?>? = null
+    var textChoice: Pair<String?, String?>? = null
+    var captionsOff: Boolean? = null
   }
   private val panes = mutableMapOf<Int, Pane>()
   private val surfaces = mutableMapOf<Int, WeakReference<MultiviewSurface>>()
@@ -96,7 +99,22 @@ internal object NativeMultiview {
         .setMaxVideoSize(1920, 1080).setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, slot != audible)
         .setPreferredAudioLanguage(audioLanguage).setPreferredTextLanguage(textLanguage)
         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, textLanguage.isBlank()).build()
+      var restoredTracks = false
       player.addListener(object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+          if (restoredTracks || panes[slot] !== pane || pane.player !== player || tracks.groups.isEmpty()) return
+          restoredTracks = true
+          val builder = player.trackSelectionParameters.buildUpon()
+          for ((type,choice) in listOf(C.TRACK_TYPE_AUDIO to pane.audioChoice, C.TRACK_TYPE_TEXT to pane.textChoice)) {
+            if (choice == null) continue
+            val match = tracks.groups.filter { it.type == type }.flatMap { group ->
+              (0 until group.length).filter { group.isTrackSupported(it) }.map { group to it }
+            }.firstOrNull { (group,index) -> group.getTrackFormat(index).let { it.language == choice.first && it.label == choice.second } }
+            if (match != null) builder.clearOverridesOfType(type).addOverride(TrackSelectionOverride(match.first.mediaTrackGroup,match.second))
+          }
+          pane.captionsOff?.let { builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT,it) }
+          player.trackSelectionParameters = builder.setTrackTypeDisabled(C.TRACK_TYPE_AUDIO,slot != audible).build()
+        }
         override fun onPlaybackStateChanged(state: Int) {
           if (panes[slot] !== pane || pane.player !== player) return
           // This is a startup deadline, not a deadline for a later live rebuffer.
@@ -161,6 +179,8 @@ internal object NativeMultiview {
           if (index == 0) builder.setTrackTypeDisabled(type, subtitles)
           else tracks.getOrNull(index-1)?.let { (group,track) -> builder.setTrackTypeDisabled(type,false).addOverride(TrackSelectionOverride(group.mediaTrackGroup,track)) }
           if (!subtitles) builder.setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, slot != audible)
+          val choice = tracks.getOrNull(index-1)?.let { (group,track) -> group.getTrackFormat(track).let { it.language to it.label } }
+          panes[slot]?.let { pane -> if(subtitles) { pane.textChoice = choice; pane.captionsOff = index == 0 } else pane.audioChoice = choice }
           player.trackSelectionParameters = builder.build()
         }
       }.setNegativeButton("Close",null).show()
