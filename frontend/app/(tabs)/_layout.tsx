@@ -7,7 +7,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: { display: "none" },
-        sceneStyle: { backgroundColor: "#0B0C12" },
+        sceneStyle: { backgroundColor: "#070711" },
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Live TV" }} />
