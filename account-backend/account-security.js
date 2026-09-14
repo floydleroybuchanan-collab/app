@@ -1,4 +1,11 @@
 import {now,q,rows,settings,fail,event} from './bot-store.js';
+import {send} from './bot-telegram.js';
+
+async function securityNotice(env,id,text,buttons){
+ if(!id||!env.TELEGRAM_BOT_TOKEN)return;
+ try{await send({...env,BOT_GROUP_REPLY:undefined,BOT_INTERACTION:{recipient:id,generation:crypto.randomUUID()}},id,text,buttons);}
+ catch(error){await event(env,id,'security_notice_failed',String(error.telegramCode||'delivery'));}
+}
 
 export const securityHash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');
 const secret=()=>Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -115,6 +122,7 @@ export async function securityApi(request,env,helpers){
   const created=await env.DB.batch(statements);
   if(recovery&&!created[0].meta.changes){await q(env,"UPDATE account_challenges SET status='canceled' WHERE id=?1",id).run();fail('This recovery code was already used. Contact your Admin.',409);}
   const s=await settings(env);
+  if(kind==='reset'&&telegramId)await securityNotice(env,telegramId,'A password reset was requested for '+user.username+'. Approve only if you started it in Charming MediaLab. Never send your password here. This request expires in ten minutes.',{inline_keyboard:[[{text:'Approve Reset',callback_data:'flow:yes:'+id},{text:'Deny',callback_data:'flow:no:'+id}]]});
   return json({success:true,token,code:code.slice(0,4)+'-'+code.slice(4),expires_at:t+600,bot_username:s.bot_username,telegram_url:'https://t.me/'+s.bot_username+'?start=flow_'+botToken},201);
  }
  if(path==='/auth/challenges/status'&&request.method==='POST'){
@@ -150,6 +158,7 @@ export async function securityApi(request,env,helpers){
   if(!result[0].meta.changes)fail('This reset is no longer available. Start again or contact an Admin.',409);
   await audit(env,c.user_id,null,'password_reset_telegram_approved',null);
   if(recoveryId)await audit(env,c.user_id,null,'telegram_identity_recovered',null);
+  await securityNotice(env,c.telegram_id,'Your Charming MediaLab password was reset. All previous app sessions were signed out. If you did not do this, contact an Admin immediately.');
   return json({success:true,message:'Password reset. Sign in with your new password.'});
  }
  return null;

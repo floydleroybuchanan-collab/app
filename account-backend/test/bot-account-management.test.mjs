@@ -55,3 +55,11 @@ test('app invite creation requires confirmation and returns only a registration 
  const f=await setup();await f.message(11111,'Mr Charm create invite 30 2');assert.equal(f.db.prepare('SELECT COUNT(*) n FROM invites').get().n,0);
  await f.callback(11111,'manage:confirm');assert.equal(f.db.prepare('SELECT COUNT(*) n FROM invites').get().n,1);assert.ok(f.sent.some(s=>s.body.text?.startsWith('New app invitation:')));assert.ok(!f.sent.some(s=>s.body.text?.includes('password_hash')));
 });
+test('password reset sends private approval and completion notices without passwords',async()=>{
+ const f=await setup();f.user('alice');await f.link(22222,'alice');
+ const request=await f.request('/auth/challenges',{method:'POST',body:{kind:'reset',login:'alice'}});assert.equal(request.status,201);
+ const approval=f.sent.find(s=>s.body.text?.startsWith('A password reset was requested')).body;assert.equal(approval.chat_id,'22222');assert.ok(!approval.ephemeral_message_parameters);
+ const confirm=approval.reply_markup.inline_keyboard[0][0].callback_data;await f.callback(22222,confirm);
+ const password='New-password-for-local-test-only';const result=await f.request('/auth/reset-password',{method:'POST',body:{token:request.body.token,new_password:password}});assert.equal(result.status,200);
+ assert.match(f.last(),/password was reset/);assert.ok(!JSON.stringify(f.sent).includes(password));assert.ok(f.db.prepare("SELECT COUNT(*) n FROM bot_responses WHERE recipient_id='22222'").get().n>0);
+});
