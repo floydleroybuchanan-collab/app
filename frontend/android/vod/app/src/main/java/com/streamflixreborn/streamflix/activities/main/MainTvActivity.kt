@@ -51,10 +51,10 @@ class MainTvActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Il setup delle preferenze è già avvenuto in StreamFlixApp
         setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
-        
+
         super.onCreate(savedInstanceState)
         com.streamflixreborn.streamflix.charm.CharmDesign.install(this)
-        
+
         // Inizializza il provider con il context dell'attività per gestire eventuali bypass visibili
         AnimeOnlineNinjaProvider.init(this)
         Cine24hProvider.init(this)
@@ -97,16 +97,15 @@ class MainTvActivity : FragmentActivity() {
             binding.navMain.headerView?.apply {
                 val header = ContentHeaderMenuMainTvBinding.bind(this)
 
-                // Header-specific transparent artwork avoids the old opaque
-                // square and preserves the circular mark at a true aspect fit.
-                header.ivNavigationHeaderIcon.setImageResource(R.drawable.medialab_rail)
+                // The same artwork as the IPTV shell, kept at its native aspect ratio.
+                header.ivNavigationHeaderIcon.setImageResource(R.drawable.medialab_launcher)
                 header.tvNavigationHeaderTitle.text = getString(R.string.app_name)
                 contentDescription = getString(R.string.charm_vod_provider_access)
                 header.tvNavigationHeaderSubtitle.text = getString(R.string.main_menu_change_provider)
                 val palette = ThemeManager.palette(UserPreferences.selectedTheme)
                 header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
                 header.tvNavigationHeaderSubtitle.setTextColor(palette.tvHeaderSecondary)
-                setBackgroundColor(palette.tvNavBackground)
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
                 setOnOpenListener {
                     header.tvNavigationHeaderTitle.visibility = View.VISIBLE
@@ -122,6 +121,10 @@ class MainTvActivity : FragmentActivity() {
                     navController.navigate(R.id.providers)
                 }
             }
+
+            binding.vodBrandHeader.visibility = if (destination.id in setOf(
+                R.id.search, R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.settings
+            )) View.VISIBLE else View.GONE
 
             when (destination.id) {
                 R.id.search, R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.settings -> {
@@ -199,15 +202,17 @@ class MainTvActivity : FragmentActivity() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
-        binding.navMain.setBackgroundColor(palette.tvNavBackground)
+        if (UserPreferences.selectedTheme == ThemeManager.DEFAULT) {
+            binding.navMain.background = com.streamflixreborn.streamflix.charm.CharmBrandBackdrop(rail = true)
+        } else binding.navMain.setBackgroundColor(palette.tvNavBackground)
         binding.navMain.headerView?.let { headerView ->
-            headerView.setBackgroundColor(palette.tvNavBackground)
+            headerView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
             val header = ContentHeaderMenuMainTvBinding.bind(headerView)
             header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
             header.tvNavigationHeaderSubtitle.setTextColor(palette.tvHeaderSecondary)
         }
     }
-    
+
     private fun updateNavigationVisibility() {
         UserPreferences.currentProvider?.let { provider ->
             binding.navMain.menu.findItem(R.id.movies)?.isVisible = Provider.supportsMovies(provider)

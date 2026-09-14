@@ -26,10 +26,10 @@ import com.streamflixreborn.streamflix.R
 
 /** Shared app-owned chrome. Playback surfaces and focus listeners remain owned by their screens. */
 object CharmDesign {
-    private const val PANEL = 0xFF171923.toInt()
-    private const val RAISED = 0xFF21232F.toInt()
-    private const val PURPLE = 0xFF8555E8.toInt()
-    private const val BORDER = 0xFF393747.toInt()
+    private const val PANEL = 0xFF10101E.toInt()
+    private const val RAISED = 0xFF151427.toInt()
+    private const val PURPLE = 0xFF7C3AED.toInt()
+    private const val BORDER = 0xFF3B3560.toInt()
     private var regular: Typeface? = null
     private var semibold: Typeface? = null
     private fun dp(view: View, value: Int) = (value * view.resources.displayMetrics.density).toInt()
@@ -37,6 +37,15 @@ object CharmDesign {
     fun install(activity: FragmentActivity) {
         activity.supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
             override fun onFragmentViewCreated(manager: FragmentManager, fragment: Fragment, view: View, state: Bundle?) {
+                val brandedScreen = fragment.javaClass.simpleName in setOf(
+                    "HomeTvFragment", "HomeMobileFragment", "MoviesTvFragment", "MoviesMobileFragment",
+                    "TvShowsTvFragment", "TvShowsMobileFragment", "FavoritesTvFragment", "FavoritesMobileFragment",
+                    "SettingsTvFragment", "SettingsMobileFragment", "SearchTvFragment", "SearchMobileFragment",
+                    "ProvidersTvFragment", "ProvidersMobileFragment")
+                if (brandedScreen &&
+                    com.streamflixreborn.streamflix.utils.UserPreferences.selectedTheme == com.streamflixreborn.streamflix.utils.ThemeManager.DEFAULT) {
+                    view.background = CharmBrandBackdrop()
+                }
                 styleTree(view)
             }
         }, true)
@@ -44,7 +53,7 @@ object CharmDesign {
 
     private fun shape(view: View, color: Int, stroke: Int, width: Int = 1): GradientDrawable = GradientDrawable().apply {
         setColor(color)
-        cornerRadius = dp(view, 12).toFloat()
+        cornerRadius = dp(view, 16).toFloat()
         setStroke(dp(view, width), stroke)
     }
 
@@ -52,8 +61,12 @@ object CharmDesign {
         addState(intArrayOf(-android.R.attr.state_enabled), shape(view, PANEL, BORDER))
         addState(intArrayOf(android.R.attr.state_focused), shape(view, PURPLE, Color.WHITE, 2))
         addState(intArrayOf(android.R.attr.state_pressed), shape(view, PURPLE, Color.WHITE, 2))
-        addState(intArrayOf(android.R.attr.state_selected), shape(view, 0xFF372750.toInt(), PURPLE))
-        addState(intArrayOf(), shape(view, if (primary) 0xFF7541D4.toInt() else RAISED, if (primary) PURPLE else BORDER))
+        addState(intArrayOf(android.R.attr.state_selected), shape(view, 0xFF25143F.toInt(), PURPLE))
+        addState(intArrayOf(), if (primary) GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(0xFF9E42E8.toInt(), 0xFF6320AF.toInt())).apply {
+                cornerRadius = dp(view, 22).toFloat()
+                setStroke(dp(view, 1), 0xFFE1CEF4.toInt())
+            } else shape(view, RAISED, BORDER))
     }
 
     fun styleTree(root: View) {
@@ -67,10 +80,11 @@ object CharmDesign {
             if (view is TextView) {
                 view.typeface = if (view.typeface?.isBold == true || view is Button || name.contains("title") || name.contains("header")) semibold else regular
                 if (view.currentTextColor == Color.BLACK) view.setTextColor(Color.WHITE)
+                if (name.contains("title") || name.contains("header")) view.setTextColor(0xFFECEBF2.toInt())
                 if (view is EditText) {
                     view.backgroundTintList = ColorStateList.valueOf(PURPLE)
                     view.setTextColor(Color.WHITE)
-                    view.setHintTextColor(0xFFABA7BC.toInt())
+                    view.setHintTextColor(0xFFAAA7BB.toInt())
                 }
             }
             val action = view is Button || name.startsWith("btn_") || view is android.widget.ImageButton
