@@ -492,10 +492,11 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         }
 
         findPreference<Preference>("p_settings_telegram")?.apply {
+            title = getString(R.string.charm_community_title)
             isEnabled = true
             isSelectable = true
             setOnPreferenceClickListener {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.charm_vod_telegram_url))))
+                com.streamflixreborn.streamflix.charm.CharmCommunityAccess.open(this@SettingsTvFragment, this)
                 true
             }
         }

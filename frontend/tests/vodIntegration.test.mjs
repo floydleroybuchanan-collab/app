@@ -32,3 +32,18 @@ test('default provider is selected once and embedded VOD never offers upstream A
   assert.match(updater,/CHARM_VOD_EMBEDDED\) return null/);
   assert.match(updater,/CHARM_VOD_EMBEDDED\) return emptyList\(\)/);
 });
+
+test('both VOD community controls resolve the panel link without embedding a room invitation',()=>{
+  const base='android/vod/app/src/main/';
+  for(const layout of ['Tv','Mobile']) {
+    assert.match(read(base+`java/com/streamflixreborn/streamflix/fragments/settings/Settings${layout}Fragment.kt`),/CharmCommunityAccess\.open\(/);
+  }
+  const strings=read(base+'res/values/charm_vod_strings.xml');
+  assert.doesNotMatch(strings,/https:\/\/(?:t\.me|telegram\.me)\/(?:\+|joinchat\/)/);
+  const api=read('src/auth/accountApi.ts').match(/ACCOUNT_API_BASE_URL = "([^"]+)"/)[1];
+  assert.ok(strings.includes(api));
+  const community=read(base+'java/com/streamflixreborn/streamflix/charm/CharmCommunityAccess.kt');
+  assert.match(community,/\/auth\/community/);
+  assert.match(community,/"community_url"/);
+  assert.match(community,/QrUtils\.generate\(/);
+});

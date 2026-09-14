@@ -5,5 +5,10 @@
     <string name="charm_vod_skip">Press OK or tap to enter</string>
     <string name="charm_vod_provider_access">Charming MediaLab — choose a provider</string>
     <string name="charm_vod_telegram_pending">Open the Charming MediaLab community</string>
-    <string name="charm_vod_telegram_url" translatable="false">https://t.me/+f2Pr2-L3WWI4MDJh</string>
+    <string name="charm_account_api_url" translatable="false">https://charmiptv-account-api.agentleakage.workers.dev</string>
+    <string name="charm_community_title">Charming Community</string>
+    <string name="charm_community_instructions">Scan with your phone to open Telegram. New members request to join and wait for approval. This does not transfer an existing app account.</string>
+    <string name="charm_community_open">Open Telegram</string>
+    <string name="charm_community_phone">Open this screen again and scan the QR code with your phone.</string>
+    <string name="charm_community_error">The community link is unavailable right now. Please try again or contact Mr. Charm.</string>
 </resources>
