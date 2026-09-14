@@ -20,7 +20,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:text="Season #" />
+        tools:text="Season #"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_episodes"

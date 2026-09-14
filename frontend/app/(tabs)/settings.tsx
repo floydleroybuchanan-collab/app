@@ -1,4 +1,5 @@
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
+import {AccountSecurityDialog,type SecurityScreen} from '@/src/components/AccountSecurityDialog';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -38,7 +39,7 @@ import {
   writeFavoritesBackup,
 } from "@/src/utils/favoritesBackup";
 import { formatDiagnosticsExport } from "@/src/core/diagnosticsExport";
-import { getNativePlaybackHealth } from "@/src/nativePlayback";
+import { getNativePlaybackHealth,getNativeAudioOutputMode,setNativeAudioOutputMode } from "@/src/nativePlayback";
 import {
   audioDiagnosticsExtras,
   getLastAudioDiagnostics,
@@ -122,7 +123,6 @@ const TILES: Tile[] = [
 ];
 
 const ADULT_GROUP_RE = /adult|xxx|porn/i;
-const TELEGRAM_COMMUNITY_URL = "https://t.me/+f2Pr2-L3WWI4MDJh";
 
 function formatAccountExpiry(value: number | string | null | undefined): string {
   if (value == null || value === "") return "—";
@@ -159,6 +159,7 @@ function SettingsScreenContent() {
   const router = useRouter();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
+  const [securityScreen,setSecurityScreen]=useState<SecurityScreen|null>(null);
   const {
     channels,
     favorites,
@@ -202,6 +203,8 @@ function SettingsScreenContent() {
   const parental = useParentalPin();
   const subtitles = useSubtitlePreferences();
   const audioPreferences = useAudioTrackPreferences();
+  const [audioOutput,setAudioOutput]=useState<'auto'|'stereo'>('auto');
+  useEffect(()=>{let stopped=false;void getNativeAudioOutputMode().then(mode=>{if(!stopped)setAudioOutput(mode);}).catch(()=>{});return()=>{stopped=true;};},[]);
   const latestAudio = getLastAudioDiagnostics();
   const [section, setSection] = useState<Section | null>(null);
   const [busy, setBusy] = useState(false);
@@ -696,6 +699,7 @@ function SettingsScreenContent() {
                 />
                 <View style={styles.divider} />
                 <Text style={styles.settingLabel}>Audio / CC</Text>
+                {Platform.OS==='android'&&<><ChoiceRow<'auto'|'stereo'> label="Audio output" value={audioOutput} options={[{label:'Automatic',value:'auto'},{label:'Stereo compatibility',value:'stereo'}]} onChange={mode=>{void setNativeAudioOutputMode(mode).then(()=>setAudioOutput(mode)).catch(error=>Alert.alert('Audio output',error.message));}}/><Text style={styles.help}>If surround sound stutters, try Stereo compatibility. It mixes dialogue and surround channels into two speakers. Close playback and reopen it to apply. Applies to Live TV, MultiView and the built-in VOD player.</Text></>}
                 <Text style={styles.help}>
                   Preferred audio language auto-selects a matching native Media3 track.
                   The last working track is remembered per channel (up to 128). Use Audio/CC in the fullscreen player to pick a track manually.
@@ -1104,6 +1108,10 @@ function SettingsScreenContent() {
                 <InfoRow label="Simultaneous sessions" value={accountUser?.max_sessions != null ? String(accountUser.max_sessions) : "Managed by account"} />
                 <Text style={styles.help}>Session limits and expired or revoked access are enforced by the Charming MediaLab account service.</Text>
                 <Action label="Sign Out" icon="log-out-outline" onPress={() => void signOut()} />
+                <Action label="Change Password" icon="lock-closed-outline" onPress={()=>setSecurityScreen('password')} />
+                <Action label="Account Security & Activity" icon="shield-outline" onPress={()=>setSecurityScreen('security')} />
+                <Action label="Link Telegram / Account Recovery" icon="shield-checkmark-outline" onPress={()=>setSecurityScreen('link')} />
+                {securityScreen&&<AccountSecurityDialog kind={securityScreen} onClose={()=>setSecurityScreen(null)} />}
                 <View style={styles.divider} />
                 <Text style={styles.dangerTitle}>Permanently cancel account</Text>
                 <Text style={styles.help}>This immediately deletes your account, sessions, personal information, and server-side preferences. It cannot be undone. If this account used a friend&apos;s invitation, their available capacity is returned automatically.</Text>
@@ -1209,7 +1217,8 @@ function SettingsScreenContent() {
                 <Text style={styles.help}>This branch changes presentation and navigation while preserving the optimized playback, guide, cache, and source architecture underneath.</Text>
                 <View style={styles.divider} />
                 <Text style={styles.help}>Questions, announcements, and community help:</Text>
-                <Action label="Open Charming MediaLab Telegram" icon="paper-plane-outline" onPress={() => void Linking.openURL(TELEGRAM_COMMUNITY_URL)} />
+                <Action label="Telegram Community · Request to Join" icon="paper-plane-outline" onPress={()=>setSecurityScreen('community')} />
+                {securityScreen==='community'&&<AccountSecurityDialog kind="community" onClose={()=>setSecurityScreen(null)} />}
                 <View style={styles.divider} />
                 <Text style={styles.settingLabel}>Account privacy</Text>
                 <Text style={styles.help}>Charming MediaLab keeps the username, email, password hash, account timer, and session records needed to operate your account. Canceling or reaching the account expiration time permanently removes that account data. A referring user may retain only an anonymous Invite number, status, and dates—never your username, email, or password.</Text>

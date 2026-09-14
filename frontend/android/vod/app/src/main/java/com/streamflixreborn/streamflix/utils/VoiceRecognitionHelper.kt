@@ -45,7 +45,7 @@ class VoiceRecognitionHelper(
             }
 
             fragment.shouldShowRequestPermissionRationale(permission) -> {
-                AlertDialog.Builder(context)
+                com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(context)
                     .setTitle(context.getString(R.string.voice_permission_title))
                     .setMessage(context.getString(R.string.voice_permission_rationale))
                     .setPositiveButton(android.R.string.ok) { _, _ ->

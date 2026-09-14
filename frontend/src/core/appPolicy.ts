@@ -1,4 +1,4 @@
-export type AppPolicy = { multiview_max: number; provider_limits: Record<string,number>; update: { version_code:number; message:string; url:string } };
+export type AppPolicy = { multiview_max: number; provider_limits: Record<string,number>; announcements_supported?:boolean; update: { version_code:number; message:string; url:string } };
 const DEFAULT: AppPolicy = {multiview_max:4,provider_limits:{},update:{version_code:0,message:"",url:""}};
 let current=DEFAULT;
 const listeners=new Set<()=>void>();
@@ -14,7 +14,7 @@ export function configureAppPolicy(raw?: Partial<AppPolicy> | null) {
   const update=raw?.update;
   let validUrl=false;
   try { const url=new URL(update?.url||""); validUrl=url.protocol==="https:"&&!url.username&&!url.password&&!url.hash; } catch {}
-  current={multiview_max:raw==null?4:typeof cap==="number"&&Number.isInteger(cap)?Math.max(0,Math.min(4,cap)):0,provider_limits:limits,
+  current={announcements_supported:raw?.announcements_supported===true,multiview_max:raw==null?4:typeof cap==="number"&&Number.isInteger(cap)?Math.max(0,Math.min(4,cap)):0,provider_limits:limits,
     update:validUrl&&update&&Number.isInteger(update.version_code)&&typeof update.message==="string"?{version_code:update.version_code,message:update.message.slice(0,500),url:update.url}:DEFAULT.update};
   listeners.forEach(fn=>fn());
 }

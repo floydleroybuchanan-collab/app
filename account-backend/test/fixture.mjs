@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync,readdirSync } from "node:fs";
 import { createHash, pbkdf2Sync } from "node:crypto";
 import worker from "../worker.js";
 
@@ -33,7 +33,7 @@ export function fixture() {
     return u;
   }
   user(OWNER, { role: "admin", expires_at: null });
-  for (const name of ["0002_user_referrals.sql", "0003_owner_admin_controls.sql", "0004_shared_admin_login.sql", "0005_mr_charm.sql", "0006_telegram_group_invites.sql", "0007_app_controls.sql", "0008_telegram_contacts.sql"])
+  for (const name of readdirSync(new URL('../migrations/',import.meta.url)).filter(name=>name.endsWith('.sql')).sort())
     db.exec(readFileSync(new URL("../migrations/"+name, import.meta.url),"utf8"));
   function prepare(sql, values=[]) {
     function execute(kind) {

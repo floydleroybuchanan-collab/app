@@ -48,7 +48,8 @@
             app:layout_constraintEnd_toStartOf="@id/btn_search_clear"
             app:layout_constraintStart_toEndOf="@id/ic_search"
             app:layout_constraintTop_toTopOf="parent"
-            tools:ignore="Autofill,UnusedAttribute" />
+            tools:ignore="Autofill,UnusedAttribute"
+        android:fontFamily="@font/charm_geist_regular" />
 
         <ImageView
             android:id="@+id/btn_search_clear"

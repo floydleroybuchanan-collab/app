@@ -1,4 +1,9 @@
 import {supportContacts} from './telegram-contacts.js';
+import {telegramTransport,rememberResponse,cleanExpiredResponses} from './bot-delivery.js';
+import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu} from './bot-commands.js';
+import {accountFlow} from './bot-account-flow.js';
+import {botAnnouncementFlow} from './bot-announcements.js';
+import {accountManagement} from './bot-account-management.js';
 import {brandText,brandedTelegramBody} from './branding.js';
 import {now,q,rows,settings,content,event,member,assignToken,fail} from './bot-store.js';
 import {handleGroupJoinRequest,recordGroupAdmission,maintainGroupInvites,createGroupInvite,revokeGroupInvite} from './bot-group-invites.js';
@@ -11,21 +16,16 @@ export async function telegram(env,method,body){
  if(target&&['sendMessage','sendRichMessage'].includes(method)&&String(body.chat_id)===target.user_id){
   body={...body,chat_id:target.chat_id,ephemeral_message_parameters:{receiver_user_id:Number(target.user_id),...(target.callback_query_id?{callback_query_id:target.callback_query_id}:{})},...(target.message_thread_id?{message_thread_id:target.message_thread_id}:{})};
  }
- const response=await (env.TELEGRAM_FETCH||fetch)('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
- const data=await response.json();
- if(!response.ok||!data.ok){const e=new Error('Telegram could not complete '+method+' ('+(data.error_code||response.status)+').');e.status=502;e.telegramCode=data.error_code;e.telegramMethod=method;e.description=data.description||'';throw e;}
- return data.result;
+ const result=await telegramTransport(env,method,body);
+ await rememberResponse(env,method,body,result);
+ return result;
 }
 const keyboard=items=>({inline_keyboard:items.map(([text,data])=>[{text,callback_data:data}])});
 const activate=s=>({inline_keyboard:[[{text:'Activate Mr. Charm',url:'https://t.me/'+s.bot_username+'?start=help'}]]});
 const groupHelp=()=>keyboard([['💜 Mr. Charm Help','help']]);
 export function splitText(text,max=3500){const out=[];while(text.length>max){let n=text.lastIndexOf('\n',max);if(n<max/2)n=max;out.push(text.slice(0,n));text=text.slice(n).replace(/^\n/,'');}if(text)out.push(text);return out;}
 const plain=text=>text.replace(/^#{1,6} /gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
-async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(brandText(text)),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
- // Group replies are personal when Telegram supports them. If Telegram falls
- // back to a visible group message, remove it after ten minutes so help,
- // rules and guides do not permanently clutter the discussion.
- if(env.BOT_GROUP_REPLY&&result?.message_id)await q(env,"INSERT INTO bot_jobs(kind,chat_id,message_id,body,due_at) VALUES('delete',?1,?2,'',?3)",env.BOT_GROUP_REPLY.chat_id,result.message_id,now()+600).run();
+export async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(brandText(text)),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
  }return result;}
 async function show(env,id,key,s){const c=await content(env,key);if(!c.enabled||!c.body.trim())return send(env,id,'This information is currently unavailable. Please contact an Admin.');
  if(key==='guide'){const marker='💜 YOUR Charming MediaLab GUIDE\nPART 2 OF 2',pos=c.body.indexOf(marker);if(pos>0){await send(env,id,c.body.slice(0,pos).trim());await send(env,id,c.body.slice(pos));}else await send(env,id,c.body);}
@@ -46,6 +46,7 @@ async function authorizedMember(env,id,s){
  return isMember(live);
 }
 export function intent(text){
+ const exact=exactCommand(text);if(exact)return exact;
  const t=text.toLowerCase().replace(/mr\.?\s*charm/g,'').replace(/^\//,'').trim();
  if(/multiview|multi.view|real.?debrid|xtream|sources|nova|playback help/.test(t))return 'app_help';
  if(/token/.test(t))return 'token';if(/account|login|time remaining|active login/.test(t))return 'account';
@@ -54,9 +55,14 @@ export function intent(text){
  if(/admin|support/.test(t))return 'contact';if(/status/.test(t))return 'status';if(/about/.test(t))return 'about';return 'help';
 }
 async function help(env,id,s){
- const items=[['📖 Charming MediaLab User Guide','guide'],['📥 Download Charming MediaLab','downloads'],['🔑 Account Help','account'],['🛠 Troubleshooting','troubleshooting'],['📜 Rules & Information','rules'],['👤 Contact an Admin','contact'],['❓ About Mr. Charm','about']];
- for(const [key,label] of [['app_help','▶ Sources & Multiview Help'],['whats_new','✨ What’s New'],['status','Service Status']]){const c=await content(env,key);if(c.enabled&&c.body.trim())items.push([label,key]);}
- const result=await send(env,id,'Here’s what I can help you with. Click one of the buttons below.',keyboard(items));
+ const admin=await currentTelegramAdmin(env,id,s,telegram),items=[];
+ for(const command of BOT_COMMANDS){
+  if(command.id==='help'||command.admin&&command.id!=='admin'||command.admin&&!admin)continue;
+  if(command.content){const c=await content(env,command.id);if(!c.enabled||!c.body.trim())continue;}
+  items.push([command.label,command.id]);
+ }
+ try{await syncCommandMenu(env,id,s,admin,telegram);}catch(e){await event(env,id,'command_menu_sync_failed',e.telegramCode?String(e.telegramCode):'network');}
+ const result=await send(env,id,'User Commands · private to you\n\n'+BOT_COMMANDS.filter(c=>!c.admin).map(c=>'/'+c.command+' — '+c.description).join('\n')+'\n\nClick one of the buttons below.',keyboard(items));
  await event(env,id,'help_menu_delivered');return result;
 }
 async function account(env,id,s,tokenOnly){
@@ -136,14 +142,22 @@ async function conversation(env,id,text,data){
   await event(env,id,'support_opened',d.topic);await send(env,id,'Your support ticket is saved for the Admins with your troubleshooting answers.');return true;
  }else return false;
  const result=await send(env,id,prompt,next==='scope'?keyboard([['Everything','answer:Everything'],['Only some channels','answer:Some channels']]):['audio','result'].includes(next)?keyboard([['Yes','answer:Yes'],['No','answer:No']]):next==='details'&&env.BOT_GROUP_REPLY?keyboard([['Send ticket to Admins','answer:Send ticket'],['Back to Help','help']]):undefined);
- // Troubleshooting is a step-by-step conversation. Remove only the prior bot
- // prompt after the next one was delivered; never touch Guides, Rules, user
- // messages, or messages from other bot features.
- if(d.prompt_message?.message_id){try{await telegram(env,'deleteMessage',{chat_id:d.prompt_message.chat_id,message_id:d.prompt_message.message_id});}catch{}}
+ // The shared delivery layer replaces the prior response, including ephemeral
+ // group replies, only after this step was successfully delivered.
  d.prompt_message=result?.message_id?{chat_id:env.BOT_GROUP_REPLY?.chat_id||id,message_id:result.message_id}:null;
  await q(env,'UPDATE bot_conversations SET state=?1,json=?2,updated_at=?3 WHERE telegram_id=?4',next,JSON.stringify(d),now(),id).run();return true;
 }
 async function handleCommand(env,id,cmd,s){
+ if(cmd==='admin'||cmd.startsWith('admin_')){
+  if(!await currentTelegramAdmin(env,id,s,telegram))return send(env,id,'Only current group admins can access Admin tools.');
+  if(cmd==='admin')return send(env,id,'Admin Commands · private to you\nResponses disappear after ten minutes.\n\n'+BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>'/'+c.command+(c.usage?' '+c.usage:'')+' — '+c.description).join('\n'),keyboard(BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>[c.label,c.id]).concat([['User Commands','help']])));
+  if(cmd==='admin_invites')return inviteCommand(env,id,'Mr Charm Invites',{},s);
+  if(['admin_invite','admin_revoke'].includes(cmd)){
+   if(env.BOT_GROUP_REPLY)return send(env,id,'Open Mr. Charm privately to enter invitation details.',{inline_keyboard:[[{text:'Continue privately',url:'https://t.me/'+s.bot_username+'?start='+cmd}]]});
+   await q(env,'INSERT INTO bot_conversations VALUES(?1,?2,?3,?4) ON CONFLICT(telegram_id) DO UPDATE SET state=excluded.state,json=excluded.json,updated_at=excluded.updated_at',id,cmd,'{}',now()).run();
+   return send(env,id,cmd==='admin_invite'?'Enter the recipient’s name or Telegram numeric ID followed by the duration in minutes. Example: John Smith 60.':'Enter the invitation ID from Recent room invitations.',keyboard([['Cancel','admin']]));
+  }
+ }
  if(cmd==='help')return help(env,id,s);
  if(['account','token','downloads'].includes(cmd)||cmd.startsWith('issue:')||cmd==='troubleshooting'){
   if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Your join request must be approved and you must still be in the Charming MediaLab group.');
@@ -163,7 +177,7 @@ async function handleCommand(env,id,cmd,s){
   const topic=cmd.slice(6);if(!topics.includes(topic))return;
   await q(env,"INSERT INTO bot_conversations VALUES(?1,'device',?2,?3) ON CONFLICT(telegram_id) DO UPDATE SET state='device',json=excluded.json,updated_at=excluded.updated_at",id,JSON.stringify({topic}),now()).run();return send(env,id,env.BOT_GROUP_REPLY?'What device are you using? Choose a button below.':'What device are you using? Please type its name and model.',env.BOT_GROUP_REPLY?keyboard(['Fire TV / Fire Stick','Onn box','Android TV / Google TV','Android phone / tablet','Other / Not sure'].map(d=>[d,'answer:'+d])):undefined);
  }
- if(cmd==='faq')return send(env,id,'Your invitation is for one registration. After registration, sign in with your username and password. Do not share your invitation or account. Your connection allowance is simultaneous logins, not permanently registered devices. Admins can review expired or disabled accounts. Mr. Charm cannot reveal or change your password.');
+ if(cmd==='faq')return send(env,id,'Your invitation is for one registration. After registration, sign in with your username and password. Do not share your invitation or account. Your connection allowance is simultaneous logins, not permanently registered devices. Admins can review expired or disabled accounts. Use Forgot Password in the app, then privately approve the request with your linked Telegram account. Enter the new password only in the app. Mr. Charm never reveals or asks for your password.');
  if(['guide','rules','whats_new','status','about','app_help'].includes(cmd))return show(env,id,cmd,s);
  return help(env,id,s);
 }
@@ -182,27 +196,37 @@ export async function handleUpdate(env,u,s){
   await event(env,id,'membership_changed',live.status);
   if(isMember(live)&&!isMember(j.old_chat_member)){
    await q(env,'UPDATE bot_members SET joined_at=?1 WHERE telegram_id=?2',j.date,id).run();await assignToken(env,id,s);
-   const c=await content(env,'welcome');if(c.enabled&&c.body.trim())await send(env,s.group_id,c.body.replaceAll('{name}',live.user.first_name),groupHelp());
+   const c=await content(env,'welcome');if(c.enabled&&c.body.trim())await send({...env,BOT_GROUP_REPLY:{chat_id:s.group_id,user_id:id}},id,c.body.replaceAll('{name}',live.user.first_name),groupHelp());
   }return;
  }
  const cb=u.callback_query,m=cb?.message||u.message,user=cb?.from||m?.from;
  if(!m||!user||user.is_bot||m.sender_chat)return;
  const privateChat=m.chat.type==='private';if(!privateChat&&String(m.chat.id)!==s.group_id)return;
+ if(privateChat&&String(m.chat.id)!==String(user.id))return;
  if(cb)await telegram(env,'answerCallbackQuery',{callback_query_id:cb.id});
  const text=u.message?.text||'';if(!privateChat&&!cb&&!/\bmr\.?\s*charm\b/i.test(text)&&!/^\/help(?:@\w+)?(?:\s|$)/i.test(text))return;
  const id=String(user.id);await member(env,user);
+ env={...env,BOT_INTERACTION:{recipient:id,generation:crypto.randomUUID()}};
+ if(cb&&m.receiver_user&&String(m.receiver_user.id)!==id)return;
  if(!privateChat)env={...env,BOT_GROUP_REPLY:{chat_id:s.group_id,user_id:id,callback_query_id:cb?.id,message_thread_id:m.message_thread_id}};
  const window=Math.floor(now()/60);
  await q(env,'INSERT INTO bot_rate VALUES(?1,?2,1) ON CONFLICT(telegram_id) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,window=excluded.window',id,window).run();
  if((await q(env,'SELECT count FROM bot_rate WHERE telegram_id=?1',id).first()).count>12)return;
  if(privateChat)await q(env,'UPDATE bot_members SET dm_started=1 WHERE telegram_id=?1',id).run();
- const cmd=cb?.data||intent(text);
- if(cmd==='help'&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+ const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update)$/i);
+ const cmd=cb?.data||start?.[1]||intent(text);
+ if(['help','admin'].includes(cmd)&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
-  if(!privateChat&&!cb&&cmd==='help'&&m.message_id){
-   const acknowledgment=await content(env,'acknowledgment');
-   const cleanup=await telegram(env,'sendMessage',{chat_id:s.group_id,text:acknowledgment.enabled&&acknowledgment.body.trim()?plain(acknowledgment.body.replaceAll('{name}',user.first_name)):'Here is your Mr. Charm help menu.',reply_parameters:{message_id:m.message_id},reply_markup:{remove_keyboard:true,selective:true},...(m.message_thread_id?{message_thread_id:m.message_thread_id}:{})});
-   await q(env,"INSERT INTO bot_jobs(kind,chat_id,message_id,body,due_at) VALUES('delete',?1,?2,'',?3)",s.group_id,cleanup.message_id,now()+30).run();
+  if(await accountManagement(env,id,text,cmd,s,m))return;
+  if(await botAnnouncementFlow(env,id,text,cmd,s))return;
+  if(await accountFlow(env,id,text,cmd,s))return;
+  if(privateChat&&text&&!/^(\/|.*mr\.?\s*charm)/i.test(text)){
+   const draft=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();
+   if(draft&&['admin_invite','admin_revoke'].includes(draft.state)){
+    await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+    if(now()-draft.updated_at>600)return send(env,id,'This admin action expired. Open Admin tools to start again.');
+    return await inviteCommand(env,id,'Mr Charm '+(draft.state==='admin_invite'?'Invite ':'Revoke ')+text,m,s,u.update_id);
+   }
   }
   if(/^\s*mr\.?\s*charm\s+(?:invites?|revoke)\b/i.test(text))return await inviteCommand(env,id,text,m,s,u.update_id);
   if(cmd.startsWith('answer:')){
@@ -211,9 +235,12 @@ export async function handleUpdate(env,u,s){
   }else if(privateChat&&text&&!/^(\/|.*mr\.?\s*charm)/i.test(text)){if(await conversation(env,id,text,cb?.data))return;}
   await handleCommand(env,id,cmd,s);
  }catch(e){
+  if(e.status&&e.status<500&&!e.telegramCode)return send(env,id,e.message,keyboard([['Help','help']]));
   if(!privateChat&&[400,403].includes(e.telegramCode)){
    await event(env,id,'group_private_reply_unavailable',(e.telegramMethod||'unknown')+' '+String(e.telegramCode));
-   await send(env,s.group_id,'Mr. Charm could not display that reply here. Open the private assistant below, press Start if asked, and repeat your request.',activate(s));
+   // A delivery failure must never disclose even the fallback response to the group.
+   if(cb)await telegram(env,'answerCallbackQuery',{callback_query_id:cb.id,text:'Open Mr. Charm privately and press Start, then repeat your request.',show_alert:true});
+   else try{await send({...env,BOT_GROUP_REPLY:undefined},id,'Open this private assistant and press Start, then repeat your request.',activate(s));}catch(fallback){if(![400,403].includes(fallback.telegramCode))throw fallback;}
   }else if(e.telegramCode===403){await q(env,'UPDATE bot_members SET dm_started=0 WHERE telegram_id=?1',id).run();await event(env,id,'private_chat_activation_needed');}
   else throw e;
  }
@@ -233,6 +260,7 @@ export async function webhook(request,env){
 }
 export async function botScheduled(env){
  if(!env.TELEGRAM_BOT_TOKEN)return;
+ await cleanExpiredResponses(env);
  const s=await settings(env);
  await maintainGroupInvites(env,s.enabled);
  if(!s.enabled)return;

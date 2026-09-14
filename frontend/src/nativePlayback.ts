@@ -78,6 +78,8 @@ type NativePlaybackModuleShape = {
   stopFullscreen(releasePlayer: boolean): Promise<void>;
   getOwner(): Promise<NativePlaybackOwner>;
   getHealthHistory?(): Promise<string>;
+  getAudioOutputMode?(): Promise<'auto'|'stereo'>;
+  setAudioOutputMode?(mode:'auto'|'stereo'): Promise<void>;
   restartChannel?(channelKey: string): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
@@ -88,6 +90,11 @@ const native: NativePlaybackModuleShape | null =
 const emitter = native ? new NativeEventEmitter(NativeModules.NativePlayback) : null;
 
 export function nativePlaybackAvailable(): boolean { return !!native; }
+export async function getNativeAudioOutputMode(): Promise<'auto'|'stereo'> { return (await native?.getAudioOutputMode?.()) ?? 'auto'; }
+export async function setNativeAudioOutputMode(mode:'auto'|'stereo'): Promise<void> {
+  if(!native?.setAudioOutputMode)throw new Error('Audio compatibility requires the updated Android app.');
+  await native.setAudioOutputMode(mode);
+}
 export function prepareNativeFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.prepareFullscreen(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function prepareNativePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.preparePreview(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function resolveNativePlaybackFreshSource(requestId: number, uri?: string | null, headers: Record<string, string> = {}, contentType?: string | null, failureReason?: string | null): void { native?.resolveFreshSource(requestId, uri ?? null, headers, contentType ?? null, failureReason ?? null); }

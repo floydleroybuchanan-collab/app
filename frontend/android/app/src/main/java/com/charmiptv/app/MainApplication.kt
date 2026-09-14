@@ -28,6 +28,7 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
             PackageList(this).packages.apply {
               add(TvRemotePackage())
               add(CharmVodPackage())
+              add(CharmAnnouncementPackage())
               add(NativePlaybackPackage())
               add(EpgNativePackage())
               add(EpgRamPackage())

@@ -3,6 +3,8 @@ import { ADMIN_FLAGS, ADMIN_LIMITS, DAY, demandPermission, integer, invitationTe
 import {accountContact,saveAccountContact} from './telegram-contacts.js';
 import { botAdmin } from './bot-admin.js';
 import { appControlsAdmin } from './app-controls.js';
+import {announcementAdmin} from './announcements.js';
+import {issueRecoveryGrant} from './account-security.js';
 const PROFILE_KEYS = ["enabled", ...ADMIN_FLAGS, ...Object.keys(ADMIN_LIMITS)];
 const USER_SORTS = { newest: "u.created_at DESC,u.id", oldest: "u.created_at,u.id", alphabetical: "u.username COLLATE NOCASE,u.id", alphabetical_desc: "u.username COLLATE NOCASE DESC,u.id", expires_soon: "u.expires_at IS NULL,u.expires_at,u.id", most_time: "u.expires_at IS NULL DESC,u.expires_at DESC,u.id", last_login: "u.last_login_at DESC,u.id" };
 const INVITE_SORTS = { newest: "i.created_at DESC,i.id", oldest: "i.created_at,i.id", expires_soon: "i.expires_at IS NULL,i.expires_at,i.id", duration: "i.account_duration_days IS NULL,i.account_duration_days,i.id", creator: "creator.username COLLATE NOCASE,i.created_at DESC,i.id" };
@@ -68,6 +70,7 @@ export async function handleAdminRequest(request, env, helpers) {
   if (!session.ok) return session.response;
   const auth = { ...session, ...await resolveAdminAccess(env, session.user) };
   const url = new URL(request.url), path = url.pathname, method = request.method;
+  if(path.startsWith('/admin/announcements'))return announcementAdmin(request,env,auth,helpers);
   const now = Math.floor(Date.now() / 1000);
   if (path === '/admin/app-settings') return appControlsAdmin(request,env,auth,helpers);
   if (path.startsWith('/admin/bot/')) return botAdmin(request,env,auth,helpers);
@@ -140,9 +143,15 @@ export async function handleAdminRequest(request, env, helpers) {
     return json({ success: true, invite: { id, invite_code: code, account_duration_days: duration, max_sessions: sessions, created_at: now, expires_at: expiry, created_by_admin_name: auth.user.username } }, 201);
   }
 
-  const userMatch = path.match(/^\/admin\/users\/([^/]+)(?:\/(logout|reset-password))?$/);
+  const userMatch = path.match(/^\/admin\/users\/([^/]+)(?:\/(logout|reset-password|recovery))?$/);
   if (userMatch) {
     const user = await targetUser(env, auth, userMatch[1]);
+    if(userMatch[2]==='recovery'&&method==='POST'){
+      demandPermission(auth,'can_reset_password');
+      const body=await safeJson(request);
+      if(body.ownership_verified!==true||!await verifyPassword(String(body.admin_password||''),auth.user.password_hash))throw policyError('Verify the owner and confirm with your current administrator password.');
+      return json({success:true,recovery:await issueRecoveryGrant(env,user,auth.user.id,body.reason)},201);
+    }
     if (!userMatch[2] && method === "GET") {
       const safe = Object.fromEntries(["id", "username", "email", "role", "status", "max_sessions", "created_at", "activated_at", "expires_at", "last_login_at"].map(key => [key, user[key]]));
       const tm=await first(env,"SELECT telegram_id,username AS telegram_username,name AS telegram_name,status AS telegram_status FROM bot_members WHERE account_id=?1",[user.id]);

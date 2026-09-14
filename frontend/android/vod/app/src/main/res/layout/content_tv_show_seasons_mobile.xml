@@ -16,7 +16,8 @@
         android:textSize="18sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_tv_show_seasons"

@@ -776,7 +776,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
         }
 
         findPreference<Preference>("key_backup_refresh_cache_mobile")?.setOnPreferenceClickListener {
-            AlertDialog.Builder(requireContext())
+            com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireContext())
                 .setTitle(R.string.settings_refresh_cache_confirm)
                 .setMessage(R.string.settings_refresh_cache_message)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -1203,7 +1203,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
             hint = getString(R.string.settings_parental_pin_hint)
         }
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireContext())
             .setTitle(titleRes)
             .setMessage(messageRes)
             .setView(input)
@@ -1240,7 +1240,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
             hint = getString(R.string.settings_parental_pin_hint)
         }
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireContext())
             .setTitle(titleRes)
             .setMessage(messageRes)
             .setView(input)
@@ -1399,7 +1399,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
         contentView.findViewById<android.widget.TextView>(R.id.tv_is_loading_error)?.visibility = View.GONE
         contentView.findViewById<Group>(R.id.g_is_loading_retry)?.visibility = View.GONE
 
-        backupLoadingDialog = AlertDialog.Builder(requireContext())
+        backupLoadingDialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireContext())
             .setTitle(titleRes)
             .setView(contentView)
             .setCancelable(false)

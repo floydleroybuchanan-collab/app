@@ -15,7 +15,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:indeterminate="true"
-        android:indeterminateTint="#C6C6C6"
+        android:indeterminateTint="@color/charm_vod_purple"
         android:indeterminateTintMode="src_atop"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -33,7 +33,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed" />
+        app:layout_constraintVertical_chainStyle="packed"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/btn_is_loading_retry"
@@ -45,7 +46,8 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_is_loading_error" />
+        app:layout_constraintTop_toBottomOf="@id/tv_is_loading_error"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/btn_is_loading_clear_cache"
@@ -56,7 +58,8 @@
         android:text="@string/loading_error_clear_cache"
         app:layout_constraintTop_toBottomOf="@id/btn_is_loading_retry"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/btn_is_loading_error_details"
@@ -67,7 +70,8 @@
         android:text="@string/loading_error_details"
         app:layout_constraintTop_toBottomOf="@id/btn_is_loading_clear_cache"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_is_loading_retry"

@@ -9,16 +9,17 @@
         android:id="@+id/tv_category_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="70dp"
+        android:layout_marginStart="44dp"
         android:layout_marginTop="32dp"
-        android:layout_marginEnd="70dp"
+        android:layout_marginEnd="44dp"
         android:textColor="#FFFFFF"
         android:textSize="20sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:text="Title" />
+        tools:text="Title"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_swiper_title"
@@ -33,7 +34,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="@id/tv_category_title"
         app:layout_constraintTop_toBottomOf="@id/tv_category_title"
-        tools:text="Title" />
+        tools:text="Title"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_swiper_tv_show_last_episode"
@@ -44,7 +46,8 @@
         app:layout_constraintBottom_toTopOf="@id/barrier1"
         app:layout_constraintStart_toStartOf="@id/tv_category_title"
         app:layout_constraintTop_toBottomOf="@id/tv_swiper_title"
-        tools:text="S1 E1" />
+        tools:text="S1 E1"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_swiper_quality"
@@ -59,7 +62,8 @@
         app:layout_constraintStart_toEndOf="@id/tv_swiper_tv_show_last_episode"
         app:layout_constraintTop_toBottomOf="@id/tv_swiper_title"
         tools:text="HD"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_swiper_released"
@@ -72,7 +76,8 @@
         app:layout_constraintStart_toEndOf="@id/tv_swiper_quality"
         app:layout_constraintTop_toBottomOf="@id/tv_swiper_title"
         tools:text="yyyy"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <ImageView
         android:id="@+id/iv_swiper_rating_icon"
@@ -96,7 +101,8 @@
         app:layout_constraintBottom_toTopOf="@id/barrier1"
         app:layout_constraintStart_toEndOf="@id/iv_swiper_rating_icon"
         app:layout_constraintTop_toBottomOf="@id/tv_swiper_title"
-        tools:text="#.#" />
+        tools:text="#.#"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier1"
@@ -116,7 +122,8 @@
         app:layout_constraintEnd_toStartOf="@id/guideline1"
         app:layout_constraintStart_toStartOf="@id/tv_category_title"
         app:layout_constraintTop_toBottomOf="@id/barrier1"
-        tools:text="Overview" />
+        tools:text="Overview"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/btn_swiper_watch_now"
@@ -131,7 +138,8 @@
         android:textSize="18sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="@id/tv_category_title"
-        app:layout_constraintTop_toBottomOf="@id/tv_swiper_overview" />
+        app:layout_constraintTop_toBottomOf="@id/tv_swiper_overview"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <ProgressBar
         android:id="@+id/pb_swiper_progress"
@@ -142,7 +150,7 @@
         android:layout_marginTop="10dp"
         android:layout_marginEnd="16dp"
         android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
+        android:progressTint="@color/charm_vod_purple"
         app:layout_constraintEnd_toEndOf="@id/btn_swiper_watch_now"
         app:layout_constraintStart_toStartOf="@id/btn_swiper_watch_now"
         app:layout_constraintTop_toBottomOf="@id/btn_swiper_watch_now"

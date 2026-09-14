@@ -38,7 +38,7 @@ class DebridLinkDialog : DialogFragment() {
         column.addView(instructions); column.addView(code)
         column.addView(qr, LinearLayout.LayoutParams(dp(168), dp(168)))
         column.addView(status)
-        val dialog = AlertDialog.Builder(context).setTitle("Link Real-Debrid")
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setTitle("Link Real-Debrid")
             .setView(ScrollView(context).apply { addView(column) })
             .setPositiveButton("Open sign-in page", null).setNeutralButton("New code", null)
             .setNegativeButton("Cancel") { _, _ -> model.cancel() }.create()

@@ -1,9 +1,12 @@
 <resources>
 
     <style name="AppTheme.Mobile" parent="Theme.AppCompat">
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
+        <item name="android:alertDialogTheme">@style/CharmDialog.Framework</item>
+        <item name="android:fontFamily">@font/charm_geist_regular</item>
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="app_background_color">#070711</item>
+        <item name="app_background_color">#0B0C12</item>
         <item name="home_gradient_drawable">@drawable/bg_home_gradient_default</item>
         <item name="movie_banner_gradient_drawable">@drawable/bg_movie_banner_gradient_default</item>
         <item name="tv_show_banner_gradient_drawable">@drawable/bg_tv_show_banner_gradient_default</item>
@@ -139,12 +142,14 @@
 
     <!-- Tema di Default per TV -->
     <style name="AppTheme.Tv" parent="Theme.Leanback">
-        <item name="app_background_color">#070711</item>
+        <item name="android:alertDialogTheme">@style/CharmDialog.Framework</item>
+        <item name="android:fontFamily">@font/charm_geist_regular</item>
+        <item name="app_background_color">#0B0C12</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">@color/charm_vod_focus</item>
         <item name="colorControlActivated">@color/charm_vod_focus</item>
-        <item name="colorControlNormal">#AAA7BB</item>
+        <item name="colorControlNormal">#B2ADBF</item>
         <item name="android:windowBackground">@drawable/bg_splash_screen</item>
         <item name="home_gradient_drawable">@drawable/bg_home_gradient_default</item>
         <item name="movie_banner_gradient_drawable">@drawable/bg_movie_banner_gradient_default</item>
@@ -185,7 +190,7 @@
     <style name="AppTheme.SunsetCinema" parent="Theme.Leanback">
         <item name="app_background_color">#201410</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#F39A5B</item>
         <item name="colorControlActivated">#F39A5B</item>
         <item name="colorControlNormal">#D7B7A4</item>
@@ -205,7 +210,7 @@
     <style name="AppTheme.SteelBlue" parent="Theme.Leanback">
         <item name="app_background_color">#141C25</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#7DB3E8</item>
         <item name="colorControlActivated">#7DB3E8</item>
         <item name="colorControlNormal">#ADC5DA</item>
@@ -225,7 +230,7 @@
     <style name="AppTheme.ForestNight" parent="Theme.Leanback">
         <item name="app_background_color">#101816</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#65D7C2</item>
         <item name="colorControlActivated">#65D7C2</item>
         <item name="colorControlNormal">#A8D1C7</item>
@@ -245,7 +250,7 @@
     <style name="AppTheme.CrimsonNoir" parent="Theme.Leanback">
         <item name="app_background_color">#1C1014</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#D86A7A</item>
         <item name="colorControlActivated">#D86A7A</item>
         <item name="colorControlNormal">#A88891</item>
@@ -265,7 +270,7 @@
     <style name="AppTheme.MidnightViolet" parent="Theme.Leanback">
         <item name="app_background_color">#151523</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#AFA3FF</item>
         <item name="colorControlActivated">#AFA3FF</item>
         <item name="colorControlNormal">#8F8AAE</item>
@@ -285,7 +290,7 @@
     <style name="AppTheme.NordFrost" parent="Theme.Leanback">
         <item name="app_background_color">#182029</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#8ED0E8</item>
         <item name="colorControlActivated">#8ED0E8</item>
         <item name="colorControlNormal">#8EA2B0</item>
@@ -305,7 +310,7 @@
     <style name="AppTheme.EmeraldLuxe" parent="Theme.Leanback">
         <item name="app_background_color">#11201B</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#7ED6A3</item>
         <item name="colorControlActivated">#7ED6A3</item>
         <item name="colorControlNormal">#98AE9F</item>
@@ -325,7 +330,7 @@
     <style name="AppTheme.RetroNeon" parent="Theme.Leanback">
         <item name="app_background_color">#16161D</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="colorAccent">#4DE0D7</item>
         <item name="colorControlActivated">#4DE0D7</item>
         <item name="colorControlNormal">#A56FBD</item>

@@ -37,7 +37,7 @@ object LoggingUtils {
 
         val logContent = logBuilder.toString()
 
-        AlertDialog.Builder(context)
+        com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context)
             .setTitle("📝 ${context.getString(R.string.error_dialog_title)}")
             .setMessage(logContent)
             .setPositiveButton("OK", null)

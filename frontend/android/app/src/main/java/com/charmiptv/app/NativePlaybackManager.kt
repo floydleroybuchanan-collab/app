@@ -193,6 +193,10 @@ object NativePlaybackManager {
   private var videoCodecs: String? = null
   private var audioMimeType: String? = null
   private var audioCodecs: String? = null
+  private var audioChannelCount = 0
+  private var audioSampleRate = 0
+  private var audioUnderruns = 0
+  private var audioSinkError: String? = null
   private var videoWidth: Int? = null
   private var videoHeight: Int? = null
   private var videoDecoder: String? = null
@@ -252,6 +256,8 @@ object NativePlaybackManager {
       "suppression" to (instance?.playbackSuppressionReason ?: 0),
       "videoMime" to safeCode(videoMimeType), "audioMime" to safeCode(audioMimeType),
       "videoDecoder" to safeCode(videoDecoder), "audioDecoder" to safeCode(audioDecoder),
+      "audioChannels" to audioChannelCount, "audioSampleRate" to audioSampleRate,
+      "audioUnderruns" to audioUnderruns, "audioSinkError" to safeCode(audioSinkError),
       "videoOutputs" to outputs, "droppedVideo" to (counters?.droppedBufferCount ?: 0),
       "videoQuietMs" to (if (lastVideoAdvanceMs > 0) now - lastVideoAdvanceMs else 0L),
       "width" to (videoWidth ?: 0), "height" to (videoHeight ?: 0),
@@ -603,7 +609,7 @@ object NativePlaybackManager {
     val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(
       durations[0], durations[1], durations[2], durations[3],
     ).setTargetBufferBytes(if (lowRam) TARGET_BUFFER_BYTES_LOW_RAM else TARGET_BUFFER_BYTES_NORMAL).setPrioritizeTimeOverSizeThresholds(false).build()
-    val renderers = DefaultRenderersFactory(context)
+    val renderers = com.streamflixreborn.streamflix.charm.CharmAudioRenderersFactory(context)
       // Prefer the bundled LGPL FFmpeg audio renderer for AC3/E-AC3/DTS/
       // TrueHD rather than repeatedly selecting an OEM decoder that advertises
       // support but produces silence. Video remains on MediaCodec hardware.
@@ -723,6 +729,8 @@ object NativePlaybackManager {
         if (!isCurrent()) return
         audioMimeType = format.sampleMimeType
         audioCodecs = format.codecs
+        audioChannelCount = format.channelCount
+        audioSampleRate = format.sampleRate
         recordDiagnostic("audio-format", lastPlaybackError, created)
       }
 
@@ -758,7 +766,10 @@ object NativePlaybackManager {
       }
 
       override fun onAudioUnderrun(eventTime: AnalyticsListener.EventTime, bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
-        if (isCurrent()) captureHealth("audio-underrun", created)
+        if (isCurrent()) { audioUnderruns++; captureHealth("audio-underrun", created) }
+      }
+      override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {
+        if (isCurrent()) { NativePlaybackManager.audioSinkError = audioSinkError.javaClass.simpleName; captureHealth("audio-sink-error", created) }
       }
     }
     analyticsListener = nextAnalytics
@@ -1189,6 +1200,10 @@ object NativePlaybackManager {
     videoCodecs = null
     audioMimeType = null
     audioCodecs = null
+    audioChannelCount = 0
+    audioSampleRate = 0
+    audioUnderruns = 0
+    audioSinkError = null
     videoWidth = null
     videoHeight = null
     videoDecoder = null

@@ -1,4 +1,6 @@
 import { handleAdminRequest } from "./admin-service.js";
+import {securityApi} from './account-security.js';
+import {announcementClient,legacyAnnouncementUpdate} from './announcements.js';
 import { appControls, recordServiceError } from './app-controls.js';
 import { webhook, botScheduled } from './bot-telegram.js';
 import { registerInvitedAccount } from "./registration-service.js";
@@ -12,6 +14,9 @@ const MANAGED_SOURCE_SLOTS = [
   { id: "tertiary", playlist: "M3U_URL_3", epg: "EPG_URL_3", required: false },
   { id: "quaternary", playlist: "M3U_URL_4", epg: "EPG_URL_4", required: false },
 ];
+// Shared administrative rules, used only after the bot verifies a currently
+// authorized Telegram identity linked to an active panel administrator.
+export function accountAdminHelpers(){return {json,safeJson,publicUser,hashPassword,verifyPassword,audit,deleteAccountData};}
 
 export default {
   async fetch(request, env, ctx) {
@@ -20,6 +25,14 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname;
       if(path === '/telegram/webhook') return await webhook(request,env);
+      if(path.startsWith('/announcements')){
+        const auth=await requireUser(request,env);if(!auth.ok)return auth.response;
+        return await announcementClient(request,env,auth,{json,safeJson});
+      }
+      if(path.startsWith('/auth/challenges')||['/auth/community','/auth/reset-password','/auth/registration-policy','/me/password','/me/security'].includes(path)){
+        const response=await securityApi(request,env,{json,safeJson,requireUser,verifyPassword,hashPassword,audit});
+        if(response)return response;
+      }
       await purgeExpiredAccounts(env, 50);
 
       if (path === "/" && request.method === "GET") {
@@ -254,11 +267,12 @@ async function createContentAccess(request, env) {
     epg_url: configured.epgUrl,
   }));
   const named = Object.fromEntries(contentSources.map(({ id, playlist_url, epg_url }) => [id, { playlist_url, epg_url }]));
+  const controls=await appControls(env),announcement=await legacyAnnouncementUpdate(env,auth.user.id);
   return json({
     success: true,
     content: {
       expires_at: expiresAt,
-      app_policy: await appControls(env),
+      app_policy: {...controls,...(announcement?{update:announcement}:{}),announcements_supported:true},
       sources: contentSources,
       // Named pairs keep already-issued two-source APKs compatible while the
       // scalable array lets this and future APKs consume up to four slots.

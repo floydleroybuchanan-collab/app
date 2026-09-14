@@ -1,0 +1,23 @@
+<resources>
+    <item name="charm_design_recycler" type="id" />
+    <style name="CharmDialog.Compat" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:colorBackground">@color/charm_vod_panel</item>
+        <item name="android:windowBackground">@color/charm_vod_panel</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">@color/charm_vod_text_muted</item>
+        <item name="colorAccent">@color/charm_vod_purple</item>
+        <item name="android:fontFamily">@font/charm_geist_regular</item>
+        <item name="android:windowMinWidthMajor">72%</item>
+        <item name="android:windowMinWidthMinor">88%</item>
+    </style>
+    <style name="CharmDialog.Framework" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorBackground">@color/charm_vod_panel</item>
+        <item name="android:windowBackground">@color/charm_vod_panel</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">@color/charm_vod_text_muted</item>
+        <item name="android:colorAccent">@color/charm_vod_purple</item>
+        <item name="android:fontFamily">@font/charm_geist_regular</item>
+        <item name="android:windowMinWidthMajor">72%</item>
+        <item name="android:windowMinWidthMinor">88%</item>
+    </style>
+</resources>

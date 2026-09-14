@@ -24,7 +24,7 @@ object SubtitleOffset {
  * A positive offset delays captions and a negative offset advances them.
  */
 @UnstableApi
-class SubtitleOffsetRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
+class SubtitleOffsetRenderersFactory(context: Context) : com.streamflixreborn.streamflix.charm.CharmAudioRenderersFactory(context) {
     override fun buildTextRenderers(
         context: Context,
         output: TextOutput,

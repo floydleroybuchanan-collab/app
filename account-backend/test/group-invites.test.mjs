@@ -24,6 +24,19 @@ async function setup(mode='automatic'){
  const join=(i,id=Number(i.telegram_id),update=1)=>({update_id:update,chat_join_request:{chat:{id:Number(s.group_id)},from:{id,first_name:'Tester',username:'current_name'},date:NOW(),user_chat_id:id+999,invite_link:{invite_link:i.invite_link}}});
  return {...f,s,calls,members,create,join,record:id=>f.db.prepare('SELECT * FROM bot_group_invites WHERE id=?').get(id)};
 }
+test('shared Settings link requires approval, is reusable and never restores or creates an account on request',async()=>{
+ const f=await setup();
+ const create=()=>f.request('/admin/bot/community-link',{method:'POST',token:f.ownerToken,body:{}});
+ const first=await create();assert.equal(first.status,200);assert.equal((await create()).body.url,first.body.url);
+ const call=f.calls.find(c=>c.method==='createChatInviteLink');assert.equal(call.body.creates_join_request,true);assert.equal(call.body.member_limit,undefined);assert.equal(call.body.expire_date,undefined);
+ assert.equal(f.calls.filter(c=>c.method==='createChatInviteLink').length,1);
+ assert.equal((await f.request('/auth/community')).body.community_url,first.body.url);
+ await handleUpdate(f.env,{update_id:501,chat_join_request:{chat:{id:Number(f.s.group_id)},from:{id:789,first_name:'Applicant'},date:NOW(),user_chat_id:789,invite_link:{invite_link:first.body.url,name:'MediaLab community settings'}}},f.s);
+ assert.equal(f.calls.filter(c=>c.method==='approveChatJoinRequest').length,0);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM invites').get().n,0);
+ const staff=await f.staff();assert.equal((await f.request('/admin/bot/community-link',{method:'POST',token:staff.token,body:{}})).status,403);
+});
+
 test('seven independent links; only matching ID can be approved; consumed link revoked; app tokens unchanged until membership update',async()=>{
  const f=await setup(),invites=await Promise.all(Array.from({length:7},(_,n)=>f.create(100+n)));
  assert.equal(new Set(invites.map(i=>i.invite_link)).size,7);
@@ -104,5 +117,5 @@ test('support contacts use live admin names, preserve selection and avoid privac
  const u={callback_query:{id:'cb',data:'contact',from:{id:123,first_name:'Tester'},message:{chat:{id:Number(f.s.group_id),type:'supergroup'}}}};
  await handleUpdate(f.env,u,f.s);let reply=f.calls.at(-1).body;assert.match(reply.text,/Admin One/);assert.match(reply.text,/Private Admin/);assert.ok(!JSON.stringify(reply).includes('tg://user'));
  f.db.prepare('INSERT INTO bot_support_admins(telegram_id,name,username,enabled) VALUES(?,?,?,?)').run('1','Old name','stale',0);
- await handleUpdate(f.env,u,f.s);reply=f.calls.at(-1).body;assert.match(reply.text,/being configured/);
+ await handleUpdate(f.env,u,f.s);reply=f.calls.findLast(c=>c.method==='sendMessage').body;assert.match(reply.text,/being configured/);
 });

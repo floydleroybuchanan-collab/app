@@ -78,7 +78,8 @@
                 android:textAllCaps="true"
                 android:textColor="?android:attr/textColorSecondary"
                 android:textSize="11sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+        android:fontFamily="@font/charm_geist_regular" />
 
             <TextView
                 android:id="@+id/tv_next_episode_meta"
@@ -88,7 +89,8 @@
                 android:textColor="?android:attr/textColorPrimary"
                 android:textSize="14sp"
                 android:textStyle="bold"
-                tools:text="S2 E8" />
+                tools:text="S2 E8"
+        android:fontFamily="@font/charm_geist_regular" />
 
             <TextView
                 android:id="@+id/tv_next_episode_title"
@@ -99,7 +101,8 @@
                 android:maxLines="2"
                 android:textColor="?android:attr/textColorPrimary"
                 android:textSize="14sp"
-                tools:text="Finale" />
+                tools:text="Finale"
+        android:fontFamily="@font/charm_geist_semibold" />
 
             <TextView
                 android:id="@+id/tv_next_episode_countdown"
@@ -108,7 +111,8 @@
                 android:layout_marginTop="4dp"
                 android:textColor="?android:attr/textColorSecondary"
                 android:textSize="12sp"
-                tools:text="Playing next in 8s" />
+                tools:text="Playing next in 8s"
+        android:fontFamily="@font/charm_geist_regular" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -132,7 +136,8 @@
                     android:text="@string/player_next_episode_action"
                     android:textColor="?android:attr/textColorPrimary"
                     android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+        android:fontFamily="@font/charm_geist_regular" />
 
                 <ImageView
                     android:id="@+id/btn_next_episode_dismiss"
@@ -177,7 +182,8 @@
             android:shadowDx="1"
             android:shadowDy="1"
             android:shadowRadius="2"
-            tools:text="50%"/>
+            tools:text="50%"
+        android:fontFamily="@font/charm_geist_regular"/>
 
         <ProgressBar
             android:id="@+id/pb_brightness"
@@ -220,7 +226,8 @@
             android:shadowDx="1"
             android:shadowDy="1"
             android:shadowRadius="2"
-            tools:text="50%"/>
+            tools:text="50%"
+        android:fontFamily="@font/charm_geist_regular"/>
 
         <ProgressBar
             android:id="@+id/pb_volume"

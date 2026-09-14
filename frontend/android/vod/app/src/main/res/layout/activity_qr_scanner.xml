@@ -27,7 +27,8 @@
             android:text="@string/settings_scan_resolver_qr_title"
             android:textColor="@android:color/white"
             android:textSize="20sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+        android:fontFamily="@font/charm_geist_semibold" />
 
         <TextView
             android:id="@+id/qr_scanner_close"
@@ -41,7 +42,8 @@
             android:paddingBottom="8dp"
             android:text="@android:string/cancel"
             android:textColor="@android:color/white"
-            android:textSize="15sp" />
+            android:textSize="15sp"
+        android:fontFamily="@font/charm_geist_regular" />
     </LinearLayout>
 
     <LinearLayout
@@ -68,6 +70,7 @@
             android:paddingBottom="10dp"
             android:text="@string/settings_scan_resolver_qr_summary"
             android:textColor="@android:color/white"
-            android:textSize="15sp" />
+            android:textSize="15sp"
+        android:fontFamily="@font/charm_geist_regular" />
     </LinearLayout>
 </FrameLayout>

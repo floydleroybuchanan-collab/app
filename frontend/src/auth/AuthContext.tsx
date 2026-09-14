@@ -27,7 +27,7 @@ type AuthContextValue = {
   user: AccountUser | null;
   notice: string | null;
   signIn: (username: string, password: string) => Promise<string | null>;
-  register: (inviteCode: string, username: string, email: string, password: string) => Promise<string | null>;
+  register: (inviteCode: string, username: string, email: string, password: string, challengeToken?: string) => Promise<string | null>;
   loadReferrals: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
   createReferral: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
   deleteReferral: (invitationId: string) => Promise<{ data: ReferralSummary | null; error: string | null }>;
@@ -194,9 +194,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
-  const register = useCallback(async (inviteCode: string, username: string, email: string, password: string) => {
+  const register = useCallback(async (inviteCode: string, username: string, email: string, password: string, challengeToken?: string) => {
     setNotice(null);
-    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password));
+    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password, challengeToken));
   }, [acceptAuthenticatedResult]);
 
   const referralRequest = useCallback(async (action: "load" | "create" | "delete", invitationId?: string) => {

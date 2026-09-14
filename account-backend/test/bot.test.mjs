@@ -9,7 +9,9 @@ test('one invitation under concurrent requests, membership gating, registration 
  const f=setup();await member(f.env,{id:12345,first_name:'Test'},'pending');assert.equal(await assignToken(f.env,'12345',configuration),null);
  await member(f.env,{id:12345,first_name:'Test'},'member');await Promise.all(Array.from({length:6},()=>assignToken(f.env,'12345',configuration)));
  const invites=f.db.prepare('SELECT * FROM invites').all();assert.equal(invites.length,1);
- const r=await f.request('/auth/register',{method:'POST',body:{invite_code:invites[0].invite_code,username:'botviewer',email:'bot@example.test',password:PASSWORD}});assert.equal(r.status,201);
+ const approval=await f.request('/auth/challenges',{method:'POST',body:{kind:'registration',invite_code:invites[0].invite_code,username:'botviewer',email:'bot@example.test'}});
+ f.db.prepare("UPDATE account_challenges SET status='approved' WHERE kind='registration'").run();
+ const r=await f.request('/auth/register',{method:'POST',body:{invite_code:invites[0].invite_code,username:'botviewer',email:'bot@example.test',password:PASSWORD,challenge_token:approval.body.token}});assert.equal(r.status,201);
  const m=f.db.prepare('SELECT * FROM bot_members').get();assert.equal(m.account_id,r.body.user.id);
  await f.request('/me',{method:'DELETE',token:r.body.token,body:{confirmation:'please cancel me',password:PASSWORD}});
  const ended=f.db.prepare('SELECT * FROM bot_members').get();assert.equal(ended.blocked,1);assert.equal(ended.ever_assigned,1);assert.equal(await assignToken(f.env,'12345',configuration),null);
@@ -41,7 +43,7 @@ test('token only private, membership rechecked, blank optional menus hidden, def
  // Run with a capturing rejected membership response.
  const out=[];f.env.TELEGRAM_FETCH=async(url,opt)=>{const b=JSON.parse(opt.body);out.push(b);return Response.json({ok:true,result:url.endsWith('getChatMember')?{status:'left',user:{id:12345,first_name:'Tester'}}:{message_id:1}});};
  await handleUpdate(f.env,{callback_query:{id:'cb',from:{id:12345,first_name:'Tester'},data:'token',message:{chat:{id:12345,type:'private'}}}},configuration);
- assert.ok(!JSON.stringify(out).includes(inv.invite_code));assert.match(out.at(-1).text,/Member access required/);
+ assert.ok(!JSON.stringify(out).includes(inv.invite_code));assert.match(out.findLast(b=>b.text).text,/Member access required/);
 });
 test('saved broadcasts do not send until queued, scheduler claims once, cancelled jobs not sent',async()=>{
  const f=setup();await q(f.env,'UPDATE bot_settings SET json=?1',JSON.stringify(configuration)).run();
@@ -92,7 +94,7 @@ test('group buttons need no private Start and route each member’s token only t
  const replies=f.sent.filter(s=>s.method==='sendMessage');assert.equal(replies.length,2);
  for(let i=0;i<2;i++){const id=[12345,23456][i],r=replies.find(s=>s.body.ephemeral_message_parameters.receiver_user_id===id).body;assert.equal(r.chat_id,configuration.group_id);assert.equal(r.ephemeral_message_parameters.callback_query_id,'callback-'+id);assert.equal(r.message_thread_id,42);assert.ok(r.text.includes(invitations[i].invite_code));assert.ok(!r.text.includes(invitations[1-i].invite_code));}
  assert.equal(f.env.BOT_GROUP_REPLY,undefined);
- await handleUpdate(f.env,cb(12345,'help'),configuration);assert.ok(f.sent.at(-1).body.reply_markup.inline_keyboard.length>=7);
+ await handleUpdate(f.env,cb(12345,'help'),configuration);assert.ok(f.sent.findLast(s=>s.method==='sendMessage').body.reply_markup.inline_keyboard.length>=7);
  assert.equal(f.db.prepare('SELECT SUM(dm_started) n FROM bot_members').get().n,0);
 });
 test('failed ephemeral token delivery never retries the token publicly or by DM',async()=>{

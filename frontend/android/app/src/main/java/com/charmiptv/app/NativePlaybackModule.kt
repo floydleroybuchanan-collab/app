@@ -22,6 +22,11 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   private val main = Handler(Looper.getMainLooper())
 
   override fun getName(): String = "NativePlayback"
+  @ReactMethod fun getAudioOutputMode(promise: Promise) { promise.resolve(com.streamflixreborn.streamflix.charm.CharmAudioOutput.mode(ctx)) }
+  @ReactMethod fun setAudioOutputMode(mode: String, promise: Promise) {
+    try { com.streamflixreborn.streamflix.charm.CharmAudioOutput.setMode(ctx, mode); promise.resolve(null) }
+    catch (failure: Exception) { promise.reject("E_AUDIO_OUTPUT", "Could not save the audio output preference.", failure) }
+  }
 
   init {
     NativePlaybackManager.setListener(this)

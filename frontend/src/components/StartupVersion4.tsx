@@ -61,7 +61,7 @@ export function StartupVersion4() {
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, backgroundColor: "#070711", alignItems: "center", justifyContent: "center", gap: 8 },
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, backgroundColor: "#0B0C12", alignItems: "center", justifyContent: "center", gap: 8 },
   mark: { width: 54, height: 54, borderRadius: 14, backgroundColor: tvColors.purple, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   markText: { color: "#fff", fontFamily: fonts.bold, fontSize: 30 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 22 },

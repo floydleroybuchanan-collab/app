@@ -59,7 +59,8 @@
         app:layout_constraintStart_toEndOf="@id/barrier1"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_chainStyle="packed"
-        tools:text="Text" />
+        tools:text="Text"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_setting_sub_text"
@@ -68,14 +69,15 @@
         android:layout_marginStart="12dp"
         android:layout_marginEnd="12dp"
         android:duplicateParentState="true"
-        android:textColor="#808080"
+        android:textColor="@color/charm_vod_text_muted"
         android:textSize="12sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/barrier2"
         app:layout_constraintStart_toEndOf="@id/barrier1"
         app:layout_constraintTop_toBottomOf="@id/tv_setting_main_text"
         tools:text="Subtitle"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier2"
@@ -91,7 +93,7 @@
         android:layout_marginEnd="10dp"
         android:duplicateParentState="true"
         android:src="@drawable/ic_player_setting_arrow_right"
-        android:tint="#808080"
+        android:tint="@color/charm_vod_text_muted"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"

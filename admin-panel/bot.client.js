@@ -91,6 +91,10 @@ async function botDownloads(box){
 }
 async function botSettings(box){const d=await api('/admin/bot/settings'),s=d.settings,card=el('div',undefined,'card');box.append(card);
  card.append(el('p','Bot credential: '+(d.ready.token?'Saved':'Not saved')+' · Connection secret: '+(d.ready.webhook_secret?'Saved':'Not saved')));
+ const community=el('div',undefined,'callout');community.append(el('h3','App Settings · Telegram room link'),el('p','Existing members can reopen the room. Other Telegram accounts must request approval. This link does not restore an app account.'));
+ const communityLink=await api('/admin/bot/community-link'),linkStatus=el('p',communityLink.url||'A shared request-to-join link has not been configured.','code');community.append(linkStatus);
+ if(admin.is_owner)community.append(button('Configure request-to-join link',async()=>{const result=await api('/admin/bot/community-link','POST',{});linkStatus.textContent=result.url;message('The app Settings room link is ready. New members still require approval.');}));
+ card.append(community);
  const username=field(card,'Bot username','bot_username',s.bot_username),group=field(card,'Telegram group numeric ID','group_id',s.group_id);
  if(admin.is_owner){
   const finder=el('div'),status=el('p','Click Find my Telegram group after adding Mr. Charm as an administrator.','help');status.setAttribute('role','status');status.setAttribute('aria-live','polite');

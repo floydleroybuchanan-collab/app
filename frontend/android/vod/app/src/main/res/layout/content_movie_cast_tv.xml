@@ -17,7 +17,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/hgv_movie_cast"

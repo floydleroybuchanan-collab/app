@@ -464,7 +464,7 @@ class TvShowViewHolder(
             else context.getString(R.string.smarttube_beta)
         }.toTypedArray()
 
-        AlertDialog.Builder(context)
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(context)
             .setTitle(context.getString(R.string.choose_smarttube_version))
             .setItems(items) { _, which ->
                 val selectedPackage = packages[which]
@@ -529,7 +529,7 @@ class TvShowViewHolder(
             else -> {
                 val stPackages = getInstalledSmartTubePackages()
                 if (stPackages.isNotEmpty()) {
-                    AlertDialog.Builder(context)
+                    com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(context)
                         .setTitle(context.getString(R.string.watch_trailer_with))
                         .setItems(arrayOf(context.getString(R.string.youtube), context.getString(R.string.smarttube))) { _, which ->
                             if (which == 0) {

@@ -9,6 +9,20 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
  if(!auth.isOwner&&!auth.profile.can_manage_bot)fail('The owner must grant Mr. Charm control access.',403);
  const url=new URL(request.url),path=url.pathname.slice('/admin/bot'.length),method=request.method,id=auth.user.id;
  const s=await settings(env);
+ if(path==='/community-link'&&method==='GET')return json({success:true,url:(await q(env,"SELECT value FROM bot_runtime WHERE key='community_join_request_link'").first())?.value||null});
+ if(path==='/community-link'&&method==='POST'){
+  if(!auth.isOwner)fail('Only the owner can configure the shared community link.',403);
+  if(!s.enabled||!s.group_id)fail('Enable and connect the bot first.');
+  const existing=await q(env,"SELECT value FROM bot_runtime WHERE key='community_join_request_link'").first();
+  if(existing)return json({success:true,url:existing.value});
+  const created=await telegram(env,'createChatInviteLink',{chat_id:s.group_id,name:'MediaLab community settings',creates_join_request:true});
+  if(!created.invite_link||created.creates_join_request!==true)fail('Telegram did not return an approval-required room link.',502);
+  await q(env,"INSERT OR IGNORE INTO bot_runtime(key,value) VALUES('community_join_request_link',?1)",created.invite_link).run();
+  const saved=await q(env,"SELECT value FROM bot_runtime WHERE key='community_join_request_link'").first();
+  if(saved.value!==created.invite_link)await telegram(env,'revokeChatInviteLink',{chat_id:s.group_id,invite_link:created.invite_link});
+  await event(env,null,'community_join_request_link_configured','',id);
+  return json({success:true,url:saved.value});
+ }
  if(path==='/group-invites'&&method==='POST')return json({success:true,invite:await createGroupInvite(env,s,await safeJson(request),id)},201);
  if(path==='/group-invites'&&method==='GET'){
   const page=Math.max(1,Math.min(100000,Math.floor(Number(url.searchParams.get('page'))||1))),search='%'+String(url.searchParams.get('search')||'').slice(0,100)+'%';

@@ -237,7 +237,7 @@ class NovaPlayback : DialogFragment(), SurfaceHolder.Callback {
                     else IMediaPlayer.METADATA_KEY_AUDIO_TRACK + i * IMediaPlayer.METADATA_KEY_AUDIO_TRACK_MAX
                 if (metadata.has(key)) metadata.getString(key) else "Track ${i + 1}"
             }
-            main.post { if (isAdded) AlertDialog.Builder(requireContext()).setTitle(if (subs) "Subtitles" else "Audio")
+            main.post { if (isAdded) com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireContext()).setTitle(if (subs) "Subtitles" else "Audio")
                 .setItems((if (subs) listOf("Off") + labels else labels).toTypedArray()) { _, index ->
                     command { current -> if (current === p) { if (subs) current.setSubtitleTrack(index - 1) else current.setAudioTrack(index) } }
                 }.setNegativeButton("Close", null).show() }

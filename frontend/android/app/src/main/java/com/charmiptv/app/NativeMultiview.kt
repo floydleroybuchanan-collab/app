@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.FrameLayout
 import androidx.media3.common.*
 import androidx.media3.datasource.DefaultDataSource
@@ -89,7 +90,7 @@ internal object NativeMultiview {
       val data = DefaultDataSource.Factory(ctx, OkHttpDataSource.Factory(client).setDefaultRequestProperties(properties))
       val extractors = DefaultExtractorsFactory().setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS)
       val media = DefaultMediaSourceFactory(data, extractors)
-      val renderers = DefaultRenderersFactory(ctx).setEnableDecoderFallback(true)
+      val renderers = com.streamflixreborn.streamflix.charm.CharmAudioRenderersFactory(ctx).setEnableDecoderFallback(true)
         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
       val player = ExoPlayer.Builder(ctx).setRenderersFactory(renderers).setMediaSourceFactory(media)
         .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(4000, 15000, 1000, 2000)
@@ -261,6 +262,19 @@ class MultiviewModule(private val ctx: ReactApplicationContext) : ReactContextBa
 }
 
 class MultiviewSurface(context: Context) : FrameLayout(context) {
+  private var layoutQueued = false
+  private fun schedulePlayerLayout() {
+    if (layoutQueued) return
+    layoutQueued = true
+    post {
+      layoutQueued = false
+      if (width > 0 && height > 0) {
+        playerView.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        playerView.layout(0, 0, width, height)
+      }
+    }
+  }
+  override fun requestLayout() { super.requestLayout(); schedulePlayerLayout() }
   var slot = -1
   var token: String? = null
   val playerView = LayoutInflater.from(context).inflate(R.layout.charm_multiview_surface, this, false) as PlayerView
@@ -268,6 +282,9 @@ class MultiviewSurface(context: Context) : FrameLayout(context) {
   override fun onAttachedToWindow() { super.onAttachedToWindow(); unclipVideoAncestors(this); NativeMultiview.bind(this) }
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
     super.onSizeChanged(w,h,oldw,oldh)
+    // React owns the pane bounds; measure native video children again after any
+    // grid/enlarge transition so FIT uses this pane's current aspect ratio.
+    schedulePlayerLayout()
     if (w > 0 && h > 0 && (oldw <= 0 || oldh <= 0)) NativeMultiview.bind(this)
   }
   fun changed() { NativeMultiview.bind(this) }

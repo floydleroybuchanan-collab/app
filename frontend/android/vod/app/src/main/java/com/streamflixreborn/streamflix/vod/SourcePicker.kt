@@ -79,7 +79,7 @@ object SourcePicker {
         fun showDetails(index: Int) {
             val row = rows.getOrNull(index) ?: return
             detailsDialog?.dismiss()
-            detailsDialog = AlertDialog.Builder(context).setTitle("Source details")
+            detailsDialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setTitle("Source details")
                 .setMessage(listOfNotNull(row.name, row.details?.badges, DeviceCompatibility.badge(row.details)).joinToString("\n\n"))
                 .setPositiveButton("Close", null).show()
         }
@@ -139,7 +139,7 @@ object SourcePicker {
         list.setOnItemLongClickListener { _,_,index,_ -> showDetails(index); true }
         val detailButton = Button(context).apply { text="Details for selected source"; textSize=16f; isAllCaps=false; setOnClickListener { showDetails(list.selectedItemPosition.coerceAtLeast(0)) } }
         root.addView(detailButton)
-        val dialog = AlertDialog.Builder(context).setView(root).setNegativeButton("Close", null).create()
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setView(root).setNegativeButton("Close", null).create()
         list.setOnItemClickListener { _, _, index, _ ->
             val server = rows.getOrNull(index) ?: return@setOnItemClickListener
             dialog.dismiss()

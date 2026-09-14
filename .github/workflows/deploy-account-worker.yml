@@ -36,8 +36,10 @@ jobs:
 
       - name: Test account rules and administrator isolation
         run: |
-          node --test account-backend/test/accounts.test.mjs
+          node --test account-backend/test/*.test.mjs
           node --check admin-panel/panel.client.js
+          node --check admin-panel/announcements.client.js
+          node --check admin-panel/bot.client.js
 
       - name: Verify account Worker source and bindings
         run: |
@@ -98,6 +100,17 @@ jobs:
           appendFileSync(output, `count=${configured.size}\ntertiary=${configured.has("tertiary")}\nquaternary=${configured.has("quaternary")}\n`);
           console.log(`${configured.size} complete managed playlist/Guide source pair(s) validated; values remain masked`);
           NODE
+
+      - name: Prepare only this release's database additions
+        run: node account-backend/prepare-release-migrations.mjs
+
+      - name: Apply account security and announcement migrations
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          workingDirectory: account-backend
+          command: d1 migrations apply charmiptv-accounts --remote --config .wrangler/release-migrations.json
 
       - name: Deploy account Worker and preserve secrets
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd

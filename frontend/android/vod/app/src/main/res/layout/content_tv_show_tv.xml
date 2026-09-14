@@ -7,9 +7,9 @@
 
     <ImageView
         android:id="@+id/iv_tv_show_poster"
-        android:layout_width="250dp"
+        android:layout_width="212dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="70dp"
+        android:layout_marginStart="44dp"
         android:layout_marginTop="50dp"
         android:adjustViewBounds="true"
         app:layout_constraintStart_toStartOf="parent"
@@ -25,14 +25,15 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="40dp"
         android:layout_marginTop="50dp"
-        android:layout_marginEnd="70dp"
+        android:layout_marginEnd="44dp"
         android:textColor="#FFFFFF"
-        android:textSize="50sp"
+        android:textSize="40sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_goneMarginStart="70dp"
-        tools:text="Title" />
+        tools:text="Title"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <ImageView
         android:id="@+id/iv_tv_show_rating_icon"
@@ -57,7 +58,8 @@
         app:layout_constraintBottom_toTopOf="@id/barrier1"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_rating_icon"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_title"
-        tools:text="#.#" />
+        tools:text="#.#"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_tv_show_quality"
@@ -72,7 +74,8 @@
         app:layout_constraintStart_toEndOf="@id/tv_tv_show_rating"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_title"
         tools:text="HD"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_tv_show_released"
@@ -85,7 +88,8 @@
         app:layout_constraintStart_toEndOf="@id/tv_tv_show_quality"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_title"
         tools:text="yyyy"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_tv_show_runtime"
@@ -98,7 +102,8 @@
         app:layout_constraintStart_toEndOf="@id/tv_tv_show_released"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_title"
         tools:text="# h # min"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier1"
@@ -113,13 +118,14 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="40dp"
         android:layout_marginTop="5dp"
-        android:layout_marginEnd="70dp"
+        android:layout_marginEnd="44dp"
         android:textColor="#FFFFFF"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toBottomOf="@id/barrier1"
         app:layout_goneMarginStart="70dp"
-        tools:text="Genres" />
+        tools:text="Genres"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_tv_show_overview"
@@ -127,14 +133,15 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="40dp"
         android:layout_marginTop="30dp"
-        android:layout_marginEnd="70dp"
+        android:layout_marginEnd="44dp"
         android:ellipsize="end"
-        android:maxLines="10"
+        android:maxLines="6"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_genres"
         app:layout_goneMarginStart="70dp"
-        tools:text="Overview" />
+        tools:text="Overview"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/btn_tv_show_watch_now"
@@ -148,7 +155,8 @@
         android:text="@string/tv_show_watch_season_episode"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
-        app:layout_goneMarginStart="70dp" />
+        app:layout_goneMarginStart="70dp"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <ProgressBar
         android:id="@+id/pb_tv_show_progress_episode"
@@ -159,7 +167,7 @@
         android:layout_marginTop="10dp"
         android:layout_marginEnd="16dp"
         android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
+        android:progressTint="@color/charm_vod_purple"
         app:layout_constraintEnd_toEndOf="@id/btn_tv_show_watch_now"
         app:layout_constraintStart_toStartOf="@id/btn_tv_show_watch_now"
         app:layout_constraintTop_toBottomOf="@id/btn_tv_show_watch_now"
@@ -176,7 +184,8 @@
         android:focusableInTouchMode="true"
         android:text="@string/tv_show_trailer"
         app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now"
-        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <ImageView
         android:id="@+id/btn_tv_show_favorite"

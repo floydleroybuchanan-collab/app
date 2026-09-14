@@ -1,4 +1,4 @@
-name: Build Charming MediaLab RC.10 Sideload APK
+name: Build Charming MediaLab Sideload APK
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Charming MediaLab RC.10 universal sideload APK
+    name: Build Charming MediaLab universal sideload APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -195,8 +195,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/Charming.MediaLab.RC-10-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/Charming.MediaLab.RC-10-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/Charming.MediaLab-2.2.0-RC1-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/Charming.MediaLab-2.2.0-RC1-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -208,7 +208,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Charming.MediaLab.RC-10-Sideload-Encrypted-${{ github.run_number }}
+          name: Charming.MediaLab-Sideload-Encrypted-${{ github.run_number }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json

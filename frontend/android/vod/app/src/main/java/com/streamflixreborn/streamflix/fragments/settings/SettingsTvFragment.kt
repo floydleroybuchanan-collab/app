@@ -836,7 +836,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         }
 
         findPreference<Preference>("key_backup_refresh_cache_tv")?.setOnPreferenceClickListener {
-            AlertDialog.Builder(requireContext())
+            com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
                 .setTitle(R.string.settings_refresh_cache_confirm)
                 .setMessage(R.string.settings_refresh_cache_message)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
@@ -947,7 +947,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             }
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_export_title)
             .setItems(options.map { it.first }.toTypedArray()) { _, which ->
                 options[which].second.invoke()
@@ -972,7 +972,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             showLocalBackupPicker()
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_import_title)
             .setItems(options.map { it.first }.toTypedArray()) { _, which ->
                 options[which].second.invoke()
@@ -1002,7 +1002,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             }
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_db_export_option)
             .setItems(options.map { it.first }.toTypedArray()) { _, which ->
                 options[which].second.invoke()
@@ -1027,7 +1027,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             showLocalDatabaseBackupPicker()
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_db_import_option)
             .setItems(options.map { it.first }.toTypedArray()) { _, which ->
                 options[which].second.invoke()
@@ -1236,7 +1236,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             return
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_import_local_option)
             .setItems(backups.map(::buildBackupListLabel).toTypedArray()) { _, which ->
                 showLocalBackupFileActions(backups[which])
@@ -1255,7 +1255,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             return
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_db_import_option)
             .setItems(backups.map(::buildBackupListLabel).toTypedArray()) { _, which ->
                 showLocalDatabaseBackupFileActions(backups[which])
@@ -1269,7 +1269,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             getString(R.string.backup_delete_action),
         )
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(file.name)
             .setItems(options) { _, which ->
                 when (which) {
@@ -1287,7 +1287,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             getString(R.string.backup_delete_action),
         )
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(file.name)
             .setItems(options) { _, which ->
                 when (which) {
@@ -1300,7 +1300,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     }
 
     private fun confirmDeleteLocalBackup(file: File) {
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.backup_delete_confirm_title)
             .setMessage(getString(R.string.backup_delete_confirm_message, file.name))
             .setPositiveButton(R.string.backup_delete_action) { _, _ ->
@@ -1406,7 +1406,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         contentView.findViewById<TextView>(R.id.tv_is_loading_error)?.visibility = View.GONE
         contentView.findViewById<Group>(R.id.g_is_loading_retry)?.visibility = View.GONE
 
-        backupLoadingDialog = AlertDialog.Builder(requireContext())
+        backupLoadingDialog = com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(titleRes)
             .setView(contentView)
             .setCancelable(false)
@@ -1837,7 +1837,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             hint = getString(R.string.settings_parental_pin_hint)
         }
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(titleRes)
             .setMessage(messageRes)
             .setView(input)
@@ -1874,7 +1874,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             hint = getString(R.string.settings_parental_pin_hint)
         }
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(titleRes)
             .setMessage(messageRes)
             .setView(input)
@@ -1982,7 +1982,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             setSingleLine()
         }
 
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle("Test WebSocket bypass")
             .setMessage("Enter the URL that the mobile resolver should open.")
             .setView(input)
@@ -2075,7 +2075,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             addView(container)
         }
 
-        val dialog = AlertDialog.Builder(requireContext())
+        val dialog = com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle("WebSocket bypass QR")
             .setView(scrollView)
             .setPositiveButton(android.R.string.ok, null)

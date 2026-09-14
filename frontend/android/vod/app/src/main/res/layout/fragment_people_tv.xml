@@ -19,7 +19,8 @@
         app:layout_constraintEnd_toStartOf="@id/iv_people_image"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:text="People name" />
+        tools:text="People name"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_birthday_label"
@@ -31,7 +32,8 @@
         android:textColor="#FFFFFF"
         android:textStyle="bold"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_people_name" />
+        app:layout_constraintTop_toBottomOf="@id/tv_people_name"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_birthday"
@@ -44,7 +46,8 @@
         app:layout_constraintEnd_toStartOf="@id/iv_people_image"
         app:layout_constraintStart_toEndOf="@id/tv_people_birthday_label"
         app:layout_constraintTop_toBottomOf="@id/tv_people_name"
-        tools:text="Birthday" />
+        tools:text="Birthday"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_birthday"
@@ -70,7 +73,8 @@
         android:textColor="#FFFFFF"
         android:textStyle="bold"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_people_birthday" />
+        app:layout_constraintTop_toBottomOf="@id/tv_people_birthday"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_deathday"
@@ -83,7 +87,8 @@
         app:layout_constraintEnd_toStartOf="@id/iv_people_image"
         app:layout_constraintStart_toEndOf="@id/tv_people_deathday_label"
         app:layout_constraintTop_toBottomOf="@id/b_people_birthday"
-        tools:text="Day of death" />
+        tools:text="Day of death"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_deathday"
@@ -109,7 +114,8 @@
         android:textColor="#FFFFFF"
         android:textStyle="bold"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/b_people_deathday" />
+        app:layout_constraintTop_toBottomOf="@id/b_people_deathday"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_birthplace"
@@ -122,7 +128,8 @@
         app:layout_constraintEnd_toStartOf="@id/iv_people_image"
         app:layout_constraintStart_toEndOf="@id/tv_people_birthplace_label"
         app:layout_constraintTop_toBottomOf="@id/b_people_deathday"
-        tools:text="Place of birth" />
+        tools:text="Place of birth"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_birthplace"

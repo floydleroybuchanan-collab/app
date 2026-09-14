@@ -65,6 +65,9 @@ export default function MultiviewScreen() {
   const paneNodes = useRef<any[]>([]);
   const focusConfirmed = useRef(false);
   const firstPicker = useRef<any>(null);
+  const pickerList = useRef<FlatList<Channel>>(null);
+  const menuScroll = useRef<ScrollView>(null);
+  const menuRows = useRef<Record<string, number>>({});
   const [preferOverlayFocus, setPreferOverlayFocus] = useState(false);
   const writePanes = useCallback((next: MultiviewPane[]) => { paneRef.current = next; setPanes(next); }, []);
   const choose = useCallback(async (slot: number, supplied: Channel, refresh = false) => {
@@ -271,7 +274,9 @@ export default function MultiviewScreen() {
     const menuEntry = label === "Change channel" || label === "Add channel";
     return <Pressable key={pickerEntry ? "picker-entry" : controlKey} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
       focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && (pickerEntry || (picker == null && menuEntry))}
-      disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
+      onLayout={event => { if (picker == null) menuRows.current[controlKey] = event.nativeEvent.layout.y; }}
+      onFocus={() => { if (picker == null) menuScroll.current?.scrollTo({y:Math.max(0,(menuRows.current[controlKey] || 0)-80),animated:false}); }}
+      disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text numberOfLines={1} style={styles.text}>{label}</Text></Pressable>;
   };
   return <View style={styles.page}>
     <View style={styles.grid}>
@@ -298,7 +303,7 @@ export default function MultiviewScreen() {
     {labels && !overlay && <Text pointerEvents="none" numberOfLines={2} style={styles.hint}>{swapFrom != null ? "Select another pane to swap. Back cancels." : notice || "Press OK on a pane for options. Back returns to the guide."}</Text>}
     {menu && picker == null && <FocusGuide key="pane-menu" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.menu}>
       <Text style={styles.title}>{panes[selected]?.channel.name || "Multiview"}</Text>
-      <ScrollView>
+      <ScrollView ref={menuScroll}>
       {action(panes[selected] ? "Change channel" : "Add channel", () => openPicker(selected), !ready)}
       {action("Add another channel", () => { const slot=panes.findIndex((p,i)=>!p && i<appPolicy.multiview_max); if(slot>=0) openPicker(slot); }, occupied.length>=appPolicy.multiview_max)}
       {action("Listen to this screen", () => {listen(selected);setMenu(false);}, !panes[selected])}
@@ -319,10 +324,12 @@ export default function MultiviewScreen() {
       {action(`Playlist: ${sources.find(([id])=>id===sourceFilter)?.[1] || "All Playlists"}`, () => {const ids=["all",...sources.map(([id])=>id)];setSourceFilter(ids[(ids.indexOf(sourceFilter)+1)%ids.length]);setGroupFilter("all");},false,false,"playlist-filter")}
       {action(`Group: ${groupFilter === "all" ? "All groups" : groupFilter}`, () => {const ids=["all",...groups];setGroupFilter(ids[(ids.indexOf(groupFilter)+1)%ids.length]);},false,false,"group-filter")}
       <Text style={styles.notice}>{results.length} channels · Each screen uses a provider connection</Text>
-      <FlatList data={results} keyExtractor={channel => channel.id} keyboardShouldPersistTaps="handled"
+      <FlatList ref={pickerList} data={results} keyExtractor={channel => channel.id} keyboardShouldPersistTaps="handled"
+        getItemLayout={(_,index)=>({length:52,offset:52*index,index})}
+        removeClippedSubviews={false}
         initialNumToRender={10} maxToRenderPerBatch={10} windowSize={5}
         ListEmptyComponent={<Text style={styles.text}>No matching channels. Try All or another playlist.</Text>}
-        renderItem={({item}) => <Pressable onPress={() => {void choose(picker,item);}} style={({focused}: any) => [styles.row,focused && styles.focus]}><Text style={styles.text}>{item.name}</Text><Text style={styles.notice}>{item.playlist_name} · {item.source_group || item.group}</Text></Pressable>} />
+        renderItem={({item,index}) => <Pressable onFocus={()=>pickerList.current?.scrollToIndex({index,viewPosition:0.5,animated:false})} onPress={() => {void choose(picker,item);}} style={({focused}: any) => [styles.row,focused && styles.focus]}><Text numberOfLines={1} style={styles.text}>{item.name}</Text><Text numberOfLines={1} style={styles.notice}>{item.playlist_name} · {item.source_group || item.group}</Text></Pressable>} />
       <Text style={styles.notice}>{notice}</Text>
       {action("Cancel", () => {setPicker(null);setQuery("");setMenu(true);})}
     </FocusGuide>}
@@ -333,12 +340,12 @@ const styles = StyleSheet.create({
   outline:{...StyleSheet.absoluteFillObject,borderWidth:1,borderColor:tvColors.purple,zIndex:2},
   channel:{position:"absolute",left:0,right:0,top:0,color:"#fff",fontSize:16,padding:8,backgroundColor:"#100b20bb"},
   status:{position:"absolute",left:12,right:12,top:"40%",color:"#ffcf90",fontSize:16,backgroundColor:"#100b20dd",padding:12},
-  title:{color:"#fff",fontSize:22,fontWeight:"700",marginBottom:8},text:{color:"#fff",fontSize:17},notice:{color:"#d0c7dc",fontSize:14},
+  title:{color:"#fff",fontSize:18,fontWeight:"700",marginBottom:6},text:{color:"#fff",fontSize:14},notice:{color:"#B2ADBF",fontSize:11},
   hint:{position:"absolute",bottom:8,left:12,right:12,color:"#fff",fontSize:14,padding:6,backgroundColor:"#100b20bb"},
-  menu:{position:"absolute",right:12,top:12,bottom:12,width:"40%",maxWidth:440,minWidth:260,padding:16,backgroundColor:"#140e22f5",borderRadius:12,borderColor:tvColors.purple,borderWidth:1},
-  picker:{position:"absolute",right:0,top:0,bottom:0,width:"46%",minWidth:300,maxWidth:640,padding:16,gap:8,backgroundColor:"#140e22f5"},
+  menu:{position:"absolute",right:12,top:12,bottom:12,width:"36%",maxWidth:400,minWidth:260,padding:12,backgroundColor:"#151720f5",borderRadius:14,borderColor:tvColors.purple,borderWidth:1},
+  picker:{position:"absolute",right:0,top:0,bottom:0,width:"42%",minWidth:300,maxWidth:560,padding:12,gap:4,backgroundColor:"#151720f5"},
   filterRow:{flexDirection:"row",flexWrap:"wrap",gap:4},
-  button:{paddingHorizontal:12,paddingVertical:10,borderWidth:2,borderColor:"transparent",borderRadius:8,marginBottom:4,backgroundColor:"#272035"},
-  focus:{borderColor:tvColors.purple,backgroundColor:"#403052"},disabled:{opacity:.4},
-  search:{backgroundColor:"#272035",color:"#fff",padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8,fontSize:17},row:{padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8}
+  button:{paddingHorizontal:12,paddingVertical:8,borderWidth:2,borderColor:"transparent",borderRadius:10,marginBottom:2,backgroundColor:"#252634"},
+  focus:{borderColor:"#fff",backgroundColor:"#7541D4"},disabled:{opacity:.4},
+  search:{backgroundColor:"#252634",color:"#fff",padding:8,borderWidth:2,borderColor:"transparent",borderRadius:10,fontSize:14},row:{height:52,justifyContent:"center",paddingHorizontal:10,borderWidth:2,borderColor:"transparent",borderRadius:10}
 });

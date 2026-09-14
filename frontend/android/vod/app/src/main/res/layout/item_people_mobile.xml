@@ -31,6 +31,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/iv_people_image"
-        tools:text="People name" />
+        tools:text="People name"
+        android:fontFamily="@font/charm_geist_regular" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

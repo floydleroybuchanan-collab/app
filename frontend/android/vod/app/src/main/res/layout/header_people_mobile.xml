@@ -32,7 +32,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/iv_people_image"
-        tools:text="People name" />
+        tools:text="People name"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_birthday_label"
@@ -44,7 +45,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_people_name" />
+        app:layout_constraintTop_toBottomOf="@id/tv_people_name"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_birthday"
@@ -54,7 +56,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_people_birthday_label"
-        tools:text="Birthday" />
+        tools:text="Birthday"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_birthday"
@@ -73,7 +76,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_people_birthday" />
+        app:layout_constraintTop_toBottomOf="@id/tv_people_birthday"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_deathday"
@@ -83,7 +87,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_people_deathday_label"
-        tools:text="Day of death" />
+        tools:text="Day of death"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_deathday"
@@ -102,7 +107,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_people_deathday" />
+        app:layout_constraintTop_toBottomOf="@id/tv_people_deathday"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_birthplace"
@@ -112,7 +118,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_people_birthplace_label"
-        tools:text="Place of birth" />
+        tools:text="Place of birth"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_birthplace"
@@ -132,7 +139,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_people_birthplace" />
+        app:layout_constraintTop_toBottomOf="@id/tv_people_birthplace"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_biography"
@@ -142,7 +150,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_people_biography_label"
-        tools:text="Biography" />
+        tools:text="Biography"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_people_biography_read_more"
@@ -157,7 +166,8 @@
         app:layout_constraintBottom_toBottomOf="@id/tv_people_biography"
         app:layout_constraintEnd_toEndOf="@id/tv_people_biography"
         app:layout_constraintStart_toStartOf="@id/tv_people_biography"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Group
         android:id="@+id/g_people_biography"

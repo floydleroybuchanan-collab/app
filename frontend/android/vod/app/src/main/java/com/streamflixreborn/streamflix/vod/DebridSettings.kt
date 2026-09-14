@@ -23,9 +23,9 @@ object DebridSettings {
             val files = listOf("nova", "host-extractors").flatMap { folder ->
                 context.assets.list("licenses/" + folder).orEmpty().map { folder + "/" + it }
             }.sorted()
-            AlertDialog.Builder(context).setTitle("Playback licenses and source").setItems(files.toTypedArray()) { _, index ->
+            com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setTitle("Playback licenses and source").setItems(files.toTypedArray()) { _, index ->
                 val text = context.assets.open("licenses/" + files[index]).bufferedReader().use { it.readText() }
-                AlertDialog.Builder(context).setTitle(files[index]).setMessage(text).setPositiveButton("Close", null).show()
+                com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setTitle(files[index]).setMessage(text).setPositiveButton("Close", null).show()
             }.setNegativeButton("Close",null).show()
             true
         }
@@ -66,7 +66,7 @@ object DebridSettings {
             summary = RealDebrid.deviceLabel
             setOnPreferenceClickListener {
                 val input = EditText(fragment.requireContext()).apply { setText(RealDebrid.deviceLabel); maxLines = 1 }
-                AlertDialog.Builder(fragment.requireContext()).setTitle("Connection label")
+                com.streamflixreborn.streamflix.charm.CharmDialogBuilder(fragment.requireContext()).setTitle("Connection label")
                     .setMessage("This label is saved in Charming MediaLab. Manage the website connection name on Real-Debrid.")
                     .setView(input).setPositiveButton("Save") { _, _ ->
                         fragment.lifecycleScope.launch {
@@ -94,7 +94,7 @@ object DebridSettings {
         }
     }
     private fun chooseConnection(fragment: PreferenceFragmentCompat) {
-        AlertDialog.Builder(fragment.requireContext()).setTitle("Connect Real-Debrid")
+        com.streamflixreborn.streamflix.charm.CharmDialogBuilder(fragment.requireContext()).setTitle("Connect Real-Debrid")
             .setItems(arrayOf("Sign in on this device", "Link with a code", "Advanced: enter API token")) { _, which ->
                 if (which == 2) connect(fragment) else DebridLinkDialog.show(fragment, which == 0)
             }.setNegativeButton("Cancel", null).show()
@@ -107,7 +107,7 @@ object DebridSettings {
             isSaveEnabled = false
             if (android.os.Build.VERSION.SDK_INT >= 26) importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         }
-        val dialog = AlertDialog.Builder(context).setTitle("Connect Real-Debrid")
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setTitle("Connect Real-Debrid")
             .setMessage("Open your Real-Debrid account, copy your personal API token and paste it here. It stays encrypted on this device.")
             .setView(input).setPositiveButton("Connect", null)
             .setNeutralButton("Get my token", null).setNegativeButton("Cancel", null).create()

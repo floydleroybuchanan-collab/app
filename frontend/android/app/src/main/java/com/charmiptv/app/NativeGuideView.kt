@@ -123,14 +123,14 @@ class NativeGuideView(context: Context) : View(context) {
   private val liveWindowHistoryMs = 60L * 60_000L
   private val liveWindowAdvanceThresholdMs = 60_000L
 
-  private val background = Paint().apply { color = Color.rgb(8, 7, 13) }
-  private val header = Paint().apply { color = Color.rgb(22, 18, 33) }
-  private val channel = Paint().apply { color = Color.rgb(26, 22, 38) }
-  private val rowSurface = Paint().apply { color = Color.rgb(18, 16, 28) }
-  private val cell = Paint().apply { color = Color.rgb(31, 27, 45) }
-  private val selected = Paint().apply { color = Color.rgb(119, 74, 219) }
-  private val divider = Paint().apply { color = Color.rgb(53, 45, 72); strokeWidth = density }
-  private val nowPaint = Paint().apply { color = Color.rgb(197, 158, 255); strokeWidth = 2f * density }
+  private val background = Paint().apply { color = Color.rgb(11, 12, 18) }
+  private val header = Paint().apply { color = Color.rgb(21, 23, 32) }
+  private val channel = Paint().apply { color = Color.rgb(32, 34, 46) }
+  private val rowSurface = Paint().apply { color = Color.rgb(21, 23, 32) }
+  private val cell = Paint().apply { color = Color.rgb(37, 38, 52) }
+  private val selected = Paint().apply { color = Color.rgb(133, 85, 232) }
+  private val divider = Paint().apply { color = Color.rgb(57, 55, 71); strokeWidth = density }
+  private val nowPaint = Paint().apply { color = Color.rgb(186, 155, 255); strokeWidth = 2f * density }
   private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f * density }
   private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(183, 174, 204); textSize = 11f * density }
   private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -652,7 +652,7 @@ class NativeGuideView(context: Context) : View(context) {
       val rowIndex = firstVisibleRow + slot
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
-      channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(119, 74, 219) else Color.rgb(26, 22, 38)
+      channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(133, 85, 232) else Color.rgb(32, 34, 46)
       canvas.drawRect(0f, top, channelWidth, top + rowHeight - density, channel)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)

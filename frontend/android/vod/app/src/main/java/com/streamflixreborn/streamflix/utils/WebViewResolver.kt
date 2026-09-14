@@ -451,7 +451,7 @@ class WebViewResolver(private val context: Context) {
                     rootContainer.addView(webView, RelativeLayout.LayoutParams(-1, -1))
                 }
 
-                dialog = AlertDialog.Builder(uiContext, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+                dialog = com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(uiContext, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
                     .setView(rootContainer)
                     .setCancelable(true)
                     .setOnCancelListener {

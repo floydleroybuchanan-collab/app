@@ -1,5 +1,6 @@
 import { DAY, policyError, referralAccess } from "./admin-policy.js";
 import { syncReferralSlots } from "./referral-service.js";
+import {loadChallenge,securityHash} from './account-security.js';
 
 // Registration, the one-use claim, attribution and slot consumption commit
 // together. Every permission/expiry predicate is checked inside the transaction.
@@ -18,6 +19,14 @@ export async function registerInvitedAccount(request, env, helpers) {
   const referral = adminInvite ? null : await env.DB.prepare("SELECT * FROM referral_invites WHERE invite_code=?1").bind(code).first();
   const invitation = adminInvite || referral;
   if (!invitation) throw policyError("Invalid invitation code.", 404);
+  const recipient=adminInvite?await env.DB.prepare('SELECT telegram_id,blocked FROM bot_members WHERE invite_id=?1').bind(invitation.id).first():null;
+  let challengeHash=null;
+  if(recipient){
+    if(!body.challenge_token)return json({success:false,error:'Approve this registration in Telegram using the latest app. Update the app if this option is missing.',code:'TELEGRAM_APPROVAL_REQUIRED'},403);
+    const challenge=await loadChallenge(env,body.challenge_token),details=JSON.parse(challenge.payload);
+    if(recipient.blocked||challenge.kind!=='registration'||challenge.status!=='approved'||challenge.telegram_id!==recipient.telegram_id||details.invite_id!==invitation.id||details.username!==username||details.email!==email)throw policyError('This registration has not been approved by its Telegram recipient.',403);
+    challengeHash=await securityHash(body.challenge_token);
+  }
   let now = Math.floor(Date.now() / 1000);
   if (invitation.status !== "unused") throw policyError("This invitation is no longer available.", 409);
   if (invitation.expires_at !== null && invitation.expires_at <= now) throw policyError("This invitation has expired.", 410);
@@ -42,13 +51,18 @@ export async function registerInvitedAccount(request, env, helpers) {
         LEFT JOIN admin_owner o ON o.user_id=creator.id
         WHERE i.id=?6 AND i.status='unused' AND (i.expires_at IS NULL OR i.expires_at>?5)
           AND creator.role='admin' AND p.enabled=1
+          AND (NOT EXISTS(SELECT 1 FROM bot_members WHERE invite_id=i.id) OR EXISTS(
+            SELECT 1 FROM account_challenges c JOIN bot_members m ON m.telegram_id=c.telegram_id
+            WHERE c.token_hash=?7 AND c.kind='registration' AND c.status='approved' AND c.expires_at>?5
+              AND m.invite_id=i.id AND m.blocked=0 AND m.account_id IS NULL
+              AND json_extract(c.payload,'$.invite_id')=i.id AND json_extract(c.payload,'$.username')=?2 AND json_extract(c.payload,'$.email')=?3))
           AND (o.user_id IS NOT NULL OR (p.can_create_invites=1
             AND i.account_duration_days IS NOT NULL AND i.account_duration_days BETWEEN 1 AND p.max_duration_days
             AND i.max_sessions BETWEEN 1 AND p.max_sessions
             AND i.expires_at IS NOT NULL AND i.expires_at-i.created_at<=p.max_invite_valid_days*${DAY}
             AND st.accounts_created<p.max_accounts_total
             AND (SELECT COUNT(*) FROM admin_user_attribution a JOIN users u ON u.id=a.user_id
-              WHERE a.admin_user_id=p.user_id AND a.origin='admin_invite' AND (u.expires_at IS NULL OR u.expires_at>?5))<p.max_open_accounts))`).bind(...parameters),
+              WHERE a.admin_user_id=p.user_id AND a.origin='admin_invite' AND (u.expires_at IS NULL OR u.expires_at>?5))<p.max_open_accounts))`).bind(...parameters,challengeHash),
       env.DB.prepare("UPDATE invites SET status='used',redeemed_by_user_id=?1,redeemed_at=?2 WHERE id=?3 AND status='unused' AND EXISTS(SELECT 1 FROM users WHERE id=?1)").bind(id, now, invitation.id),
       env.DB.prepare(`INSERT INTO admin_user_attribution(user_id,admin_user_id,origin,created_at)
         SELECT ?1,created_by_user_id,'admin_invite',?2 FROM invites WHERE id=?3 AND redeemed_by_user_id=?1`).bind(id, now, invitation.id),
@@ -72,6 +86,7 @@ export async function registerInvitedAccount(request, env, helpers) {
     ];
   }
   let results;
+  if(challengeHash)statements.push(env.DB.prepare("UPDATE account_challenges SET status='consumed',completion_id=?1 WHERE token_hash=?2 AND status='approved' AND EXISTS(SELECT 1 FROM users WHERE id=?1)").bind(id,challengeHash));
   try { results = await env.DB.batch(statements); }
   catch (error) {
     if (/UNIQUE constraint failed: users\.(username|email)/i.test(String(error.message)))

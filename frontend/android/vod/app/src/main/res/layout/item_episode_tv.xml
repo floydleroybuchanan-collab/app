@@ -43,7 +43,7 @@
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="20dp"
         android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
+        android:progressTint="@color/charm_vod_purple"
         app:layout_constraintBottom_toBottomOf="@id/iv_episode_poster"
         app:layout_constraintEnd_toEndOf="@id/iv_episode_poster"
         app:layout_constraintStart_toStartOf="@id/iv_episode_poster"
@@ -59,7 +59,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/iv_episode_poster"
-        tools:text="Episode #" />
+        tools:text="Episode #"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_episode_title"
@@ -72,7 +73,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_episode_info"
-        tools:text="Title" />
+        tools:text="Title"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_episode_released"
@@ -85,7 +87,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_episode_title"
-        tools:text="Release date" />
+        tools:text="Release date"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_episode_overview"
@@ -101,6 +104,7 @@
         app:layout_constraintTop_toBottomOf="@id/tv_episode_title"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        tools:text="Overview" />
+        tools:text="Overview"
+        android:fontFamily="@font/charm_geist_semibold" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

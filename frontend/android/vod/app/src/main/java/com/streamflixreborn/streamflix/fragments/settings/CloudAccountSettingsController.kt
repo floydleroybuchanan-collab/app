@@ -121,7 +121,7 @@ object CloudAccountSettingsController {
             addView(email, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             addView(password, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
-        val dialog = AlertDialog.Builder(context)
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context)
             .setTitle(titleRes)
             .setView(content)
             .setNegativeButton(android.R.string.cancel, null)
@@ -180,7 +180,7 @@ object CloudAccountSettingsController {
                 },
             )
         }
-        val dialog = AlertDialog.Builder(context)
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context)
             .setTitle(R.string.cloud_sync_progress_title)
             .setView(content)
             .setCancelable(false)

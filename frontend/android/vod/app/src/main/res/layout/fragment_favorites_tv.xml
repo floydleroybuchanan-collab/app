@@ -19,7 +19,8 @@
         android:textColor="@color/favorites_action_text_tv"
         android:textStyle="bold"
         app:layout_constraintEnd_toStartOf="@id/btn_favorites_reorder"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <Button
         android:id="@+id/btn_favorites_reorder"
@@ -36,7 +37,8 @@
         android:textColor="@color/favorites_action_text_tv"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/favorites_actions_bottom"
@@ -70,6 +72,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_regular" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -63,7 +63,8 @@
         app:layout_constraintEnd_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toTopOf="@id/iv_tv_show_poster"
         tools:text="HD"
-        tools:visibility="visible" />
+        tools:visibility="visible"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_tv_show_last_episode"
@@ -82,7 +83,8 @@
         app:layout_constraintEnd_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_quality"
         app:layout_goneMarginTop="6dp"
-        tools:text="S1 E1" />
+        tools:text="S1 E1"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <ProgressBar
         android:id="@+id/pb_tv_show_progress"
@@ -93,7 +95,7 @@
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="10dp"
         android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
+        android:progressTint="@color/charm_vod_purple"
         app:layout_constraintBottom_toBottomOf="@id/iv_tv_show_poster"
         app:layout_constraintEnd_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintStart_toStartOf="@id/iv_tv_show_poster"
@@ -112,6 +114,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/iv_tv_show_poster"
-        tools:text="Title" />
+        tools:text="Title"
+        android:fontFamily="@font/charm_geist_semibold" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -103,6 +103,7 @@ class MainMobileActivity : FragmentActivity() {
         setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
         super.onCreate(savedInstanceState)
+        com.streamflixreborn.streamflix.charm.CharmDesign.install(this)
 
         AnimeOnlineNinjaProvider.init(this)
         Cine24hProvider.init(this)
@@ -117,6 +118,7 @@ class MainMobileActivity : FragmentActivity() {
 
         _binding = ActivityMainMobileBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.streamflixreborn.streamflix.charm.CharmDesign.styleTree(binding.root)
         applyThemeNavigationChrome()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContent) { view, windowInsets ->

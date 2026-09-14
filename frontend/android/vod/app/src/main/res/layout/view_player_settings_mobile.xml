@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#202020"
+    android:background="@color/charm_vod_panel"
     android:clickable="true"
     android:focusable="true">
 
@@ -39,7 +39,8 @@
         app:layout_constraintStart_toEndOf="@id/btn_settings_back"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_goneMarginStart="16dp"
-        tools:text="Settings" />
+        tools:text="Settings"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <ImageView
         android:id="@+id/btn_settings_close"

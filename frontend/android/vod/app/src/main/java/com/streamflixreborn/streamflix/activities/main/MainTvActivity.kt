@@ -53,6 +53,7 @@ class MainTvActivity : FragmentActivity() {
         setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
         
         super.onCreate(savedInstanceState)
+        com.streamflixreborn.streamflix.charm.CharmDesign.install(this)
         
         // Inizializza il provider con il context dell'attività per gestire eventuali bypass visibili
         AnimeOnlineNinjaProvider.init(this)
@@ -63,6 +64,7 @@ class MainTvActivity : FragmentActivity() {
 
         _binding = ActivityMainTvBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        com.streamflixreborn.streamflix.charm.CharmDesign.styleTree(binding.root)
         window.setBackgroundDrawableResource(R.color.charm_vod_canvas)
         applyThemeNavigationChrome()
 

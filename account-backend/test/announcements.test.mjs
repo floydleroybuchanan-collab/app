@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fixture} from './fixture.mjs';
+import {handleUpdate} from '../bot-telegram.js';
+const body=()=>({title:'New update',message:'Return to Telegram for the APK.',url:'https://t.me/Example/123',version_code:19,kind:'update',audience:'outdated',sound:true,starts_at:Math.floor(Date.now()/1000),expires_at:Math.floor(Date.now()/1000)+7*86400,reminder_hours:24,user_ids:[]});
+test('drafts stay private, publishing filters versions and schedules, and cancellation removes delivery',async()=>{
+ const f=fixture();f.user('viewer');const token=f.token('viewer');
+ const draft=await f.request('/admin/announcements',{method:'POST',token:f.ownerToken,body:body()});assert.equal(draft.status,201);
+ const receive=version=>f.request('/announcements',{method:'POST',token,body:{version_code:version}});
+ assert.equal((await receive(18)).body.announcements.length,0);
+ const id=draft.body.announcement.id,published=await f.request('/admin/announcements/'+id+'/publish',{method:'POST',token:f.ownerToken,body:{revision:1}});assert.equal(published.status,200);
+ assert.equal((await receive(18)).body.announcements.length,1);assert.equal((await receive(19)).body.announcements.length,0);
+ const controls=await f.request('/content/access',{token});assert.equal(controls.body.content.app_policy.update.version_code,19);
+ await f.request('/announcements/receipt',{method:'POST',token,body:{id,event:'displayed'}});
+ const report=(await f.request('/admin/announcements',{token:f.ownerToken})).body.announcements[0].report;assert.equal(report.displayed,1);assert.equal(report.opened,0);
+ assert.equal((await f.request('/admin/announcements/'+id,{method:'DELETE',token:f.ownerToken,body:{revision:1}})).status,409);
+ assert.equal((await f.request('/admin/announcements/'+id,{method:'DELETE',token:f.ownerToken,body:{revision:2}})).status,200);
+ assert.equal((await receive(18)).body.announcements.length,0);
+});
+test('selected recipients, expiry, permissions and self-test are enforced by the server',async()=>{
+ const f=fixture();f.user('viewer');f.user('other');const viewer=f.token('viewer'),other=f.token('other'),staff=await f.staff();
+ assert.equal((await f.request('/admin/announcements',{token:staff.token})).status,403);
+ const draft=(await f.request('/admin/announcements',{method:'POST',token:f.ownerToken,body:{...body(),audience:'selected',user_ids:['viewer']}})).body.announcement;
+ await f.request('/admin/announcements/'+draft.id+'/publish',{method:'POST',token:f.ownerToken,body:{revision:1}});
+ const receive=token=>f.request('/announcements',{method:'POST',token,body:{version_code:18}});
+ assert.equal((await receive(viewer)).body.announcements.length,1);assert.equal((await receive(other)).body.announcements.length,0);
+ f.db.prepare('UPDATE app_announcements SET expires_at=0').run();assert.equal((await receive(viewer)).body.announcements.length,0);
+ const testNotice=await f.request('/admin/announcements/'+draft.id+'/test',{method:'POST',token:f.ownerToken,body:{}});assert.equal(testNotice.status,200);
+ assert.equal((await receive(other)).body.announcements.length,0);assert.equal((await receive(f.ownerToken)).body.announcements.length,1);
+ assert.equal((await f.request('/admin/announcements',{method:'POST',token:f.ownerToken,body:{...body(),url:'javascript:alert(1)'}})).status,400);
+});
+test('private admin wizard checks current rights at every step and publishes only after preview confirmation',async()=>{
+ const f=fixture(),calls=[];let isAdmin=true;
+ f.env.TELEGRAM_BOT_TOKEN='local';f.env.TELEGRAM_FETCH=async(url,options)=>{const method=url.split('/').pop(),body=JSON.parse(options.body);calls.push({method,body});return Response.json({ok:true,result:method==='getChatMember'?{status:isAdmin?'administrator':'member',user:{id:body.user_id}}:{message_id:calls.length}});};
+ const s={enabled:true,group_id:'-100123',bot_username:'TestBot'},user={id:12345,first_name:'Admin'},chat={id:12345,type:'private'};
+ const type=text=>handleUpdate(f.env,{message:{from:user,chat,text}},s),press=data=>handleUpdate(f.env,{callback_query:{id:crypto.randomUUID(),from:user,message:{chat},data:'announce:'+data}},s);
+ await type('Mr Charm Notify Update');await type('New version ready');await type('Get the new APK in Telegram.');await type('19');await type('https://t.me/Example/123');await press('outdated');await press('now');await press('7');await press('24');await press('yes');
+ assert.equal(f.db.prepare('SELECT status FROM app_announcements').get().status,'draft');
+ isAdmin=false;await press('publish');assert.equal(f.db.prepare('SELECT status FROM app_announcements').get().status,'draft');
+ isAdmin=true;await press('publish');assert.equal(f.db.prepare('SELECT status FROM app_announcements').get().status,'published');
+ assert.ok(calls.filter(c=>c.method==='sendMessage').every(c=>String(c.body.chat_id)==='12345'));
+});

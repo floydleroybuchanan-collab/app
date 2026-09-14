@@ -19,7 +19,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_update_message"
@@ -32,7 +33,8 @@
         android:textColor="#FFFFFF"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_update_title" />
+        app:layout_constraintTop_toBottomOf="@id/tv_update_title"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <TextView
         android:id="@+id/tv_update_current_version_label"
@@ -45,7 +47,8 @@
         android:text="@string/update_current_version_label"
         app:layout_constraintEnd_toStartOf="@id/iv_update_arrow"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_update_message" />
+        app:layout_constraintTop_toBottomOf="@id/tv_update_message"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_update_current_version"
@@ -58,7 +61,8 @@
         app:layout_constraintEnd_toStartOf="@id/iv_update_arrow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_update_current_version_label"
-        tools:text="2.15.0" />
+        tools:text="2.15.0"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <ImageView
         android:id="@+id/iv_update_arrow"
@@ -85,7 +89,8 @@
         android:textColor="#FFFFFF"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_update_arrow"
-        app:layout_constraintTop_toBottomOf="@id/tv_update_message" />
+        app:layout_constraintTop_toBottomOf="@id/tv_update_message"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <TextView
         android:id="@+id/tv_update_new_version"
@@ -100,7 +105,8 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_update_arrow"
         app:layout_constraintTop_toBottomOf="@id/tv_update_new_version_label"
-        tools:text="2.15.1" />
+        tools:text="2.15.1"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <ScrollView
         android:id="@+id/sv_release_notes"
@@ -121,7 +127,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="12sp"
-            tools:text="- Bug fixes" />
+            tools:text="- Bug fixes"
+        android:fontFamily="@font/charm_geist_regular" />
     </ScrollView>
 
     <androidx.constraintlayout.widget.Barrier
@@ -159,7 +166,8 @@
         android:text="@string/update_later"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/btn_update"
-        app:layout_constraintTop_toBottomOf="@id/pb_update_is_loading" />
+        app:layout_constraintTop_toBottomOf="@id/pb_update_is_loading"
+        android:fontFamily="@font/charm_geist_regular" />
 
     <Button
         android:id="@+id/btn_update"
@@ -174,6 +182,7 @@
         android:text="@string/update"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/pb_update_is_loading" />
+        app:layout_constraintTop_toBottomOf="@id/pb_update_is_loading"
+        android:fontFamily="@font/charm_geist_regular" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

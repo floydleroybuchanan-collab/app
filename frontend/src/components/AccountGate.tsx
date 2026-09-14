@@ -1,4 +1,6 @@
 import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
+import {AccountSecurityDialog,type SecurityScreen} from './AccountSecurityDialog';
+import {securityRequest} from '@/src/auth/securityApi';
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -27,6 +29,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   const [inviteCode, setInviteCode] = useState("");
   const [email, setEmail] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [securityScreen,setSecurityScreen]=useState<SecurityScreen|null>(null);
 
   const submit = useCallback(async () => {
     const cleanUsername = username.trim();
@@ -62,12 +65,16 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
     setBusy(true);
     setError(null);
     try {
+      const policy=await securityRequest<{requires_telegram_approval:boolean}>('/auth/registration-policy',{invite_code:inviteCode});
+      if(policy.requires_telegram_approval){setSecurityScreen('registration');return;}
       const message = await register(inviteCode, username, email, password);
       if (message) setError(message);
       else {
         setPassword("");
         setConfirmPassword("");
       }
+    } catch(e) {
+      setError(e instanceof Error?e.message:'Unable to register. Try again.');
     } finally {
       setBusy(false);
     }
@@ -266,8 +273,10 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
             {mode === "login" ? "Register With Invitation" : "Return to Sign In"}
           </Text>
         </Pressable>
+        {mode==='login'&&(['reset','access'] as const).map(kind=><Pressable key={kind} disabled={busy} onPress={()=>setSecurityScreen(kind)} accessibilityRole="button" style={({focused})=>[styles.secondaryButton,focused&&styles.focused]}><Text style={styles.secondaryButtonText}>{kind==='reset'?'Forgot Password':'Request App Access'}</Text></Pressable>)}
+        <Pressable disabled={busy} onPress={()=>setSecurityScreen('community')} accessibilityRole="button" style={({focused})=>[styles.secondaryButton,focused&&styles.focused]}><Text style={styles.secondaryButtonText}>Telegram Community</Text></Pressable>
       </View>
-    </ScrollView></View>
+    </ScrollView>{securityScreen&&<AccountSecurityDialog kind={securityScreen} initialLogin={username} registration={{invite_code:inviteCode,username,email}} onApproved={async token=>{const message=await register(inviteCode,username,email,password,token);if(message)throw new Error(message);setPassword('');setConfirmPassword('');setSecurityScreen(null);}} onClose={()=>setSecurityScreen(null)}/>}</View>
   );
 }
 

@@ -321,7 +321,7 @@ class FavoritesTvFragment : Fragment() {
             getString(R.string.favorites_sort_title_ascending),
             getString(R.string.favorites_sort_title_descending),
         )
-        AlertDialog.Builder(requireContext())
+        com.streamflixreborn.streamflix.charm.CharmPlatformDialogBuilder(requireContext())
             .setTitle(R.string.favorites_sort_title)
             .setSingleChoiceItems(labels, modes.indexOf(viewModel.currentSortMode())) { dialog, which ->
                 if (modes[which] != FavoritesViewModel.SortMode.MANUAL) setRearrangeMode(false)

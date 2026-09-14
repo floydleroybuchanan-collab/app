@@ -2,6 +2,7 @@
 const API = document.querySelector('meta[name="api"]').content;
 const $ = id => document.getElementById(id);
 const FLAGS = {
+  can_manage_announcements:'Create, schedule and cancel app announcements',
   can_manage_bot:'Manage Mr. Charm content, settings and all Telegram member links (global access)',
   can_create_invites:"Create invitation codes",can_manage_all:"Access every administrator's viewer accounts (otherwise own accounts only)",
   can_change_time:"Change account timers",can_change_sessions:"Change simultaneous session allowance",
@@ -73,6 +74,7 @@ async function navigate(next) {
 async function loadView() {
   const ticket=++generation;
   if(view==='app-settings'){await loadAppSettings();return;}
+  if(view==='announcements'){await loadAnnouncements();return;}
   if(view==="bot"){await loadBot();return;}
   if(view==="create"){createInvitation();return;}
   if(view==="dashboard"){
@@ -222,7 +224,14 @@ function editUser(u) {
   },u.status==="disabled"?"primary":"danger"));
   if(admin.is_owner)actions.append(button("Give this user admin access",()=>{$("dialog").close();editAdmin(undefined,u.username);}));
   if(permitted("can_force_logout"))actions.append(button("Sign out all sessions",async()=>{if(confirm("Sign out every session for "+u.username+"?")){await api("/admin/users/"+u.id+"/logout","POST",{});await saved("All sessions revoked.");}}));
-  if(permitted("can_reset_password"))actions.append(button("Reset password",()=>{ $("dialog").close();const target=openDialog("Reset viewer password",u.username+" will be signed out on all sessions.");const rf=form(target,async()=>{await api("/admin/users/"+u.id+"/reset-password","POST",{new_password:password.value});await saved("Password changed.");});const password=field(rf,"New password","password","","password",{required:true,minLength:8,maxLength:256,autocomplete:"new-password"});submit(rf,"Reset password");}));
+  if(permitted("can_reset_password"))actions.append(button("Verified account recovery",()=>{
+    $("dialog").close();const target=openDialog("Verified account recovery",u.username+' · For legacy accounts or lost Telegram access. The user chooses their own new password in the app.');
+    const rf=form(target,async()=>{const result=await api('/admin/users/'+u.id+'/recovery','POST',{ownership_verified:verified.checked,reason:reason.value,admin_password:password.value});password.value='';rf.replaceChildren(el('p','Give this code privately to the verified owner. It can start one recovery request and expires in one hour.'),el('p',result.recovery.code,'code'),el('p','In the app: Forgot Password → Lost Telegram / legacy account help.'));});
+    const reason=field(rf,'How did you verify account ownership?','reason','','text',{required:true,minLength:15,maxLength:500});
+    const verified=check(rf,'I verified this person owns the existing account.','ownership_verified');
+    const password=field(rf,'Your administrator password','password','','password',{required:true,autocomplete:'current-password'});
+    submit(rf,'Issue one-time recovery code');
+  }));
   if(permitted("can_delete_users"))actions.append(button("Delete account",()=>{$("dialog").close();const target=openDialog("Permanently delete account","This removes "+u.username+"'s personal information and releases their inviter's eligible slot. This cannot be undone.");
     const df=form(target,async()=>{await api("/admin/users/"+u.id,"DELETE",{confirmation:confirmation.value});await saved("Account and personal data deleted.");});const confirmation=field(df,"Type "+u.username+" to confirm","confirmation","","text",{required:true});submit(df,"Permanently delete");},"danger"));
 }

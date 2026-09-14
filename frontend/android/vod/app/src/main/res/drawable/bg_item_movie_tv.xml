@@ -1,29 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <item android:state_activated="true">
-        <layer-list>
-            <item android:bottom="-5dp" android:left="-5dp" android:right="-5dp" android:top="-5dp">
-                <shape android:shape="rectangle">
-                    <solid android:color="#227C3AED" />
-                    <stroke android:width="5dp" android:color="@color/favorite_selected" />
-                </shape>
-            </item>
-        </layer-list>
-    </item>
-
-    <item android:state_focused="true">
-        <layer-list>
-            <item android:bottom="-3dp" android:left="-3dp" android:right="-3dp" android:top="-3dp">
-                <shape android:shape="rectangle">
-                    <stroke android:width="3dp" android:color="@color/charm_vod_focus" />
-                </shape>
-            </item>
-        </layer-list>
-    </item>
-
-    <item>
-        <shape android:shape="rectangle"></shape>
-    </item>
-
+ <item android:state_focused="true"><layer-list><item android:left="-3dp" android:right="-3dp" android:top="-3dp" android:bottom="-3dp"><shape><corners android:radius="12dp"/><stroke android:width="3dp" android:color="#D5C3FF"/></shape></item></layer-list></item>
+ <item android:state_activated="true"><shape><corners android:radius="10dp"/><solid android:color="#372750"/><stroke android:width="2dp" android:color="#8555E8"/></shape></item>
+ <item><shape><corners android:radius="10dp"/><solid android:color="#151720"/></shape></item>
 </selector>

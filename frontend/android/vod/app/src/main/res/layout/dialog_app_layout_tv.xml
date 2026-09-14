@@ -18,7 +18,8 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:fontFamily="@font/charm_geist_semibold" />
 
     <LinearLayout
         android:id="@+id/ll_app_layout"
@@ -45,6 +46,7 @@
         android:text="@string/app_layout_apply"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/ll_app_layout" />
+        app:layout_constraintTop_toBottomOf="@id/ll_app_layout"
+        android:fontFamily="@font/charm_geist_regular" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
