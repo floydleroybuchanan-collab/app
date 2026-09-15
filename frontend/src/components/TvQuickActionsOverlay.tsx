@@ -381,7 +381,7 @@ export function TvQuickActionsOverlay() {
         </View>
 
         {mode === "main" ? (
-          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          <ScrollView focusable={false} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
             {guideProgram ? (
               <>
                 <Action buttonRef={firstActionRef} preferredFocus={focusClaim} icon="play" label="Watch channel now" value={guideProgram.title} onPress={watchSelectedProgram} />
@@ -420,7 +420,7 @@ export function TvQuickActionsOverlay() {
         ) : null}
 
         {mode === "epg-source" ? (
-          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          <ScrollView focusable={false} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
             <Text style={styles.sectionTitle}>Choose EPG source</Text>
             {sourceChoices.length ? sourceChoices.map((source) => (
               <Action
@@ -449,7 +449,7 @@ export function TvQuickActionsOverlay() {
               style={styles.search}
             />
             <Text style={styles.count}>{epgTotal} XMLTV channels · showing first {Math.min(80, epgRows.length)}</Text>
-            <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+            <ScrollView focusable={false} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
               {epgRows.map((row) => (
                 <Action key={row.id} icon="calendar-outline" label={row.name || row.id} value={row.id} disabled={busy} onPress={() => void assignEpg(row.id)} />
               ))}

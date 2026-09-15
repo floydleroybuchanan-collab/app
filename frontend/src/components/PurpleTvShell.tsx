@@ -642,7 +642,7 @@ export function PurpleTvShell({
           {active === "/guide" && guideGroups?.length ? (
             <View style={styles.guideGroupSection}>
               <Text style={styles.guideGroupLabel}>{guideGroups.some((item) => item.kind === "playlist") ? "Playlists" : "Groups"}</Text>
-              <ScrollView
+              <ScrollView focusable={false}
                 style={styles.guideGroupList}
                 contentContainerStyle={styles.guideGroupListContent}
                 showsVerticalScrollIndicator={false}
@@ -677,7 +677,7 @@ export function PurpleTvShell({
 
           <View style={styles.navSections} testID="purple-nav-bounded-sections">
             <View style={styles.primaryNavSection}>
-              <ScrollView
+              <ScrollView focusable={false}
                 style={styles.primaryNavList}
                 contentContainerStyle={styles.navListContent}
                 showsVerticalScrollIndicator={false}

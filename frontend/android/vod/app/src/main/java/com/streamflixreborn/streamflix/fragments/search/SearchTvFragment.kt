@@ -126,6 +126,11 @@ class SearchTvFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
 
+                // A recovered search must not keep pointing Down at a hidden retry button.
+                if (state !is State.FailedSearching && state !is State.SearchingMore) {
+                    binding.etSearch.nextFocusDownId = binding.llGlobalSearch.id
+                    if (binding.isLoading.root.hasFocus()) binding.etSearch.requestFocus()
+                }
                 when (state) {
                     is State.Searching, is State.GlobalSearching -> {
                         binding.isLoading.apply {

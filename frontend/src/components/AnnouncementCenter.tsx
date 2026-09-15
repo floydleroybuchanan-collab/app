@@ -1,3 +1,4 @@
+import {useTVFocusEntry} from './useTVFocusEntry';
 import React,{useEffect,useRef,useState} from 'react';
 import {AppState,Linking,Modal,NativeModules,Platform,Pressable,ScrollView,StyleSheet,Text,View,useWindowDimensions} from 'react-native';
 import Constants from 'expo-constants';
@@ -69,9 +70,10 @@ export function AnnouncementCenter(){
  };
  const dismiss=()=>{receipt('dismissed');cooldown.current=Date.now()+30_000;setActive(null);};
  const open=async()=>{if(!active?.url)return;try{await Linking.openURL(active.url);receipt('opened');}catch{setError('Telegram could not open on this device. Scan the QR with your phone or use Installation help.');}};
- const button=(label:string,action:()=>void,primary=false)=><Pressable key={label} accessibilityRole="button" onPress={action} style={({focused})=>[styles.button,primary&&styles.primary,focused&&styles.focused]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
+ const entryFocus=useTVFocusEntry(!!active&&safe,(active?.id||'')+':'+help);
+ const button=(label:string,action:()=>void,primary=false)=><Pressable key={label} ref={primary||label==='Back to update'?entryFocus.entryRef:label==='Exit'?entryFocus.fallbackRef:undefined} accessibilityRole="button" onPress={action} style={({focused})=>[styles.button,primary&&styles.primary,focused&&styles.focused]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
  if(!active||!safe)return null;
- return <Modal transparent animationType="fade" onShow={onShow} onRequestClose={dismiss}><View style={styles.scrim}><FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={[styles.card,{width:Math.min(width-40,820),maxHeight:height-40}]}><ScrollView contentContainerStyle={styles.content}>
+ return <Modal transparent animationType="fade" onShow={()=>{onShow();entryFocus.onLayout();}} onRequestClose={dismiss}><View style={styles.scrim}><FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={[styles.card,{width:Math.min(width-40,820),maxHeight:height-40}]}><ScrollView focusable={false} removeClippedSubviews={false} onLayout={entryFocus.onLayout} contentContainerStyle={styles.content}><View style={{gap:18}} onFocusCapture={entryFocus.onFocusCapture}>
   <View style={styles.header}><Ionicons name="cloud-download-outline" size={34} color="#C4B5FD"/><Text style={styles.brand}>CHARMING MEDIALAB</Text></View>
   <Text style={styles.title}>{active.title}</Text><Text style={styles.message}>{active.message}</Text>
   {help?<View style={styles.help}><Text style={styles.message}>1. Open Mr Charm on your phone and choose Mr Charm Download App. Find the release announced here.</Text><Text style={styles.message}>2. On your television, open Downloader and use the download code or address supplied with that release.</Text><Text style={styles.message}>3. Download the APK and follow Android’s installation prompts. Install it over the existing app to keep your settings. Do not uninstall first.</Text><Text style={styles.message}>Scanning on a phone opens Telegram on that phone. It does not install the update on your TV.</Text>{button('Back to update',()=>setHelp(false))}</View>:<>
@@ -80,6 +82,7 @@ export function AnnouncementCenter(){
   {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
   {button(active.reminder_hours===24?'Remind me tomorrow':'Remind me in '+active.reminder_hours+' hours',dismiss)}
   {button('Alert sounds: '+(sound?'On':'Off'),()=>{const enabled=!sound;setSound(enabled);void storage.setItem(UPDATE_SOUND_KEY,enabled);})}
- </ScrollView></FocusGuide></View></Modal>;
+  {button('Exit',dismiss)}
+ </View></ScrollView></FocusGuide></View></Modal>;
 }
 const styles=StyleSheet.create({scrim:{flex:1,backgroundColor:'rgba(3,4,9,.88)',justifyContent:'center',alignItems:'center'},card:{borderRadius:24,backgroundColor:'#13141F',borderWidth:1,borderColor:'#514363'},content:{padding:30,gap:18},header:{flexDirection:'row',alignItems:'center',gap:14},brand:{color:'#C4B5FD',fontFamily:fonts.bold,fontSize:12,letterSpacing:3},title:{color:'#fff',fontSize:30,fontFamily:fonts.bold},message:{color:'#CDC9DA',fontSize:16,lineHeight:25,fontFamily:fonts.regular},download:{flexDirection:'row',alignItems:'center',gap:24},button:{paddingVertical:13,paddingHorizontal:18,minHeight:48,backgroundColor:'#232231',borderWidth:2,borderColor:'#40374E',borderRadius:12,alignItems:'center'},primary:{backgroundColor:tvColors.purple,borderColor:tvColors.purple},focused:{borderColor:'#fff',backgroundColor:'#6831BE'},buttonText:{color:'#fff',fontFamily:fonts.semibold,fontSize:15},help:{gap:14,padding:18,backgroundColor:'#1C1D2B',borderRadius:14},error:{color:'#FDA4AF',fontSize:14}});

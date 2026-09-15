@@ -1,14 +1,19 @@
-import { findNodeHandle, Platform, UIManager } from "react-native";
+import { findNodeHandle, NativeModules, Platform, UIManager } from "react-native";
 
 /** Request native TV focus on a React node (Pressable ref, View ref, etc.). */
 export function requestNativeFocus(node: unknown): boolean {
   if (!node) return false;
   // React's generic HostComponent.focus() calls TextInputState, which is a
   // no-op for a Pressable. TV ViewManager owns requestTVFocus instead.
-  if (Platform.isTV) {
+  if (Platform.OS === "android" || Platform.isTV) {
     try {
       const handle = findNodeHandle(node as any);
       if (!handle) return false;
+      if (Platform.OS === "android" && NativeModules.TvRemote?.requestControlFocus) {
+        // Resolve both TextInput and View tags, including controls inside Modal windows.
+        void NativeModules.TvRemote.requestControlFocus(handle).catch(() => {});
+        return true;
+      }
       UIManager.dispatchViewManagerCommand(handle, "requestTVFocus" as any, []);
       return true;
     } catch { return false; }

@@ -564,7 +564,7 @@ function SettingsScreenContent() {
 
         {!section ? (
           <FocusGuide style={styles.tileGridWrap}>
-            <ScrollView
+            <ScrollView focusable={false}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.tileGrid}
             >
@@ -588,7 +588,7 @@ function SettingsScreenContent() {
           </FocusGuide>
         ) : (
           <FocusGuide style={styles.detailsWrap}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.details}>
+          <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.details}>
 
             {section === "general" ? (
               <SettingsCard title="Guide & channels" icon="list-outline">

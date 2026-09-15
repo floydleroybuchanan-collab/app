@@ -1,3 +1,4 @@
+import { useTVFocusEntry } from './useTVFocusEntry';
 import { MediaLabArt } from "@/src/components/MediaLabBrand";
 import { AccountLoginBrand } from "./AccountLoginBrand";
 import { FocusGuide } from "./TVFocusGuideView";
@@ -19,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/src/auth/AuthContext";
 import { fonts, radius, tvColors } from "@/src/theme";
-import { setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
+import { setGuideNavigationActive, setRemoteContext, setPointerActive } from "@/src/utils/tvRemote";
 
 export function AccountGate({ children }: { children: React.ReactNode }) {
   const { status, user, notice, signIn, register, signOut, retryRestore } = useAuth();
@@ -38,10 +39,13 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [securityScreen,setSecurityScreen]=useState<SecurityScreen|null>(null);
 
+  const entryFocus = useTVFocusEntry(status !== "signed_in" && status !== "restoring" && !busy && !securityScreen, status + ":" + mode);
+
   useEffect(() => {
     if (status === "signed_in") return;
     setRemoteContext("default");
     setGuideNavigationActive(false);
+    setPointerActive(false);
   }, [status]);
 
   const submit = useCallback(async () => {
@@ -125,13 +129,14 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 
   if (status === "unavailable") {
     return (
-      <View style={styles.screen} testID="account-session-unavailable">
+      <View style={styles.screen} testID="account-session-unavailable" onFocusCapture={entryFocus.onFocusCapture} onLayout={entryFocus.onLayout}>
         <View style={[styles.card, wide && mode === "login" && { width: Math.min(480, width * .46) }, width < 700 && styles.cardCompact]}>
           <View style={styles.brandMark}><Ionicons name="cloud-offline-outline" size={30} color="#fff" /></View>
           <Text style={styles.title}>Account check unavailable</Text>
           <Text style={styles.message}>{notice || "Unable to verify your account right now."}</Text>
           <View style={styles.actions}>
             <Pressable
+              ref={entryFocus.entryRef}
               hasTVPreferredFocus
               onPress={() => void retryRestore()}
               style={({ focused }: any) => [styles.primaryButton, focused && styles.focused]}
@@ -157,7 +162,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
     <View style={{ flex: 1, backgroundColor: "#0B0912" }}>
     <LinearGradient pointerEvents="none" colors={["#231031", "#100B19", "#0B0912"]} start={{x:0,y:.45}} end={{x:1,y:.7}} style={StyleSheet.absoluteFill} />
     <FocusGuide style={{flex:1}} autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
-    <ScrollView
+    <ScrollView focusable={false} removeClippedSubviews={false}
       style={styles.screenScroll}
       contentContainerStyle={[styles.screenContent, wide && styles.screenWide, compact && {paddingVertical:20}]}
       keyboardShouldPersistTaps="handled"
@@ -169,7 +174,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
         <Text style={[styles.tagline, !wide && {fontSize:19}]}>Live TV. Movies. Series.</Text>
         <Text style={styles.brandSubtitle}>Your favorites. All in one place.</Text>
       </View>
-      <View style={[styles.loginForm, wide && {width:Math.min(396,width*.43)}]}>
+      <View style={[styles.loginForm, wide && {width:Math.min(396,width*.43)}]} onFocusCapture={entryFocus.onFocusCapture} onLayout={entryFocus.onLayout}>
         <Text style={styles.kicker}>WELCOME TO CHARMING MEDIALAB</Text>
         <Text style={styles.title}>{mode === "login" ? "Welcome back." : "Create your account"}</Text>
         <Text style={[styles.message, compact && {marginBottom:14}]}>
@@ -180,7 +185,6 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           <>
             <Text style={styles.label}>Invitation code</Text>
             <TextInput
-              hasTVPreferredFocus
               value={inviteCode}
               onChangeText={setInviteCode}
               editable={!busy}
@@ -198,7 +202,6 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 
         <Text style={styles.label}>Username</Text>
         <TextInput
-          hasTVPreferredFocus={mode === "login"}
           value={username}
           onChangeText={setUsername}
           editable={!busy}
@@ -287,6 +290,8 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
         {error || notice ? <Text style={styles.error}>{error || notice}</Text> : null}
 
         <Pressable
+          ref={entryFocus.entryRef}
+          focusable={!busy}
           disabled={busy}
           onPress={() => void (mode === "login" ? submit() : submitRegistration())}
           style={({ focused }: any) => [styles.primaryButton, busy && styles.disabled, focused && styles.focused]}

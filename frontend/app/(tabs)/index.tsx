@@ -191,7 +191,7 @@ function LiveTvHomeScreenContent() {
 
   return (
     <PurpleTvShell active="/">
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
+      <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
         <View style={styles.hero}>
           <LinearGradient
             colors={["rgba(124,58,237,0.18)", "rgba(12,10,27,0.80)", "#090914"]}
@@ -284,7 +284,7 @@ function LiveTvHomeScreenContent() {
           <Text style={styles.sectionTitle}>Recently Watched Channels</Text>
           <Text style={styles.sectionHint}>Currently airing on channels you watched</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+        <ScrollView focusable={false} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
           {recentLive.map((channel, index) => (
             <RecentChannelCard
               key={channel.id}

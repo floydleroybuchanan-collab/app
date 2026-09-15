@@ -343,7 +343,7 @@ function SearchScreenContent() {
                 ))}
               </>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.resultsScroll}>
+              <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.resultsScroll}>
                 {results.channels.length ? <Text style={styles.resultsTitle}>Channels</Text> : null}
                 {results.channels.map((channel, index) => (
                   <FocusGuide key={channel.id} style={styles.resultBlock} trapFocusRight>

@@ -29,6 +29,24 @@ import com.facebook.react.bridge.ReactMethod
 class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx) {
   override fun getName(): String = "TvRemote"
 
+  @ReactMethod
+  fun requestControlFocus(reactTag: Double, promise: Promise) {
+    com.facebook.react.bridge.UiThreadUtil.runOnUiThread {
+      try {
+        val tag = reactTag.toInt()
+        val view = com.facebook.react.uimanager.UIManagerHelper.getUIManagerForReactTag(ctx, tag)?.resolveView(tag)
+        if (view == null || !view.isAttachedToWindow || !view.isShown || !view.isEnabled || !view.isFocusable) {
+          promise.resolve(false)
+        } else {
+          // Hardware navigation can start while Android still considers the last interaction touch.
+          // Text fields receive navigation focus without automatically opening the keyboard.
+          view.isFocusableInTouchMode = true
+          promise.resolve(view.requestFocus())
+        }
+      } catch (_: Throwable) { promise.resolve(false) }
+    }
+  }
+
   companion object {
     // Use @JvmField (a plain static field, no accessors) so Kotlin does NOT
     // generate a static setPointerActive(...) setter that would clash at the

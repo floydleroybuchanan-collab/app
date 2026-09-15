@@ -52,7 +52,7 @@ export function IconRailSettings() {
       <View style={styles.overlay}>
         <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.menu}>
           <Text style={styles.heading}>Rail timeout</Text>
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 3 }} showsVerticalScrollIndicator={false}>
+          <ScrollView focusable={false} style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 3 }} showsVerticalScrollIndicator={false}>
           {ICON_RAIL_TIMEOUT_OPTIONS.map(option => <Pressable key={option.value}
             ref={option.value === prefs.timeoutMinutes ? selected as any : undefined}
             accessibilityRole="radio" accessibilityState={{ selected: option.value === prefs.timeoutMinutes }}

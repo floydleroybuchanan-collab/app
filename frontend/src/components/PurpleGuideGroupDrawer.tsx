@@ -102,7 +102,7 @@ export function PurpleGuideGroupDrawer({
   return (
     <View style={styles.overlay} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+        <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
           {!groups.length && <Pressable ref={emptyRef as any} hasTVPreferredFocus={preferActiveFocus}
             onFocus={() => { focusConfirmedRef.current = true; setPreferActiveFocus(false); setRemoteContext("guide_groups"); }}
             onPress={onOpenMainDrawer} style={({ focused }: any) => [styles.row, focused && styles.focused]}>

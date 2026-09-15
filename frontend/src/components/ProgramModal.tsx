@@ -18,6 +18,7 @@ export function ProgramModal() {
   const [msg, setMsg] = React.useState<string | null>(null);
   // Optimistic override so the label flips the instant the user presses Remind/Cancel.
   const [optimisticReminded, setOptimisticReminded] = React.useState<boolean | null>(null);
+  const [descriptionFocused, setDescriptionFocused] = React.useState(false);
   const [focusClaim, setFocusClaim] = React.useState(false);
   // Ref-only busy guard — never disable the focused TV button (that crashes Fire TV).
   const mountedRef = React.useRef(true);
@@ -137,7 +138,7 @@ export function ProgramModal() {
             </Text>
             {!!program.category && <Text style={styles.category}>{program.category}</Text>}
             {!!program.desc && (
-              <ScrollView style={styles.descBox} nestedScrollEnabled showsVerticalScrollIndicator>
+              <ScrollView focusable onFocus={() => setDescriptionFocused(true)} onBlur={() => setDescriptionFocused(false)} style={[styles.descBox, {borderWidth:2,borderColor:descriptionFocused?"#FFFFFF":"transparent"}]} nestedScrollEnabled showsVerticalScrollIndicator>
                 <Text style={styles.desc}>{program.desc}</Text>
               </ScrollView>
             )}

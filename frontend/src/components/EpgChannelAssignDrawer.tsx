@@ -164,7 +164,7 @@ export function EpgChannelAssignDrawer({
               <Text style={styles.count} numberOfLines={1}>{total} channel{total === 1 ? "" : "s"}</Text>
             </View>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+            <ScrollView focusable={false} style={styles.list} showsVerticalScrollIndicator={false} nestedScrollEnabled>
               {visibleRows.map((row) => {
                 const isCurrent = currentAssignedId === row.id;
                 const inUse = assignedIds.has(row.id);

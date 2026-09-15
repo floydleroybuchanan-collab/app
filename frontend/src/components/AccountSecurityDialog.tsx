@@ -1,3 +1,4 @@
+import {useTVFocusEntry} from './useTVFocusEntry';
 import React,{useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,AppState,Linking,Modal,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View,useWindowDimensions} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
@@ -18,6 +19,7 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[done,setDone]=useState(''),[clock,setClock]=useState(Date.now());
  const [community,setCommunity]=useState<{bot_username:string;bot_url:string;community_url:string|null}|null>(null);
  const [security,setSecurity]=useState<{telegram:{telegram_id:string;username:string;name:string}|null;activity:{action:string;created_at:number}[]}|null>(null);
+ const entryFocus=useTVFocusEntry(!busy,kind+':'+(done?'done':challenge?status+':'+(challenge.expires_at*1000<=clock?'expired':'active'):showRecovery?'recovery':'start'));
  const mounted=useRef(true);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const title={reset:'Forgot Password',access:'Request App Access',link:'Link Telegram',password:'Change Password',community:'Telegram Community',registration:'Approve your account',security:'Account Security'}[kind];
@@ -62,13 +64,14 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
   if(mounted.current){setPassword('');setConfirm('');setCurrentPassword('');setDone(result.message);}
  });
  const open=(url:string)=>run(async()=>{await Linking.openURL(url);});
- const button=(label:string,action:()=>void,primary=false)=><Pressable key={label} accessibilityRole="button" disabled={busy} onPress={action} style={({focused})=>[styles.button,primary&&styles.primary,focused&&styles.focused,busy&&styles.disabled]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
- const input=(label:string,value:string,change:(s:string)=>void,secure=false)=><View><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={change} secureTextEntry={secure} autoCapitalize="none" autoCorrect={false} maxLength={256} editable={!busy} style={styles.input} placeholderTextColor={tvColors.textMuted}/></View>;
+ const button=(label:string,action:()=>void,primary=false)=><Pressable key={label} ref={primary?entryFocus.entryRef:label==='Back'?entryFocus.fallbackRef:undefined} focusable={!busy} accessibilityRole="button" disabled={busy} onPress={action} style={({focused})=>[styles.button,primary&&styles.primary,focused&&styles.focused,busy&&styles.disabled]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
+ const [focusedInput,setFocusedInput]=useState<string|null>(null);
+ const input=(label:string,value:string,change:(s:string)=>void,secure=false)=><View><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={change} secureTextEntry={secure} autoCapitalize="none" autoCorrect={false} maxLength={256} editable={!busy} onFocus={()=>setFocusedInput(label)} onBlur={()=>setFocusedInput(null)} style={[styles.input,focusedInput===label&&styles.focused]} placeholderTextColor={tvColors.textMuted}/></View>;
  const confirmed=status==='approved'||status==='consumed';
  const inactive=!!challenge&&(remaining===0||['denied','canceled'].includes(status));
- return <Modal transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
+ return <Modal transparent animationType="fade" onShow={entryFocus.onLayout} onRequestClose={close} statusBarTranslucent>
   <View style={styles.backdrop}><FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={[styles.card,{maxHeight:height-32,width:Math.min(width-32,wide?840:520)}]}>
-   <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+   <ScrollView focusable={false} removeClippedSubviews={false} onLayout={entryFocus.onLayout} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}><View style={{gap:16}} onFocusCapture={entryFocus.onFocusCapture}>
     <View style={styles.heading}><View style={styles.icon}><Ionicons name={kind==='access'?'person-add-outline':'shield-checkmark-outline'} color="#fff" size={28}/></View><View style={{flex:1}}><Text style={styles.eyebrow}>CHARMING MEDIALAB · YOUR ACCOUNT</Text><Text style={styles.title}>{title}</Text></View></View>
     {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     {!!done?<><Text style={styles.copy}>{done}</Text>{button('Done',close,true)}</>:kind==='security'?<>
@@ -94,8 +97,8 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
      <LocalQrCode value={challenge.telegram_url}/><View style={{flex:1,gap:12}}><Text style={styles.copy}>Scan with your phone, open Mr Charm and press Start if asked. Confirm only the request you started.</Text><Text style={styles.label}>Or open @{challenge.bot_username} and send this complete command:</Text><Text selectable style={styles.code}>{`Mr Charm ${{reset:'Forgot Password',link:'Link My Account',access:'Request App Access',registration:'Confirm Registration'}[kind as 'reset'|'link'|'access'|'registration']||'Request App Access'} ${challenge.code}`}</Text><Text style={styles.copy}>Expires in {Math.floor(remaining/60)}:{String(remaining%60).padStart(2,'0')} · Waiting for Telegram</Text>{!Platform.isTV&&button('Open Telegram',()=>void open(challenge.telegram_url),true)}</View>
     </View>}
     {busy&&<ActivityIndicator color={tvColors.purpleBright}/>}
-    {!done&&button('Back',close)}
-   </ScrollView>
+    {button('Back',close)}
+   </View></ScrollView>
   </FocusGuide></View>
  </Modal>;
 }
