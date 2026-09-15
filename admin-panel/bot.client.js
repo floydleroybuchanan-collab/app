@@ -103,7 +103,7 @@ async function botSettings(box){const d=await api('/admin/bot/settings'),s=d.set
    status.textContent='Searching Telegram for your group…';status.classList.remove('error');choices.replaceChildren();
    try{
     const r=await api('/admin/bot/discover-groups');
-    if(!r.groups.length){status.textContent=r.message||'No group found yet. In Telegram, make @CharmIPTVAssistantBot a group administrator, then send /help@CharmIPTVAssistantBot in that group and click Find my Telegram group again.';return;}
+    if(!r.groups.length){status.textContent=r.message||'No group found yet. In Telegram, make @CharmIPTVAssistantBot a group administrator, then send Mr Charm Help in that group and click Find my Telegram group again.';return;}
     status.textContent='Found '+r.groups.length+' group'+(r.groups.length===1?'':'s')+'. Click your Charming MediaLab group below:';
     for(const g of r.groups)choices.append(button(g.title+' ('+g.id+')',()=>{group.value=g.id;status.textContent='Selected '+g.title+'. The numeric ID is filled in. Click Save settings below.';choices.replaceChildren();}));
    }catch(e){status.textContent=e.message;status.classList.add('error');}

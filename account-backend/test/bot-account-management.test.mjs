@@ -26,10 +26,10 @@ test('pending applicant can inspect only their own invitation without an app acc
  await f.message(22222,'Mr Charm invite status');assert.match(f.last(),/Invitation: unused/);
  await f.message(33333,'Mr Charm invite status');assert.match(f.last(),/No available bot invitation/);
 });
-test('admin slash arguments work, ordinary users are denied, and confirmation rechecks demotion',async()=>{
+test('Mr Charm admin arguments work, ordinary users are denied, and confirmation rechecks demotion',async()=>{
  const f=await setup();f.user('alice');await f.link(22222,'alice');
- await f.message(22222,'/disable_account alice');assert.match(f.last(),/Only current group admins/);
- await f.message(11111,'/disable_account@TestBot alice');assert.match(f.last(),/Confirm Disable Account/);assert.equal(f.db.prepare("SELECT status FROM users WHERE id='alice'").get().status,'active');
+ await f.message(22222,'Mr Charm Disable Account alice');assert.match(f.last(),/Only current group admins/);
+ await f.message(11111,'Mr Charm Disable Account alice');assert.match(f.last(),/Confirm Disable Account/);assert.equal(f.db.prepare("SELECT status FROM users WHERE id='alice'").get().status,'active');
  f.admins.delete(11111);await f.callback(11111,'manage:confirm');assert.match(f.last(),/Only current group admins/);assert.equal(f.db.prepare("SELECT status FROM users WHERE id='alice'").get().status,'active');
  f.admins.add(11111);await f.callback(11111,'manage:confirm');assert.equal(f.db.prepare("SELECT status FROM users WHERE id='alice'").get().status,'disabled');
  const audit=f.db.prepare("SELECT details FROM audit_log WHERE action='telegram_admin_disable_account'").get();assert.equal(JSON.parse(audit.details).result,'completed');

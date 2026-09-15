@@ -23,7 +23,8 @@ async function personalAdmission(env,id,s,applicationId){
 
 export async function accountFlow(env,id,text,cmd,s){
  const start=text.match(/^\/start(?:@\w+)?\s+flow_([a-f0-9]{48})$/i);
- const code=text.trim().match(/^(?:[A-Z2-9]{4}[- ]?){2}$/i);
+ const phraseCode=text.trim().match(/^mr\.?\s+charm\s+(link my account|forgot password|request app access|confirm registration)\s+((?:[A-Z2-9]{4}[- ]?){2})$/i);
+ const code=(phraseCode?.[2]||text.trim()).match(/^(?:[A-Z2-9]{4}[- ]?){2}$/i);
  const callback=cmd.match(/^flow:(yes|no):([a-f0-9-]{36})$/);
  if(callback){
   let c;
@@ -42,6 +43,7 @@ export async function accountFlow(env,id,text,cmd,s){
  if(start||code){
   if(env.BOT_GROUP_REPLY){await send(env,id,'Open Mr. Charm privately to enter your app request code.',{inline_keyboard:[[{text:'Continue privately',url:'https://t.me/'+s.bot_username+'?start=help'}]]});return true;}
   const c=await findBotChallenge(env,id,start?.[1]||code[0]);
+  if(phraseCode && c.kind!==({'link my account':'link','forgot password':'reset','request app access':'access','confirm registration':'registration'}[phraseCode[1].toLowerCase()]))fail('Use the full Mr Charm command shown with this request in your app.',400);
   if(c.status==='approved'){
    if(c.kind==='access')await personalAdmission(env,id,s,c.id);
    else await send(env,id,'Already approved. Return to the app to continue.');
@@ -59,8 +61,8 @@ export async function accountFlow(env,id,text,cmd,s){
   return true;
  }
  if(cmd==='access_direct'){await personalAdmission(env,id,s,crypto.randomUUID());return true;}
- if(['request_access','forgot_password','link_telegram'].includes(cmd)){
-  const instructions=cmd==='request_access'?'On the app sign-in screen choose Request App Access. Scan its QR code or send its eight-character request code here.':cmd==='forgot_password'?'On the app sign-in screen choose Forgot Password. Enter your username, then scan its QR or send the request code here. Use the Telegram account already linked to your app account.':'In the app open Settings → Account → Link Telegram and verify your current app password. Scan its QR or send the request code here. Lost your original Telegram account or cannot sign in? Contact an Admin for verified recovery.';
+ if(['request_access','forgot_password','link_telegram','confirm_registration'].includes(cmd)){
+  const instructions=cmd==='confirm_registration'?'In the app choose I Have an Invitation and begin registration. Then send Mr Charm Confirm Registration followed by the request code shown in the app.':cmd==='request_access'?'On the app sign-in screen choose Request App Access. Scan its QR code or send Mr Charm Request App Access followed by its request code.':cmd==='forgot_password'?'On the app sign-in screen choose Forgot Password. Enter your username, then scan its QR or send Mr Charm Forgot Password followed by the request code. Use the Telegram account already linked to your app account.':'In the app open Settings → Account → Link Telegram and verify your current app password. Scan its QR or send Mr Charm Link My Account followed by the request code. Lost your original Telegram account or cannot sign in? Contact an Admin for verified recovery.';
   await send(env,id,instructions,buttons([...(cmd==='request_access'?[['Apply here without a TV code','access_direct']]:[]),['Contact an Admin','contact'],['Help','help']]));return true;
  }
  return false;

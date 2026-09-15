@@ -64,7 +64,6 @@ async function selfAction(env,id,command,confirmed=false){
 
 export async function accountManagement(env,id,text,cmd,s,message){
  const raw=text.replace(/^\/start(?:@\w+)?\s+manage_/,'/').replace(/^mr\.?\s*charm\s*/i,'').replace(/^\//,'').replace(/^([a-z_]+)@\w+\b/i,'$1').trim();
- if(/^link my account(?:\s|$)/i.test(raw)){await send(env,id,'In the app, open Settings → Account → Link Telegram, verify your current password, then confirm with Mr. Charm. Knowing a username is not enough to link an account. If you have forgotten the password, use Forgot Password → Lost Telegram / legacy account help.');return true;}
  const self=ACCOUNT_COMMANDS.find(c=>cmd===c.id||raw.toLowerCase()===c.phrase);
  let command=ADMIN_ACCOUNT_COMMANDS.find(c=>cmd===c.id||raw.toLowerCase()===c.command||raw.toLowerCase()===c.phrase||raw.toLowerCase().startsWith(c.phrase+' ')||raw.toLowerCase().startsWith(c.command+' '));
  if(self&&!command?.usage){await selfAction(env,id,self.id);return true;}

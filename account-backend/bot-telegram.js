@@ -1,6 +1,6 @@
 import {supportContacts} from './telegram-contacts.js';
 import {telegramTransport,rememberResponse,cleanExpiredResponses} from './bot-delivery.js';
-import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu} from './bot-commands.js';
+import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu,migrateCommandMenus,commandButtons,commandText} from './bot-commands.js';
 import {accountFlow} from './bot-account-flow.js';
 import {botAnnouncementFlow} from './bot-announcements.js';
 import {accountManagement} from './bot-account-management.js';
@@ -11,6 +11,7 @@ export const isMember=m=>['member','administrator','creator'].includes(m.status)
 export async function telegram(env,method,body){
  if(!env.TELEGRAM_BOT_TOKEN)fail('Save TELEGRAM_BOT_TOKEN in Cloudflare first.',503);
  body=brandedTelegramBody(body);
+ if(body.reply_markup)body.reply_markup=commandButtons(body.reply_markup);
  // Request-local routing: personal replies never fall back to public group messages.
  const target=env.BOT_GROUP_REPLY;
  if(target&&['sendMessage','sendRichMessage'].includes(method)&&String(body.chat_id)===target.user_id){
@@ -25,7 +26,7 @@ const activate=s=>({inline_keyboard:[[{text:'Activate Mr. Charm',url:'https://t.
 const groupHelp=()=>keyboard([['💜 Mr. Charm Help','help']]);
 export function splitText(text,max=3500){const out=[];while(text.length>max){let n=text.lastIndexOf('\n',max);if(n<max/2)n=max;out.push(text.slice(0,n));text=text.slice(n).replace(/^\n/,'');}if(text)out.push(text);return out;}
 const plain=text=>text.replace(/^#{1,6} /gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
-export async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(brandText(text)),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
+export async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(commandText(brandText(text))),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
  }return result;}
 async function show(env,id,key,s){const c=await content(env,key);if(!c.enabled||!c.body.trim())return send(env,id,'This information is currently unavailable. Please contact an Admin.');
  if(key==='guide'){const marker='💜 YOUR Charming MediaLab GUIDE\nPART 2 OF 2',pos=c.body.indexOf(marker);if(pos>0){await send(env,id,c.body.slice(0,pos).trim());await send(env,id,c.body.slice(pos));}else await send(env,id,c.body);}
@@ -62,7 +63,7 @@ async function help(env,id,s){
   items.push([command.label,command.id]);
  }
  try{await syncCommandMenu(env,id,s,admin,telegram);}catch(e){await event(env,id,'command_menu_sync_failed',e.telegramCode?String(e.telegramCode):'network');}
- const result=await send(env,id,'User Commands · private to you\n\n'+BOT_COMMANDS.filter(c=>!c.admin).map(c=>'/'+c.command+' — '+c.description).join('\n')+'\n\nClick one of the buttons below.',keyboard(items));
+ const result=await send(env,id,'User Commands · private to you\n\n'+BOT_COMMANDS.filter(c=>!c.admin).map(c=>c.label+' — '+c.description).join('\n')+'\n\nClick one of the buttons below.',keyboard(items));
  await event(env,id,'help_menu_delivered');return result;
 }
 async function account(env,id,s,tokenOnly){
@@ -150,7 +151,7 @@ async function conversation(env,id,text,data){
 async function handleCommand(env,id,cmd,s){
  if(cmd==='admin'||cmd.startsWith('admin_')){
   if(!await currentTelegramAdmin(env,id,s,telegram))return send(env,id,'Only current group admins can access Admin tools.');
-  if(cmd==='admin')return send(env,id,'Admin Commands · private to you\nResponses disappear after ten minutes.\n\n'+BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>'/'+c.command+(c.usage?' '+c.usage:'')+' — '+c.description).join('\n'),keyboard(BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>[c.label,c.id]).concat([['User Commands','help']])));
+  if(cmd==='admin')return send(env,id,'Admin Commands · private to you\nResponses disappear after ten minutes.\n\n'+BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>c.label+(c.usage?' '+c.usage:'')+' — '+c.description).join('\n'),keyboard(BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>[c.label,c.id]).concat([['User Commands','help']])));
   if(cmd==='admin_invites')return inviteCommand(env,id,'Mr Charm Invites',{},s);
   if(['admin_invite','admin_revoke'].includes(cmd)){
    if(env.BOT_GROUP_REPLY)return send(env,id,'Open Mr. Charm privately to enter invitation details.',{inline_keyboard:[[{text:'Continue privately',url:'https://t.me/'+s.bot_username+'?start='+cmd}]]});
@@ -263,6 +264,7 @@ export async function botScheduled(env){
  await cleanExpiredResponses(env);
  const s=await settings(env);
  await maintainGroupInvites(env,s.enabled);
+ if(s.enabled)await migrateCommandMenus(env,s,telegram);
  if(!s.enabled)return;
  for(const job of await rows(env,"SELECT * FROM bot_jobs WHERE status='pending' AND due_at<=?1 ORDER BY id LIMIT 20",now())){
   const claimed=await q(env,"UPDATE bot_jobs SET status='sending' WHERE id=?1 AND status='pending'",job.id).run();if(!claimed.meta.changes)continue;

@@ -82,3 +82,19 @@ test('lost Telegram recovery requires verified admin grant and atomically retire
  assert.equal(f.db.prepare('SELECT blocked FROM bot_members WHERE telegram_id=?').get('12345').blocked,1);
  assert.ok(f.db.prepare('SELECT used_at FROM account_recovery_grants').get().used_at);
 });
+
+
+test('full Mr Charm recovery commands retain identity checks and reject the wrong request type',async()=>{
+ const f=await setup();
+ const challenge=await f.request('/auth/challenges',{method:'POST',body:{kind:'reset',login:'viewer'}});
+ const message=(id,text)=>({message:{from:{id,first_name:'Viewer'},chat:{id,type:'private'},text}});
+ await handleUpdate(f.env,message(23456,'Mr Charm Forgot Password '+challenge.body.code),configuration);
+ assert.equal(f.db.prepare('SELECT status FROM account_challenges').get().status,'waiting');
+ await handleUpdate(f.env,message(12345,'Mr Charm Link My Account '+challenge.body.code),configuration);
+ assert.match(f.calls.findLast(c=>c.method==='sendMessage').body.text,/full Mr Charm command/);
+ await handleUpdate(f.env,message(12345,'Mr Charm Forgot Password '+challenge.body.code),configuration);
+ const prompt=f.calls.findLast(c=>c.method==='sendMessage').body;
+ assert.match(prompt.text,/reset your app password/);
+ assert.ok(prompt.reply_markup.inline_keyboard[0][0].callback_data.startsWith('flow:yes:'));
+ assert.equal(f.db.prepare('SELECT status FROM account_challenges').get().status,'waiting','opening the command never approves without consent');
+});

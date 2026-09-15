@@ -30,9 +30,10 @@ test('pre-upgrade queued announcements are rebranded before delivery and splitti
   const dashboard=await f.request('/admin/bot/dashboard',{token:f.ownerToken});
   assert.equal(dashboard.body.jobs[0].body,brandText(old));
   await botScheduled(f.env);
-  assert.ok(sent.length>1);
-  assert.ok(sent.every(message=>message.text.length<=4000));
-  assert.equal(sent.map(message=>message.text).join(''),brandText(old));
+  const delivered=sent.filter(message=>typeof message.text==='string');
+ assert.ok(delivered.length>1);
+  assert.ok(delivered.every(message=>message.text.length<=4000));
+  assert.equal(delivered.map(message=>message.text).join(''),brandText(old));
   assert.equal(f.db.prepare('SELECT body FROM bot_jobs').get().body,old,'do not rewrite audit history');
   assert.equal(f.db.prepare('SELECT status FROM bot_jobs').get().status,'sent');
 });

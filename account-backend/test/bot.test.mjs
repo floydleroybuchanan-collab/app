@@ -83,7 +83,7 @@ test('group discovery finds group events and gives actionable failures',async()=
  const f=setup();let mode='group';
  f.env.TELEGRAM_FETCH=async(url)=>{const method=url.split('/').pop();if(mode==='invalid')return Response.json({ok:false,error_code:401},{status:401});let result=method==='getMe'?{id:900,username:'CharmIPTVAssistantBot'}:method==='getWebhookInfo'?{url:''}:mode==='empty'?[]:[{message:{chat:{id:-100987654321,title:'CharmIPTV',type:'supergroup'}}}];return Response.json({ok:true,result});};
  let r=await f.request('/admin/bot/discover-groups',{token:f.ownerToken});assert.equal(r.status,200);assert.equal(r.body.groups[0].id,'-100987654321');
- mode='empty';r=await f.request('/admin/bot/discover-groups',{token:f.ownerToken});assert.equal(r.status,200);assert.match(r.body.message,/\/help@CharmIPTVAssistantBot/);
+ mode='empty';r=await f.request('/admin/bot/discover-groups',{token:f.ownerToken});assert.equal(r.status,200);assert.match(r.body.message,/Mr Charm Help/);
  mode='invalid';r=await f.request('/admin/bot/discover-groups',{token:f.ownerToken});assert.equal(r.status,400);assert.match(r.body.error,/rejected the saved bot token/);
 });
 test('group buttons need no private Start and route each member’s token only to that member',async()=>{

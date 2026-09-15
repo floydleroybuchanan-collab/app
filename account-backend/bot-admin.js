@@ -130,7 +130,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
    const updates=await telegram(env,'getUpdates',{timeout:0,allowed_updates:['message','my_chat_member','chat_member','chat_join_request']});
    const groups=new Map();for(const u of updates){const chat=u.message?.chat||u.my_chat_member?.chat||u.chat_member?.chat||u.chat_join_request?.chat;if(chat&&['group','supergroup'].includes(chat.type))groups.set(String(chat.id),{id:String(chat.id),title:chat.title});}
    const channel=updates.some(u=>(u.my_chat_member?.chat||u.channel_post?.chat)?.type==='channel');
-   return json({success:true,groups:[...groups.values()],message:channel?'Telegram detected a broadcast channel. Add Mr. Charm to the discussion group where members can type messages.':'No group found yet. Add @'+me.username+' as an administrator, send /help@'+me.username+' in the group, then click Find my Telegram group again.'});
+   return json({success:true,groups:[...groups.values()],message:channel?'Telegram detected a broadcast channel. Add Mr. Charm to the discussion group where members can type messages.':'No group found yet. Add @'+me.username+' as an administrator, send Mr Charm Help in the group, then click Find my Telegram group again.'});
   }catch(e){
    if(e.telegramCode===401||e.telegramCode===404)fail('Telegram rejected the saved bot token. Copy the full token from BotFather and replace TELEGRAM_BOT_TOKEN in Cloudflare.');
    if(e.telegramCode===409)fail('Another service is checking this bot’s messages. Stop that service, then try Find my Telegram group again.');
