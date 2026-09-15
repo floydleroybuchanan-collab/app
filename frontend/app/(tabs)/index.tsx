@@ -1,4 +1,3 @@
-import { MediaLabArt } from "@/src/components/MediaLabBrand";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -193,21 +192,6 @@ function LiveTvHomeScreenContent() {
   return (
     <PurpleTvShell active="/">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
-        <View style={styles.topbar}>
-          <View style={{ flex: 1 }}><MediaLabArt width={420} height={110} /></View>
-          <View style={styles.topRight}>
-            <Pressable
-              onPress={() => router.replace("/search" as any)}
-              style={({ focused }: any) => [styles.searchHit, focused && styles.focused]}
-              testID="home-open-search"
-            >
-              <Ionicons name="search-outline" size={16} color={tvColors.textMuted} />
-            </Pressable>
-            <Text style={styles.clock}>{fmtTime(now.toISOString())}</Text>
-            <View style={styles.statusDot} />
-          </View>
-        </View>
-
         <View style={styles.hero}>
           <LinearGradient
             colors={["rgba(124,58,237,0.18)", "rgba(12,10,27,0.80)", "#090914"]}

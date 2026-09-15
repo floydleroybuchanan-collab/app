@@ -4,6 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvFocusTraversalTest {
+  @Test fun footerVisitsExitBeforeLeavingDrawerAndCanMoveBack() {
+    val buttons = listOf("Guide Sources", "Exit")
+    assertEquals("Exit", TvFocusTraversal.adjacent(buttons, 0, 1))
+    assertEquals("Guide Sources", TvFocusTraversal.adjacent(buttons, 1, -1))
+    assertNull(TvFocusTraversal.adjacent(buttons, 1, 1))
+    assertNull(TvFocusTraversal.adjacent(listOf("Exit"), 0, -1))
+    assertNull(TvFocusTraversal.adjacent(buttons, -1, 1))
+  }
   private data class Node(val name: String, val usable: Boolean = false, val children: List<Node> = emptyList())
 
   @Test fun walksNestedGuideSentinelsAndKeepsTheFixedHeaderReachable() {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   BackHandler,
+  DeviceEventEmitter,
   FlatList,
   Platform,
   Pressable,
@@ -29,7 +30,8 @@ import { fonts, radius, tvColors } from "@/src/theme";
 import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
-import { requestNativeFocus } from "@/src/utils/tvFocus";
+import { FocusGuide } from "@/src/components/TVFocusGuideView";
+import { requestNativeFocus, requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { restartNativePlaybackChannel } from "@/src/nativePlayback";
@@ -128,6 +130,13 @@ export default function PlayerScreen() {
   const generationRef = useRef(0);
   const exitInFlightRef = useRef(false);
   const channelsButtonRef = useRef<any>(null);
+  const controlsFocusedRef = useRef(false);
+  const errorButtonRef = useRef<any>(null);
+  const subtitlesOffRef = useRef<any>(null);
+  const cancelFocusRef = useRef<(() => void) | null>(null);
+  const overlayOpenRef = useRef(false);
+  const keepControlsRef = useRef(false);
+  const quickActionsOpenRef = useRef(false);
   const overlayOpenerRef = useRef<any>(null);
   const saveAudioReportRef = useRef<() => void>(() => undefined);
   const nextButtonRef = useRef<any>(null);
@@ -148,7 +157,9 @@ export default function PlayerScreen() {
     setRemoteContext("player");
     return () => { resetRemoteContextIfOwned("player", "default"); };
   }, [isTV]);
-  const overlayHideMs = playerControlsTimeoutMs;
+  const overlayHideMs = Math.max(3000, playerControlsTimeoutMs || 5000);
+  overlayOpenRef.current = playerOverlay !== null;
+  keepControlsRef.current = status === "error" || !channelById(channelId)?.url;
   const safe = useMemo(() => getTvSafeInsets(width, height, deviceLayoutMode), [deviceLayoutMode, height, width]);
   const channelMeta = useMemo(() => channelById(channelId), [channelById, channelId]);
   const channelPrograms = useGuidePrograms(channelId);
@@ -214,22 +225,55 @@ export default function PlayerScreen() {
 
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (overlayOpenRef.current || keepControlsRef.current || quickActionsOpenRef.current) return;
     hideTimer.current = setTimeout(() => {
+      if (overlayOpenRef.current || keepControlsRef.current || quickActionsOpenRef.current) return;
+      cancelFocusRef.current?.();
+      controlsFocusedRef.current = false;
       controlsRef.current = false; setControls(false); setChannelsOpen(false); setTracksOpen(false);
     }, overlayHideMs);
   }, [overlayHideMs, setChannelsOpen, setTracksOpen]);
 
+  const claimControlsFocus = useCallback(() => {
+    cancelFocusRef.current?.();
+    if (!isTV || overlayOpenRef.current || quickActionsOpenRef.current) return;
+    cancelFocusRef.current = requestNativeFocusWithRetry(
+      () => errorButtonRef.current || channelsButtonRef.current, [0, 32, 96, 200, 400],
+      () => controlsFocusedRef.current || !controlsRef.current || exitInFlightRef.current,
+    );
+  }, [isTV]);
+
   const revealControls = useCallback((opts?: { claimChannelsFocus?: boolean }) => {
-    const wasHidden = !controlsRef.current;
     controlsRef.current = true; setControls(true);
-    if (status === "error" || !hasStream) {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      return;
-    }
     scheduleHide();
-    const shouldClaim = opts?.claimChannelsFocus !== false && wasHidden && isTV && !channelsOpenRef.current;
-    if (shouldClaim) requestAnimationFrame(() => requestNativeFocus(channelsButtonRef.current));
-  }, [hasStream, isTV, scheduleHide, status]);
+    if (opts?.claimChannelsFocus !== false && !controlsFocusedRef.current) claimControlsFocus();
+  }, [claimControlsFocus, scheduleHide]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("CharmQuickActionsVisibility", (open: boolean) => {
+      const wasOpen = quickActionsOpenRef.current;
+      quickActionsOpenRef.current = open;
+      if (open) {
+        cancelFocusRef.current?.();
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        controlsFocusedRef.current = false;
+      } else if (wasOpen && !exitInFlightRef.current) revealControls();
+    });
+    return () => sub.remove();
+  }, [revealControls]);
+
+  useEffect(() => {
+    if (controls && !playerOverlay) claimControlsFocus();
+    scheduleHide();
+    return () => { cancelFocusRef.current?.(); };
+  }, [claimControlsFocus, controls, playerOverlay, scheduleHide, status]);
+
+  useEffect(() => {
+    if (!isTV || !tracksOpen) return;
+    controlsFocusedRef.current = false;
+    return requestNativeFocusWithRetry(() => subtitlesOffRef.current, [0, 32, 96, 200],
+      () => controlsFocusedRef.current || exitInFlightRef.current);
+  }, [isTV, tracksOpen]);
 
   const restartInFlightRef = useRef(false);
   const restartThisChannel = useCallback(async () => {
@@ -310,7 +354,12 @@ export default function PlayerScreen() {
   const closeOverlayAndRestoreFocus = useCallback(() => {
     setPlayerOverlay(null);
     const opener = overlayOpenerRef.current; overlayOpenerRef.current = null;
-    if (opener) requestAnimationFrame(() => requestNativeFocus(opener));
+    controlsFocusedRef.current = false;
+    cancelFocusRef.current?.();
+    cancelFocusRef.current = requestNativeFocusWithRetry(
+      () => opener || channelsButtonRef.current, [0, 32, 96, 200],
+      () => controlsFocusedRef.current || exitInFlightRef.current,
+    );
   }, []);
 
   useEffect(() => {
@@ -328,6 +377,7 @@ export default function PlayerScreen() {
     if (!controls) return;
     const which = preferControlRef.current;
     if (!which) return;
+    preferControlRef.current = null;
     const node = which === "next" ? nextButtonRef.current : prevButtonRef.current;
     requestAnimationFrame(() => requestNativeFocus(node));
   }, [channelId, controls, status, retryToken]);
@@ -353,8 +403,9 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isTV) return;
-    return addTvKeyListener(() => {
-      if (!controlsRef.current) revealControls({ claimChannelsFocus: true });
+    return addTvKeyListener((key) => {
+      if (key === "BACK" || exitInFlightRef.current) return;
+      if (!controlsRef.current || !controlsFocusedRef.current) revealControls({ claimChannelsFocus: true });
       else scheduleHide();
     });
   }, [isTV, revealControls, scheduleHide]);
@@ -386,6 +437,7 @@ export default function PlayerScreen() {
       setFailReason(null);
       if (channelKey) clearStreamFailure(channelKey);
     } else if (nextStatus === "error" && channelKey) {
+      controlsFocusedRef.current = false;
       noteStreamFailure(channelKey);
     }
   }, []);
@@ -478,7 +530,7 @@ export default function PlayerScreen() {
             void stopAllPlaybackSessions("crashed").then(() => { if (generation === generationRef.current) setRetryToken((value) => value + 1); });
           }}
           fallback={(reset) => (
-            <View style={styles.errorOverlay}>
+            <View testID="player-error-controls" collapsable={false} style={styles.errorOverlay}>
               <Ionicons name="warning-outline" size={32} color={tvColors.purpleSoft} />
               <Text style={styles.errorTitle}>Player crashed</Text>
               <Text style={styles.errorText}>The decoder hit an unexpected error. Retry keeps you on this channel.</Text>
@@ -526,7 +578,7 @@ export default function PlayerScreen() {
       {!isTV ? (
         <Pressable
           style={[StyleSheet.absoluteFill, styles.touchCatcher]}
-          focusable
+          focusable={false}
           onPress={() => {
             if (controls) { controlsRef.current = false; setControls(false); setChannelsOpen(false); setTracksOpen(false); }
             else revealControls();
@@ -536,16 +588,18 @@ export default function PlayerScreen() {
       ) : null}
 
       {(!hasStream || status === "error") ? (
-        <View style={styles.errorOverlay} pointerEvents="box-none">
+        <View testID="player-error-controls" collapsable={false} style={styles.errorOverlay} pointerEvents="box-none"
+          onFocusCapture={() => { controlsFocusedRef.current = true; }}
+          onBlurCapture={() => { controlsFocusedRef.current = false; }}>
           <Ionicons name="warning-outline" size={32} color={tvColors.purpleSoft} />
           <Text style={styles.errorTitle}>{failReason === "unsupported-protocol" ? "Unsupported stream protocol" : hasStream ? "Stream unavailable" : "No stream available"}</Text>
           {hasStream ? <Text style={styles.errorText}>{failReason ? FAIL_REASON_LABEL[failReason] : "Use Retry Now to re-prepare this stream."}</Text> : null}
           {hasStream && failReason !== "unsupported-protocol" ? (
-            <Pressable hasTVPreferredFocus={!controls} onPress={retryNow} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
+            <Pressable ref={errorButtonRef} onPress={retryNow} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
               <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>Retry Now</Text>
             </Pressable>
           ) : (
-            <Pressable hasTVPreferredFocus={!controls} onPress={stopAndExit} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
+            <Pressable ref={errorButtonRef} onPress={stopAndExit} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
               <Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.retryText}>Back to Guide</Text>
             </Pressable>
           )}
@@ -567,7 +621,11 @@ export default function PlayerScreen() {
             <View style={styles.topSpacer} /><Text style={styles.clock}>{fmtTime(playerNow.toISOString())}</Text>
           </LinearGradient>
 
-          <LinearGradient colors={["transparent", "rgba(5,4,13,0.90)", "rgba(5,4,13,0.98)"]} style={[styles.bottomOverlay, { paddingLeft: safe.left + 14, paddingRight: safe.right + 14, paddingBottom: insets.bottom + safe.bottom + 10 }]}>
+          <FocusGuide testID="player-controls" collapsable={false} autoFocus={hasStream && status !== "error"} trapFocusUp={hasStream && status !== "error"} trapFocusDown trapFocusLeft trapFocusRight
+            style={[styles.bottomOverlay, { paddingTop: 0 }]}
+            onFocusCapture={() => { controlsFocusedRef.current = true; scheduleHide(); }}
+            onBlurCapture={() => { controlsFocusedRef.current = false; }}>
+          <LinearGradient colors={["transparent", "rgba(5,4,13,0.90)", "rgba(5,4,13,0.98)"]} style={[styles.bottomContent, { paddingLeft: safe.left + 14, paddingRight: safe.right + 14, paddingBottom: insets.bottom + safe.bottom + 10 }]}>
             <View style={styles.infoRow}><View style={styles.programCopy}>
               <View style={styles.liveLine}><View style={styles.livePill}><Text style={styles.livePillText}>LIVE</Text></View><Text style={styles.programTime}>{current ? `${fmtTime(current.start)}${current.stop ? ` - ${fmtTime(current.stop)}` : ""}` : "Streaming now"}</Text></View>
               <Text numberOfLines={1} style={styles.programTitle}>{current?.title || channel?.name || "Live TV"}</Text>
@@ -582,7 +640,7 @@ export default function PlayerScreen() {
                 void stopAllPlaybackSessions("superseded").then(() => router.replace({ pathname: "/multiview" as any, params: { channelId, returnGuideGroup: params.returnGuideGroup } })).catch(() => { exitInFlightRef.current = false; showNotice("The current player could not close. Try again."); });
               }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="grid-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Multiview</Text></Pressable>}
               <Pressable onPress={goGuide} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="information-circle-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Guide</Text></Pressable>
-              <Pressable ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; setTracksOpen(false); setChannelsOpen((value) => !value); scheduleHide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
+              <Pressable testID="player-control-channels" ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; setTracksOpen(false); setChannelsOpen((value) => !value); scheduleHide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
               <View style={styles.controlsSpacer} />
               <Pressable accessibilityLabel="Restart this channel" testID="restart-current-channel" onPress={() => void restartThisChannel()} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="refresh" size={15} color="#fff" /><Text style={styles.controlLabel}>Restart channel</Text></Pressable>
               <Pressable ref={prevButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(-1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-back" size={18} color="#fff" /></Pressable>
@@ -602,7 +660,7 @@ export default function PlayerScreen() {
                   </Pressable>
                 )) : <Text style={styles.errorText}>No audio tracks reported</Text>}
                 <Text style={[styles.controlLabel, { marginTop: 8 }]}>Subtitles</Text>
-                <Pressable onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
+                <Pressable ref={subtitlesOffRef} onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
                 {textTracks.map((track) => <Pressable key={`t-${track.id}`} onPress={() => setTextTrackId(track.id)} style={({ focused }: any) => [styles.trackRow, textTrackId === track.id && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>{track.name}</Text></Pressable>)}
               </View>
             ) : null}
@@ -618,6 +676,7 @@ export default function PlayerScreen() {
               </View>
             ) : null}
           </LinearGradient>
+          </FocusGuide>
         </>
       ) : null}
     </View>
@@ -641,6 +700,7 @@ const styles = StyleSheet.create({
   topSpacer: { flex: 1 },
   clock: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5, marginTop: 4 },
   bottomOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, paddingTop: 70 },
+  bottomContent: { paddingTop: 70 },
   infoRow: { flexDirection: "row", alignItems: "flex-end" },
   programCopy: { maxWidth: "62%" },
   liveLine: { flexDirection: "row", alignItems: "center", gap: 7 },

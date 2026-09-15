@@ -114,6 +114,28 @@ class MainActivity : ReactActivity() {
       emitRemoteEvent("CharmShellInteraction", root.id.toString())
     }
     val key = event.keyCode
+    val drawer = findTagged(root, "purple-main-drawer")
+    if (drawer != null && within(focus, drawer)) {
+      // A ScrollView/TVFocusGuide sentinel above the first row is not a menu
+      // item. Keep the visible Live TV row selected at the top boundary.
+      if (key == android.view.KeyEvent.KEYCODE_DPAD_UP && testId(focus) == "purple-nav-live-tv") return true
+      val footer = findTagged(drawer, "purple-nav-pinned-footer")
+      if (footer != null && within(focus, footer) &&
+          (key == android.view.KeyEvent.KEYCODE_DPAD_LEFT || key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
+        val buttons = TvFocusTraversal.targets(footer, { view ->
+          if (view is ViewGroup) (0 until view.childCount).map(view::getChildAt) else emptyList()
+        }, { it !== footer && it.isFocusable && it.isEnabled && visible(it) })
+        val index = buttons.indexOfFirst { within(focus, it) }
+        val step = if (key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+        val target = TvFocusTraversal.adjacent(buttons, index, step)
+        if (index >= 0 && target != null) {
+          target.requestFocus()
+          return true
+        }
+        if (step < 0) return true
+        // Only Right from the final footer button hands off to Guide groups.
+      }
+    }
     if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT &&
         key != android.view.KeyEvent.KEYCODE_DPAD_RIGHT && key != android.view.KeyEvent.KEYCODE_BACK) return false
     val rail = findTagged(root, "purple-icon-rail")
@@ -161,6 +183,17 @@ class MainActivity : ReactActivity() {
   private var selectHoldKeyCode = -1
   private var selectHoldContext: String? = null
   private var selectLongTriggered = false
+  private var selectHoldFocus: View? = null
+
+  private fun playerControlFocused(): Boolean {
+    val focus = currentFocus ?: return false
+    val controls = findTagged(window.decorView, "player-controls")
+    val error = findTagged(window.decorView, "player-error-controls")
+    return visible(focus) && focus.isEnabled && focus.isFocusable &&
+      ((controls != null && focus !== controls && within(focus, controls)) ||
+        (error != null && focus !== error && within(focus, error))) &&
+      !(focus is ReactViewGroup && focus.isTVFocusGuide)
+  }
   private val selectLongPressRunnable = Runnable {
     val owner = selectHoldContext
     if (
@@ -239,6 +272,7 @@ class MainActivity : ReactActivity() {
       ) {
         selectHoldKeyCode = event.keyCode
         selectHoldContext = context
+        selectHoldFocus = if (context == "player" && playerControlFocused()) currentFocus else null
         selectLongTriggered = false
         selectHoldHandler.removeCallbacks(selectLongPressRunnable)
         selectHoldHandler.postDelayed(
@@ -258,6 +292,8 @@ class MainActivity : ReactActivity() {
           selectHoldHandler.removeCallbacks(selectLongPressRunnable)
           val owner = selectHoldContext
           val wasLong = selectLongTriggered
+          val pressedControl = selectHoldFocus
+          selectHoldFocus = null
           selectHoldKeyCode = -1
           selectHoldContext = null
           selectLongTriggered = false
@@ -266,7 +302,13 @@ class MainActivity : ReactActivity() {
           // replay a short click into a different surface.
           if (owner == null || TvRemoteModule.remoteContext != owner) return true
 
-          if (owner == "player") emitRemoteEvent("TvRemoteKey", "SELECT")
+          if (owner == "player") {
+            emitRemoteEvent("TvRemoteKey", "SELECT")
+            // Revealing the overlay is one action. Never replay that same OK
+            // into a newly mounted button, the video surface, or a stale view.
+            if (!PlayerSelectPolicy.activate(pressedControl != null,
+                pressedControl === currentFocus, playerControlFocused())) return true
+          }
 
           // Re-inject one clean short click below this Activity override. Guide
           // gets a normal NativeGuideView DOWN/UP pair; Player controls retain
@@ -428,6 +470,10 @@ class MainActivity : ReactActivity() {
     val mirrorToJs = TvRemoteModule.pointerActive || TvRemoteModule.remoteContext == "player"
     if (key != null && mirrorToJs) {
       emitRemoteEvent("TvRemoteKey", key)
+      if (TvRemoteModule.remoteContext == "player" && directional && !playerControlFocused()) {
+        shellBoundaryKeyDown = event.keyCode
+        return true
+      }
       // Pointer mode owns the D-pad entirely. Ordinary TV pages use Android's
       // native focus engine and must not receive a duplicate JS copy of the
       // same physical arrow; that duplicate was a source of focus drift.
@@ -500,6 +546,7 @@ class MainActivity : ReactActivity() {
     selectHoldKeyCode = -1
     selectHoldContext = null
     selectLongTriggered = false
+    selectHoldFocus = null
     // Static remote flags must never survive an Activity/bridge teardown.
     // A stale pointer flag consumes every D-pad key before Android focus sees it.
     TvRemoteModule.pointerActive = false

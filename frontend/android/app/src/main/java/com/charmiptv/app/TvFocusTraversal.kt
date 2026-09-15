@@ -2,6 +2,10 @@ package com.charmiptv.app
 
 /** Physical-tree traversal; deliberately independent of focus-guide sentinels. */
 internal object TvFocusTraversal {
+  /** Null means a real row boundary; callers decide whether to leave or stay. */
+  fun <T> adjacent(targets: List<T>, index: Int, step: Int): T? =
+    if (index < 0 || step !in listOf(-1, 1)) null else targets.getOrNull(index + step)
+
   fun <T> targets(root: T, children: (T) -> List<T>, usable: (T) -> Boolean): List<T> {
     val result = ArrayList<T>()
     fun visit(node: T) {

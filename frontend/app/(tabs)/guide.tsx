@@ -1070,9 +1070,6 @@ function PurpleGuideScreenContent() {
     >
       <View style={styles.page}>
         <EpgProgressBar />
-        <Pressable accessibilityLabel="Choose playlists" onPress={() => setGroupDrawerOpen(true)} style={({focused}: any) => [{paddingHorizontal:14,paddingVertical:7,backgroundColor:tvColors.panelRaised,borderWidth:1,borderColor:focused?tvColors.purple:"transparent"}]}>
-          <Text style={{color:tvColors.text,fontSize:16}}>{activePlaylist === "all" ? "All Playlists" : playlists.find(p=>p.id===activePlaylist)?.name} ▾ · {playlists.filter(p=>p.enabled).length} enabled · {visiblePlaylistChannels.length} channels{epgGuideFilter !== "all" ? ` · Filter: ${epgGuideFilter}` : ""}</Text>
-        </Pressable>
         {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
           <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>
           <Pressable focusable onPress={() => router.push("/playlists" as any)} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>

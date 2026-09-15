@@ -42,6 +42,11 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   private var owner = NativePlaybackManager.Owner.NONE
 
   init {
+    // React owns all transport controls. Media3's hidden controller and video
+    // surface must never become a second, invisible D-pad focus destination.
+    isFocusable = false
+    isFocusableInTouchMode = false
+    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
     setBackgroundColor(Color.TRANSPARENT)
     unclipVideoAncestors(this)
   }
