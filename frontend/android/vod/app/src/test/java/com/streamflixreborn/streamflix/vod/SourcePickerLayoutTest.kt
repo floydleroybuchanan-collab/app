@@ -70,4 +70,28 @@ class SourcePickerLayoutTest {
         assertFalse(dialog.isShowing)
         controller.destroy()
     }
+
+    @Test fun sharedThemeFitsFixedFavoritesAndPlayerControlsWithLargeText() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java)
+        val activity = controller.get()
+        val config = android.content.res.Configuration(activity.resources.configuration).apply { fontScale = 2f }
+        activity.resources.updateConfiguration(config, activity.resources.displayMetrics)
+        activity.setTheme(R.style.AppTheme_Tv)
+        controller.setup()
+        for (layout in listOf(R.layout.fragment_favorites_tv, R.layout.content_exo_controller_tv)) {
+            val root = activity.layoutInflater.inflate(layout, null)
+            com.streamflixreborn.streamflix.charm.CharmDesign.styleTree(root)
+            val controls = views(root).filterIsInstance<android.widget.TextView>().filter {
+                it.id in listOf(R.id.btn_favorites_reorder, R.id.btn_favorites_reorder_mode, R.id.btn_exo_sources)
+            }
+            assertTrue(controls.isNotEmpty())
+            controls.forEach { control ->
+                assertTrue(control.layoutParams.height >= control.paint.fontMetricsInt.let { it.bottom - it.top } +
+                    control.compoundPaddingTop + control.compoundPaddingBottom)
+                if (control.layoutParams.width > 0) assertTrue(control.layoutParams.width >=
+                    control.paint.measureText(control.text.toString()) + control.compoundPaddingLeft + control.compoundPaddingRight)
+            }
+        }
+        controller.pause().stop().destroy()
+    }
 }

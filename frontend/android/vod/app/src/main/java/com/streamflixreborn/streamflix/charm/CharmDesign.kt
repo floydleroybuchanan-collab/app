@@ -99,6 +99,17 @@ object CharmDesign {
                     view.textSize = 14f
                     view.setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(0xFF827C90.toInt(), Color.WHITE)))
                     view.setPadding(dp(view, 18), dp(view, 10), dp(view, 18), dp(view, 10))
+                    // Fixed dimensions must still fit the font and padding applied here.
+                    // Leave wrap-content and constraint-driven dimensions to their parent.
+                    view.layoutParams?.let { params ->
+                        val textHeight = view.paint.fontMetricsInt.let { it.bottom - it.top }
+                        if (params.height > 0) params.height = maxOf(params.height,
+                            textHeight + view.compoundPaddingTop + view.compoundPaddingBottom)
+                        if (params.width > 0 && view.text.isNotEmpty()) params.width = maxOf(params.width,
+                            kotlin.math.ceil(view.paint.measureText(view.text.toString())).toInt() +
+                                view.compoundPaddingLeft + view.compoundPaddingRight)
+                        view.layoutParams = params
+                    }
                 }
                 if (view is ImageView) view.imageTintList = ColorStateList.valueOf(Color.WHITE)
             }

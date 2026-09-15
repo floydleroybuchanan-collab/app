@@ -132,6 +132,7 @@ object SourcePicker {
             if (rows.isNotEmpty()) list.setSelection(if (at >= 0) at else 0)
             footer.text = "${rows.size} of ${allRows.size} sources · Hold OK / long press for full details. Cache reports may be stale. Full release information is in Details."
         }
+        val compactButtons = mutableListOf<Button>()
         fun filterButton(label: String, parent: LinearLayout = controls, change: (Button) -> Unit) = Button(context).apply {
             text = label; textSize = 13f; isAllCaps = false
             minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
@@ -144,6 +145,7 @@ object SourcePicker {
             }
             setOnClickListener { change(this); updateRows() }
             parent.addView(this)
+            compactButtons.add(this)
         }
         filterButton("Type: All") { button -> kind = (kind + 1) % 3; button.text = "Type: " + listOf("All", "Direct", "Real-Debrid")[kind] }
         filterButton("Resolution: All") { button -> val heights = listOf(0,720,1080,2160); resolution = heights[(heights.indexOf(resolution)+1)%heights.size]; button.text = "Resolution: " + if(resolution==0) "All" else "${resolution}p" }
@@ -196,6 +198,18 @@ object SourcePicker {
             activityDecor.removeOnLayoutChangeListener(layoutListener)
         }
         dialog.show()
+        // Apply the shared font and padding before measuring; attachment may schedule
+        // that same styling later, so sizing must not depend on posted callback order.
+        com.streamflixreborn.streamflix.charm.CharmDesign.styleTree(root)
+        run {
+            val fittedHeight = compactButtons.maxOf { button ->
+                maxOf(buttonHeight, button.paint.fontMetricsInt.let { it.bottom - it.top } +
+                    button.compoundPaddingTop + button.compoundPaddingBottom)
+            }
+            compactButtons.forEach { button ->
+                button.layoutParams = button.layoutParams.apply { height = fittedHeight }
+            }
+        }
         dialog.window?.apply {
             setBackgroundDrawable(surface(0xDC140C20.toInt(), 0xAAAD70CE.toInt()))
             setDimAmount(.18f)
