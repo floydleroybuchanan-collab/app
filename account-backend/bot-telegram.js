@@ -1,3 +1,4 @@
+import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
 import {supportContacts} from './telegram-contacts.js';
 import {telegramTransport,rememberResponse,cleanExpiredResponses} from './bot-delivery.js';
 import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu,migrateCommandMenus,commandButtons,commandText} from './bot-commands.js';
@@ -56,16 +57,37 @@ export function intent(text){
  if(/admin|support/.test(t))return 'contact';if(/status/.test(t))return 'status';if(/about/.test(t))return 'about';return 'help';
 }
 async function help(env,id,s){
- const admin=await currentTelegramAdmin(env,id,s,telegram),items=[];
- for(const command of BOT_COMMANDS){
-  if(command.id==='help'||command.admin&&command.id!=='admin'||command.admin&&!admin)continue;
-  if(command.content){const c=await content(env,command.id);if(!c.enabled||!c.body.trim())continue;}
-  items.push([command.label,command.id]);
- }
+ const admin=await currentTelegramAdmin(env,id,s,telegram);
+ const commands=await availableCommands(env,HOME_COMMANDS);
+ const items=commands.map(c=>[c.buttonLabel,c.id]);
+ items.push(['👤 User Commands','user_commands']);
+ if(admin)items.push(['🛡 Admin Commands','admin']);
  try{await syncCommandMenu(env,id,s,admin,telegram);}catch(e){await event(env,id,'command_menu_sync_failed',e.telegramCode?String(e.telegramCode):'network');}
- const result=await send(env,id,'User Commands · private to you\n\n'+BOT_COMMANDS.filter(c=>!c.admin).map(c=>c.label+' — '+c.description).join('\n')+'\n\nClick one of the buttons below.',keyboard(items));
+ const result=await send(env,id,'Here’s what I can help you with. Click one of the buttons below.',keyboard(items));
  await event(env,id,'help_menu_delivered');return result;
 }
+async function availableCommands(env,ids){
+ const commands=[];
+ for(const id of ids){
+  const command=BOT_COMMANDS.find(c=>c.id===id);if(!command)continue;
+  if(command.content){const c=await content(env,id);if(!c.enabled||!c.body.trim())continue;}
+  commands.push(command);
+ }
+ return commands;
+}
+async function commandMenu(env,id,cmd,s){
+ const selected=COMMAND_MENUS.find(menu=>menu.id===cmd);
+ const admin=cmd==='admin'||selected?.admin||cmd.startsWith('menu:admin:');
+ if(admin&&!await currentTelegramAdmin(env,id,s,telegram))return send(env,id,'Only current group admins can access Admin tools.',keyboard([['Main menu','help']]));
+ if(cmd.startsWith('menu:')&&!selected)return help(env,id,s);
+ if(selected){
+  const commands=await availableCommands(env,selected.commands);
+  return send(env,id,selected.label+'\n'+selected.description+'\n\n'+(commands.length?commands.map(c=>c.buttonLabel+'\n'+c.description).join('\n\n'):'No information is available in this category yet.'),keyboard(commands.map(c=>[c.buttonLabel,c.id]).concat([['↩ '+(admin?'Admin Commands':'User Commands'),admin?'admin':'user_commands'],['🏠 Main menu','help']])));
+ }
+ const menus=COMMAND_MENUS.filter(menu=>Boolean(menu.admin)===Boolean(admin));
+ return send(env,id,(admin?'🛡 Admin Commands':'👤 User Commands')+'\nChoose a category below. Each command includes a short explanation.\n\n'+menus.map(menu=>menu.label+' — '+menu.description).join('\n\n'),keyboard(menus.map(menu=>[menu.label,menu.id]).concat([['🏠 Main menu','help']])));
+}
+
 async function account(env,id,s,tokenOnly){
  if(!s.accounts_enabled)return send(env,id,'Account help is temporarily paused. Please contact an Admin.');
  const m=await q(env,'SELECT * FROM bot_members WHERE telegram_id=?1',id).first();
@@ -151,7 +173,7 @@ async function conversation(env,id,text,data){
 async function handleCommand(env,id,cmd,s){
  if(cmd==='admin'||cmd.startsWith('admin_')){
   if(!await currentTelegramAdmin(env,id,s,telegram))return send(env,id,'Only current group admins can access Admin tools.');
-  if(cmd==='admin')return send(env,id,'Admin Commands · private to you\nResponses disappear after ten minutes.\n\n'+BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>c.label+(c.usage?' '+c.usage:'')+' — '+c.description).join('\n'),keyboard(BOT_COMMANDS.filter(c=>c.admin&&c.id!=='admin').map(c=>[c.label,c.id]).concat([['User Commands','help']])));
+  if(cmd==='admin')return commandMenu(env,id,cmd,s);
   if(cmd==='admin_invites')return inviteCommand(env,id,'Mr Charm Invites',{},s);
   if(['admin_invite','admin_revoke'].includes(cmd)){
    if(env.BOT_GROUP_REPLY)return send(env,id,'Open Mr. Charm privately to enter invitation details.',{inline_keyboard:[[{text:'Continue privately',url:'https://t.me/'+s.bot_username+'?start='+cmd}]]});
@@ -159,6 +181,7 @@ async function handleCommand(env,id,cmd,s){
    return send(env,id,cmd==='admin_invite'?'Enter the recipient’s name or Telegram numeric ID followed by the duration in minutes. Example: John Smith 60.':'Enter the invitation ID from Recent room invitations.',keyboard([['Cancel','admin']]));
   }
  }
+ if(cmd==='user_commands'||cmd.startsWith('menu:'))return commandMenu(env,id,cmd,s);
  if(cmd==='help')return help(env,id,s);
  if(['account','token','downloads'].includes(cmd)||cmd.startsWith('issue:')||cmd==='troubleshooting'){
   if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Your join request must be approved and you must still be in the Charming MediaLab group.');
@@ -216,8 +239,9 @@ export async function handleUpdate(env,u,s){
  if(privateChat)await q(env,'UPDATE bot_members SET dm_started=1 WHERE telegram_id=?1',id).run();
  const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update)$/i);
  const cmd=cb?.data||start?.[1]||intent(text);
- if(['help','admin'].includes(cmd)&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+ if((['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:'))&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
+  if((cb||exactCommand(text)||/^\s*mr\.?\s*charm\s*$/i.test(text))&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))return await handleCommand(env,id,cmd,s);
   if(await accountManagement(env,id,text,cmd,s,m))return;
   if(await botAnnouncementFlow(env,id,text,cmd,s))return;
   if(await accountFlow(env,id,text,cmd,s))return;

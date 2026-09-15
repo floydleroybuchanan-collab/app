@@ -1,11 +1,12 @@
+const ADMIN_DESCRIPTIONS={"search_user": "Find accounts by app username, Telegram name or Telegram ID.", "userinfo": "Review a user’s account details and verified Telegram link.", "user_status": "Check whether a user can sign in and when their account expires.", "link_account": "Attach a Telegram identity to an app account after confirmation.", "relink_account": "Replace an account’s Telegram link after confirming the new identity.", "unlink_account": "Remove an account’s Telegram recovery link after confirmation.", "reset_user_password": "Start verified recovery; the user enters the new password in the app.", "signout_user": "Sign the selected user out of every active app session after confirmation.", "disable_account": "Stop a user from accessing the app until the account is enabled again.", "enable_account": "Re-enable a disabled app account after confirmation.", "ban_user": "Block app access and ban the linked identity from the Telegram room.", "unban_user": "Remove the app and Telegram ban after confirmation.", "delete_account": "Permanently delete the selected app account after confirmation.", "extend_user": "Add a chosen number of days to an account’s access period.", "set_expiration": "Choose the exact date when an account’s access ends.", "set_limit": "Set how many simultaneous app logins the account allows.", "user_sessions": "See the selected user’s active logins and login allowance.", "revoke_sessions": "Invalidate all active sessions for the selected account.", "invite_info": "Check an app invitation’s status, expiration and assigned access.", "cancel_invite": "Cancel an unused app registration invitation after confirmation.", "create_app_invite": "Create an app registration invitation with access days and a login limit.", "recent_users": "List recently created accounts within your permitted account scope.", "recent_links": "Review accounts recently connected to Telegram identities.", "user_audit": "Review recorded administrative changes for the selected account.", "bot_status": "Check the bot’s saved configuration and enabled services.", "bot_stats": "View account totals within your permitted account scope."};
 export const ACCOUNT_COMMANDS=[
- ['my_account','my account','My Account','View your account and Telegram link'],
- ['account_status','account status','Account status','Check status and expiration'],
- ['my_sessions','sessions','My Sessions','View active sessions and the login limit'],
- ['sign_out_all','sign out all','Sign Out All','Confirm signing out every app session'],
- ['my_security','security','My Security','Review recovery and password-reset status'],
- ['unlink_my_account','unlink my account','Unlink My Account','Confirm removal of your Telegram recovery link'],
- ['invite_status','invite status','Invitation Status','Check your current invitation'],
+ ['my_account','my account','My Account','See your app username, account details and verified Telegram link.'],
+ ['account_status','account status','Account status','Check whether your account is active and when access expires.'],
+ ['my_sessions','sessions','My Sessions','See your active app logins and how many simultaneous logins are allowed.'],
+ ['sign_out_all','sign out all','Sign Out All','Sign out all your app sessions after confirming; sign in again on your devices.'],
+ ['my_security','security','My Security','Review your Telegram recovery link and recent password-reset status.'],
+ ['unlink_my_account','unlink my account','Unlink My Account','Remove your Telegram recovery link after confirmation; this affects password recovery.'],
+ ['invite_status','invite status','Invitation Status','Check whether your app invitation is available, used or expired.'],
 ].map(([command,phrase,label,description])=>({id:command,command,phrase,label,description}));
 export const ADMIN_ACCOUNT_COMMANDS=[
  ['search_user','search user','<username, Telegram name or ID>','Search Users'],
@@ -34,4 +35,4 @@ export const ADMIN_ACCOUNT_COMMANDS=[
  ['user_audit','audit','<username>','Account Audit'],
  ['bot_status','bot status','','Bot Status'],
  ['bot_stats','stats','','Account Statistics'],
-].map(([command,phrase,usage,label])=>({id:'manage_'+command,command,phrase,usage,label,description:label,admin:true}));
+].map(([command,phrase,usage,label])=>({id:'manage_'+command,command,phrase,usage,label,description:ADMIN_DESCRIPTIONS[command],admin:true}));

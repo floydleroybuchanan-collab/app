@@ -4,7 +4,7 @@ import {q,rows} from './bot-store.js';
 
 export function exactCommand(text) {
  const command=text.trim().replace(/^mr\.?\s*charm\s*/i,'').replace(/^\//,'').replace(/@\w+\b/,'').trim().toLowerCase();
- const alias={'request app access':'request_access','forgot password':'forgot_password','link telegram':'link_telegram','link my account':'link_telegram','notify update':'notify_update','support':'contact','user commands':'help','admin commands':'admin'}[command];
+ const alias={'request app access':'request_access','forgot password':'forgot_password','link telegram':'link_telegram','link my account':'link_telegram','notify update':'notify_update','support':'contact','user commands':'user_commands','admin commands':'admin'}[command];
  return alias||BOT_COMMANDS.find(c=>c.command===command||c.id===command||c.phrase.toLowerCase()===command)?.id;
 }
 

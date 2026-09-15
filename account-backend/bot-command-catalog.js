@@ -1,6 +1,7 @@
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 const COMMANDS = [
  ...ACCOUNT_COMMANDS,...ADMIN_ACCOUNT_COMMANDS,
+ {id:'user_commands',command:'user_commands',label:'👤 User Commands',description:'Choose a category to find your account and app commands'},
  {id:'help',command:'help',label:'💜 User Commands',description:'Open your private help menu'},
  {id:'guide',command:'guide',label:'📖 User Guide',description:'Read the app guide'},
  {id:'downloads',command:'downloads',label:'📥 Download / update app',description:'Get the latest app and installation help'},
@@ -26,7 +27,9 @@ const COMMANDS = [
 
 const PHRASES={my_sessions:"My Sessions",my_security:"My Security",manage_userinfo:"User Information",manage_user_status:"User Account Status",manage_user_sessions:"User Sessions",manage_signout_user:"Sign Out User",manage_extend_user:"Extend Account",manage_set_limit:"Set Login Limit",manage_bot_stats:"Account Statistics",manage_user_audit:"Account Audit",confirm_registration:'Confirm Registration',help:'Help',guide:'User Guide',downloads:'Download App',account:'Account Help',request_access:'Request App Access',forgot_password:'Forgot Password',link_telegram:'Link My Account',token:'My App Invitation',troubleshooting:'Troubleshooting',rules:'Rules',contact:'Contact Admin',about:'About',app_help:'Playback Help',whats_new:'Whats New',status:'Service Status',admin:'Admin Commands',notify_update:'Notify Update',admin_invite:'Invite',admin_invites:'Invites',admin_revoke:'Revoke'};
 const titleCase=value=>value.replace(/\b[a-z]/g,c=>c.toUpperCase());
-export const BOT_COMMANDS=COMMANDS.map(c=>({...c,phrase:PHRASES[c.id]||titleCase(c.phrase||c.command.replaceAll('_',' ')),label:'Mr Charm '+(PHRASES[c.id]||titleCase(c.phrase||c.command.replaceAll('_',' ')))}));
+const BUTTON_LABELS={"help": "🏠 Main menu", "user_commands": "👤 User Commands", "guide": "📖 Charming MediaLab User Guide", "downloads": "📥 Download Charming MediaLab", "account": "🔑 Account Help", "rules": "📜 Rules & Information", "app_help": "▶ Sources & MultiView Help", "whats_new": "✨ What’s New", "status": "📡 Service Status", "request_access": "🎟 Request App Access", "confirm_registration": "✅ Confirm Registration", "forgot_password": "🔐 Forgot Password", "link_telegram": "🔗 Link My Account", "admin_invite": "🎟 Create room invitation", "admin_invites": "📋 Recent room invitations", "admin_revoke": "🚫 Revoke room invitation"};
+const COMMAND_ICONS={"my_account": "👤", "account_status": "📅", "my_sessions": "📱", "sign_out_all": "🚪", "my_security": "🔐", "unlink_my_account": "🔓", "invite_status": "🎟", "search_user": "🔎", "userinfo": "👤", "user_status": "📅", "link_account": "🔗", "relink_account": "🔄", "unlink_account": "🔓", "reset_user_password": "🔐", "signout_user": "🚪", "disable_account": "⏸", "enable_account": "✅", "ban_user": "⛔", "unban_user": "✅", "delete_account": "🗑", "extend_user": "📅", "set_expiration": "📆", "set_limit": "🔢", "user_sessions": "📱", "revoke_sessions": "🚪", "invite_info": "🎟", "cancel_invite": "🚫", "create_app_invite": "🎟", "recent_users": "👥", "recent_links": "🔗", "user_audit": "📋", "bot_status": "📡", "bot_stats": "📊"};
+export const BOT_COMMANDS=COMMANDS.map(c=>({...c,buttonLabel:BUTTON_LABELS[c.id]||(/^[^\p{L}\p{N}]/u.test(c.label)?c.label:(COMMAND_ICONS[c.command]||(c.admin?'🛡':'👤'))+' '+c.label),phrase:PHRASES[c.id]||titleCase(c.phrase||c.command.replaceAll('_',' ')),label:'Mr Charm '+(PHRASES[c.id]||titleCase(c.phrase||c.command.replaceAll('_',' ')))}));
 export function commandLabel(id){return BOT_COMMANDS.find(c=>c.id===id)?.label;}
 export function commandText(value){
  if(typeof value!=='string')return value;
@@ -34,5 +37,17 @@ export function commandText(value){
 }
 export function commandButtons(markup){
  if(!markup?.inline_keyboard)return markup;
- return {...markup,inline_keyboard:markup.inline_keyboard.map(row=>row.map(b=>({...b,text:commandLabel(b.callback_data)||commandText(b.text)})))};
+ return {...markup,inline_keyboard:markup.inline_keyboard.map(row=>row.map(b=>({...b,text:buttonText(b)})))};
+}
+
+function buttonText(button){
+ const original=commandText(button.text||'');
+ // Back and Cancel are navigation labels, even when their destination is a command.
+ if(original.startsWith('↩'))return original;
+ if(/^(?:back|cancel)\b/i.test(original))return '↩ '+original;
+ const command=BOT_COMMANDS.find(c=>c.id===button.callback_data);
+ if(command)return command.buttonLabel;
+ if(/^[^\p{L}\p{N}]/u.test(original))return original;
+ const icon=/^(?:yes|confirm|approve|enable)\b/i.test(original)?'✅':/^(?:no|delete|revoke|disable)\b/i.test(original)?'⛔':button.url?'↗':button.callback_data?.startsWith('issue:')?'🛠':button.callback_data?.startsWith('answer:')?'📺':'›';
+ return icon+' '+original;
 }

@@ -54,13 +54,13 @@ async function selfAction(env,id,command,confirmed=false){
  }
  if(command==='my_sessions'){
   const count=await q(env,'SELECT COUNT(*) n FROM sessions WHERE user_id=?1 AND revoked=0 AND expires_at>?2',user.id,t).first();
-  return send(env,id,`${user.username}\nActive sessions: ${count.n}\nLogin limit: ${user.max_sessions}`,buttons([['Sign out all','sign_out_all'],['User Commands','help']]));
+  return send(env,id,`${user.username}\nActive sessions: ${count.n}\nLogin limit: ${user.max_sessions}`,buttons([['Sign out all','sign_out_all'],['User Commands','user_commands']]));
  }
  if(command==='my_security'){
   const reset=await q(env,'SELECT completed_at FROM account_reset_cooldown WHERE user_id=?1',user.id).first();
-  return send(env,id,`${user.username}\nVerified Telegram ID: ${id}\nLast self-service reset: ${reset?date(reset.completed_at):'None recorded'}\nReset requests: up to three per hour. One successful self-service reset per 24 hours. Your password is entered only in the app.`,buttons([['User Commands','help']]));
+  return send(env,id,`${user.username}\nVerified Telegram ID: ${id}\nLast self-service reset: ${reset?date(reset.completed_at):'None recorded'}\nReset requests: up to three per hour. One successful self-service reset per 24 hours. Your password is entered only in the app.`,buttons([['User Commands','user_commands']]));
  }
- return send(env,id,summary(user),buttons([['Sessions','my_sessions'],['Security','my_security'],['User Commands','help']]));
+ return send(env,id,summary(user),buttons([['Sessions','my_sessions'],['Security','my_security'],['User Commands','user_commands']]));
 }
 
 export async function accountManagement(env,id,text,cmd,s,message){
@@ -71,7 +71,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
  if(self&&!command?.usage){await selfAction(env,id,self.id);return true;}
  if(self&&raw.toLowerCase()===self.phrase){await selfAction(env,id,self.id);return true;}
  const state=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();
- if(cmd==='self:cancel'||cmd==='manage:cancel'){await clear(env,id);await send(env,id,'Canceled.',buttons([['User Commands','help']]));return true;}
+ if(cmd==='self:cancel'||cmd==='manage:cancel'){await clear(env,id);await send(env,id,'Canceled.',buttons([['User Commands','user_commands']]));return true;}
  if(cmd==='self:confirm'){
   if(!state||state.state!=='self:confirm'||state.updated_at<now()-600)fail('This confirmation expired. Start again.',409);
   const data=JSON.parse(state.json);if((await linkedUser(env,id)).id!==data.userId)fail('Your account link changed. Start again.',409);
@@ -118,7 +118,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await send(env,id,'Continue privately to use '+command.label+'.',{inline_keyboard:[[{text:'Open private Admin Commands',url:'https://t.me/'+s.bot_username+'?start='+command.id}]]});return true;
  }
  if(!env.BOT_GROUP_REPLY&&!args&&state?.state==='manage:resume'&&state.updated_at>=now()-600){const saved=JSON.parse(state.json);if(saved.command===command.id)args=saved.args;}
- if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
+ if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\n${command.description}\n\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
  await clear(env,id);
  const parts=args.split(/\s+/),name=parts[0],extra=parts.slice(1).join(' '),key=command.command;
  let action=null;

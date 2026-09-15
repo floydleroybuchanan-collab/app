@@ -10,7 +10,7 @@ test('every advertised user and admin command is a Mr Charm phrase with a workin
   const parsed=BOT_COMMANDS.find(x=>x.id===exactCommand(c.label));
   assert.ok(parsed,c.label); assert.equal(parsed.id,c.id);
   const b=commandButtons({inline_keyboard:[[{text:'old /'+c.command,callback_data:c.id}]]}).inline_keyboard[0][0];
-  assert.equal(b.text,c.label); assert.equal(b.callback_data,c.id);
+  assert.equal(b.text,c.buttonLabel); assert.doesNotMatch(b.text,/^Mr Charm /); assert.equal(b.callback_data,c.id);
  }
  assert.equal(commandText('Use /help or /link_telegram. Visit https://example.test/help'), 'Use Mr Charm Help or Mr Charm Link My Account. Visit https://example.test/help');
  assert.equal(commandText('Mr. Charm Help'),'Mr Charm Help');

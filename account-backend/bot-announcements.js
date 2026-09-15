@@ -20,7 +20,7 @@ export async function botAnnouncementFlow(env,id,text,cmd,s){
  const data=JSON.parse(draft.json),step=draft.state.slice(9),answer=cmd.startsWith('announce:')?cmd.slice(9):text.trim();
  let next,prompt,choices=[];
  if(step==='title'){if(!answer||answer.length>100)fail('Use a title of 1–100 characters.');data.title=answer;next='message';prompt='Enter the message users should see (up to 1,200 characters).';}
- else if(step==='message'){if(!answer||answer.length>1200)fail('Use a message of 1–1,200 characters.');data.message=answer;next='version';prompt='Enter the APK’s Android version code. This is not the GitHub build number. Build #177 is version code 18.';}
+ else if(step==='message'){if(!answer||answer.length>1200)fail('Use a message of 1–1,200 characters.');data.message=answer;next='version';prompt='Enter the APK’s Android version code. This is not the GitHub build number. Use the Android version code in your release guide (for example, 21).';}
  else if(step==='version'){const version=Number(answer);if(!Number.isSafeInteger(version)||version<1||version>2100000000)fail('Enter a valid positive Android version code.');data.version_code=version;next='url';prompt='Send the HTTPS link to the Telegram release message or download destination.';}
  else if(step==='url'){let url;try{url=new URL(answer);}catch{fail('Enter a valid HTTPS release link.');}if(url.protocol!=='https:'||url.username||url.password||url.hash||answer.length>2048)fail('Use an HTTPS link without embedded credentials.');data.url=answer;next='audience';prompt='Who should receive the update? Users who already installed this version will not be prompted.';choices=[['Everyone with an older version','outdated'],['Selected app accounts','selected']];}
  else if(step==='audience'){
