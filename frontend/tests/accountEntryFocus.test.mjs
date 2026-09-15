@@ -117,7 +117,7 @@ test('native entry resolves TextInput and View tags on the UI thread and rejects
 
 test('search recovery clears the hidden retry target before hiding the error controls', () => {
   const search = source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/search/SearchTvFragment.kt');
-  const reset = search.indexOf('binding.etSearch.nextFocusDownId = binding.llGlobalSearch.id');
+  const reset = search.indexOf('binding.etSearch.nextFocusDownId = filterFocusId.takeIf { it != View.NO_ID } ?: binding.vgvSearch.id');
   const hide = search.indexOf('binding.isLoading.root.visibility = View.GONE');
   assert.ok(reset >= 0 && reset < hide);
   assert.match(search, /if \(binding.isLoading.root.hasFocus\(\)\) binding.etSearch.requestFocus\(\)/);
