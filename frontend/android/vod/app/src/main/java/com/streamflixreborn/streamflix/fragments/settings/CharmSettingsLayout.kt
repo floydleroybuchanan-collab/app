@@ -29,7 +29,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
     private val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
     private val sections = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val root = NestedScrollView(context).apply {
-        setBackgroundColor(Color.TRANSPARENT); clipToPadding = false; isFillViewport = true
+        setBackgroundColor(Color.TRANSPARENT); clipToPadding = true; isFillViewport = true
         addView(content, ViewGroup.LayoutParams(-1,-2))
     }
     private val pages = linkedMapOf(
@@ -44,7 +44,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         content.addView(title); content.addView(subtitle); content.addView(row)
         row.addView(sections, LinearLayout.LayoutParams(dp(168), -2).apply { marginEnd = dp(18) })
         row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
-        root.doOnLayout { content.setPadding((root.width*.135f).toInt(), (root.width*.162f).toInt(), (root.width*.024f).toInt(), dp(36)) }
+        root.doOnLayout { root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, 0); content.setPadding((root.width*.135f).toInt(), 0, (root.width*.024f).toInt(), dp(36)) }
         list.addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) { outRect.set(dp(4),dp(4),dp(4),dp(4)) }
         })

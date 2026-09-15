@@ -1,5 +1,6 @@
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 const COMMANDS = [
+ {id:'website',command:'website',label:'🌐 Website',description:'Open the official website for downloads, installation and account help'},
  ...ACCOUNT_COMMANDS,...ADMIN_ACCOUNT_COMMANDS,
  {id:'user_commands',command:'user_commands',label:'👤 User Commands',description:'Choose a category to find your account and app commands'},
  {id:'help',command:'help',label:'💜 User Commands',description:'Open your private help menu'},

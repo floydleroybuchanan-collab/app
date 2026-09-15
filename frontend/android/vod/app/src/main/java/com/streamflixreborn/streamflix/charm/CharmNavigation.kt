@@ -52,6 +52,18 @@ object CharmNavigation {
         action("Back", back)
         action("VOD Home") { home(context) }
         CharmDesign.styleTree(this)
+        compact(this)
+    }
+    internal fun compact(row: LinearLayout) {
+        val density = row.resources.displayMetrics.density
+        for (i in 0 until row.childCount) (row.getChildAt(i) as? Button)?.apply {
+            textSize = 12f; minHeight = 0; minimumHeight = 0
+            minWidth = 0; minimumWidth = 0; includeFontPadding = false
+            setPadding((12*density).toInt(), 0, (12*density).toInt(), 0)
+            backgroundTintList = null
+            setBackgroundResource(R.drawable.charm_vod_chip)
+            layoutParams = LinearLayout.LayoutParams(-2, maxOf((36*density).toInt(), paint.fontMetricsInt.let { it.bottom - it.top } + (4*density).toInt())).apply { marginStart = (6*density).toInt() }
+        }
     }
     fun install(activity: FragmentActivity, root: View) {
         val parent = root as? ConstraintLayout ?: return
@@ -65,14 +77,15 @@ object CharmNavigation {
         row.addView(stop)
         val dp = activity.resources.displayMetrics.density
         parent.addView(row, ConstraintLayout.LayoutParams(-2, -2).apply {
-            topToTop = 0; topMargin = (4 * dp).toInt()
+            topToTop = 0; topMargin = (24 * dp).toInt()
             if (isTv) {
-                endToStart = R.id.vod_search; marginEnd = (8 * dp).toInt()
+                endToEnd = 0; marginEnd = (24 * dp).toInt()
             } else {
                 startToStart = 0; marginStart = (8 * dp).toInt()
             }
         })
         CharmDesign.styleTree(row)
+        compact(row)
         if (!isTv) {
             val host = parent.findViewById<View>(R.id.nav_main_fragment)
             (host.layoutParams as ConstraintLayout.LayoutParams).apply {
@@ -84,8 +97,8 @@ object CharmNavigation {
             stop.visibility = if (destination.id == R.id.player) View.VISIBLE else View.GONE
             (row.layoutParams as ConstraintLayout.LayoutParams).apply {
                 if (isTv) {
-                    endToStart = if (destination.id == R.id.player) ConstraintLayout.LayoutParams.UNSET else R.id.vod_search
-                    endToEnd = if (destination.id == R.id.player) 0 else ConstraintLayout.LayoutParams.UNSET
+                    endToStart = ConstraintLayout.LayoutParams.UNSET
+                    endToEnd = 0
                     row.layoutParams = this
                 }
             }
@@ -110,7 +123,7 @@ object CharmNavigation {
         dialogs[dialog] = true
         val originalTop = body.paddingTop
         val row = controls(dialog.context) { dialog.cancel() }
-        row.setBackgroundColor(0xFF10101E.toInt())
+        row.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         content.addView(row, android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP or android.view.Gravity.START))
         row.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
             val padding = originalTop + bottom - top

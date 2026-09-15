@@ -130,7 +130,7 @@ class MainTvActivity : FragmentActivity() {
             val visible = destination.id != R.id.player
             binding.vodBrandHeader.visibility = if (visible) View.VISIBLE else View.GONE
             binding.navMain.visibility = if (visible) View.VISIBLE else View.GONE
-            binding.vodSearch.visibility = if (visible) View.VISIBLE else View.GONE
+            binding.vodSearch.visibility = View.GONE
             binding.vodCrownAccess.visibility = if (visible) View.VISIBLE else View.GONE
             binding.vodBackdrop.visibility = if (visible) View.VISIBLE else View.GONE
             if (visible) { updateNavigationVisibility(); binding.navMain.open() }

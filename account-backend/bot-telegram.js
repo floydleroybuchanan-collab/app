@@ -1,3 +1,4 @@
+import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
 import {supportContacts} from './telegram-contacts.js';
 import {telegramTransport,rememberResponse,cleanExpiredResponses} from './bot-delivery.js';
@@ -183,6 +184,7 @@ async function handleCommand(env,id,cmd,s){
  }
  if(cmd==='user_commands'||cmd.startsWith('menu:'))return commandMenu(env,id,cmd,s);
  if(cmd==='help')return help(env,id,s);
+ if(cmd==='website'){const website=await websiteConfig(env);return send(env,id,'🌐 Charming MediaLab website\nDownload the app, read installation steps and find account help.',{inline_keyboard:[[{text:'🌐 Open website',url:website.url}],[{text:'↩ Main menu',callback_data:'help'}]]});}
  if(['account','token','downloads'].includes(cmd)||cmd.startsWith('issue:')||cmd==='troubleshooting'){
   if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Your join request must be approved and you must still be in the Charming MediaLab group.');
  }
@@ -290,6 +292,7 @@ export async function botScheduled(env){
  await maintainGroupInvites(env,s.enabled);
  if(s.enabled)await migrateCommandMenus(env,s,telegram);
  if(!s.enabled)return;
+ await queueWebsitePost(env,s);
  for(const job of await rows(env,"SELECT * FROM bot_jobs WHERE status='pending' AND due_at<=?1 ORDER BY id LIMIT 20",now())){
   const claimed=await q(env,"UPDATE bot_jobs SET status='sending' WHERE id=?1 AND status='pending'",job.id).run();if(!claimed.meta.changes)continue;
   try{const result=job.kind==='delete'?await telegram(env,'deleteMessage',{chat_id:job.chat_id,message_id:job.message_id}):await send(env,job.chat_id,job.body);

@@ -20,8 +20,8 @@ android {
         minSdk 24
         consumerProguardFiles 'nova-consumer-rules.pro'
         buildConfigField 'String', 'APPLICATION_ID', '"com.charmiptv.app.purple.next.vodtest1"'
-        buildConfigField 'int', 'VERSION_CODE', '22'
-        buildConfigField 'String', 'VERSION_NAME', '"2.2.0-rc.6"'
+        buildConfigField 'int', 'VERSION_CODE', '25'
+        buildConfigField 'String', 'VERSION_NAME', '"2.2.0-rc.7"'
         buildConfigField 'String', 'APP_LAYOUT', '"tv"'
         buildConfigField 'boolean', 'CHARM_VOD_EMBEDDED', 'true'
         buildConfigField 'String', 'REAL_DEBRID_CLIENT_ID', quote(setting('REAL_DEBRID_CLIENT_ID') ?: 'X245A4XAIBGVM')
@@ -136,4 +136,3 @@ dependencies {
     implementation("org.java-websocket:Java-WebSocket:1.5.3")
     
 }
-

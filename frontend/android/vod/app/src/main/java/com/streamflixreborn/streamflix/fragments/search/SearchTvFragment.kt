@@ -51,11 +51,14 @@ class SearchTvFragment : Fragment() {
     private var charmExplore: List<AppAdapter.Item>? = null
     private var charmFilter = "Everything"
 
+    var filterFocusId: Int = View.NO_ID
+        private set
+
     fun designFilters(global: View): View {
         val row = android.widget.LinearLayout(requireContext()).apply { orientation=android.widget.LinearLayout.HORIZONTAL }
         listOf("Everything", "Movies", "TV shows", "People", "All genres").forEach { label ->
             row.addView(com.streamflixreborn.streamflix.charm.CharmVodPageLayout.chip(row,label).apply {
-                textSize=12f;isSelected=label==charmFilter
+                id=View.generateViewId(); textSize=12f;isSelected=label==charmFilter
                 setOnClickListener {
                     if(label=="All genres") com.streamflixreborn.streamflix.charm.CharmGenreMenu.show(this@SearchTvFragment,charmGenres.takeIf { it.isNotEmpty() })
                     else { charmFilter=label; for(i in 0 until row.childCount)row.getChildAt(i).isSelected=row.getChildAt(i)===this; renderSearchItems() }
@@ -63,7 +66,8 @@ class SearchTvFragment : Fragment() {
             }, android.widget.LinearLayout.LayoutParams(-2,-2).apply { marginEnd=8 })
         }
         (global.parent as? ViewGroup)?.removeView(global)
-        row.addView(global,android.widget.LinearLayout.LayoutParams(0,-2,1f))
+        filterFocusId = row.getChildAt(0).id
+        global.visibility = View.GONE
         binding.tvGlobalSearch.textSize=12f
         global.setBackgroundResource(R.drawable.charm_vod_chip)
         return row
@@ -128,7 +132,7 @@ class SearchTvFragment : Fragment() {
 
                 // A recovered search must not keep pointing Down at a hidden retry button.
                 if (state !is State.FailedSearching && state !is State.SearchingMore) {
-                    binding.etSearch.nextFocusDownId = binding.llGlobalSearch.id
+                    binding.etSearch.nextFocusDownId = filterFocusId.takeIf { it != View.NO_ID } ?: binding.vgvSearch.id
                     if (binding.isLoading.root.hasFocus()) binding.etSearch.requestFocus()
                 }
                 when (state) {
@@ -198,6 +202,7 @@ class SearchTvFragment : Fragment() {
     }
 
     private fun submitSearch(): Boolean {
+        isGlobalSearchChecked = androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext()).getBoolean("charm_global_search", false)
         val query = binding.etSearch.text?.toString().orEmpty()
         hideKeyboard()
 
@@ -215,12 +220,13 @@ class SearchTvFragment : Fragment() {
     }
 
     private fun initializeSearch() {
+        isGlobalSearchChecked = androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireContext()).getBoolean("charm_global_search", false)
         val isIptv = UserPreferences.currentProvider is IptvProvider
         val hintStringRes = if (isIptv) R.string.search_input_hint_iptv else R.string.search_input_hint
         binding.etSearch.hint = getString(hintStringRes)
 
         binding.llGlobalSearch.nextFocusUpId = binding.etSearch.id
-        binding.vgvSearch.nextFocusUpId = binding.llGlobalSearch.id
+        binding.vgvSearch.nextFocusUpId = binding.etSearch.id
 
         binding.llGlobalSearch.setOnClickListener {
             isGlobalSearchChecked = !isGlobalSearchChecked
@@ -251,7 +257,7 @@ class SearchTvFragment : Fragment() {
                     return@setOnKeyListener false
                 }
 
-                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || keyCode == KeyEvent.KEYCODE_BACK) {
                     return@setOnKeyListener focusSearchContent()
                 }
 
@@ -342,7 +348,7 @@ class SearchTvFragment : Fragment() {
                     subposition: Int,
                 ) {
                     child?.itemView?.nextFocusUpId =
-                        if (position in 0 until currentGridColumns) binding.llGlobalSearch.id
+                        if (position in 0 until currentGridColumns) binding.etSearch.id
                         else View.NO_ID
                 }
             })

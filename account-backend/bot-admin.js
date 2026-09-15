@@ -1,3 +1,4 @@
+import {websiteAdmin} from './website-announcements.js';
 import {telegramUsername} from './telegram-contacts.js';
 import {brandedContent} from './branding.js';
 import {DEFAULT_CONTENT} from './bot-defaults.js';
@@ -9,6 +10,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
  if(!auth.isOwner&&!auth.profile.can_manage_bot)fail('The owner must grant Mr. Charm control access.',403);
  const url=new URL(request.url),path=url.pathname.slice('/admin/bot'.length),method=request.method,id=auth.user.id;
  const s=await settings(env);
+ if(path==='/website'||path==='/website/send')return websiteAdmin(request,env,auth,{json,safeJson},s,path);
  if(path==='/community-link'&&method==='GET')return json({success:true,url:(await q(env,"SELECT value FROM bot_runtime WHERE key='community_join_request_link'").first())?.value||null});
  if(path==='/community-link'&&method==='POST'){
   if(!auth.isOwner)fail('Only the owner can configure the shared community link.',403);

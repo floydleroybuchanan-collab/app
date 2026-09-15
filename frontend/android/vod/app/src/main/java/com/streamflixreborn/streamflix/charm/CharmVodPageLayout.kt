@@ -28,6 +28,8 @@ import com.streamflixreborn.streamflix.models.TvShow
 
 /** Insets belong to scrolling content, never to the artwork or navigation host. */
 object CharmVodPageLayout {
+    fun contentTop(root: View): Int = (root.height * .29f).toInt() + root.dp(8)
+
     private fun View.dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     fun observeArtwork(activity: FragmentActivity, root: View, backdrop: ImageView, nav: NavController) {
@@ -63,7 +65,7 @@ object CharmVodPageLayout {
         if (grid.getTag(R.id.charm_page_setup) == true) return
         grid.setTag(R.id.charm_page_setup, true)
         val page = fragment.javaClass.simpleName
-        val header = LinearLayout(root.context).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(root.context).apply { id = View.generateViewId(); orientation = LinearLayout.VERTICAL }
         val title = when (page) {
             "MoviesTvFragment" -> "Movies"
             "TvShowsTvFragment" -> "TV shows"
@@ -74,9 +76,9 @@ object CharmVodPageLayout {
         }
         title?.let { label ->
             header.addView(TextView(root.context).apply {
-                text = label; textSize = 28f; setTextColor(0xFFECEBF2.toInt())
+                text = label; textSize = 20f; setTextColor(0xFFECEBF2.toInt())
                 typeface = ResourcesCompat.getFont(context, R.font.charm_geist_semibold)
-                setPadding(0, 0, 0, dp(14))
+                setPadding(0, 0, 0, dp(6))
             })
         }
         // Existing search/genre/favorite controls keep their IDs, listeners and values.
@@ -87,10 +89,14 @@ object CharmVodPageLayout {
             "FavoritesTvFragment" -> listOf(R.id.btn_favorites_reorder_mode, R.id.btn_favorites_reorder)
             else -> emptyList()
         }
+        val favoriteRow = LinearLayout(root.context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
         controls.mapNotNull { root.findViewById<View>(it) }.forEach { control ->
             (control.parent as? ViewGroup)?.removeView(control)
-            header.addView(control, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = root.dp(10) })
+            if (page == "FavoritesTvFragment") {
+                favoriteRow.addView(control, LinearLayout.LayoutParams(-2, -2).apply { marginStart = root.dp(8) })
+            } else header.addView(control, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = root.dp(6) })
         }
+        if (favoriteRow.childCount > 0) header.addView(favoriteRow)
         if (fragment is com.streamflixreborn.streamflix.fragments.search.SearchTvFragment) {
             root.findViewById<View>(R.id.ll_global_search)?.let { header.addView(fragment.designFilters(it)) }
         }
@@ -107,47 +113,60 @@ object CharmVodPageLayout {
         if (header.childCount > 0) root.addView(header)
         grid.doOnLayout {
             val left = (root.width * .135f).toInt()
-            val top = (root.width * .162f).toInt()
+            val top = contentTop(root)
             val right = (root.width * .024f).toInt()
             (grid.layoutParams as? ConstraintLayout.LayoutParams)?.apply {
                 startToEnd = ConstraintLayout.LayoutParams.UNSET
                 startToStart = ConstraintLayout.LayoutParams.PARENT_ID
                 endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-                topToBottom = ConstraintLayout.LayoutParams.UNSET
-                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                topToBottom = if (header.childCount > 0) header.id else ConstraintLayout.LayoutParams.UNSET
+                topToTop = if (header.childCount > 0) ConstraintLayout.LayoutParams.UNSET else ConstraintLayout.LayoutParams.PARENT_ID
                 bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-                marginStart = left; marginEnd = right; topMargin = 0
+                marginStart = left; marginEnd = right; topMargin = if (header.childCount > 0) root.dp(12) else top
                 width = 0; height = 0
                 grid.layoutParams = this
             }
             val available = (root.width - left - right).coerceAtLeast(1)
+            if (page == "SearchTvFragment") header.findViewById<View>(R.id.cl_search)?.let { search ->
+                search.layoutParams = LinearLayout.LayoutParams((available * .76f).toInt(), -2).apply {
+                    gravity = Gravity.END; bottomMargin = root.dp(6)
+                }
+            }
             header.measure(View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             if (header.childCount > 0) header.layoutParams = ConstraintLayout.LayoutParams(available, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 startToStart = ConstraintLayout.LayoutParams.PARENT_ID; topToTop = ConstraintLayout.LayoutParams.PARENT_ID
                 marginStart = left; topMargin = top
             }
-            grid.setPadding(0, top + if (header.childCount > 0) header.measuredHeight + root.dp(18) else 0, 0, root.dp(32))
-            grid.clipToPadding = false
+            grid.setPadding(0, root.dp(8), 0, root.dp(32))
+            grid.clipToPadding = true
             grid.nextFocusLeftId = R.id.nav_main
             if (grid is VerticalGridView) {
-                grid.windowAlignment = BaseGridView.WINDOW_ALIGN_LOW_EDGE
-                grid.windowAlignmentOffset = top + root.dp(72)
+                grid.windowAlignment = BaseGridView.WINDOW_ALIGN_HIGH_EDGE
+                grid.windowAlignmentOffset = root.dp(8)
                 grid.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             }
         }
-        var distance = 0
-        grid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                distance = (distance + dy).coerceAtLeast(0)
-                if (grid is VerticalGridView) header.translationY = -distance.toFloat()
+        // The controls own a separate area; focus-driven grid scrolling cannot cover them.
+        header.doOnLayout {
+            val focusables = header.getFocusables(View.FOCUS_FORWARD)
+            focusables.forEach { control ->
+                if (control.id == View.NO_ID) control.id = View.generateViewId()
+                control.nextFocusDownId = grid.id
             }
-        })
+            grid.nextFocusUpId = focusables.lastOrNull()?.id ?: R.id.nav_main
+            if (fragment is com.streamflixreborn.streamflix.fragments.search.SearchTvFragment) {
+                header.findViewById<View>(R.id.et_search)?.nextFocusDownId = fragment.filterFocusId
+                header.findViewById<View>(R.id.btn_search_clear)?.nextFocusDownId = fragment.filterFocusId
+                header.findViewById<View>(R.id.btn_search_voice)?.nextFocusDownId = fragment.filterFocusId
+            }
+        }
         CharmDesign.styleTree(header)
+        CharmNavigation.compact(favoriteRow)
     }
 
     fun chip(root: View, label: String) = TextView(root.context).apply {
         text = label; textSize = 13f; setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER; setPadding(dp(18), dp(10), dp(18), dp(10))
+        gravity = Gravity.CENTER; setPadding(dp(12), dp(7), dp(12), dp(7))
         isFocusable = true; isFocusableInTouchMode = true; isClickable = true
         setBackgroundResource(R.drawable.charm_vod_chip)
         typeface = ResourcesCompat.getFont(context, R.font.charm_geist_regular)

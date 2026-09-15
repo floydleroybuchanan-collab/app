@@ -5,10 +5,11 @@ let botTab='Dashboard';
 async function loadBot(){
  const section=heading('Mr. Charm Control Center','Manage your Telegram assistant, member links, support and editable content.');
  const tabs=el('div',undefined,'bot-tabs');section.append(tabs);
- for(const name of ['Dashboard','Members','Group Invites','Content','Downloads','Support','Support Admins','Bot Settings','Audit Log'])tabs.append(button(name,()=>{botTab=name;return loadBot();},botTab===name?'primary':''));
+ for(const name of ['Dashboard','Members','Group Invites','Content','Downloads','Website','Support','Support Admins','Bot Settings','Audit Log'])tabs.append(button(name,()=>{botTab=name;return loadBot();},botTab===name?'primary':''));
  const box=el('div',undefined,'bot-workspace');section.append(box);
  if(botTab==='Content')return botContent(box);
  if(botTab==='Downloads')return botDownloads(box);
+ if(botTab==='Website')return botWebsite(box);
  if(botTab==='Bot Settings')return botSettings(box);
  if(botTab==='Members')return botMembers(box);
  if(botTab==='Group Invites')return botGroupInvites(box);
@@ -142,4 +143,24 @@ async function botSupportAdmins(box){
   const on=check(card,'Shown as support admin','enabled',!!a.enabled);
   card.append(button('Save',async()=>{await api('/admin/bot/support-admins/'+a.telegram_id,'PATCH',{enabled:on.checked,contact_username:username.value});await loadBot();message('Support admin saved.');}));box.append(card);
  }
+}
+
+async function botWebsite(box){
+ const d=await api('/admin/bot/website'),s=d.website;
+ box.append(el('h2','Website & scheduled announcements'),el('p','The Website button appears in Mr Charm. Save changes before sending. Scheduled posts go to the configured Telegram group; private bot replies stay private.','help'));
+ const card=el('div',undefined,'card');box.append(card);
+ const url=field(card,'Official website URL','websiteUrl',s.url,'url');
+ const text=botText(card,'Announcement message',s.message);text.rows=4;text.maxLength=1200;
+ const enabled=check(card,'Enable scheduled website announcements','websiteEnabled',s.enabled);
+ const timezone=field(card,'Timezone (for example America/New_York)','websiteTimezone',s.timezone);
+ const time=field(card,'Posting time in that timezone','websiteTime',s.time,'time');
+ const repeatLabel=el('label','Repeat'),repeat=el('select');for(const [v,t] of [['weekly','Weekly · recommended'],['daily','Daily']]){const o=el('option',t);o.value=v;repeat.append(o);}repeat.value=s.repeat;repeatLabel.append(repeat);card.append(repeatLabel);
+ const dayLabel=el('label','Day of week'),day=el('select');['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach((name,i)=>{const o=el('option',name);o.value=String(i);day.append(o)});day.value=String(s.weekday);dayLabel.append(day);card.append(dayLabel);
+ repeat.onchange=()=>{day.disabled=repeat.value==='daily'};repeat.onchange();
+ const preview=el('pre');preview.className='website-preview';card.append(el('h3','Message preview'),preview);
+ const update=()=>{preview.textContent=text.value+'\n\n🌐 '+url.value};text.oninput=update;url.oninput=update;update();
+ card.append(button('Save website settings',async()=>{await api('/admin/bot/website','PUT',{revision:s.revision,url:url.value,message:text.value,enabled:enabled.checked,timezone:timezone.value,time:time.value,repeat:repeat.value,weekday:Number(day.value)});await loadBot();message('Website settings saved.');},'primary'));
+ box.append(el('p','Next scheduled post: '+(s.enabled&&s.next_at?new Date(s.next_at*1000).toLocaleString('en-US',{timeZone:s.timezone})+' ('+s.timezone+')':'Schedule disabled')));
+ box.append(button('Preview & send saved announcement',()=>{const body=openDialog('Send website announcement','This posts publicly in the configured Telegram group. The preview below uses the last saved settings.');body.append(el('p',s.message),el('p',s.url));const confirmSend=check(body,'I want to post this message to the group now','websiteSendConfirmed',false);const requestId=crypto.randomUUID();const send=button('Send now',async()=>{if(!confirmSend.checked){message('Confirm the group post first.');return;}send.disabled=true;try{await api('/admin/bot/website/send','POST',{confirm:true,revision:s.revision,request_id:requestId});$('dialog').close();await loadBot();message('Website announcement queued. Check delivery history for the result.');}catch(e){send.disabled=false;throw e;}},'primary');body.append(send);}));
+ box.append(el('h3','Recent website deliveries'));for(const job of d.deliveries){const item=el('div',undefined,'card');item.append(el('strong',job.status),el('p',date(job.due_at)));if(job.error)item.append(el('p',job.error));if(job.status==='pending')item.append(button('Cancel queued post',async()=>{await api('/admin/bot/jobs/'+job.id,'DELETE');await loadBot();}));box.append(item);}if(!d.deliveries.length)box.append(el('p','No website announcements have been sent.'));
 }

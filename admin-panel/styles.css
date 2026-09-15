@@ -34,3 +34,4 @@ input[type=checkbox]{display:inline-block;width:18px;min-height:18px;height:18px
 /* Shared silver and purple artwork, with readable controls above the backdrop. */
 body{background:radial-gradient(ellipse at 0 0,#38174766,transparent 55%),var(--bg)}
 .login-brand{display:block;width:100%;height:auto;margin:0 auto 20px}.header-brand{display:block;width:160px;height:72px;object-fit:contain;margin-bottom:4px}.login-card{max-width:460px;background:linear-gradient(130deg,#26182fe8,#130d1dec)}header{background:linear-gradient(100deg,#2b1437,#16101f 65%)}
+.website-preview {white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border:1px solid #8555aa;border-radius:12px;font:inherit;background:#180e25;}

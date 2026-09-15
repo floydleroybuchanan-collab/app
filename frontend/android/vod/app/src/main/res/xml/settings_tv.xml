@@ -4,6 +4,9 @@
 
     <PreferenceScreen android:key="screen_vod_sources" android:title="VOD Sources and Real-Debrid"
         android:summary="Sources, playback and Real-Debrid account" android:widgetLayout="@layout/preference_widget_chevron">
+        <SwitchPreferenceCompat android:key="charm_global_search" android:title="Global Search"
+            android:summary="Search across providers instead of only the selected provider. Applies to VOD search."
+            android:defaultValue="false" app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat android:key="vod_choose_first" android:title="Choose source before playing"
             android:summary="When off, Quick Play starts a direct source automatically" app:iconSpaceReserved="false" />
         <SwitchPreferenceCompat android:key="vod_debrid_search" android:title="Find Real-Debrid sources"
