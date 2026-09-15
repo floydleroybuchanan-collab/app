@@ -16,8 +16,8 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
-    "sha256": "d36156f1dfa3ded9119c2cd73b22df5c2f2e59af37e8c6a12a1ae6d2bceca750",
-    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
+    "sha256": "95b01dc30547ed9f3e027aca7bca02c9132d0da2be23c498f3088acf400ad377",
+    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; RC5: retryable discovery, partial results and independent bounded host lookup with generation/account guards."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsMobileView.kt": {
     "upstream": "b78a9e8624dcf1ae7f0f2298a829b93b97392e6787e904ab18c32a02ceeaed4a",

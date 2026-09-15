@@ -9,6 +9,12 @@
         <SwitchPreferenceCompat android:key="vod_debrid_search" android:title="Find Real-Debrid sources"
             android:summary="Find torrent sources and supported host links when you open Sources"
             app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat android:key="vod_cloud_search" android:title="Search my Real-Debrid cloud"
+            android:summary="Include matching files already in your personal RD library. Off by default; not required for cached search." app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat android:key="vod_cached_only" android:title="Cached torrents only"
+            android:summary="On by default. Show reported-cached or verified RD torrents; hide unknown availability. Direct sources are unaffected." app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat android:key="vod_cached_consent" android:title="Enable cached search with Torrentio"
+            android:summary="Optional connection: review how Torrentio receives your Real-Debrid access token and title searches." app:iconSpaceReserved="false" />
         <ListPreference android:key="vod_engine" android:title="VOD player"
             android:entries="@array/charm_vod_engines" android:entryValues="@array/charm_vod_engine_values"
             android:summary="Media3 or embedded Nova playback" app:iconSpaceReserved="false" />

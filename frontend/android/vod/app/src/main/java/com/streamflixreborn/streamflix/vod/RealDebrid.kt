@@ -26,6 +26,15 @@ object RealDebrid {
         data.optString("label") + data.optString("expiration").takeIf { it.isNotBlank() }?.let { " · Expires " + it.take(10) }.orEmpty()
     } ?: "Not connected"
     val deviceLabel get() = vault.read()?.optString("device_label")?.takeIf { it.isNotBlank() && it != "CharmIPTV" } ?: "Charming MediaLab"
+    val cachedSearchConsent get() = vault.read()?.optBoolean("torrentio-consent", false) == true
+    suspend fun setCachedSearchConsent(enabled: Boolean) = authLock.withLock {
+        vault.read()?.let { vault.write(it.put("torrentio-consent", enabled)) }
+        generation++
+    }
+    internal suspend fun cachedSearchToken(): String {
+        if (!cachedSearchConsent) throw IOException("Enable cached search in VOD Settings to use Torrentio cache reports.")
+        return credentials().second
+    }
     private val oauth = DebridOAuth()
     suspend fun setLabel(label: String) = authLock.withLock {
         vault.read()?.let { vault.write(it.put("device_label", label.filter { c -> !c.isISOControl() }.take(80).ifBlank { "Charming MediaLab" })) }
@@ -171,12 +180,17 @@ object RealDebrid {
         return Video(source = url.toString())
     }
 
-    suspend fun resolve(server: Video.Server, type: Video.Type): Video {
+    suspend fun resolve(server: Video.Server, type: Video.Type): Video =
+        kotlinx.coroutines.withTimeoutOrNull(90_000) { resolveTorrent(server, type) }
+            ?: throw IOException("Real-Debrid playback preparation timed out. Choose another source or check your RD account.")
+
+    private suspend fun resolveTorrent(server: Video.Server, type: Video.Type): Video {
         val detail = requireNotNull(server.details)
         val hash = detail.infoHash?.lowercase()?.takeIf { it.matches(Regex("[a-f0-9]{40}")) }
             ?: throw IOException("This torrent has no valid info hash.")
         val (epoch, token) = credentials()
         var id = owned[hash] ?: detail.cloudTorrentId
+        var createdThisAttempt = false
         var created = id != null && owned[hash] == id
         if (id == null) {
             checkSession(epoch)
@@ -186,6 +200,7 @@ object RealDebrid {
                 if (owned.size < 100) owned[hash] = id
             }
             created = true
+            createdThisAttempt = true
         }
         require(id.matches(Regex("[A-Za-z0-9_-]+")))
         var replacedMissingItem = false
@@ -201,6 +216,7 @@ object RealDebrid {
                 require(id.matches(Regex("[A-Za-z0-9_-]+")))
                 authLock.withLock { checkSession(epoch); if (owned.size < 100) owned[hash] = id }
                 created = true
+                createdThisAttempt = true
                 replacedMissingItem = true
                 return@repeat
             }
@@ -227,6 +243,20 @@ object RealDebrid {
                     val url = result.optString("download")
                     if (!url.startsWith("https://")) throw IOException("Real-Debrid did not return a secure playback URL.")
                     return Video(source = url)
+                }
+                "downloading", "queued", "compressing", "uploading" -> {
+                    if (VodPreferences.cachedOnly) {
+                        // Remove only the torrent created by this exact play attempt, never an existing library entry.
+                        if (createdThisAttempt) {
+                            checkSession(epoch)
+                            val removed = VodHttp.request(Request.Builder()
+                                .url("https://api.real-debrid.com/rest/1.0/torrents/delete/$id")
+                                .header("Authorization", "Bearer $token").delete().build()).use { it.isSuccessful }
+                            if (removed) owned.remove(hash, id)
+                            else throw IOException("This source is not ready. Could not cancel its new RD transfer; manage it in your RD account.")
+                        }
+                        throw IOException("This source is not cached and ready now. Choose another source, or disable Cached torrents only to allow preparation.")
+                    }
                 }
                 "magnet_error", "error", "virus", "dead" -> throw IOException("This torrent is unavailable. Choose another source.")
             }

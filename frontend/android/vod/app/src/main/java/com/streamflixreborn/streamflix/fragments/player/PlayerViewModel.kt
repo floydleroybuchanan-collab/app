@@ -79,20 +79,29 @@ class PlayerViewModel(
             _sources.update { rows -> rows.filter { it.details?.isDebrid != true } }
             sourceStatus.value = ""
         }
-        if (!RealDebrid.connected || !VodPreferences.debridSearch || debridJob != null) return
+        if (!RealDebrid.connected || !VodPreferences.debridSearch || debridJob?.isActive == true) return
+        _sources.update { rows -> rows.filter { it.details?.isDebrid != true } }
         val epoch = generation
         val type = contentType
         debridJob = viewModelScope.launch(Dispatchers.IO) {
             sourceStatus.value = "Searching Real-Debrid sources…"
             try {
-                val hosts = try { DebridHosts.sources(_sources.value) } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { emptyList() }
-                if (epoch == generation && accountRevision == RealDebrid.sessionRevision)
-                    _sources.update { rows -> (rows + hosts).distinctBy { it.id } }
-                val added = SourceDiscovery.debrid(type)
+                hostJob?.cancel()
+                hostJob = viewModelScope.launch(Dispatchers.IO) {
+                    val hosts = try { kotlinx.coroutines.withTimeoutOrNull(12_000) { DebridHosts.sources(_sources.value) }.orEmpty() }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { emptyList() }
+                    if (epoch == generation && accountRevision == RealDebrid.sessionRevision)
+                        _sources.update { rows -> (rows + hosts).distinctBy { it.id } }
+                }
+                val result = SourceDiscovery.debrid(type) { partial ->
+                    if (epoch == generation && accountRevision == RealDebrid.sessionRevision)
+                        _sources.update { rows -> (partial + rows).distinctBy { it.id } }
+                }
+                val added = result.sources
                 if (epoch == generation && accountRevision == RealDebrid.sessionRevision) {
-                    _sources.update { rows -> (rows + added.sortedBy { DeviceCompatibility.rank(it.details) }).distinctBy { it.id } }
-                    sourceStatus.value = if (added.isEmpty() && hosts.isEmpty()) "No matching Real-Debrid sources" else ""
+                    _sources.update { rows -> (added.sortedBy { DeviceCompatibility.rank(it.details) } + rows).distinctBy { it.id } }
+                    sourceStatus.value = result.message
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (epoch == generation && accountRevision == RealDebrid.sessionRevision) { sourceStatus.value = e.message ?: "Search unavailable"; debridJob = null } }

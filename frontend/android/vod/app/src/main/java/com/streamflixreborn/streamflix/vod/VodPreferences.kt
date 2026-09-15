@@ -10,6 +10,12 @@ object VodPreferences {
     var debridSearch: Boolean
         get() = prefs.getBoolean("debrid-search", true)
         set(value) { prefs.edit().putBoolean("debrid-search", value).apply() }
+    var cloudSearch: Boolean
+        get() = prefs.getBoolean("cloud-search", false)
+        set(value) { prefs.edit().putBoolean("cloud-search", value).apply() }
+    var cachedOnly: Boolean
+        get() = prefs.getBoolean("cached-only", true)
+        set(value) { prefs.edit().putBoolean("cached-only", value).apply() }
     var engine: String
         get() = prefs.getString("engine", "media3") ?: "media3"
         set(value) { prefs.edit().putString("engine", value).apply() }

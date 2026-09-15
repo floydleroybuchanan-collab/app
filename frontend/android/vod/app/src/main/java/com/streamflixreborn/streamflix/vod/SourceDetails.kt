@@ -22,13 +22,14 @@ data class SourceDetails(
 ) : Serializable {
     enum class Kind { DIRECT, REAL_DEBRID, REAL_DEBRID_HOST }
     val isDebrid get() = kind != Kind.DIRECT
-    enum class Availability { UNKNOWN, READY, PREPARING, UNAVAILABLE }
+    enum class Availability { UNKNOWN, REPORTED_CACHED, READY, PREPARING, UNAVAILABLE }
     val badges: String get() = listOfNotNull(
         height?.let { if (it == 2160) "4K" else "${it}p" }, codec, hdr, audio,
         if (detected) "Detected during playback" else null,
         bytes?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f GB", it / 1_000_000_000.0) },
         if (kind == Kind.REAL_DEBRID_HOST) "RD host · Checked when selected" else null,
         if (kind == Kind.REAL_DEBRID) when (availability) {
+            Availability.REPORTED_CACHED -> "Reported cached · Torrentio"
             Availability.READY -> "Ready in your cloud"
             Availability.PREPARING -> "Preparing"
             Availability.UNAVAILABLE -> "Unavailable"

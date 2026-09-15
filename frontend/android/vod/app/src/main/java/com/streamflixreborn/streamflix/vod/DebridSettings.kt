@@ -39,6 +39,34 @@ object DebridSettings {
             isChecked = VodPreferences.debridSearch
             setOnPreferenceChangeListener { _, value -> VodPreferences.debridSearch = value as Boolean; true }
         }
+        fragment.findPreference<SwitchPreferenceCompat>("vod_cloud_search")?.apply {
+            isPersistent = false; isChecked = VodPreferences.cloudSearch
+            setOnPreferenceChangeListener { _, value -> VodPreferences.cloudSearch = value as Boolean; true }
+        }
+        fragment.findPreference<SwitchPreferenceCompat>("vod_cached_only")?.apply {
+            isPersistent = false; isChecked = VodPreferences.cachedOnly
+            setOnPreferenceChangeListener { _, value -> VodPreferences.cachedOnly = value as Boolean; true }
+        }
+        fragment.findPreference<SwitchPreferenceCompat>("vod_cached_consent")?.apply {
+            isPersistent = false; isEnabled = RealDebrid.connected; isChecked = RealDebrid.cachedSearchConsent
+            setOnPreferenceChangeListener { _, value ->
+                fun save(enabled: Boolean) {
+                    fragment.lifecycleScope.launch {
+                        try { withContext(Dispatchers.IO) { RealDebrid.setCachedSearchConsent(enabled) } }
+                        catch (e: CancellationException) { throw e }
+                        catch (_: Exception) { Toast.makeText(fragment.context, "Could not save the cached-search connection. Try again.", Toast.LENGTH_LONG).show() }
+                        if (fragment.isAdded) bind(fragment)
+                    }
+                }
+                if (value == false) save(false)
+                else com.streamflixreborn.streamflix.charm.CharmDialogBuilder(fragment.requireContext())
+                    .setTitle("Enable Torrentio cached search?")
+                    .setMessage("Torrentio is an independent service. Enabling this sends it your Real-Debrid access token and requested movie or episode IDs over HTTPS. The token grants access to your RD account. Charming stores it encrypted and does not log it. Torrentio reports may be stale; availability is checked again when you play. Your personal cloud search remains a separate setting. You can disable this connection here and revoke the RD connection on Real-Debrid.")
+                    .setPositiveButton("Enable cached search") { _, _ -> save(true) }
+                    .setNegativeButton("Cancel", null).show()
+                false
+            }
+        }
         fragment.findPreference<androidx.preference.ListPreference>("vod_engine")?.apply {
             isPersistent = false
             value = VodPreferences.engine
