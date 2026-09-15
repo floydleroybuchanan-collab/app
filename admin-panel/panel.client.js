@@ -165,7 +165,7 @@ function editInvite(i) {
 }
 function adminRow(a) {
   const actions=el("div",undefined,"actions");actions.append(button("Telegram",()=>editTelegramContact(a,"admins")));if(!a.is_owner)actions.append(button("Permissions",()=>editAdmin(a)),button("Viewing access",()=>editViewing(a)),button("Reset password",()=>resetAdmin(a)));
-  return [cell(a.username,a.email+(a.telegram_contact_username?" · Telegram: @"+a.telegram_contact_username:"")+(a.telegram_contact_id?" · ID "+a.telegram_contact_id:"")),cell(a.is_owner?"Owner":a.enabled?"Panel enabled":"Panel disabled",a.is_owner?"Owner TV access":a.viewer_access?"TV: "+remaining(a.expires_at):"TV: not enabled"),cell(a.accounts_created+" created",a.active_accounts+" active · "+a.disabled_accounts+" disabled"),
+  return [cell(a.username,a.email+(a.telegram_contact_username?" · Saved contact: @"+a.telegram_contact_username:"")+(a.telegram_contact_id?" · ID "+a.telegram_contact_id:"")),cell(a.is_owner?"Owner":a.enabled?"Panel enabled":"Panel disabled",a.is_owner?"Owner TV access":a.viewer_access?"TV: "+remaining(a.expires_at):"TV: not enabled"),cell(a.accounts_created+" created",a.active_accounts+" active · "+a.disabled_accounts+" disabled"),
     cell(a.accounts_expired+" expired",a.accounts_canceled+" canceled · "+a.accounts_deleted+" deleted"),
     cell(a.pending_invites+" pending · "+a.invites_created+" codes ever",a.referred_accounts+" current referred accounts"),date(a.last_login_at),actions];
 }
@@ -272,9 +272,10 @@ function editAdmin(existing,existingUsername="") {
 }
 async function editTelegramContact(person,kind){
   const path='/admin/'+kind+'/'+encodeURIComponent(person.id)+'/telegram',data=await api(path);
-  const body=openDialog('Telegram contact · '+person.username,'Keep the app login and Telegram identity together, even when their usernames differ.');
+  const body=openDialog('Telegram contact · '+person.username,'Contact details and verified account access are shown separately below.');
   body.append(el('p','App login: '+person.username+' · Email: '+person.email));
   if(data.linked)body.append(el('p','Verified bot link: '+data.linked.name+' · ID '+data.linked.telegram_id+(data.linked.username?' · @'+data.linked.username:'')));
+  if(!data.linked)body.append(el('p','Not verified: saving a contact below does not link app access, password recovery or bot account commands. In the Charming MediaLab Android app, open Settings → Account → Link Telegram / Account Recovery to verify the link.','help'));
   const f=form(body,async()=>{await api(path,'PUT',{username:username.value,telegram_id:telegramId.value,...(ownerPassword?{owner_password:ownerPassword.value}:{})});await saved('Telegram contact saved.');});
   const username=field(f,'Telegram username (optional; @name)','telegram_username',data.contact.username,'text',{maxLength:33,autocomplete:'off'});
   const telegramId=field(f,'Recorded Telegram ID (optional)','telegram_id',data.contact.telegram_id||'','text',{inputMode:'numeric',pattern:'[1-9][0-9]{4,19}'});
