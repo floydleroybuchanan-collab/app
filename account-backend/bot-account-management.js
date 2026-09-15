@@ -1,3 +1,4 @@
+import {telegramLinkHelp,ADMIN_LINK_STEPS} from './telegram-link-help.js';
 import {BOT_COMMANDS} from './bot-command-catalog.js';
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 import {q,rows,now,fail,event} from './bot-store.js';
@@ -13,7 +14,7 @@ const summary=user=>`${user.username}\nStatus: ${user.status==='active'&&user.ex
 async function linkedUser(env,id,admin=false){
  const m=await q(env,'SELECT * FROM bot_members WHERE telegram_id=?1',id).first();
  if(m?.blocked)fail('This Telegram identity is blocked from app-account access. The panel owner must review the account before these tools can be used.',403);
- if(!m?.account_id)fail(admin?'Your Telegram admin status is recognized, but your Telegram identity is not linked to an authorized app/panel admin account. Sign in to the app with your panel admin account, then open Settings → Account → Link Telegram / Account Recovery and complete verification. Link Account here manages another user’s link; it does not set up your own admin access. Bot Status is available without an app-account link.':'No verified app account is linked. In the app, use Settings → Account → Link Telegram. For a forgotten password, use the Admin-assisted recovery option.',403);
+ if(!m?.account_id)fail((admin?'Your Telegram admin status is recognized, but your Telegram identity is not linked to an authorized app/panel admin account.':'No verified app account is linked.')+'\n\n'+telegramLinkHelp(admin),403);
  const user=await q(env,'SELECT * FROM users WHERE id=?1',m.account_id).first();
  if(!user)fail('The linked account is unavailable.',404);
  return {...user,telegram_id:id,telegram_username:m.username};
@@ -124,7 +125,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await send(env,id,'Continue privately to use '+command.label+'.',{inline_keyboard:[[{text:'Open private Admin Commands',url:'https://t.me/'+s.bot_username+'?start='+command.id}]]});return true;
  }
  if(!env.BOT_GROUP_REPLY&&!args&&state?.state==='manage:resume'&&state.updated_at>=now()-600){const saved=JSON.parse(state.json);if(saved.command===command.id)args=saved.args;}
- if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\n${command.description}\n\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
+ if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\n${command.description}${['link_account','relink_account'].includes(command.command)?'\n\n'+ADMIN_LINK_STEPS[1]:''}\n\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
  await clear(env,id);
  const parts=args.split(/\s+/),name=parts[0],extra=parts.slice(1).join(' '),key=command.command;
  let action=null;

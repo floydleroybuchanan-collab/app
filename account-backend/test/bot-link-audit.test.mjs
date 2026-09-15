@@ -54,3 +54,17 @@ test('Account Help does not describe an unlinked Telegram member as linked',asyn
  assert.doesNotMatch(text,/Your Telegram is linked/);
  assert.match(text,/no verified app-account link/i);
 });
+test('legacy linking guidance is available to users, admins and the panel without requiring a new account',async()=>{
+ const f=await setup(false);
+ const userHelp=await f.invoke('link_telegram');
+ assert.match(userHelp,/accounts created before Mr Charm/);
+ assert.match(userHelp,/Android app’s Settings, not the web panel/);
+ assert.match(userHelp,/Do not create a second account/);
+ const adminHelp=await f.invoke('manage_link_account');
+ assert.match(adminHelp,/For your own admin access/);
+ assert.match(adminHelp,/To help another user/);
+ const panel=await f.request('/admin/admins/'+OWNER+'/telegram',{token:f.ownerToken});
+ assert.equal(panel.status,200);
+ assert.ok(panel.body.link_instructions.some(step=>step.includes('Android app’s Settings, not the web panel')));
+ assert.ok(panel.body.link_instructions.some(step=>step.includes('already show a verified link')));
+});

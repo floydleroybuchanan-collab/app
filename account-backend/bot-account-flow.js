@@ -1,3 +1,4 @@
+import {telegramLinkHelp} from './telegram-link-help.js';
 import {now,q,fail,assignToken,event} from './bot-store.js';
 import {findBotChallenge,confirmBotChallenge} from './account-security.js';
 import {telegram,send,isMember} from './bot-telegram.js';
@@ -62,7 +63,7 @@ export async function accountFlow(env,id,text,cmd,s){
  }
  if(cmd==='access_direct'){await personalAdmission(env,id,s,crypto.randomUUID());return true;}
  if(['request_access','forgot_password','link_telegram','confirm_registration'].includes(cmd)){
-  const instructions=cmd==='confirm_registration'?'In the app choose I Have an Invitation and begin registration. Then send Mr Charm Confirm Registration followed by the request code shown in the app.':cmd==='request_access'?'On the app sign-in screen choose Request App Access. Scan its QR code or send Mr Charm Request App Access followed by its request code.':cmd==='forgot_password'?'On the app sign-in screen choose Forgot Password. Enter your username, then scan its QR or send Mr Charm Forgot Password followed by the request code. Use the Telegram account already linked to your app account.':'In the app open Settings → Account → Link Telegram and verify your current app password. Scan its QR or send Mr Charm Link My Account followed by the request code. Lost your original Telegram account or cannot sign in? Contact an Admin for verified recovery.';
+  const instructions=cmd==='confirm_registration'?'In the app choose I Have an Invitation and begin registration. Then send Mr Charm Confirm Registration followed by the request code shown in the app.':cmd==='request_access'?'On the app sign-in screen choose Request App Access. Scan its QR code or send Mr Charm Request App Access followed by its request code.':cmd==='forgot_password'?'On the app sign-in screen choose Forgot Password. Enter your username, then scan its QR or send Mr Charm Forgot Password followed by the request code. Use the Telegram account already linked to your app account.':telegramLinkHelp();
   await send(env,id,instructions,buttons([...(cmd==='request_access'?[['Apply here without a TV code','access_direct']]:[]),['Contact an Admin','contact'],['Help','help']]));return true;
  }
  return false;

@@ -276,6 +276,7 @@ async function editTelegramContact(person,kind){
   body.append(el('p','App login: '+person.username+' · Email: '+person.email));
   if(data.linked)body.append(el('p','Verified bot link: '+data.linked.name+' · ID '+data.linked.telegram_id+(data.linked.username?' · @'+data.linked.username:'')));
   if(!data.linked)body.append(el('p','Not verified: saving a contact below does not link app access, password recovery or bot account commands. In the Charming MediaLab Android app, open Settings → Account → Link Telegram / Account Recovery to verify the link.','help'));
+  const instructions=el('section',undefined,'card');instructions.append(el('h3','How to verify an existing account'));for(const step of data.link_instructions||[])instructions.append(el('p',step));body.append(instructions);
   const f=form(body,async()=>{await api(path,'PUT',{username:username.value,telegram_id:telegramId.value,...(ownerPassword?{owner_password:ownerPassword.value}:{})});await saved('Telegram contact saved.');});
   const username=field(f,'Telegram username (optional; @name)','telegram_username',data.contact.username,'text',{maxLength:33,autocomplete:'off'});
   const telegramId=field(f,'Recorded Telegram ID (optional)','telegram_id',data.contact.telegram_id||'','text',{inputMode:'numeric',pattern:'[1-9][0-9]{4,19}'});

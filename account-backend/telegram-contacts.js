@@ -1,3 +1,4 @@
+import {TELEGRAM_LINK_STEPS,ADMIN_LINK_STEPS} from './telegram-link-help.js';
 import {q,rows,fail,now} from './bot-store.js';
 
 export function telegramUsername(value){
@@ -14,7 +15,7 @@ export async function accountContact(env,userId,lookupUsername){
  // Suggestions identify people for the operator; they never authorize an account.
  const matches=await rows(env,`SELECT telegram_id,name,username,status FROM bot_members
   WHERE telegram_id=?1 OR telegram_id=?2 OR (?3<>'' AND lower(username)=lower(?3)) ORDER BY telegram_id LIMIT 10`,contact.telegram_id,linked?.telegram_id||null,lookupUsername===undefined?contact.username:telegramUsername(lookupUsername));
- return {contact,linked:linked||null,matches};
+ return {contact,linked:linked||null,matches,link_instructions:[...TELEGRAM_LINK_STEPS,...ADMIN_LINK_STEPS]};
 }
 
 export async function saveAccountContact(env,userId,body){
