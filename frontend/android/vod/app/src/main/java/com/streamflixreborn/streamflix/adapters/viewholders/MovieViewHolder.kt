@@ -144,6 +144,7 @@ class MovieViewHolder(
         itemSelected: Boolean = false,
     ) {
         this.movie = movie
+        itemView.setTag(R.id.charm_artwork_url, movie.banner ?: movie.poster)
         this.onMovieClick = onMovieClick
         this.onMovieLongClick = onMovieLongClick
         this.onMovieKey = onMovieKey
@@ -471,7 +472,7 @@ class MovieViewHolder(
             }
         }
 
-        binding.ivMoviePoster.loadMoviePoster(movie) {
+        binding.ivMoviePoster.loadMovieBanner(movie) {
             fallback(R.drawable.glide_fallback_cover)
             centerCrop()
             transition(DrawableTransitionOptions.withCrossFade())
@@ -604,7 +605,7 @@ class MovieViewHolder(
                 animation.fillAfter = true
             }
         }
-        binding.ivMoviePoster.loadMoviePoster(movie) {
+        binding.ivMoviePoster.loadMovieBanner(movie) {
             fallback(R.drawable.glide_fallback_cover)
             centerCrop()
             transition(DrawableTransitionOptions.withCrossFade())
@@ -869,16 +870,14 @@ class MovieViewHolder(
     }
 
     private fun displayMovieTv(binding: ContentMovieTvBinding) {
-        binding.ivMoviePoster.run {
-            loadMoviePoster(movie) {
-                transition(DrawableTransitionOptions.withCrossFade())
-            }
-            visibility = when {
-                movie.poster.isNullOrEmpty() -> View.GONE
-                else -> View.VISIBLE
-            }
-        }
+        binding.ivMoviePoster.visibility = View.GONE
 
+        binding.charmDetailMyList.setOnClickListener { binding.btnMovieFavorite.performClick() }
+        binding.charmDetailMore.setOnClickListener { com.streamflixreborn.streamflix.ui.ShowOptionsTvDialog(context, movie).show() }
+        binding.charmDetailSources.setOnClickListener {
+            binding.btnMovieWatchNow.setTag(R.id.charm_detail_sources, true)
+            try { binding.btnMovieWatchNow.performClick() } finally { binding.btnMovieWatchNow.setTag(R.id.charm_detail_sources, null) }
+        }
         binding.tvMovieTitle.text = movie.title
 
         binding.tvMovieRating.text = movie.rating?.let { String.format(Locale.ROOT, "%.1f", it) } ?: "N/A"
@@ -931,12 +930,15 @@ class MovieViewHolder(
         binding.btnMovieWatchNow.apply {
             setOnClickListener {
                 checkProviderAndRun {
-                    findNavController().navigate(MovieTvFragmentDirections.actionMovieToPlayer(
+                    val action = MovieTvFragmentDirections.actionMovieToPlayer(
                         id = movie.id,
                         title = movie.title,
                         subtitle = movie.released?.format("yyyy") ?: "",
                         videoType = Video.Type.Movie(id = movie.id, title = movie.title, releaseDate = movie.released?.format("yyyy-MM-dd") ?: "", poster = movie.poster ?: movie.banner ?: "", imdbId = movie.imdbId),
-                    ))
+                    )
+                    findNavController().navigate(R.id.player, action.arguments.apply {
+                        putBoolean("charmChooseSource", binding.btnMovieWatchNow.getTag(R.id.charm_detail_sources) == true)
+                    })
                 }
             }
         }

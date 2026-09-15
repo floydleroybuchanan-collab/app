@@ -1,3 +1,4 @@
+import {BOT_COMMANDS} from './bot-command-catalog.js';
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 import {q,rows,now,fail,event} from './bot-store.js';
 import {send,telegram} from './bot-telegram.js';
@@ -65,7 +66,8 @@ async function selfAction(env,id,command,confirmed=false){
 export async function accountManagement(env,id,text,cmd,s,message){
  const raw=text.replace(/^\/start(?:@\w+)?\s+manage_/,'/').replace(/^mr\.?\s*charm\s*/i,'').replace(/^\//,'').replace(/^([a-z_]+)@\w+\b/i,'$1').trim();
  const self=ACCOUNT_COMMANDS.find(c=>cmd===c.id||raw.toLowerCase()===c.phrase);
- let command=ADMIN_ACCOUNT_COMMANDS.find(c=>cmd===c.id||raw.toLowerCase()===c.command||raw.toLowerCase()===c.phrase||raw.toLowerCase().startsWith(c.phrase+' ')||raw.toLowerCase().startsWith(c.command+' '));
+ const canonical=c=>(BOT_COMMANDS.find(x=>x.id===c.id)?.phrase||c.phrase).toLowerCase();
+ let command=ADMIN_ACCOUNT_COMMANDS.find(c=>raw.toLowerCase()===canonical(c)||raw.toLowerCase().startsWith(canonical(c)+' ')||cmd===c.id||raw.toLowerCase()===c.command||raw.toLowerCase()===c.phrase||raw.toLowerCase().startsWith(c.phrase+' ')||raw.toLowerCase().startsWith(c.command+' '));
  if(self&&!command?.usage){await selfAction(env,id,self.id);return true;}
  if(self&&raw.toLowerCase()===self.phrase){await selfAction(env,id,self.id);return true;}
  const state=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();
@@ -75,7 +77,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
   const data=JSON.parse(state.json);if((await linkedUser(env,id)).id!==data.userId)fail('Your account link changed. Start again.',409);
   await clear(env,id);await selfAction(env,id,data.command,true);return true;
  }
- let args=command?[command.phrase,command.command].filter(prefix=>raw.toLowerCase().startsWith(prefix+' ')).map(prefix=>raw.slice(prefix.length).trim())[0]||'':'';
+ let args=command?[canonical(command),command.phrase,command.command].filter(prefix=>raw.toLowerCase().startsWith(prefix+' ')).map(prefix=>raw.slice(prefix.length).trim())[0]||'':'';
  if(cmd==='manage:confirm'){
   if(!state||state.state!=='manage:confirm'||state.updated_at<now()-600)fail('This confirmation expired. Start again.',409);
   const data=JSON.parse(state.json),api=await adminApi(env,id,s);
@@ -116,7 +118,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await send(env,id,'Continue privately to use '+command.label+'.',{inline_keyboard:[[{text:'Open private Admin Commands',url:'https://t.me/'+s.bot_username+'?start='+command.id}]]});return true;
  }
  if(!env.BOT_GROUP_REPLY&&!args&&state?.state==='manage:resume'&&state.updated_at>=now()-600){const saved=JSON.parse(state.json);if(saved.command===command.id)args=saved.args;}
- if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\nUsage: Mr Charm ${command.phrase} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
+ if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
  await clear(env,id);
  const parts=args.split(/\s+/),name=parts[0],extra=parts.slice(1).join(' '),key=command.command;
  let action=null;

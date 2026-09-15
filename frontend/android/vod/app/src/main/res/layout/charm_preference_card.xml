@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="112dp" android:orientation="vertical" android:padding="12dp" android:background="@drawable/charm_vod_settings_card" android:focusable="true" android:clickable="true">
+  <ImageView android:id="@android:id/icon" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginBottom="8dp" android:contentDescription="@null" android:visibility="gone" />
+  <TextView android:id="@android:id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#ECEBF2" android:textSize="14sp" android:fontFamily="@font/charm_geist_semibold" android:maxLines="3" />
+  <TextView android:id="@android:id/summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="#BAB3CB" android:textSize="11sp" android:maxLines="4" android:ellipsize="end" android:fontFamily="@font/charm_geist_regular" />
+  <LinearLayout android:id="@android:id/widget_frame" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:gravity="end" android:orientation="horizontal" />
+</LinearLayout>

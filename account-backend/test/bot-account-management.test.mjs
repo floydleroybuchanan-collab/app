@@ -17,7 +17,7 @@ async function setup(){
 }
 test('own account commands isolate sessions and require confirmation before revoking',async()=>{
  const f=await setup();f.user('alice');f.user('bob');await f.link(22222,'alice');await f.link(33333,'bob');f.token('alice');f.token('bob');
- await f.message(22222,'Mr Charm sessions');assert.match(f.last(),/alice\nActive sessions: 1/);assert.doesNotMatch(f.last(),/bob/);
+ await f.message(22222,'Mr Charm My Sessions');assert.match(f.last(),/alice\nActive sessions: 1/);assert.doesNotMatch(f.last(),/bob/);
  await f.message(22222,'Mr Charm sign out all');assert.equal(f.db.prepare("SELECT revoked FROM sessions WHERE user_id='alice'").get().revoked,0);
  await f.callback(22222,'self:confirm');assert.equal(f.db.prepare("SELECT revoked FROM sessions WHERE user_id='alice'").get().revoked,1);assert.equal(f.db.prepare("SELECT revoked FROM sessions WHERE user_id='bob'").get().revoked,0);
 });
@@ -36,7 +36,7 @@ test('Mr Charm admin arguments work, ordinary users are denied, and confirmation
 });
 test('account scope applies to both lookups and mutations even for a Telegram admin',async()=>{
  const f=await setup(),staff=await f.staff();f.admins.add(44444);await f.link(44444,staff.id);f.user('outside');
- await f.message(44444,'Mr Charm userinfo outside');assert.match(f.last(),/permitted scope/);
+ await f.message(44444,'Mr Charm User Information outside');assert.match(f.last(),/permitted scope/);
  await f.message(44444,'Mr Charm disable account outside');assert.match(f.last(),/permitted scope/);assert.equal(f.db.prepare("SELECT status FROM users WHERE id='outside'").get().status,'active');
 });
 test('reply lookup remains requester-only and reply linking carries identity into private confirmation',async()=>{
@@ -62,4 +62,11 @@ test('password reset sends private approval and completion notices without passw
  const confirm=approval.reply_markup.inline_keyboard[0][0].callback_data;await f.callback(22222,confirm);
  const password='New-password-for-local-test-only';const result=await f.request('/auth/reset-password',{method:'POST',body:{token:request.body.token,new_password:password}});assert.equal(result.status,200);
  assert.match(f.last(),/password was reset/);assert.ok(!JSON.stringify(f.sent).includes(password));assert.ok(f.db.prepare("SELECT COUNT(*) n FROM bot_responses WHERE recipient_id='22222'").get().n>0);
+});
+
+
+test('admin user-session and status phrases cannot resolve to the admins own account',async()=>{
+ const f=await setup();f.user('alice');f.token('alice');
+ await f.message(11111,'Mr Charm User Sessions alice');assert.match(f.last(),/alice/);
+ await f.message(11111,'Mr Charm User Account Status alice');assert.match(f.last(),/alice/);
 });

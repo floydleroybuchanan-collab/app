@@ -28,6 +28,7 @@ class NavigationSlideView @JvmOverloads constructor(
     private val menuInflater: MenuInflater = SupportMenuInflater(context)
 
     var isOpen = true
+    var persistentLabels = false
 
     private var selectedListener: ((item: MenuItem) -> Boolean)? = null
     private var reselectedListener: ((item: MenuItem) -> Boolean)? = null
@@ -195,6 +196,7 @@ class NavigationSlideView @JvmOverloads constructor(
     }
 
     fun close() {
+        if (persistentLabels) { open(); return }
         isOpen = false
 
         headerView?.close()

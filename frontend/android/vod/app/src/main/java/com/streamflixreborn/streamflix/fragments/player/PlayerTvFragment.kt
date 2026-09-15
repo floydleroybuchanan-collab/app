@@ -377,7 +377,7 @@ class PlayerTvFragment : Fragment() {
                         val preferredServer = state.servers.firstOrNull {
                             it.name.equals(args.preferredServerName, ignoreCase = true)
                         }
-                        if (VodPreferences.chooseFirst || state.servers.isEmpty()) showSourcePicker()
+                        if (arguments?.getBoolean("charmChooseSource") == true || VodPreferences.chooseFirst || state.servers.isEmpty()) showSourcePicker()
                             else viewModel.getVideo(preferredServer ?: state.servers.first())
 
                     }

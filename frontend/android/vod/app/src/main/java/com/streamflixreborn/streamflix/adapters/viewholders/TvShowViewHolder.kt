@@ -104,6 +104,7 @@ class TvShowViewHolder(
         itemSelected: Boolean = false,
     ) {
         this.tvShow = tvShow
+        itemView.setTag(R.id.charm_artwork_url, tvShow.banner ?: tvShow.poster)
         this.onTvShowClick = onTvShowClick
         this.onTvShowLongClick = onTvShowLongClick
         this.onTvShowKey = onTvShowKey
@@ -221,6 +222,10 @@ class TvShowViewHolder(
 
     private fun setPoster(imageView: ImageView) {
         imageView.scaleType = if (isIptvProvider()) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+        if (_binding is ItemTvShowTvBinding || _binding is ItemTvShowGridBinding) {
+            imageView.loadTvShowBanner(tvShow) { fallback(R.drawable.glide_fallback_cover);transition(DrawableTransitionOptions.withCrossFade()) }
+            return
+        }
         imageView.loadTvShowPoster(tvShow) {
             fallback(R.drawable.glide_fallback_cover)
             transition(DrawableTransitionOptions.withCrossFade())
@@ -742,12 +747,12 @@ class TvShowViewHolder(
     }
 
     private fun displayTvShowTv(binding: ContentTvShowTvBinding) {
-        binding.ivTvShowPoster.run {
-            loadTvShowPoster(tvShow) {
-                fallback(R.drawable.glide_fallback_cover)
-                transition(DrawableTransitionOptions.withCrossFade())
-            }
-            visibility = if (tvShow.poster.isNullOrEmpty()) View.GONE else View.VISIBLE
+        binding.ivTvShowPoster.visibility = View.GONE
+        binding.charmDetailMyList.setOnClickListener { binding.btnTvShowFavorite.performClick() }
+        binding.charmDetailMore.setOnClickListener { com.streamflixreborn.streamflix.ui.ShowOptionsTvDialog(context, tvShow).show() }
+        binding.charmDetailSources.setOnClickListener {
+            binding.btnTvShowWatchNow.setTag(R.id.charm_detail_sources, true)
+            try { binding.btnTvShowWatchNow.performClick() } finally { binding.btnTvShowWatchNow.setTag(R.id.charm_detail_sources, null) }
         }
         binding.tvTvShowTitle.text = tvShow.title
 
@@ -787,6 +792,7 @@ class TvShowViewHolder(
         binding.tvTvShowOverview.text = tvShow.overview
         val episodeToWatch = tvShow.episodeToWatch
         val episodeSeason = resolveEpisodeSeason(episodeToWatch)
+        binding.charmDetailSources.visibility = if (episodeToWatch != null && !isIptvProvider()) View.VISIBLE else View.GONE
         binding.btnTvShowWatchNow.apply {
             isVisible = episodeToWatch != null
             setOnClickListener {
@@ -813,6 +819,7 @@ class TvShowViewHolder(
                         ),
                     )
                     val args = Bundle().apply {
+                        putBoolean("charmChooseSource", binding.btnTvShowWatchNow.getTag(R.id.charm_detail_sources) == true)
                         putString("id", episodeToWatch.id)
                         putString("title", tvShow.title)
                         putString("subtitle", "S${videoType.season.number} E${videoType.number}  •  ${videoType.title}")

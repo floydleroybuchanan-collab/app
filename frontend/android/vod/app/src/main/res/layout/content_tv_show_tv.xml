@@ -7,10 +7,10 @@
 
     <ImageView
         android:id="@+id/iv_tv_show_poster"
-        android:layout_width="212dp"
+        android:layout_width="1dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="44dp"
-        android:layout_marginTop="50dp"
+        android:layout_marginStart="0dp"
+        android:layout_marginTop="0dp"
         android:adjustViewBounds="true"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -23,15 +23,15 @@
         android:id="@+id/tv_tv_show_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="40dp"
-        android:layout_marginTop="50dp"
+        android:layout_marginStart="0dp"
+        android:layout_marginTop="0dp"
         android:layout_marginEnd="44dp"
         android:textColor="#FFFFFF"
-        android:textSize="40sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
+        android:textSize="36sp"
+        app:layout_constraintEnd_toStartOf="@id/charm_detail_text_edge"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_goneMarginStart="70dp"
+        app:layout_goneMarginStart="0dp"
         tools:text="Title"
         android:fontFamily="@font/charm_geist_semibold" />
 
@@ -39,14 +39,14 @@
         android:id="@+id/iv_tv_show_rating_icon"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginStart="40dp"
+        android:layout_marginStart="0dp"
         android:src="@drawable/ic_star"
         android:tint="#C0C0C0"
         app:layout_constraintBottom_toBottomOf="@id/tv_tv_show_rating"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@id/tv_tv_show_rating"
-        app:layout_goneMarginStart="70dp"
+        app:layout_goneMarginStart="0dp"
         tools:ignore="ContentDescription,UseAppTint" />
 
     <TextView
@@ -65,7 +65,7 @@
         android:id="@+id/tv_tv_show_quality"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="25dp"
+        android:layout_marginStart="12dp"
         android:layout_marginTop="15dp"
         android:textAllCaps="true"
         android:textColor="#FFFFFF"
@@ -81,7 +81,7 @@
         android:id="@+id/tv_tv_show_released"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="25dp"
+        android:layout_marginStart="12dp"
         android:layout_marginTop="15dp"
         android:textColor="#FFFFFF"
         app:layout_constraintBottom_toTopOf="@id/barrier1"
@@ -95,7 +95,7 @@
         android:id="@+id/tv_tv_show_runtime"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="25dp"
+        android:layout_marginStart="12dp"
         android:layout_marginTop="15dp"
         android:textColor="#FFFFFF"
         app:layout_constraintBottom_toTopOf="@id/barrier1"
@@ -116,14 +116,14 @@
         android:id="@+id/tv_tv_show_genres"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="40dp"
+        android:layout_marginStart="0dp"
         android:layout_marginTop="5dp"
         android:layout_marginEnd="44dp"
         android:textColor="#FFFFFF"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
+        app:layout_constraintEnd_toStartOf="@id/charm_detail_text_edge"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/barrier1"
-        app:layout_goneMarginStart="70dp"
+        app:layout_goneMarginStart="0dp"
         tools:text="Genres"
         android:fontFamily="@font/charm_geist_regular" />
 
@@ -131,15 +131,17 @@
         android:id="@+id/tv_tv_show_overview"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="40dp"
-        android:layout_marginTop="30dp"
+        android:layout_marginStart="0dp"
+        android:layout_marginTop="18dp"
         android:layout_marginEnd="44dp"
         android:ellipsize="end"
-        android:maxLines="6"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
+        android:maxLines="4"
+        android:textSize="14sp"
+        android:textColor="#D1CBDD"
+        app:layout_constraintEnd_toStartOf="@id/charm_detail_text_edge"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_genres"
-        app:layout_goneMarginStart="70dp"
+        app:layout_goneMarginStart="0dp"
         tools:text="Overview"
         android:fontFamily="@font/charm_geist_regular" />
 
@@ -148,14 +150,14 @@
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="40dp"
-        android:layout_marginTop="30dp"
+        android:layout_marginStart="0dp"
+        android:layout_marginTop="18dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
         android:text="@string/tv_show_watch_season_episode"
-        app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
-        app:layout_goneMarginStart="70dp"
+        app:layout_goneMarginStart="0dp"
         android:fontFamily="@font/charm_geist_regular" />
 
     <ProgressBar
@@ -178,22 +180,22 @@
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="25dp"
-        android:layout_marginTop="30dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="18dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
         android:text="@string/tv_show_trailer"
-        app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now"
+        app:layout_constraintStart_toEndOf="@id/charm_detail_sources"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
         android:fontFamily="@font/charm_geist_regular" />
 
     <ImageView
-        android:id="@+id/btn_tv_show_favorite"
+        android:id="@+id/btn_tv_show_favorite" android:contentDescription="@string/charm_my_list"
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
-        android:layout_height="0dp"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="30dp"
+        android:layout_height="44dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="18dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
         android:paddingStart="10dp"
@@ -203,5 +205,12 @@
         app:layout_constraintStart_toEndOf="@id/btn_tv_show_trailer"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
         tools:ignore="ContentDescription,UseAppTint" />
+
+
+    <androidx.constraintlayout.widget.Guideline android:id="@+id/charm_detail_text_edge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" app:layout_constraintGuide_percent="0.65" />
+    <TextView android:id="@+id/charm_detail_sources" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/charm_sources" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now" app:layout_constraintTop_toTopOf="@id/btn_tv_show_watch_now" />
+    <TextView android:id="@+id/charm_detail_my_list" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:text="@string/charm_my_list" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/btn_tv_show_favorite" app:layout_constraintTop_toTopOf="@id/btn_tv_show_trailer" />
+    <TextView android:id="@+id/charm_detail_more" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/charm_more" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/charm_detail_my_list" app:layout_constraintTop_toTopOf="@id/btn_tv_show_trailer" />
+    <View android:layout_width="1dp" android:layout_height="36dp" app:layout_constraintTop_toBottomOf="@id/btn_tv_show_favorite" app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

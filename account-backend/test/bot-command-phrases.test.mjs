@@ -8,7 +8,7 @@ test('every advertised user and admin command is a Mr Charm phrase with a workin
  for(const c of BOT_COMMANDS){
   assert.match(c.label,/^Mr Charm [A-Z]/); assert.ok(!c.label.includes('/'));
   const parsed=BOT_COMMANDS.find(x=>x.id===exactCommand(c.label));
-  assert.ok(parsed,c.label); assert.equal(parsed.phrase,c.phrase);
+  assert.ok(parsed,c.label); assert.equal(parsed.id,c.id);
   const b=commandButtons({inline_keyboard:[[{text:'old /'+c.command,callback_data:c.id}]]}).inline_keyboard[0][0];
   assert.equal(b.text,c.label); assert.equal(b.callback_data,c.id);
  }

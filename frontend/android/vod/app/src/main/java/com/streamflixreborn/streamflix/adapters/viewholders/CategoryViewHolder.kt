@@ -1,5 +1,10 @@
 package com.streamflixreborn.streamflix.adapters.viewholders
 
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
@@ -304,6 +309,24 @@ class CategoryViewHolder(
             is TvShow -> selected.overview
         }
 
+
+        binding.btnSwiperMyList.text = if(selected.isFavorite) "In my list" else "Add to my list"
+        binding.btnSwiperMyList.setOnClickListener {
+            val current=selected
+            checkProviderAndRun(current) {
+                val database=AppDatabase.getInstance(context)
+                itemView.findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
+                    val saved=withContext(Dispatchers.IO) {
+                        when(current) {
+                            is Movie -> { val dao=database.movieDao();val value=!(dao.getById(current.id)?.isFavorite?:false);val resolved=com.streamflixreborn.streamflix.utils.ArtworkRepair.resolveMovieForFavorite(context,current,value);dao.upsertFavorite(resolved,value);value }
+                            is TvShow -> { val dao=database.tvShowDao();val value=!(dao.getById(current.id)?.isFavorite?:false);val resolved=com.streamflixreborn.streamflix.utils.ArtworkRepair.resolveTvShowForFavorite(context,current,value);dao.upsertFavorite(resolved,value);value }
+                        }
+                    }
+                    current.isFavorite=saved
+                    if(category.list.getOrNull(category.selectedIndex)===current)binding.btnSwiperMyList.text=if(saved) "In my list" else "Add to my list"
+                }
+            }
+        }
 
         binding.btnSwiperWatchNow.apply {
             setOnClickListener {

@@ -37,14 +37,10 @@ object CharmDesign {
     fun install(activity: FragmentActivity) {
         activity.supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
             override fun onFragmentViewCreated(manager: FragmentManager, fragment: Fragment, view: View, state: Bundle?) {
-                val brandedScreen = fragment.javaClass.simpleName in setOf(
-                    "HomeTvFragment", "HomeMobileFragment", "MoviesTvFragment", "MoviesMobileFragment",
-                    "TvShowsTvFragment", "TvShowsMobileFragment", "FavoritesTvFragment", "FavoritesMobileFragment",
-                    "SettingsTvFragment", "SettingsMobileFragment", "SearchTvFragment", "SearchMobileFragment",
-                    "ProvidersTvFragment", "ProvidersMobileFragment")
-                if (brandedScreen &&
-                    com.streamflixreborn.streamflix.utils.UserPreferences.selectedTheme == com.streamflixreborn.streamflix.utils.ThemeManager.DEFAULT) {
-                    view.background = CharmBrandBackdrop()
+                if (fragment.javaClass.simpleName.endsWith("TvFragment") &&
+                    !fragment.javaClass.simpleName.startsWith("Player")) {
+                    view.setBackgroundColor(Color.TRANSPARENT)
+                    CharmVodPageLayout.attach(fragment, view)
                 }
                 styleTree(view)
             }
@@ -87,13 +83,14 @@ object CharmDesign {
                     view.setHintTextColor(0xFFAAA7BB.toInt())
                 }
             }
-            val action = view is Button || name.startsWith("btn_") || view is android.widget.ImageButton
+            val action = view is Button || name.startsWith("btn_") || name.startsWith("charm_detail_") || view is android.widget.ImageButton
             if (action) {
                 view.background = buttonBackground(view, name.contains("watch_now") || name.contains("resume"))
                 view.minimumHeight = dp(view, 42)
                 view.minimumWidth = dp(view, 42)
                 if (view is TextView) {
                     view.isAllCaps = false
+                    view.textSize = 14f
                     view.setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(0xFF827C90.toInt(), Color.WHITE)))
                     view.setPadding(dp(view, 18), dp(view, 10), dp(view, 18), dp(view, 10))
                 }

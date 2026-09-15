@@ -20,8 +20,8 @@ android {
         minSdk 24
         consumerProguardFiles 'nova-consumer-rules.pro'
         buildConfigField 'String', 'APPLICATION_ID', '"com.charmiptv.app.purple.next.vodtest1"'
-        buildConfigField 'int', 'VERSION_CODE', '19'
-        buildConfigField 'String', 'VERSION_NAME', '"2.2.0-rc.1"'
+        buildConfigField 'int', 'VERSION_CODE', '20'
+        buildConfigField 'String', 'VERSION_NAME', '"2.2.0-rc.2"'
         buildConfigField 'String', 'APP_LAYOUT', '"tv"'
         buildConfigField 'boolean', 'CHARM_VOD_EMBEDDED', 'true'
         buildConfigField 'String', 'REAL_DEBRID_CLIENT_ID', quote(setting('REAL_DEBRID_CLIENT_ID') ?: 'X245A4XAIBGVM')
@@ -46,6 +46,12 @@ android {
     }
     kotlinOptions { jvmTarget = '17' }
     buildFeatures { viewBinding true; buildConfig true }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED', '--add-opens=java.base/java.util=ALL-UNNAMED', '--add-opens=java.base/java.io=ALL-UNNAMED', '--add-opens=java.base/java.net=ALL-UNNAMED', '--add-opens=java.base/java.security=ALL-UNNAMED', '--add-opens=java.base/java.text=ALL-UNNAMED', '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED', '--add-opens=java.desktop/java.awt.font=ALL-UNNAMED', '--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED'
+        }
+    }
 }
 
 def generateVodKeys = tasks.register('generateVodKeys') {
@@ -121,6 +127,7 @@ dependencies {
     implementation "io.github.jan-tennert.supabase:realtime-kt"
     implementation "io.ktor:ktor-client-okhttp:3.2.2"
     testImplementation "junit:junit:4.13.2"
+    testImplementation "org.robolectric:robolectric:4.17"
     testImplementation "org.json:json:20230227"
     implementation 'org.conscrypt:conscrypt-android:2.5.2'
     implementation "androidx.browser:browser:1.7.0"

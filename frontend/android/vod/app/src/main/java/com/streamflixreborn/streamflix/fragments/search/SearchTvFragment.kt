@@ -46,6 +46,34 @@ class SearchTvFragment : Fragment() {
     private val viewModel by viewModelsFactory { SearchViewModel(database) }
     private var isGlobalSearchChecked: Boolean = false
     private var currentGridColumns: Int = 1
+    private var charmSearchItems: List<AppAdapter.Item> = emptyList()
+    private var charmGenres: List<Genre> = emptyList()
+    private var charmExplore: List<AppAdapter.Item>? = null
+    private var charmFilter = "Everything"
+
+    fun designFilters(global: View): View {
+        val row = android.widget.LinearLayout(requireContext()).apply { orientation=android.widget.LinearLayout.HORIZONTAL }
+        listOf("Everything", "Movies", "TV shows", "People", "All genres").forEach { label ->
+            row.addView(com.streamflixreborn.streamflix.charm.CharmVodPageLayout.chip(row,label).apply {
+                textSize=12f;isSelected=label==charmFilter
+                setOnClickListener {
+                    if(label=="All genres") com.streamflixreborn.streamflix.charm.CharmGenreMenu.show(this@SearchTvFragment,charmGenres.takeIf { it.isNotEmpty() })
+                    else { charmFilter=label; for(i in 0 until row.childCount)row.getChildAt(i).isSelected=row.getChildAt(i)===this; renderSearchItems() }
+                }
+            }, android.widget.LinearLayout.LayoutParams(-2,-2).apply { marginEnd=8 })
+        }
+        (global.parent as? ViewGroup)?.removeView(global)
+        row.addView(global,android.widget.LinearLayout.LayoutParams(0,-2,1f))
+        binding.tvGlobalSearch.textSize=12f
+        global.setBackgroundResource(R.drawable.charm_vod_chip)
+        return row
+    }
+
+    private fun renderSearchItems() {
+        appAdapter.submitList(charmSearchItems.filter { when(charmFilter) {
+            "Movies" -> it is Movie; "TV shows" -> it is TvShow; "People" -> it is com.streamflixreborn.streamflix.models.People; else -> true
+        } }.onEach { when(it) { is Movie -> it.itemType=AppAdapter.Type.MOVIE_GRID_TV_ITEM; is TvShow -> it.itemType=AppAdapter.Type.TV_SHOW_GRID_TV_ITEM } })
+    }
 
     private val appAdapter by lazy {
         AppAdapter().apply {
@@ -332,16 +360,23 @@ class SearchTvFragment : Fragment() {
     }
 
     private fun displaySearch(list: List<AppAdapter.Item>, hasMore: Boolean) {
-        currentGridColumns = if (viewModel.query == "") 5 else 6
+        currentGridColumns = 4
         binding.vgvSearch.setNumColumns(currentGridColumns)
 
-        appAdapter.submitList(list.onEach {
-            when (it) {
-                is Genre -> it.itemType = AppAdapter.Type.GENRE_GRID_TV_ITEM
-                is Movie -> it.itemType = AppAdapter.Type.MOVIE_GRID_TV_ITEM
-                is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_GRID_TV_ITEM
+        charmGenres = list.filterIsInstance<Genre>().ifEmpty { charmGenres }
+        charmSearchItems = list.filterNot { it is Genre }
+        renderSearchItems()
+        if (viewModel.query.isBlank() && charmSearchItems.isEmpty()) {
+            val cached = charmExplore
+            if (cached != null) { charmSearchItems=cached; renderSearchItems() }
+            else viewLifecycleOwner.lifecycleScope.launch {
+                val provider = UserPreferences.currentProvider
+                val items = try { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.streamflixreborn.streamflix.utils.ParentalControlUtils.filterItems(provider?.getHome().orEmpty().flatMap { it.list }.filter { it is Movie || it is TvShow }).distinctBy { when(it) { is Movie -> "movie:"+it.id; is TvShow -> "tv:"+it.id; else -> it.toString() } }.take(24)
+                } } catch (_: Exception) { emptyList() }
+                if (_binding != null && viewModel.query.isBlank() && binding.etSearch.text.isNullOrBlank() && UserPreferences.currentProvider == provider) { charmExplore=items; charmSearchItems=items; renderSearchItems() }
             }
-        })
+        }
 
         if (hasMore && viewModel.query != "") {
             appAdapter.setOnLoadMoreListener { viewModel.loadMore() }

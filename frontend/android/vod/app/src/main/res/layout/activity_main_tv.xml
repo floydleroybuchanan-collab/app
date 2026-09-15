@@ -1,64 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="?attr/app_background_color"
-    tools:context=".activities.main.MainTvActivity"
-    tools:deviceIds="tv"
-    tools:ignore="MergeRootFrame">
-
-    <com.tanasi.navigation.widget.NavigationSlideView
-        android:id="@+id/nav_main"
-        android:layout_width="wrap_content"
-        android:layout_height="0dp"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:background="?attr/app_background_color"
-        app:headerLayout="@layout/content_header_menu_main_tv"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:menu="@menu/menu_main_activity_tv"
-        app:menuGravity="center"
-        app:menuSpacing="8dp" />
-
-    <com.streamflixreborn.streamflix.charm.CharmBrandHeaderView
-        android:id="@+id/vod_brand_header"
-        android:layout_width="0dp"
-        android:layout_height="82dp"
-        android:focusable="false"
-        android:importantForAccessibility="no"
-        android:visibility="gone"
-        app:layout_constraintStart_toEndOf="@id/nav_main"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/nav_main_fragment"
-        android:name="androidx.navigation.fragment.NavHostFragment"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="?attr/app_background_color"
-        app:defaultNavHost="true"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/nav_main"
-        app:layout_constraintTop_toBottomOf="@id/vod_brand_header"
-        app:navGraph="@navigation/nav_main_graph_tv" />
-
-    <!-- Finite, skippable Charming MediaLab welcome; catalog loads underneath. -->
-    <com.streamflixreborn.streamflix.charm.CharmVodWelcomeView
-        android:id="@+id/iv_splash_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="visible"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/charm_vod_canvas">
+    <ImageView android:id="@+id/vod_backdrop" android:layout_width="0dp" android:layout_height="0dp" android:scaleType="centerCrop" android:contentDescription="@null" android:foreground="@drawable/charm_vod_readability"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
+    <androidx.fragment.app.FragmentContainerView android:id="@+id/nav_main_fragment" android:name="androidx.navigation.fragment.NavHostFragment"
+        android:layout_width="0dp" android:layout_height="0dp" android:background="@android:color/transparent" app:defaultNavHost="true" app:navGraph="@navigation/nav_main_graph_tv"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
+    <com.streamflixreborn.streamflix.charm.CharmBrandHeaderView android:id="@+id/vod_brand_header" android:layout_width="0dp" android:layout_height="0dp" android:elevation="2dp"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
+    <com.tanasi.navigation.widget.NavigationSlideView android:id="@+id/nav_main" android:layout_width="0dp" android:layout_height="0dp" android:background="@android:color/transparent" android:elevation="4dp"
+        app:layout_constraintWidth_percent="0.10" app:layout_constraintHeight_percent="0.59" app:layout_constraintHorizontal_bias="0.025" app:layout_constraintVertical_bias="0.69"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent"
+        app:menu="@menu/menu_main_activity_tv" app:menuGravity="top" app:menuSpacing="10dp" />
+    <TextView android:id="@+id/vod_search" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:layout_marginEnd="24dp" android:padding="10dp" android:text="@string/charm_search_hint" android:textSize="12sp" android:textColor="#D1C4DF" android:fontFamily="@font/charm_geist_regular" android:drawableStart="@drawable/ic_search" android:drawablePadding="10dp" android:background="@drawable/charm_vod_chip" android:focusable="true" android:clickable="true" android:elevation="6dp"
+        app:layout_constraintWidth_percent="0.25" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" />
+    <View android:id="@+id/vod_crown_access" android:layout_width="0dp" android:layout_height="0dp" android:focusable="true" android:clickable="true" android:contentDescription="@string/charm_vod_provider_access" android:background="@drawable/charm_crown_focus" android:elevation="4dp"
+        app:layout_constraintWidth_percent="0.085" app:layout_constraintHeight_percent="0.15" app:layout_constraintHorizontal_bias="0.025" app:layout_constraintVertical_bias="0.115"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
+    <com.streamflixreborn.streamflix.charm.CharmVodWelcomeView android:id="@+id/iv_splash_overlay" android:layout_width="0dp" android:layout_height="0dp" android:elevation="12dp" android:clickable="true" android:focusable="true" android:visibility="visible"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

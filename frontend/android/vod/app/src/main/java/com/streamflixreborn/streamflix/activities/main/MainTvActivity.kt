@@ -86,7 +86,11 @@ class MainTvActivity : FragmentActivity() {
             }
         }
 
+        binding.navMain.persistentLabels = true
         binding.navMain.setupWithNavController(navController)
+        binding.vodSearch.setOnClickListener { if (navController.currentDestination?.id != R.id.search) navController.navigate(R.id.search) }
+        binding.vodCrownAccess.setOnClickListener { navController.navigate(R.id.providers) }
+        com.streamflixreborn.streamflix.charm.CharmVodPageLayout.observeArtwork(this, binding.root, binding.vodBackdrop, navController)
         updateNavigationVisibility()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -122,17 +126,14 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
 
-            binding.vodBrandHeader.visibility = if (destination.id in setOf(
-                R.id.search, R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.settings
-            )) View.VISIBLE else View.GONE
+            val visible = destination.id != R.id.player
+            binding.vodBrandHeader.visibility = if (visible) View.VISIBLE else View.GONE
+            binding.navMain.visibility = if (visible) View.VISIBLE else View.GONE
+            binding.vodSearch.visibility = if (visible) View.VISIBLE else View.GONE
+            binding.vodCrownAccess.visibility = if (visible) View.VISIBLE else View.GONE
+            binding.vodBackdrop.visibility = if (visible) View.VISIBLE else View.GONE
+            if (visible) { updateNavigationVisibility(); binding.navMain.open() }
 
-            when (destination.id) {
-                R.id.search, R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.settings -> {
-                    binding.navMain.visibility = View.VISIBLE
-                    updateNavigationVisibility()
-                }
-                else -> binding.navMain.visibility = View.GONE
-            }
         }
 
         lifecycleScope.launch {
@@ -202,9 +203,7 @@ class MainTvActivity : FragmentActivity() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
-        if (UserPreferences.selectedTheme == ThemeManager.DEFAULT) {
-            binding.navMain.background = com.streamflixreborn.streamflix.charm.CharmBrandBackdrop(rail = true)
-        } else binding.navMain.setBackgroundColor(palette.tvNavBackground)
+        binding.navMain.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         binding.navMain.headerView?.let { headerView ->
             headerView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
             val header = ContentHeaderMenuMainTvBinding.bind(headerView)

@@ -33,8 +33,7 @@ class GenreViewHolder(
 
     private fun displayGridMobileItem(binding: ItemGenreGridMobileBinding) {
         binding.root.apply {
-            val colors = context.resources.getIntArray(R.array.genres)
-            (background as? GradientDrawable)?.setColor(colors[bindingAdapterPosition % colors.size])
+            setBackgroundResource(R.drawable.charm_vod_chip)
 
             setOnClickListener {
                 val args = Bundle().apply {
@@ -50,8 +49,7 @@ class GenreViewHolder(
 
     private fun displayGridTvItem(binding: ItemGenreGridTvBinding) {
         binding.root.apply {
-            val colors = context.resources.getIntArray(R.array.genres)
-            (background as? GradientDrawable)?.setColor(colors[bindingAdapterPosition % colors.size])
+            setBackgroundResource(R.drawable.charm_vod_chip)
 
             setOnClickListener {
                 val args = Bundle().apply {

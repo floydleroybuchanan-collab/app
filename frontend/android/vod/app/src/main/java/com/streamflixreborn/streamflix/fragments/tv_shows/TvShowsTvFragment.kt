@@ -117,7 +117,7 @@ class TvShowsTvFragment : Fragment() {
     }
 
     private fun displayTvShows(tvShows: List<TvShow>, hasMore: Boolean) {
-        appAdapter.submitList(tvShows.onEach {
+        com.streamflixreborn.streamflix.charm.CharmCatalogControls.submit(binding.vgvTvShows, tvShows.onEach {
             it.itemType = AppAdapter.Type.TV_SHOW_GRID_TV_ITEM
         })
 

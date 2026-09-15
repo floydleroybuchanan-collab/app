@@ -30,7 +30,10 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.constraintlayout.widget.Group
-import androidx.leanback.preference.LeanbackPreferenceFragmentCompat
+import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.PreferenceGroupAdapter
+import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -78,7 +81,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
+class SettingsTvFragment : PreferenceFragmentCompat() {
+    private var charmSettings: CharmSettingsLayout? = null
     private data class SettingsScreenState(
         val rootKey: String?,
         val title: String?,
@@ -226,12 +230,42 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             displaySettings()
         }
         applyScreenTitle()
+        charmSettings?.show(currentScreenState.rootKey, currentScreenState.title)
         view?.post { listView?.requestFocus() }
+    }
+
+    override fun onCreateRecyclerView(inflater: LayoutInflater, parent: ViewGroup, savedInstanceState: Bundle?): RecyclerView = RecyclerView(requireContext()).apply {
+        id = androidx.preference.R.id.recycler_view
+        layoutManager = androidx.recyclerview.widget.GridLayoutManager(context, 2)
+    }
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        super.onCreateView(inflater, container, savedInstanceState)
+        val design = CharmSettingsLayout(listView) { key, title ->
+            if (key == null) screenBackStack.clear()
+            else if (currentScreenState.rootKey == null) screenBackStack.addLast(currentScreenState)
+            currentScreenState = SettingsScreenState(key, title)
+            settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
+            renderCurrentScreen()
+        }
+        charmSettings = design
+        return design.root
+    }
+
+    override fun onCreateAdapter(preferenceScreen: PreferenceScreen): RecyclerView.Adapter<*> {
+        CharmSettingsLayout.prepare(preferenceScreen)
+        return PreferenceGroupAdapter(preferenceScreen)
+    }
+
+    override fun onDestroyView() {
+        charmSettings = null
+        super.onDestroyView()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        SettingsListStyler.attach(view, isTv = true)
+        setDivider(null)
+        charmSettings?.show(currentScreenState.rootKey, currentScreenState.title)
         view.post { listView?.requestFocus() }
     }
 
@@ -477,7 +511,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
 
         findPreference<Preference>("p_settings_about")?.apply {
             val palette = ThemeManager.palette(UserPreferences.selectedTheme)
-            val titleStr = getString(R.string.settings_version_tv)
+            val titleStr = "About Charming MediaLab"
             val spannableTitle = SpannableString(titleStr)
             spannableTitle.setSpan(ForegroundColorSpan(palette.tvHeaderPrimary), 0, titleStr.length, 0)
             title = spannableTitle
@@ -487,8 +521,14 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             spannableSummary.setSpan(ForegroundColorSpan(palette.tvHeaderSecondary), 0, summaryStr.length, 0)
             summary = spannableSummary
 
-            isSelectable = false
-            setOnPreferenceClickListener(null)
+            isSelectable = true
+            setOnPreferenceClickListener {
+                com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireContext())
+                    .setTitle("Charming MediaLab")
+                    .setMessage("Video on Demand\nVersion " + BuildConfig.VERSION_NAME + "\n\nYour movies, series and saved favorites in one place.")
+                    .setPositiveButton("Done", null).show()
+                true
+            }
         }
 
         findPreference<Preference>("p_settings_telegram")?.apply {
