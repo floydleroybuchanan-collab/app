@@ -35,6 +35,7 @@ object SourcePicker {
         val context = fragment.requireContext()
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
+        val buttonHeight = dp(maxOf(44, kotlin.math.ceil(22f * context.resources.configuration.fontScale + 20f).toInt()))
         fun surface(fill: Int, stroke: Int) = GradientDrawable().apply {
             setColor(fill); cornerRadius = dp(12).toFloat(); setStroke(dp(1), stroke)
         }
@@ -43,7 +44,7 @@ object SourcePicker {
             setPadding(dp(20), dp(16), dp(20), dp(8))
         }
         val title = TextView(context).apply {
-            text = "Sources"; textSize = 24f; setTextColor(Color.WHITE)
+            text = "Sources"; textSize = 24f; maxLines = 1; ellipsize = TextUtils.TruncateAt.END; setTextColor(Color.WHITE)
             setPadding(0, 0, 0, dp(8)); isAccessibilityHeadingCompat()
         }
         val status = TextView(context).apply {
@@ -135,7 +136,7 @@ object SourcePicker {
             text = label; textSize = 13f; isAllCaps = false
             minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
             setPadding(dp(12), 0, dp(12), 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)).apply { setMargins(dp(3), dp(2), dp(3), dp(2)) }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, buttonHeight).apply { setMargins(dp(3), dp(2), dp(3), dp(2)) }
             setTextColor(Color.WHITE)
             background = StateListDrawable().apply {
                 addState(intArrayOf(android.R.attr.state_focused), surface(0xFF403052.toInt(), 0xFFCA82FF.toInt()))

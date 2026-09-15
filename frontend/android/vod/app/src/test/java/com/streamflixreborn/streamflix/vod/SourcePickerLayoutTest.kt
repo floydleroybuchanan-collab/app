@@ -25,8 +25,13 @@ import org.robolectric.annotation.ConscryptMode
 @Config(sdk=[35], application=Application::class, qualifiers="land-hdpi")
 class SourcePickerLayoutTest {
     private fun views(root: View): List<View> = listOf(root) + if (root is ViewGroup) (0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
-    @Test fun compactControlsFilterAndRetainAUsableDialogAcrossResize() {
+    @Test fun compactControlsFilterAndRetainAUsableDialogAcrossResize() = verify(1f)
+    @Test fun largeSystemTextFitsTheCompactControls() = verify(2f)
+    private fun verify(fontScale: Float) {
         val controller = Robolectric.buildActivity(FragmentActivity::class.java)
+        val resources = controller.get().resources
+        val config = android.content.res.Configuration(resources.configuration).apply { this.fontScale = fontScale }
+        resources.updateConfiguration(config, resources.displayMetrics)
         controller.get().setTheme(R.style.AppTheme_Tv)
         val activity = controller.setup().get()
         val fragment = Fragment()
@@ -46,6 +51,9 @@ class SourcePickerLayoutTest {
         val filters = buttons.filter { it.text.startsWith("Type:") || it.text.startsWith("Resolution:") || it.text.startsWith("Torrents:") }
         assertEquals(3, filters.size)
         filters.forEach { assertEquals(details.layoutParams.height, it.layoutParams.height) }
+        filters.plus(details).forEach { button ->
+            assertTrue("Button must fit its text and padding", button.layoutParams.height >= button.paint.fontMetricsInt.let { it.bottom - it.top } + button.paddingTop + button.paddingBottom)
+        }
         assertTrue(details.requestFocus())
         assertTrue(details.isFocused)
         buttons.single { it.text == "Retry" }.performClick()
