@@ -10,16 +10,17 @@ const date=value=>value?new Date(value*1000).toISOString().slice(0,16).replace('
 const save=(env,id,state,data)=>q(env,'INSERT INTO bot_conversations VALUES(?1,?2,?3,?4) ON CONFLICT(telegram_id) DO UPDATE SET state=excluded.state,json=excluded.json,updated_at=excluded.updated_at',id,state,JSON.stringify(data),now()).run();
 const clear=(env,id)=>q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
 const summary=user=>`${user.username}\nStatus: ${user.status==='active'&&user.expires_at&&user.expires_at<=now()?'expired':user.status}\nExpires: ${date(user.expires_at)}\nLogin limit: ${user.max_sessions}\nTelegram: ${user.telegram_id?`${user.telegram_username?'@'+user.telegram_username+' · ':''}${user.telegram_id}`:'Not linked'}`;
-async function linkedUser(env,id){
+async function linkedUser(env,id,admin=false){
  const m=await q(env,'SELECT * FROM bot_members WHERE telegram_id=?1',id).first();
- if(!m?.account_id||m.blocked)fail('No verified app account is linked. In the app, use Settings → Account → Link Telegram. For a forgotten password, use the Admin-assisted recovery option.',403);
+ if(m?.blocked)fail('This Telegram identity is blocked from app-account access. The panel owner must review the account before these tools can be used.',403);
+ if(!m?.account_id)fail(admin?'Your Telegram admin status is recognized, but your Telegram identity is not linked to an authorized app/panel admin account. Sign in to the app with your panel admin account, then open Settings → Account → Link Telegram / Account Recovery and complete verification. Link Account here manages another user’s link; it does not set up your own admin access. Bot Status is available without an app-account link.':'No verified app account is linked. In the app, use Settings → Account → Link Telegram. For a forgotten password, use the Admin-assisted recovery option.',403);
  const user=await q(env,'SELECT * FROM users WHERE id=?1',m.account_id).first();
  if(!user)fail('The linked account is unavailable.',404);
  return {...user,telegram_id:id,telegram_username:m.username};
 }
 async function adminApi(env,id,s){
  if(!await currentTelegramAdmin(env,id,s,telegram))fail('Only current group admins can access these commands.',403);
- const user=await linkedUser(env,id);
+ const user=await linkedUser(env,id,true);
  if(user.role!=='admin'||user.status!=='active')fail('Link your authorized panel administrator account through the app first. Group membership alone does not grant account-management permissions.',403);
  const auth=await resolveAdminAccess(env,user);
  const call=async(path,method='GET',body)=>{
@@ -108,6 +109,11 @@ export async function accountManagement(env,id,text,cmd,s,message){
   const data=JSON.parse(state.json);command=ADMIN_ACCOUNT_COMMANDS.find(c=>c.id===data.command);args=text.trim();
  }
  if(!command)return false;
+ if(command.command==='bot_status'){
+  if(!await currentTelegramAdmin(env,id,s,telegram))fail('Only current group admins can access these commands.',403);
+  await clear(env,id);
+  await send(env,id,`Mr. Charm: ${s.enabled?'Enabled':'Disabled'}\nAccount requests: ${s.accounts_enabled?'Enabled':'Paused'}\nDownloads: ${s.downloads_enabled?'Enabled':'Paused'}\nPersonal replies expire after ten minutes.`,buttons([['Admin Commands','admin']]));return true;
+ }
  const {call,auth}=await adminApi(env,id,s);
  if(command.command==='userinfo'&&message.reply_to_message?.from)args=String(message.reply_to_message.from.id);
  if(['link_account','relink_account'].includes(command.command)&&message.reply_to_message?.from&&args&&!/\s/.test(args))args+=' '+message.reply_to_message.from.id;
@@ -127,7 +133,6 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await send(env,id,data.users.length?data.users.map(summary).join('\n\n'):'No accounts in your permitted scope match.');return true;
  }
  if(key==='bot_stats'){const data=await call('/admin/dashboard');await send(env,id,'Account statistics\n'+JSON.stringify(data.stats||data,null,2).slice(0,3000));return true;}
- if(key==='bot_status'){await send(env,id,`Mr. Charm: ${s.enabled?'Enabled':'Disabled'}\nAccount requests: ${s.accounts_enabled?'Enabled':'Paused'}\nDownloads: ${s.downloads_enabled?'Enabled':'Paused'}\nPersonal replies expire after ten minutes.`);return true;}
  if(key==='recent_links'){
   const data=await call('/admin/users?page_size=100');const allowed=new Set(data.users.map(u=>u.id));
   const links=await rows(env,'SELECT account_id,telegram_id,username,updated_at FROM bot_members WHERE account_id IS NOT NULL ORDER BY updated_at DESC LIMIT 100');

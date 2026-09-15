@@ -59,3 +59,13 @@ test('navigation cancels an active draft and preserves contextual back and cance
  const buttons=commandButtons({inline_keyboard:[[{text:'Back to support admins',callback_data:'contact'},{text:'Cancel',callback_data:'admin'}]]}).inline_keyboard.flat();
  assert.equal(buttons[0].text,'↩ Back to support admins');assert.equal(buttons[1].text,'↩ Cancel');
 });
+test('unlinked group admins can read bot status but account changes require their verified panel identity',async()=>{
+ const f=setup();
+ const status=await f.invoke(11111,'manage_bot_status');
+ assert.match(status.text,/Mr Charm: Enabled/);
+ assert.equal(status.ephemeral_message_parameters.receiver_user_id,11111);
+ assert.match((await f.invoke(11111,'manage_link_account')).text,/your panel admin account/);
+ assert.match((await f.invoke(22222,'manage_bot_status')).text,/Only current group admins/);
+ f.admins.delete(11111);
+ assert.match((await f.invoke(11111,'manage_bot_status')).text,/Only current group admins/);
+});
