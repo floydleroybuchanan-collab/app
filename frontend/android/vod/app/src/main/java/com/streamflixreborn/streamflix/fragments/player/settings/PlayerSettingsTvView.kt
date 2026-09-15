@@ -29,6 +29,20 @@ class PlayerSettingsTvView @JvmOverloads constructor(
         this,
         true
     )
+    private val navigation = com.streamflixreborn.streamflix.charm.CharmNavigation.controls(context) { onBackPressed() }.apply {
+        id = View.generateViewId()
+    }
+    init {
+        val panel = binding.tvSettingsHeader.parent as androidx.constraintlayout.widget.ConstraintLayout
+        panel.addView(navigation, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(-2, -2).apply {
+            startToStart = 0; topToTop = 0; topMargin = 8.dp(context); marginStart = 8.dp(context)
+        })
+        binding.tvSettingsHeader.layoutParams = (binding.tvSettingsHeader.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams).apply {
+            topToTop = -1; topToBottom = navigation.id; topMargin = 8.dp(context)
+        }
+        navigation.getChildAt(0).nextFocusDownId = binding.rvSettings.id
+        navigation.getChildAt(1).nextFocusDownId = binding.rvSettings.id
+    }
 
     private val settingsAdapter = SettingsAdapter(this, Settings.listTv)
     private val qualityAdapter = SettingsAdapter(this, Settings.Quality.list)
@@ -91,6 +105,8 @@ class PlayerSettingsTvView @JvmOverloads constructor(
 
     override fun focusSearch(focused: View, direction: Int): View {
         return when {
+            binding.rvSettings.hasFocus() && (direction == View.FOCUS_LEFT ||
+                (direction == View.FOCUS_UP && (binding.rvSettings.layoutManager as? LinearLayoutManager)?.findFirstCompletelyVisibleItemPosition() == 0)) -> navigation.getChildAt(0)
             binding.rvSettings.hasFocus() -> focused
             else -> super.focusSearch(focused, direction)
         }

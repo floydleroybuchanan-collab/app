@@ -36,6 +36,10 @@ object CharmDesign {
 
     fun install(activity: FragmentActivity) {
         activity.supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
+            override fun onFragmentStarted(manager: FragmentManager, fragment: Fragment) {
+                if (fragment is androidx.fragment.app.DialogFragment && fragment !is com.streamflixreborn.streamflix.vod.NovaPlayback)
+                    fragment.dialog?.let(CharmNavigation::decorateDialog)
+            }
             override fun onFragmentViewCreated(manager: FragmentManager, fragment: Fragment, view: View, state: Bundle?) {
                 if (fragment.javaClass.simpleName.endsWith("TvFragment") &&
                     !fragment.javaClass.simpleName.startsWith("Player")) {
@@ -155,9 +159,19 @@ object CharmDesign {
 }
 
 class CharmDialogBuilder(context: Context, themeResId: Int = R.style.CharmDialog_Compat) : androidx.appcompat.app.AlertDialog.Builder(context, themeResId) {
-    override fun create(): androidx.appcompat.app.AlertDialog = super.create().also(CharmDesign::prepareDialog)
+    private var caption: CharSequence? = null
+    override fun setTitle(title: CharSequence?): CharmDialogBuilder { caption = title; super.setTitle(title); return this }
+    override fun setTitle(titleId: Int): CharmDialogBuilder = setTitle(context.getText(titleId))
+    override fun create(): androidx.appcompat.app.AlertDialog = super.create().also {
+        it.setCustomTitle(CharmNavigation.dialogTitle(it, caption)); CharmDesign.prepareDialog(it)
+    }
 }
 
 class CharmPlatformDialogBuilder(context: Context, themeResId: Int = R.style.CharmDialog_Framework) : android.app.AlertDialog.Builder(context, themeResId) {
-    override fun create(): android.app.AlertDialog = super.create().also(CharmDesign::prepareDialog)
+    private var caption: CharSequence? = null
+    override fun setTitle(title: CharSequence?): CharmPlatformDialogBuilder { caption = title; super.setTitle(title); return this }
+    override fun setTitle(titleId: Int): CharmPlatformDialogBuilder = setTitle(context.getText(titleId))
+    override fun create(): android.app.AlertDialog = super.create().also {
+        it.setCustomTitle(CharmNavigation.dialogTitle(it, caption)); CharmDesign.prepareDialog(it)
+    }
 }

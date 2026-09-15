@@ -58,6 +58,7 @@ class ShowOptionsTvDialog(
 
     init {
         setContentView(binding.root)
+        com.streamflixreborn.streamflix.charm.CharmNavigation.decorateDialog(this)
 
         binding.btnOptionCancel.setOnClickListener {
             hide()

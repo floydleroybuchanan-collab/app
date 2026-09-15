@@ -60,7 +60,7 @@ class DebridLinkDialog : DialogFragment() {
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = value.code != null
                     if (value.complete) {
                         (parentFragment as? PreferenceFragmentCompat)?.let(DebridSettings::bind)
-                        Toast.makeText(context, "Real-Debrid connected", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Real-Debrid connected and saved on this device", Toast.LENGTH_LONG).show()
                         dismiss()
                     } else value.code?.let {
                         if (displayedCode != it.user) {
@@ -74,7 +74,7 @@ class DebridLinkDialog : DialogFragment() {
                 }
             }
         }
-        model.start()
+        model.start(arguments?.getBoolean("cachedSearch", false) == true)
         return dialog
     }
     private fun open(url: String) {
@@ -92,9 +92,9 @@ class DebridLinkDialog : DialogFragment() {
         super.onDismiss(dialog)
     }
     companion object {
-        fun show(parent: PreferenceFragmentCompat, browser: Boolean) {
+        fun show(parent: PreferenceFragmentCompat, browser: Boolean, cachedSearch: Boolean = false) {
             if (parent.childFragmentManager.isStateSaved || parent.childFragmentManager.findFragmentByTag("rd-link") != null) return
-            DebridLinkDialog().apply { arguments = Bundle().apply { putBoolean("browser", browser) } }
+            DebridLinkDialog().apply { arguments = Bundle().apply { putBoolean("browser", browser); putBoolean("cachedSearch", cachedSearch) } }
                 .show(parent.childFragmentManager, "rd-link")
         }
     }

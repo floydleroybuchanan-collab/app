@@ -55,6 +55,17 @@ class PlayerSettingsMobileView @JvmOverloads constructor(
     var onManualZoomClicked: (() -> Unit)? = null
 
     init {
+        val navigation = com.streamflixreborn.streamflix.charm.CharmNavigation.controls(context) { onBackPressed() }.apply { id = View.generateViewId() }
+        val panel = binding.tvSettingsHeader.parent as androidx.constraintlayout.widget.ConstraintLayout
+        panel.addView(navigation, androidx.constraintlayout.widget.ConstraintLayout.LayoutParams(-2, -2).apply {
+            topToTop = 0; startToStart = 0; topMargin = 4.dp(context); marginStart = 8.dp(context)
+        })
+        listOf(binding.tvSettingsHeader, binding.btnSettingsBack, binding.btnSettingsClose).forEach { view ->
+            (view.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams).apply {
+                topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+                topToBottom = navigation.id; view.layoutParams = this
+            }
+        }
         binding.btnSettingsClose.setOnClickListener {
             hide()
         }

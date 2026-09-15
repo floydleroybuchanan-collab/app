@@ -54,7 +54,8 @@ object SourceDiscovery {
         }
         throw IOException("Torrentio search unavailable.")
     }
-    suspend fun debrid(type: Video.Type, publish: (List<Video.Server>) -> Unit = {}): Result {
+    suspend fun debrid(type: Video.Type, progress: (String) -> Unit = {}, publish: (List<Video.Server>) -> Unit = {}): Result {
+        progress("Identifying title for Torrentio search…")
         val imdb = withTimeoutOrNull(20_000) { SourceIdentity.imdb(type) }
             ?: throw IOException("Title identification timed out. Use Retry.")
         val path = when(type) {
@@ -65,6 +66,7 @@ object SourceDiscovery {
             }
         }
         val reported = RealDebrid.cachedSearchConsent
+        progress("Searching Torrentio for $path…")
         val builder = "https://torrentio.strem.fun/".toHttpUrl().newBuilder()
         if (reported) builder.addPathSegment("realdebrid=" + RealDebrid.cachedSearchToken())
         val found = parse(fetch(builder.addPathSegments("stream/$path.json").build()), reported)

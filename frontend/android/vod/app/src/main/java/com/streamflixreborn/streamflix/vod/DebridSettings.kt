@@ -124,10 +124,20 @@ object DebridSettings {
     private fun chooseConnection(fragment: PreferenceFragmentCompat) {
         com.streamflixreborn.streamflix.charm.CharmDialogBuilder(fragment.requireContext()).setTitle("Connect Real-Debrid")
             .setItems(arrayOf("Sign in on this device", "Link with a code", "Advanced: enter API token")) { _, which ->
-                if (which == 2) connect(fragment) else DebridLinkDialog.show(fragment, which == 0)
+                val choice = android.widget.CheckBox(fragment.requireContext()).apply {
+                    text = "Enable Torrentio cached search"; isChecked = true
+                    setPadding(24, 16, 24, 16)
+                }
+                com.streamflixreborn.streamflix.charm.CharmDialogBuilder(fragment.requireContext())
+                    .setTitle("Save Real-Debrid on this device")
+                    .setMessage("Your connection will be encrypted and remembered after you close the app. Torrentio is selected by default. It is an independent service that receives your Real-Debrid access token and title searches over HTTPS; the token grants access to your RD account. Cached-only is on by default. You can uncheck Torrentio or change these settings later.")
+                    .setView(choice).setPositiveButton("Continue") { _, _ ->
+                        if (which == 2) connect(fragment, choice.isChecked)
+                        else DebridLinkDialog.show(fragment, which == 0, choice.isChecked)
+                    }.setNegativeButton("Back", null).show()
             }.setNegativeButton("Cancel", null).show()
     }
-    private fun connect(fragment: PreferenceFragmentCompat) {
+    private fun connect(fragment: PreferenceFragmentCompat, cachedSearch: Boolean = false) {
         val context = fragment.requireContext()
         val input = EditText(context).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -154,7 +164,7 @@ object DebridSettings {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                 connectJob = fragment.lifecycleScope.launch {
                     try {
-                        withContext(Dispatchers.IO) { RealDebrid.connectToken(token) }
+                        withContext(Dispatchers.IO) { RealDebrid.connectToken(token, cachedSearch) }
                         if (fragment.isAdded) { bind(fragment); dialog.dismiss() }
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {

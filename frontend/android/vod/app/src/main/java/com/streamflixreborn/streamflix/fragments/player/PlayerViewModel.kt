@@ -79,7 +79,15 @@ class PlayerViewModel(
             _sources.update { rows -> rows.filter { it.details?.isDebrid != true } }
             sourceStatus.value = ""
         }
-        if (!RealDebrid.connected || !VodPreferences.debridSearch || debridJob?.isActive == true) return
+        if (!RealDebrid.connected) {
+            sourceStatus.value = RealDebrid.connectionProblem ?: "Real-Debrid is not connected on this device. Open VOD Settings → Real-Debrid account."
+            return
+        }
+        if (!VodPreferences.debridSearch) {
+            sourceStatus.value = "Real-Debrid search is turned off. Enable Find Real-Debrid sources in VOD Settings."
+            return
+        }
+        if (debridJob?.isActive == true) return
         _sources.update { rows -> rows.filter { it.details?.isDebrid != true } }
         val epoch = generation
         val type = contentType
@@ -94,7 +102,9 @@ class PlayerViewModel(
                     if (epoch == generation && accountRevision == RealDebrid.sessionRevision)
                         _sources.update { rows -> (rows + hosts).distinctBy { it.id } }
                 }
-                val result = SourceDiscovery.debrid(type) { partial ->
+                val result = SourceDiscovery.debrid(type, progress = { message ->
+                    if (epoch == generation && accountRevision == RealDebrid.sessionRevision) sourceStatus.value = message
+                }) { partial ->
                     if (epoch == generation && accountRevision == RealDebrid.sessionRevision)
                         _sources.update { rows -> (partial + rows).distinctBy { it.id } }
                 }

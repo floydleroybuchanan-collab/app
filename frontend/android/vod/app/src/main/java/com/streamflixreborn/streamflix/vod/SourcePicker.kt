@@ -157,7 +157,10 @@ object SourcePicker {
         }
         val detailButton = filterButton("Details", header) { showDetails(rows.indexOfFirst { it.id == selectedSourceId }.coerceAtLeast(0)) }
         filterButton("Retry", header) { discover() }
-        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setView(root).setNegativeButton("Close", null).create()
+        val dialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context).setView(root).setNegativeButton("Back") { dialog, _ -> dialog.cancel() }.create()
+        dialog.setOnCancelListener {
+            if (currentId == null) com.streamflixreborn.streamflix.charm.CharmNavigation.back(context)
+        }
         list.setOnItemClickListener { _, _, index, _ ->
             val server = rows.getOrNull(index) ?: return@setOnItemClickListener
             dialog.dismiss()

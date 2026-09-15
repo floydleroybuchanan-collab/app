@@ -2,6 +2,8 @@
 from pathlib import Path
 import importlib.util
 import struct
+import io
+import zipfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +13,29 @@ spec.loader.exec_module(apk)
 
 
 class AndroidCompatibilityTests(unittest.TestCase):
+    def test_owner_signing_identity_is_required(self):
+        apk.verify_owner_certificate("Signer #1 certificate SHA-256 digest: " + apk.OWNER_CERTIFICATE_SHA256)
+        for signature in ["", "Signer #1 certificate SHA-256 digest: " + "a" * 64,
+                          "Signer #1 certificate SHA-256 digest: " + apk.OWNER_CERTIFICATE_SHA256 + "\nSigner #2 certificate SHA-256 digest: " + "b" * 64]:
+            with self.assertRaises(ValueError): apk.verify_owner_certificate(signature)
+
+    def test_release_rejects_private_material_and_debug_metadata(self):
+        for name, body in [("assets/key.pem", b"-----BEGIN PRIVATE KEY-----"),
+                           ("assets/upload.jks", b"binary"), ("assets/.env.production", b"secret"),
+                           ("assets/index.android.bundle.map", b"{}"),
+                           ("assets/index.android.bundle", b"x" * (1024 * 1024 - 10) + b"-----BEGIN RSA PRIVATE KEY-----")]:
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w") as archive: archive.writestr(name, body)
+            buffer.seek(0)
+            with zipfile.ZipFile(buffer) as archive:
+                with self.assertRaises(ValueError): apk.verify_sensitive_payloads(archive)
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("assets/public.pem", b"-----BEGIN PUBLIC KEY-----")
+            archive.writestr("assets/index.android.bundle", b"normal bundle")
+        buffer.seek(0)
+        with zipfile.ZipFile(buffer) as archive: apk.verify_sensitive_payloads(archive)
+
     def test_ndk_api_notes_are_read_for_both_elf_architectures(self):
         for wide in (True, False):
             for api in (21, 24, 26):

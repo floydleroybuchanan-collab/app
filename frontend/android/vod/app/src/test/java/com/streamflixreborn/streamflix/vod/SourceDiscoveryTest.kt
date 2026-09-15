@@ -4,6 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SourceDiscoveryTest {
+    @Test fun recordedLiveTorrentioResponsesProduceVisibleCachedCandidates() {
+        for (name in listOf("spiderman", "lioness-s1e1", "lioness-s2e1")) {
+            val body = javaClass.getResource("/discovery/$name.json")!!.readText()
+            val rows = SourceDiscovery.parse(body, true)
+            assertTrue("$name must have RD candidates", rows.isNotEmpty())
+            assertTrue("$name must survive cached-only filtering", rows.any { SourceDiscovery.cached(it.details) })
+            assertTrue(rows.all { it.details?.isDebrid == true && it.src.isEmpty() })
+            assertFalse(rows.toString().contains("CHARM_NON_SECRET_TEST"))
+        }
+    }
     private val hash = "a".repeat(40)
     @Test fun configuredCachedResultDoesNotRetainCredentialUrl() {
         val rows = SourceDiscovery.parse("""{"streams":[{"name":"[RD+] Torrentio","title":"Movie.1080p","url":"https://torrentio.strem.fun/realdebrid/SECRET/$hash/null/2/Movie.mkv"}]}""", true)

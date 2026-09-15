@@ -22,6 +22,7 @@ object RealDebrid {
     val sessionRevision get() = generation
     private val owned = java.util.concurrent.ConcurrentHashMap<String, String>()
     val connected get() = vault.read()?.optString("access_token")?.isNotBlank() == true
+    val connectionProblem get() = vault.readError
     val accountLabel get() = vault.read()?.let { data ->
         data.optString("label") + data.optString("expiration").takeIf { it.isNotBlank() }?.let { " · Expires " + it.take(10) }.orEmpty()
     } ?: "Not connected"
@@ -42,13 +43,13 @@ object RealDebrid {
     private fun account(data: JSONObject, user: JSONObject): JSONObject = data
         .put("label", user.optString("username", "Connected") + " · " + user.optString("type", "account"))
         .put("expiration", user.optString("expiration"))
-    suspend fun connectOAuth(data: JSONObject, expectedRevision: Long) {
+    suspend fun connectOAuth(data: JSONObject, expectedRevision: Long, enableCachedSearch: Boolean = false) {
         val user = JSONObject(api("user", token = data.getString("access_token")))
         coroutineContext.ensureActive()
         authLock.withLock {
             coroutineContext.ensureActive()
             if (generation != expectedRevision) throw IOException("Account changed. Start linking again.")
-            vault.write(account(data, user).put("device_label", "Charming MediaLab"))
+            vault.write(account(data, user).put("device_label", "Charming MediaLab").put("torrentio-consent", enableCachedSearch))
             generation++; owned.clear()
         }
     }
@@ -69,11 +70,12 @@ object RealDebrid {
         return data
     }
 
-    suspend fun connectToken(token: String) = authLock.withLock {
+    suspend fun connectToken(token: String, enableCachedSearch: Boolean = false) = authLock.withLock {
         val checked = DebridInput.token(token)
         val user = JSONObject(api("user", token = checked))
         coroutineContext.ensureActive()
-        vault.write(account(JSONObject().put("access_token", checked).put("auth_mode", "personal"), user))
+        vault.write(account(JSONObject().put("access_token", checked).put("auth_mode", "personal")
+            .put("torrentio-consent", enableCachedSearch), user))
         generation++
         owned.clear()
     }

@@ -97,7 +97,13 @@ class NovaPlayback : DialogFragment(), SurfaceHolder.Callback {
             val v = video; val s = server
             releaseNative { if (v != null && s != null) main.post { dismissAllowingStateLoss(); media3?.invoke(v, s, position) } }
         }
-        button("Close") { dismiss() }
+        button("Stop and exit") {
+            releaseNative { main.post { dismissAllowingStateLoss(); com.streamflixreborn.streamflix.charm.CharmNavigation.back(context) } }
+        }
+        frame.addView(com.streamflixreborn.streamflix.charm.CharmNavigation.controls(context) {
+            releaseNative { main.post { dismissAllowingStateLoss(); com.streamflixreborn.streamflix.charm.CharmNavigation.back(context) } }
+        },
+            FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
         scroll.addView(buttons); controls.addView(scroll)
         frame.addView(controls, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         return Dialog(context, theme).apply { setContentView(frame); window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }

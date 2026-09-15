@@ -51,6 +51,7 @@ class ShowOptionsMobileDialog(
 
     init {
         setContentView(binding.root)
+        com.streamflixreborn.streamflix.charm.CharmNavigation.decorateDialog(this)
 
         findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             ?.setBackgroundColor(Color.TRANSPARENT)

@@ -71,6 +71,7 @@ class MainTvActivity : FragmentActivity() {
         val navHostFragment = this.supportFragmentManager
             .findFragmentById(binding.navMainFragment.id) as NavHostFragment
         val navController = navHostFragment.navController
+        com.streamflixreborn.streamflix.charm.CharmNavigation.install(this, binding.root)
 
         adjustLayoutDelta(null, null)
 

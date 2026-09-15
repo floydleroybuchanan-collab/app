@@ -751,9 +751,19 @@ class TvShowViewHolder(
         binding.charmDetailMyList.setOnClickListener { binding.btnTvShowFavorite.performClick() }
         binding.charmDetailMore.setOnClickListener { com.streamflixreborn.streamflix.ui.ShowOptionsTvDialog(context, tvShow).show() }
         binding.charmDetailSources.setOnClickListener {
-            binding.btnTvShowWatchNow.setTag(R.id.charm_detail_sources, true)
-            try { binding.btnTvShowWatchNow.performClick() } finally { binding.btnTvShowWatchNow.setTag(R.id.charm_detail_sources, null) }
+            com.streamflixreborn.streamflix.charm.CharmDialogBuilder(context)
+                .setTitle("Choose a season")
+                .setItems(tvShow.seasons.map { "Season ${it.number}" }.toTypedArray()) { _, index ->
+                    val season = tvShow.seasons[index]
+                    binding.root.findNavController().navigate(R.id.season, android.os.Bundle().apply {
+                        putString("tvShowId", tvShow.id); putString("tvShowTitle", tvShow.title)
+                        putString("tvShowPoster", tvShow.poster); putString("tvShowBanner", tvShow.banner)
+                        putString("seasonId", season.id); putInt("seasonNumber", season.number)
+                        putString("seasonTitle", "Season ${season.number}")
+                    })
+                }.setNegativeButton("Back", null).show()
         }
+        binding.charmDetailSources.text = "Choose season"
         binding.tvTvShowTitle.text = tvShow.title
 
         binding.tvTvShowRating.apply {
@@ -792,7 +802,7 @@ class TvShowViewHolder(
         binding.tvTvShowOverview.text = tvShow.overview
         val episodeToWatch = tvShow.episodeToWatch
         val episodeSeason = resolveEpisodeSeason(episodeToWatch)
-        binding.charmDetailSources.visibility = if (episodeToWatch != null && !isIptvProvider()) View.VISIBLE else View.GONE
+        binding.charmDetailSources.visibility = if (tvShow.seasons.isNotEmpty() && !isIptvProvider()) View.VISIBLE else View.GONE
         binding.btnTvShowWatchNow.apply {
             isVisible = episodeToWatch != null
             setOnClickListener {

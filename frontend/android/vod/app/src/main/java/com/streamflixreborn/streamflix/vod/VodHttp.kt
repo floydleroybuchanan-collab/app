@@ -22,6 +22,7 @@ internal object VodHttp {
         return source.readUtf8()
     }
     val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
+        .dns(VodDns)
         .readTimeout(25, TimeUnit.SECONDS).callTimeout(40, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
 
@@ -30,7 +31,12 @@ internal object VodHttp {
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (continuation.isActive) continuation.resumeWithException(IOException("The source service could not be reached."))
+                if (continuation.isActive) continuation.resumeWithException(IOException(when (e) {
+                    is java.net.UnknownHostException -> "DNS lookup failed. Check the DNS setting in VOD Connection & Services."
+                    is javax.net.ssl.SSLException -> "The source service's secure connection failed. Check the device clock and network."
+                    is java.net.SocketTimeoutException -> "The source service connection timed out. Use Retry."
+                    else -> "The source service could not be reached. Check your network and use Retry."
+                }))
             }
             override fun onResponse(call: Call, response: Response) {
                 continuation.resume(response) { _, value, _ -> value.close() }

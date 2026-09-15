@@ -377,7 +377,7 @@ class PlayerTvFragment : Fragment() {
                         val preferredServer = state.servers.firstOrNull {
                             it.name.equals(args.preferredServerName, ignoreCase = true)
                         }
-                        if (arguments?.getBoolean("charmChooseSource") == true || VodPreferences.chooseFirst || state.servers.isEmpty()) showSourcePicker()
+                        if (arguments?.getBoolean("charmChooseSource") == true || viewModel.contentType is Video.Type.Episode || VodPreferences.chooseFirst || state.servers.isEmpty()) showSourcePicker()
                             else viewModel.getVideo(preferredServer ?: state.servers.first())
 
                     }
@@ -1848,7 +1848,7 @@ class PlayerTvFragment : Fragment() {
             addView(container)
         }
 
-        qrDialog = androidx.appcompat.app.AlertDialog.Builder(requireActivity())
+        qrDialog = com.streamflixreborn.streamflix.charm.CharmDialogBuilder(requireActivity())
             .setTitle("Scan with phone")
             .setView(scrollView)
             .setCancelable(true)

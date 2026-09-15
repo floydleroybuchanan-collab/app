@@ -6,28 +6,28 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt": {
     "upstream": "567f17a971b1bef0ff4e9607031c0bcb4f5ddb20348c9a512ad97b61459ccca2",
-    "sha256": "5ddfb1edf4d659739b33aa2f1fff1f558505fb5f6b6efe59ab89e06519354b2e",
-    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
+    "sha256": "18e04e87c59f04bffbafec6e833a90aa55c1b3e173d2766da9e243ac78e7ac13",
+    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection. RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "bf880d6e97fe3be4e77c36c079b6b0f342f09abd6a9dd249c240cd88d73d4470",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference"
+    "sha256": "ab7c9d42acff71a2358fa287c079337b87be909a40f7b7c4c320398042132bca",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
-    "sha256": "95b01dc30547ed9f3e027aca7bca02c9132d0da2be23c498f3088acf400ad377",
-    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; RC5: retryable discovery, partial results and independent bounded host lookup with generation/account guards."
+    "sha256": "5a739257ca09b406b9f5d770e174d80cb6fdbca69fb9566937e68d088fa4f183",
+    "reason": "Unified direct, torrent and supported host resolution; account invalidation and cancellation; preserve playback, subtitles and resume. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; RC5: retryable discovery, partial results and independent bounded host lookup with generation/account guards. RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsMobileView.kt": {
     "upstream": "b78a9e8624dcf1ae7f0f2298a829b93b97392e6787e904ab18c32a02ceeaed4a",
-    "sha256": "777b0d831d5c3b70a39c0aae05af79a8a902827d1220f43fcf3a53e150118025",
-    "reason": "Expose existing server settings page for the source control."
+    "sha256": "d6f5a3f3d0fc27b87f7fb9396eb92faa1adaef3b2255d3d09ca01ceefb0b9c04",
+    "reason": "Expose existing server settings page for the source control. RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/settings/PlayerSettingsTvView.kt": {
     "upstream": "ebbd01156c747f4caf6b8e90e32f12d99eaa16c5aa6ec8e1ad54b5dc359e506c",
-    "sha256": "b70ae3d2050921d7b3a695abb587e288adec73a401097c91ece56a45db10c306",
-    "reason": "Expose existing server settings page for the source control on TV."
+    "sha256": "20fed34a2b5f47486e3a9a5c6159f2b1126a9c522dc2e3f99488816d856dae16",
+    "reason": "Expose existing server settings page for the source control on TV. RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/extractors/Extractor.kt": {
     "upstream": "4fc0423770f80db4345e892426c8df1de60476bb31e9f72c8bdcc755dad232b7",

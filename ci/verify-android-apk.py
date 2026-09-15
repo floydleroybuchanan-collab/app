@@ -44,8 +44,36 @@ def android_api_notes(data: bytes) -> list[int]:
     return levels
 
 
+OWNER_CERTIFICATE_SHA256 = "106b3a5591effe179597fc0bfee400e2634eeb669e3f47e1fb1143e85ca623c4"
+
+
+def verify_owner_certificate(signature: str) -> None:
+    certificates = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)", signature)
+    if [value.lower() for value in certificates] != [OWNER_CERTIFICATE_SHA256]:
+        raise ValueError("APK signing certificate differs from the installed Charming MediaLab release")
+
+
+def verify_sensitive_payloads(archive: zipfile.ZipFile) -> None:
+    """Reject signing material and development metadata without exposing file contents."""
+    for entry in archive.infolist():
+        name = entry.filename.lower()
+        if re.search(r"(?:^|/)(?:\.env(?:\.[^/]*)?|[^/]+\.(?:jks|keystore|p12|pfx))$", name):
+            raise ValueError("Private configuration or signing container packaged in APK")
+        if name.startswith("assets/") and name.endswith((".map", ".hprof")):
+            raise ValueError("Development metadata packaged in APK")
+        # Stream the scan, including binary bundles, without allocating an extra APK-sized buffer.
+        tail = b""
+        with archive.open(entry) as handle:
+            while chunk := handle.read(1024 * 1024):
+                data = tail + chunk
+                if re.search(rb"-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----", data):
+                    raise ValueError("Private key material packaged in APK")
+                tail = data[-80:]
+
+
 def verify_archive(archive: zipfile.ZipFile) -> tuple[dict[str, list[str]], list[str]]:
     """Validate packaged engines, including every ABI, without executing the APK."""
+    verify_sensitive_payloads(archive)
     names = archive.namelist()
     if len(names) != len(set(names)):
         raise ValueError("Duplicate APK ZIP entries")
@@ -106,6 +134,7 @@ def main() -> None:
 
     apk = str(args.apk.resolve())
     signature = run("apksigner", "verify", "--verbose", "--print-certs", apk)
+    verify_owner_certificate(signature)
     alignment = run("zipalign", "-c", "-P", "16", "-v", "4", apk)
     badging = run("aapt", "dump", "badging", apk)
     manifest = run("aapt", "dump", "xmltree", apk, "AndroidManifest.xml")
@@ -118,6 +147,9 @@ def main() -> None:
         raise ValueError("APK is missing TV launcher or Internet permission")
     if "application-debuggable" in badging:
         raise ValueError("Sideload must embed the production bundle without a debuggable application")
+    backup = re.search(r"android:allowBackup[^\n]*", manifest)
+    if not backup or not re.search(r"(?:0x0|false)(?:\s|$)", backup.group(0)):
+        raise ValueError("Release must disable Android application-data backups")
     minimum = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
     target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
     if not minimum or int(minimum.group(1)) != 24:
@@ -139,7 +171,7 @@ def main() -> None:
     report = {
         "apk": args.apk.name, "bytes": args.apk.stat().st_size, "sha256": checksum,
         "package": package.group(1), "versionCode": int(package.group(2)), "versionName": package.group(3),
-        "signatureVerified": True, "zipAlignment16KiBVerified": True,
+        "signatureVerified": True, "certificateSha256": OWNER_CERTIFICATE_SHA256, "matchesReleaseCertificate": True, "privateMaterialScanPassed": True, "androidBackupDisabled": True, "debuggable": False, "zipAlignment16KiBVerified": True,
         "minSdk": int(minimum.group(1)), "targetSdk": int(target.group(1)),
         "nativeAndroidApiNotesChecked": True,
         "playbackEngine": "Media3", "vlcAbsent": True,

@@ -142,6 +142,7 @@ class MainMobileActivity : FragmentActivity() {
         val navHost =
             supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as NavHostFragment
         val navController = navHost.navController
+        com.streamflixreborn.streamflix.charm.CharmNavigation.install(this, binding.root)
 
         if (BuildConfig.APP_LAYOUT == "tv" ||
             (BuildConfig.APP_LAYOUT != "mobile" &&
@@ -536,7 +537,7 @@ class MainMobileActivity : FragmentActivity() {
     private fun showResolverConnectionErrorDialog(ws: String, token: String) {
         if (isFinishing || isDestroyed) return
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.streamflixreborn.streamflix.charm.CharmDialogBuilder(this)
             .setTitle(R.string.app_name)
             .setMessage("Unable to reach the TV bypass websocket. Retry?")
             .setPositiveButton("Retry") { _, _ ->
@@ -554,7 +555,7 @@ class MainMobileActivity : FragmentActivity() {
     private fun showPostBypassCloseDialog() {
         if (isFinishing || isDestroyed) return
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        com.streamflixreborn.streamflix.charm.CharmDialogBuilder(this)
             .setTitle(R.string.app_name)
             .setMessage("Bypass completed. Do you want to close the app?")
             .setPositiveButton("Close app") { _, _ ->

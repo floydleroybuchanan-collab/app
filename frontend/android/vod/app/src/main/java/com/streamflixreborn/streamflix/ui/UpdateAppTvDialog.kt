@@ -28,6 +28,7 @@ class UpdateAppTvDialog(
 
     init {
         setContentView(binding.root)
+        com.streamflixreborn.streamflix.charm.CharmNavigation.decorateDialog(this)
 
         binding.tvUpdateCurrentVersion.text = BuildConfig.VERSION_NAME
 

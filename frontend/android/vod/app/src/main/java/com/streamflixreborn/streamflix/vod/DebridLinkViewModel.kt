@@ -14,8 +14,10 @@ internal class DebridLinkViewModel : ViewModel() {
     val state = mutable.asStateFlow()
     private var job: Job? = null
     private var started = false
-    fun start() {
+    private var enableCachedSearch = false
+    fun start(cachedSearch: Boolean = enableCachedSearch) {
         if (started) return
+        enableCachedSearch = cachedSearch
         started = true
         job = viewModelScope.launch(Dispatchers.IO) {
             val revision = RealDebrid.sessionRevision
@@ -34,7 +36,7 @@ internal class DebridLinkViewModel : ViewModel() {
                         if (credentials != null) {
                             val token = oauth.token(credentials.getString("client_id"), credentials.getString("client_secret"), code.device)
                             ensureActive()
-                            RealDebrid.connectOAuth(token, revision)
+                            RealDebrid.connectOAuth(token, revision, enableCachedSearch)
                             mutable.value = State(message = "Account connected", complete = true)
                             return@launch
                         }
