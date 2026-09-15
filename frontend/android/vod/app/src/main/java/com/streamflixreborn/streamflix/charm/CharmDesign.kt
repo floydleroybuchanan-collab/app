@@ -68,6 +68,12 @@ object CharmDesign {
     fun styleTree(root: View) {
         if (regular == null) regular = ResourcesCompat.getFont(root.context, R.font.charm_geist_regular)
         if (semibold == null) semibold = ResourcesCompat.getFont(root.context, R.font.charm_geist_semibold)
+        val checkedColors = ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(0xFF625A70.toInt(), 0xFFC48BFF.toInt(), 0xFFAAA7BB.toInt()))
+        val trackColors = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(0xFF6320AF.toInt(), 0xFF3B3560.toInt()))
         val pending = java.util.ArrayDeque<View>()
         pending.add(root)
         while (pending.isNotEmpty()) {
@@ -95,6 +101,11 @@ object CharmDesign {
                     view.setPadding(dp(view, 18), dp(view, 10), dp(view, 18), dp(view, 10))
                 }
                 if (view is ImageView) view.imageTintList = ColorStateList.valueOf(Color.WHITE)
+            }
+            when (view) {
+                is androidx.appcompat.widget.SwitchCompat -> { view.thumbTintList = checkedColors; view.trackTintList = trackColors }
+                is android.widget.Switch -> { view.thumbTintList = checkedColors; view.trackTintList = trackColors }
+                is android.widget.CompoundButton -> view.buttonTintList = checkedColors
             }
             if (view is ProgressBar) {
                 view.progressTintList = ColorStateList.valueOf(PURPLE)

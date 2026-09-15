@@ -32,7 +32,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk=[35], application=Application::class, qualifiers="w960dp-h540dp-land-mdpi")
 class CharmSettingsLayoutTest {
-    private fun activity() = Robolectric.buildActivity(FragmentActivity::class.java).also { it.get().setTheme(R.style.AppTheme_Tv) }.setup().get()
+    private fun activity() = Robolectric.buildActivity(FragmentActivity::class.java).also { it.get().setTheme(R.style.AppTheme_Tv); it.get().theme.applyStyle(androidx.leanback.preference.R.style.PreferenceThemeOverlayLeanback, true) }.setup().get()
     private fun layout(view: View) {
         view.measure(View.MeasureSpec.makeMeasureSpec(960,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(540,View.MeasureSpec.EXACTLY));view.layout(0,0,960,540)
         shadowOf(Looper.getMainLooper()).idle()
@@ -82,7 +82,7 @@ class CharmSettingsLayoutTest {
         val toggle=SwitchPreferenceCompat(activity).apply {key="test_toggle";title="Quick Play"}
         screen.addPreference(action);screen.addPreference(toggle);CharmSettingsLayout.prepare(screen)
         val adapter=PreferenceGroupAdapter(screen);val parent=FrameLayout(activity)
-        for(i in 0 until adapter.itemCount) {val holder=adapter.onCreateViewHolder(parent,adapter.getItemViewType(i));adapter.onBindViewHolder(holder,i);holder.itemView.performClick()}
+        for(i in 0 until adapter.itemCount) {val holder=adapter.onCreateViewHolder(parent,adapter.getItemViewType(i));adapter.onBindViewHolder(holder,i); if(adapter.getItem(i) === toggle) assertNotNull("Toggle widget must be visible",holder.itemView.findViewById<View>(androidx.preference.R.id.switchWidget));holder.itemView.performClick()}
         assertEquals(1,called);assertTrue(toggle.isChecked)
         assertTrue(manager.sharedPreferences!!.getBoolean("test_toggle",false))
     }
