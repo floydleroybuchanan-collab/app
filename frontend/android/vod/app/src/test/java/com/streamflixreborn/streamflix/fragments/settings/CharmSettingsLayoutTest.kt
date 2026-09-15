@@ -66,7 +66,8 @@ class CharmSettingsLayoutTest {
             java.io.File("build/charm-design-checks").mkdirs()
             java.io.File("build/charm-design-checks/"+(page.key?:"settings")+".png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
             image.recycle()
-            assertTrue(design.root.clipToPadding==false)
+            assertTrue("Settings scrolling stays below the banner", design.root.clipToPadding)
+            assertTrue("Settings title starts below the artwork", design.root.paddingTop >= (540 * .29f).toInt())
             for(i in 0 until list.childCount) {
                 val child=list.getChildAt(i)
                 assertTrue("No horizontal overflow",child.right<=list.width)
