@@ -1,7 +1,7 @@
 import {now,q,rows,event} from './bot-store.js';
 
 export const RESPONSE_LIFETIME_SECONDS = 600;
-const SEND_METHODS = new Set(['sendMessage','sendRichMessage','sendPhoto','sendDocument','sendVideo','sendAudio','sendAnimation','sendVoice']);
+const SEND_METHODS = new Set(['sendMessage','editMessageText','sendRichMessage','sendPhoto','sendDocument','sendVideo','sendAudio','sendAnimation','sendVoice']);
 
 export async function telegramTransport(env,method,body) {
  if(!env.TELEGRAM_BOT_TOKEN)throw Object.assign(new Error('Save TELEGRAM_BOT_TOKEN in Cloudflare first.'),{status:503});

@@ -234,18 +234,28 @@ export async function handleUpdate(env,u,s){
  if(cb)await telegram(env,'answerCallbackQuery',{callback_query_id:cb.id});
  const text=u.message?.text||'';if(!privateChat&&!cb&&!/\bmr\.?\s*charm\b/i.test(text)&&!/^\/help(?:@\w+)?(?:\s|$)/i.test(text))return;
  const id=String(user.id);await member(env,user);
- env={...env,BOT_INTERACTION:{recipient:id,generation:crypto.randomUUID()}};
+ env={...env,BOT_INTERACTION:{recipient:id,generation:crypto.randomUUID()},BOT_CALLBACK_MESSAGE:privateChat&&cb?m.message_id:null};
  if(cb&&m.receiver_user&&String(m.receiver_user.id)!==id)return;
  if(!privateChat)env={...env,BOT_GROUP_REPLY:{chat_id:s.group_id,user_id:id,callback_query_id:cb?.id,message_thread_id:m.message_thread_id}};
  const window=Math.floor(now()/60);
  await q(env,'INSERT INTO bot_rate VALUES(?1,?2,1) ON CONFLICT(telegram_id) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,window=excluded.window',id,window).run();
- if((await q(env,'SELECT count FROM bot_rate WHERE telegram_id=?1',id).first()).count>12)return;
+ if((await q(env,'SELECT count FROM bot_rate WHERE telegram_id=?1',id).first()).count>12){
+  await event(env,id,'command_rate_limited',privateChat?'private':'group');
+  if(cb)await telegram(env,'answerCallbackQuery',{callback_query_id:cb.id,text:'Please wait until the next minute, then try again.',show_alert:true});
+  return;
+ }
  if(privateChat)await q(env,'UPDATE bot_members SET dm_started=1 WHERE telegram_id=?1',id).run();
- const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update)$/i);
+ const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update|usage|website_release)$/i);
  const cmd=cb?.data||start?.[1]||intent(text);
  if((['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:'))&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
   if((cb||exactCommand(text)||/^\s*mr\.?\s*charm\s*$/i.test(text))&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))return await handleCommand(env,id,cmd,s);
+  if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'){
+   await event(env,id,'usage_requested',(privateChat?'private':'group')+' '+(cb?'button':'text'));
+   await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+   const result=await handleCommand(env,id,cmd,s);
+   await event(env,id,'usage_delivered',privateChat?'private':'group');return result;
+  }
   if(await accountManagement(env,id,text,cmd,s,m))return;
   if(await botAnnouncementFlow(env,id,text,cmd,s))return;
   if(await accountFlow(env,id,text,cmd,s))return;
