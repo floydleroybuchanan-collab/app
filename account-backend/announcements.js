@@ -46,7 +46,7 @@ export async function activeAnnouncements(env,userId,version){
 }
 export async function legacyAnnouncementUpdate(env,userId){
  const active=await activeAnnouncements(env,userId,null),a=active.find(item=>item.kind==='update');
- return a?{version_code:a.version_code,message:a.message.slice(0,500),url:a.url}:null;
+ return a?{version_code:a.version_code,message:a.message.slice(0,3500),url:a.url}:null;
 }
 export async function announcementAdmin(request,env,auth,helpers){
  if(!auth.isOwner&&!auth.profile.can_manage_announcements)fail('Announcement permission is required.',403);
@@ -95,3 +95,4 @@ export async function announcementClient(request,env,auth,helpers){
  }
  fail('Method not allowed.',405);
 }
+

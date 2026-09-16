@@ -15,6 +15,7 @@ export function configureAppPolicy(raw?: Partial<AppPolicy> | null) {
   let validUrl=false;
   try { const url=new URL(update?.url||""); validUrl=url.protocol==="https:"&&!url.username&&!url.password&&!url.hash; } catch {}
   current={announcements_supported:raw?.announcements_supported===true,multiview_max:raw==null?4:typeof cap==="number"&&Number.isInteger(cap)?Math.max(0,Math.min(4,cap)):0,provider_limits:limits,
-    update:validUrl&&update&&Number.isInteger(update.version_code)&&typeof update.message==="string"?{version_code:update.version_code,message:update.message.slice(0,500),url:update.url}:DEFAULT.update};
+    update:validUrl&&update&&Number.isInteger(update.version_code)&&typeof update.message==="string"?{version_code:update.version_code,message:update.message.slice(0,3500),url:update.url}:DEFAULT.update};
   listeners.forEach(fn=>fn());
 }
+

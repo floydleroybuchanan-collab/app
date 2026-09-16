@@ -24,3 +24,13 @@ test('support report allows numeric measurements only and bounds malformed or ov
  assert.deepEqual(JSON.parse(supportReport('v',14,'x'.repeat(200001))).playback,[]);
  assert.equal(JSON.parse(supportReport('v',14,JSON.stringify(Array(100).fill({width:1})))).playback.length,20);
 });
+
+test('long update messages survive the legacy policy path intact',()=>{
+ const message='Welcome to Charming MediaLab. '.repeat(110);
+ configureAppPolicy({update:{version_code:26,message,url:'https://example.test/releases'}});
+ assert.equal(getAppPolicy().update.message,message);
+ configureAppPolicy({update:{version_code:26,message:'x'.repeat(4000),url:'https://example.test/releases'}});
+ assert.equal(getAppPolicy().update.message.length,3500);
+ configureAppPolicy();
+});
+
