@@ -11,8 +11,8 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "20f2ed0e11aed71628cb474ae67715d321b26f73968054cbe1cfc8f7eda5bebf",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume. RC8: report playback state for authorized admin usage totals; no stream URLs or titles reported, no playback behavior changed."
+    "sha256": "c09809eb692eb24ecc501d7c66ebcf1a47274a65e3d0924de4f6aa6a4b9e299f",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume. RC8: report playback state for authorized admin usage totals; no stream URLs or titles reported, no playback behavior changed. RC9 playback patch: bind the VOD Menu visibility to Media3 controller visibility and release that binding with the player view."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",

@@ -261,6 +261,7 @@ class PlayerTvFragment : Fragment() {
 
         initializePlayer(false)
         initializeVideo()
+        com.streamflixreborn.streamflix.charm.CharmPageDrawer.bindPlayer(this, binding.pvPlayer)
         binding.pvPlayer.onMediaPreviousClicked = ::handleMediaPrevious
         binding.pvPlayer.onMediaNextClicked = ::handleMediaNext
         gestureHelper = PlayerGestureHelper(

@@ -29,6 +29,7 @@ class PlayerTvView @JvmOverloads constructor(
     var onMediaNextClicked: (() -> Boolean)? = null
 
     private var zoomToast: Toast? = null
+    private var revealKey: Int? = null
 
     fun enterManualZoomMode() {
         player?.pause()
@@ -53,6 +54,10 @@ class PlayerTvView @JvmOverloads constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == revealKey) {
+            if (event.action == KeyEvent.ACTION_UP) revealKey = null
+            return true
+        }
         if (isManualZoomEnabled) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 // RIPRISTINATA LOGICA ORIGINALE: Scaliamo solo il videoSurfaceView.
@@ -108,6 +113,16 @@ class PlayerTvView @JvmOverloads constructor(
         }
 
         if (controller.isVisible) return super.dispatchKeyEvent(event)
+
+        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode in listOf(
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER
+            )) {
+            revealKey = event.keyCode
+            showController()
+            return true
+        }
 
         return when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> {

@@ -52,7 +52,12 @@ object CharmAudioOutput {
 /** Explicit compatibility option; default audio and all video behavior are preserved. */
 open class CharmAudioRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
     private val stereo = CharmAudioOutput.mode(context) == "stereo"
-    init { if (stereo) setExtensionRendererMode(EXTENSION_RENDERER_MODE_PREFER) }
+    init {
+        // Keep the platform decoder first, but make the bundled FFmpeg audio
+        // renderer available for formats the device cannot decode (e.g. DTS).
+        setExtensionRendererMode(if (stereo) EXTENSION_RENDERER_MODE_PREFER else EXTENSION_RENDERER_MODE_ON)
+        setEnableDecoderFallback(true)
+    }
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink? {
         if (!stereo) return super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams)
         val mixer = ChannelMixingAudioProcessor()

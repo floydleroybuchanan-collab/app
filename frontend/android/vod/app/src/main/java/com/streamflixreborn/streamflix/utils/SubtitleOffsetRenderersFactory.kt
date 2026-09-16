@@ -25,6 +25,12 @@ object SubtitleOffset {
  */
 @UnstableApi
 class SubtitleOffsetRenderersFactory(context: Context) : com.streamflixreborn.streamflix.charm.CharmAudioRenderersFactory(context) {
+    init {
+        // VOD files commonly carry Dolby/DTS tracks. Decode audio to PCM rather
+        // than trusting a device's compressed-passthrough claim. This bundled
+        // extension is audio-only; platform video decoding is unchanged.
+        setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+    }
     override fun buildTextRenderers(
         context: Context,
         output: TextOutput,

@@ -11,7 +11,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.fragment.NavHostFragment
-import androidx.recyclerview.widget.RecyclerView
+import androidx.media3.ui.PlayerView
 import com.streamflixreborn.streamflix.R
 
 /** Modal page controls: preserve real controls/listeners and restore the exact originating view. */
@@ -23,6 +23,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     private var origin: View? = null
     private var rightReleasedAt = 0L
     private var consumeRightUp = false
+    private var playbackControls: PlayerView? = null
     private val menu = Button(activity).apply {
         id = View.generateViewId(); text = "☰ Menu"; isAllCaps = false; textSize = 12f
         isFocusable = true; setOnClickListener { open() }; glass(this)
@@ -32,13 +33,32 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             endToEnd = 0; topToTop = 0; marginEnd = dp(16); topMargin = dp(10)
         })
         menu.elevation = dp(9).toFloat()
-        nav?.navController?.addOnDestinationChangedListener { _, _, _ -> dialog?.dismiss(); menu.bringToFront() }
+        nav?.navController?.addOnDestinationChangedListener { _, destination, _ ->
+            dialog?.dismiss()
+            menu.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
+            menu.bringToFront()
+        }
         activity.lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) { dialog?.dismiss(); rightReleasedAt = 0 }
             override fun onDestroy(owner: LifecycleOwner) { instances.remove(activity) }
         })
     }
     private fun dp(n: Int) = (n * root.resources.displayMetrics.density).toInt()
+    fun bindPlayerControls(playerView: PlayerView) {
+        playbackControls = playerView
+        fun update(visibility: Int) {
+            if (playbackControls !== playerView) return
+            val hadFocus = menu.hasFocus()
+            menu.visibility = visibility
+            if (visibility != View.VISIBLE && hadFocus) playerView.requestFocus()
+        }
+        playerView.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { update(it) })
+        update(if (playerView.isControllerFullyVisible) View.VISIBLE else View.GONE)
+    }
+    private fun unbindPlayerControls(playerView: PlayerView) {
+        playerView.setControllerVisibilityListener(null as PlayerView.ControllerVisibilityListener?)
+        if (playbackControls === playerView) { playbackControls = null; menu.visibility = View.VISIBLE }
+    }
     fun register(fragment: Fragment, title: String, controls: List<View>) {
         val view = fragment.view ?: return
         controls.forEach { (it.parent as? ViewGroup)?.removeView(it) }
@@ -94,6 +114,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         d.setOnDismissListener {
             page?.controls?.forEach { (it.parent as? ViewGroup)?.removeView(it) }
             dialog = null
+            playbackControls?.showController()
             val prior = origin
             root.post { if (dialog == null) { if (prior?.isAttachedToWindow == true && prior.isShown && prior.isFocusable) prior.requestFocus() else menu.requestFocus() } }
         }
@@ -118,17 +139,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         val focus = activity.currentFocus ?: root.findFocus() ?: return false
         if (focus is EditText || focus is SeekBar || dialog?.isShowing == true) return false
         val doubleTap = rightReleasedAt > 0 && event.eventTime - rightReleasedAt in 0..330
-        val next = focus.focusSearch(View.FOCUS_RIGHT)
-        val rect = android.graphics.Rect(); focus.getGlobalVisibleRect(rect)
-        val nextRect = android.graphics.Rect(); next?.getGlobalVisibleRect(nextRect)
-        var parent = focus.parent
-        var inContentRow = false
-        while (parent is View && parent !== root) {
-            if (parent is RecyclerView || parent is LinearLayout && parent.orientation == LinearLayout.HORIZONTAL) inContentRow = true
-            parent = parent.parent
-        }
-        val edge = inContentRow && (next == null || next === menu || nextRect.centerX() <= rect.centerX() || kotlin.math.abs(nextRect.centerY() - rect.centerY()) > rect.height()/2)
-        if (doubleTap || edge) { consumeRightUp = true; open(); return true }
+        if (doubleTap) { consumeRightUp = true; open(); return true }
         return false
     }
     private fun verticalControls(view: View) {
@@ -141,8 +152,21 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     }
     companion object {
         private val instances = java.util.WeakHashMap<FragmentActivity, CharmPageDrawer>()
-        fun install(activity: FragmentActivity, root: ConstraintLayout) { instances[activity] = CharmPageDrawer(activity, root) }
+        fun install(activity: FragmentActivity, root: ConstraintLayout) {
+            val drawer = CharmPageDrawer(activity, root)
+            instances[activity] = drawer
+            // Restored player fragments can exist before the activity installs its chrome.
+            val fragment = drawer.nav?.childFragmentManager?.primaryNavigationFragment
+            fragment?.view?.findViewById<PlayerView>(R.id.pv_player)?.let { bindPlayer(fragment, it) }
+        }
         fun register(fragment: Fragment, title: String, controls: List<View>) { instances[fragment.activity]?.register(fragment, title, controls) }
+        fun bindPlayer(fragment: Fragment, playerView: PlayerView) {
+            val drawer = instances[fragment.activity] ?: return
+            drawer.bindPlayerControls(playerView)
+            fragment.viewLifecycleOwner.lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onDestroy(owner: LifecycleOwner) { drawer.unbindPlayerControls(playerView) }
+            })
+        }
         fun dispatch(activity: FragmentActivity, event: KeyEvent) = instances[activity]?.dispatch(event) ?: false
         fun glass(view: TextView) {
             val density = view.resources.displayMetrics.density
@@ -156,4 +180,3 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         }
     }
 }
-
