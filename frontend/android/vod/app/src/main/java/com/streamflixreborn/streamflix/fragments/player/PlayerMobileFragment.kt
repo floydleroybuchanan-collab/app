@@ -1054,6 +1054,7 @@ class PlayerMobileFragment : Fragment() {
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 super.onIsPlayingChanged(isPlaying)
+                com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-mobile", isPlaying)
                 binding.pvPlayer.keepScreenOn = isPlaying || UserPreferences.keepScreenOnWhenPaused
 
                 if (isPlaying) {
@@ -1566,6 +1567,7 @@ class PlayerMobileFragment : Fragment() {
     }
 
     private fun releasePlayer() {
+        com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-mobile", false)
         stopProgressHandler()
         binding.pvPlayer.player = null
         binding.settings.player = null

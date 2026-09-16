@@ -69,7 +69,7 @@ object CharmVodPageLayout {
         val title = when (page) {
             "MoviesTvFragment" -> "Movies"
             "TvShowsTvFragment" -> "TV shows"
-            "SearchTvFragment" -> "Find your next favorite"
+            "SearchTvFragment" -> "Discover"
             "FavoritesTvFragment" -> "My list"
             "ProvidersTvFragment" -> "Choose your VOD source"
             else -> null
@@ -110,10 +110,13 @@ object CharmVodPageLayout {
             header.addView(CharmCatalogControls.controls(fragment,grid))
             (grid as? VerticalGridView)?.setNumColumns(4)
         }
+        val drawerControls = (0 until header.childCount).map { header.getChildAt(it) }.filter { it.getFocusables(View.FOCUS_FORWARD).isNotEmpty() }
+        drawerControls.forEach { header.removeView(it) }
+        CharmPageDrawer.register(fragment, title ?: page.removeSuffix("TvFragment"), drawerControls)
         if (header.childCount > 0) root.addView(header)
         grid.doOnLayout {
             val left = (root.width * .135f).toInt()
-            val top = contentTop(root)
+            val top = (root.height * .247f).toInt()
             val right = (root.width * .024f).toInt()
             (grid.layoutParams as? ConstraintLayout.LayoutParams)?.apply {
                 startToEnd = ConstraintLayout.LayoutParams.UNSET
@@ -141,8 +144,11 @@ object CharmVodPageLayout {
             grid.clipToPadding = true
             grid.nextFocusLeftId = R.id.nav_main
             if (grid is VerticalGridView) {
-                grid.windowAlignment = BaseGridView.WINDOW_ALIGN_HIGH_EDGE
-                grid.windowAlignmentOffset = root.dp(8)
+                grid.windowAlignment = BaseGridView.WINDOW_ALIGN_LOW_EDGE
+                grid.windowAlignmentOffset = 0
+                grid.itemAlignmentOffset = 0
+                grid.itemAlignmentOffsetPercent = 0f
+                grid.isItemAlignmentOffsetWithPadding = true
                 grid.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             }
         }

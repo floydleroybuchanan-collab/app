@@ -82,7 +82,6 @@ export function AnnouncementCenter(){
   {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
   {button(active.reminder_hours===24?'Remind me tomorrow':'Remind me in '+active.reminder_hours+' hours',dismiss)}
   {button('Alert sounds: '+(sound?'On':'Off'),()=>{const enabled=!sound;setSound(enabled);void storage.setItem(UPDATE_SOUND_KEY,enabled);})}
-  {button('Exit',dismiss)}
- </View></ScrollView></FocusGuide></View></Modal>;
+ </View></ScrollView><View style={{paddingHorizontal:30,paddingBottom:20}} onFocusCapture={entryFocus.onFocusCapture}>{button('Exit',dismiss)}</View></FocusGuide></View></Modal>;
 }
 const styles=StyleSheet.create({scrim:{flex:1,backgroundColor:'rgba(3,4,9,.88)',justifyContent:'center',alignItems:'center'},card:{borderRadius:24,backgroundColor:'#13141F',borderWidth:1,borderColor:'#514363'},content:{padding:30,gap:18},header:{flexDirection:'row',alignItems:'center',gap:14},brand:{color:'#C4B5FD',fontFamily:fonts.bold,fontSize:12,letterSpacing:3},title:{color:'#fff',fontSize:30,fontFamily:fonts.bold},message:{color:'#CDC9DA',fontSize:16,lineHeight:25,fontFamily:fonts.regular},download:{flexDirection:'row',alignItems:'center',gap:24},button:{paddingVertical:13,paddingHorizontal:18,minHeight:48,backgroundColor:'#232231',borderWidth:2,borderColor:'#40374E',borderRadius:12,alignItems:'center'},primary:{backgroundColor:tvColors.purple,borderColor:tvColors.purple},focused:{borderColor:'#fff',backgroundColor:'#6831BE'},buttonText:{color:'#fff',fontFamily:fonts.semibold,fontSize:15},help:{gap:14,padding:18,backgroundColor:'#1C1D2B',borderRadius:14},error:{color:'#FDA4AF',fontSize:14}});

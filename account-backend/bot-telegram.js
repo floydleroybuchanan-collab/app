@@ -1,3 +1,4 @@
+import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
 import {supportContacts} from './telegram-contacts.js';
@@ -172,6 +173,7 @@ async function conversation(env,id,text,data){
  await q(env,'UPDATE bot_conversations SET state=?1,json=?2,updated_at=?3 WHERE telegram_id=?4',next,JSON.stringify(d),now(),id).run();return true;
 }
 async function handleCommand(env,id,cmd,s){
+ if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release')return usageCommand(env,id,cmd,s);
  if(cmd==='admin'||cmd.startsWith('admin_')){
   if(!await currentTelegramAdmin(env,id,s,telegram))return send(env,id,'Only current group admins can access Admin tools.');
   if(cmd==='admin')return commandMenu(env,id,cmd,s);

@@ -19,6 +19,20 @@ class CharmBrandHeaderView @JvmOverloads constructor(context: Context, attrs: At
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         target.set(0f, 0f, width.toFloat(), height.toFloat())
+        // Preserve the approved banner and extend its straight rail before the lower bend.
+        canvas.save()
+        canvas.clipRect(0f, 0f, width.toFloat(), height * .28f)
         canvas.drawBitmap(artwork, null, target, paint)
+        canvas.restore()
+        canvas.save()
+        canvas.scale(1f, 1.56f, width * .5f, height * .26f)
+        canvas.clipRect(0f, height * .26f, width * .12f, height * .61f)
+        canvas.drawBitmap(artwork, null, target, paint)
+        canvas.restore()
+        canvas.save()
+        canvas.translate(0f, height * .21f)
+        canvas.clipRect(0f, height * .59f, width * .12f, height.toFloat())
+        canvas.drawBitmap(artwork, null, target, paint)
+        canvas.restore()
     }
 }

@@ -29,6 +29,11 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     override fun getName() = "CharmVod"
 
     @ReactMethod
+    fun setUsageSession(token: String?) {
+        com.streamflixreborn.streamflix.charm.CharmUsageReporter.configure(context.applicationContext as android.app.Application, token, BuildConfig.VERSION_CODE, context.currentActivity)
+    }
+
+    @ReactMethod
     fun open(promise: Promise) {
         context.runOnUiQueueThread {
             val activity = context.currentActivity

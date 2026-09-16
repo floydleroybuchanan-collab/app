@@ -9,7 +9,7 @@
     <com.streamflixreborn.streamflix.charm.CharmBrandHeaderView android:id="@+id/vod_brand_header" android:layout_width="0dp" android:layout_height="0dp" android:elevation="2dp"
         app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
     <com.tanasi.navigation.widget.NavigationSlideView android:id="@+id/nav_main" android:layout_width="0dp" android:layout_height="0dp" android:background="@android:color/transparent" android:elevation="4dp"
-        app:layout_constraintWidth_percent="0.10" app:layout_constraintHeight_percent="0.59" app:layout_constraintHorizontal_bias="0.025" app:layout_constraintVertical_bias="0.69"
+        app:layout_constraintWidth_percent="0.091" app:layout_constraintHeight_percent="0.59" app:layout_constraintHorizontal_bias="0.034" app:layout_constraintVertical_bias="0.66"
         app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent"
         app:menu="@menu/menu_main_activity_tv" app:menuGravity="top" app:menuSpacing="10dp" />
     <TextView android:visibility="gone" android:id="@+id/vod_search" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:layout_marginEnd="24dp" android:padding="10dp" android:text="@string/charm_search_hint" android:textSize="12sp" android:textColor="#D1C4DF" android:fontFamily="@font/charm_geist_regular" android:drawableStart="@drawable/ic_search" android:drawablePadding="10dp" android:background="@drawable/charm_vod_chip" android:focusable="true" android:clickable="true" android:elevation="6dp"

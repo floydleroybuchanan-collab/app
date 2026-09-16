@@ -12,7 +12,7 @@ async function loadAppSettings() {
  for(const [id,label] of [['primary','Charming MediaLab'],['secondary','Charming MediaLab 2'],['tertiary','Charming MediaLab 3'],['quaternary','Charming MediaLab 4']]) limits[id]=select(f,label+' provider pane limit',id,[[0,'Unknown / no extra app cap'],[1,'1'],[2,'2'],[3,'3'],[4,'4']],settings.provider_limits[id]);
  f.append(el('h2','Optional update notice'),el('p','Use the Android version code of an available build. Set 0 to turn the notice off. Older apps keep working; this never forces an update.','help'));
  const version=field(f,'New Android version code','version',settings.update.version_code,'number',{min:0,max:2100000000});
- const note=field(f,'Message','update_message',settings.update.message,'text',{maxLength:500});
+ const note=field(f,'Message','update_message',settings.update.message,'text',{maxLength:3500});
  const url=field(f,'HTTPS download or release page','update_url',settings.update.url,'url',{maxLength:2048});
  submit(f,'Save app controls');
  section.append(el('h2','Account service errors'),el('p','Caught internal errors for the last seven days. Counts contain no user identities or request addresses. Database failures may prevent counts from being stored; consult Cloudflare Worker metrics and logs as well.','help'));

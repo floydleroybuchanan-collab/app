@@ -558,6 +558,7 @@ object NativePlaybackManager {
 
   private fun publishState(state: String, reason: String? = null) { listener?.onState(state, reason) }
   private fun stopInternal(releasePlayer: Boolean) {
+    com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("iptv-main", false)
     captureHealth("stop", player)
     main.removeCallbacks(healthSampler)
     EpgImportCoordinator.playbackActive = false
@@ -700,6 +701,7 @@ object NativePlaybackManager {
       }
       override fun onIsPlayingChanged(isPlaying: Boolean) {
         if (!isCurrent() || created.isPlaying != isPlaying) return
+        com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("iptv-main", isPlaying)
         if (!isPlaying) recoveryPolicy.onInterrupted(SystemClock.elapsedRealtime())
         if (!firstFrameRendered) return
         if (isPlaying && !userPaused) {

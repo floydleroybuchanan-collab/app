@@ -94,7 +94,7 @@ class CharmSettingsLayoutTest {
             val title=view.findViewById<android.widget.TextView>(if(resource==R.layout.content_movie_tv)R.id.tv_movie_title else R.id.tv_tv_show_title)
             title.text="A selected movie or television series"
             view.measure(View.MeasureSpec.makeMeasureSpec(805,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));view.layout(0,0,805,view.measuredHeight)
-            for(id in listOf(R.id.charm_detail_sources,R.id.charm_detail_more,R.id.charm_detail_my_list)) {
+            for(id in listOf(R.id.charm_detail_sources,R.id.charm_detail_my_list)) {
                 val button=view.findViewById<View>(id)
                 assertTrue("Action must fit: ${activity.resources.getResourceEntryName(id)} right=${button.right}",button.right<=805)
                 assertTrue(button.width>0)

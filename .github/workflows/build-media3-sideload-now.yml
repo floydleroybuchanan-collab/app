@@ -200,8 +200,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/Charming.MediaLab-2.2.0-RC7-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/Charming.MediaLab-2.2.0-RC7-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/Charming.MediaLab-2.2.0-RC8-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/Charming.MediaLab-2.2.0-RC8-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner

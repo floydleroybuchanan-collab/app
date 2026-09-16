@@ -4,7 +4,8 @@ export function validateWebsite(input){
  const n={url:String(input.url||'').trim(),message:String(input.message||'').trim(),enabled:input.enabled,timezone:String(input.timezone||''),time:String(input.time||''),repeat:input.repeat,weekday:Number(input.weekday)};
  let u;try{u=new URL(n.url);}catch{fail('Enter a valid HTTPS website address.');}
  if(u.protocol!=='https:'||u.username||u.password||n.url.length>2048)fail('Use an HTTPS website address without a username or password.');
- if(!n.message||n.message.length>1200)fail('Enter a website message of 1–1,200 characters.');
+ if(!n.message||n.message.length>3500)fail('Enter a website message of 1–3,500 characters.');
+ if(n.message.length+n.url.length+5>4096)fail('The message and website address together must fit within 4,096 characters.');
  if(typeof n.enabled!=='boolean'||!['daily','weekly'].includes(n.repeat)||!Number.isInteger(n.weekday)||n.weekday<0||n.weekday>6||!/^([01]\d|2[0-3]):[0-5]\d$/.test(n.time))fail('Choose a valid repeat interval, day and time.');
  try{new Intl.DateTimeFormat('en-US',{timeZone:n.timezone}).format();}catch{fail('Enter a valid timezone, such as America/New_York.');}
  return n;

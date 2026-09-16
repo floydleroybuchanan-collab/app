@@ -176,7 +176,7 @@
         tools:progress="80" />
 
     <TextView
-        android:id="@+id/btn_tv_show_trailer"
+        android:id="@+id/btn_tv_show_trailer" android:visibility="gone"
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -190,7 +190,7 @@
         android:fontFamily="@font/charm_geist_regular" />
 
     <ImageView
-        android:id="@+id/btn_tv_show_favorite" android:contentDescription="@string/charm_my_list"
+        android:id="@+id/btn_tv_show_favorite" android:visibility="gone" android:contentDescription="@string/charm_my_list"
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="44dp"
@@ -209,8 +209,8 @@
 
     <androidx.constraintlayout.widget.Guideline android:id="@+id/charm_detail_text_edge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" app:layout_constraintGuide_percent="0.65" />
     <TextView android:id="@+id/charm_detail_sources" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/charm_sources" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now" app:layout_constraintTop_toTopOf="@id/btn_tv_show_watch_now" />
-    <TextView android:id="@+id/charm_detail_my_list" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:text="@string/charm_my_list" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/btn_tv_show_favorite" app:layout_constraintTop_toTopOf="@id/btn_tv_show_trailer" />
-    <TextView android:id="@+id/charm_detail_more" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/charm_more" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/charm_detail_my_list" app:layout_constraintTop_toTopOf="@id/btn_tv_show_trailer" />
-    <View android:layout_width="1dp" android:layout_height="36dp" app:layout_constraintTop_toBottomOf="@id/btn_tv_show_favorite" app:layout_constraintStart_toStartOf="parent" />
+    <TextView android:id="@+id/charm_detail_my_list" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:text="@string/charm_my_list" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/charm_detail_sources" app:layout_constraintTop_toTopOf="@id/btn_tv_show_watch_now" />
+    <TextView android:id="@+id/charm_detail_more" android:visibility="gone" style="@style/AppTheme.Widget.Tv.Button" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/charm_more" android:focusable="true" android:focusableInTouchMode="true" app:layout_constraintStart_toEndOf="@id/charm_detail_my_list" app:layout_constraintTop_toTopOf="@id/btn_tv_show_watch_now" />
+    <View android:layout_width="1dp" android:layout_height="36dp" app:layout_constraintTop_toBottomOf="@id/btn_tv_show_watch_now" app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

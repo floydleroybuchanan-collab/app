@@ -102,6 +102,9 @@ internal object NativeMultiview {
         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, textLanguage.isBlank()).build()
       var restoredTracks = false
       player.addListener(object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+          if (panes[slot] === pane && pane.player === player) com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("iptv-multi-$slot", isPlaying)
+        }
         override fun onTracksChanged(tracks: Tracks) {
           if (restoredTracks || panes[slot] !== pane || pane.player !== player || tracks.groups.isEmpty()) return
           restoredTracks = true
@@ -145,7 +148,10 @@ internal object NativeMultiview {
     } catch (_: Exception) { release(pane); emit(slot, pane.revision, "error", "This stream could not start. Try fewer panes or another channel.") }
   }
   private fun release(pane: Pane?): Boolean {
-    if (pane != null) main.removeCallbacksAndMessages(pane)
+    if (pane != null) {
+      main.removeCallbacksAndMessages(pane)
+      panes.entries.firstOrNull { it.value === pane }?.key?.let { com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("iptv-multi-$it", false) }
+    }
     val player = pane?.player ?: return !releaseFailed
     surfaces.values.forEach { ref -> ref.get()?.playerView?.let { if (it.player === player) it.player = null } }
     return try { player.release(); pane.player = null; true }
@@ -190,6 +196,7 @@ internal object NativeMultiview {
     if (token != session || !MultiviewPolicy.validSlot(slot) || revisions[slot] > revision) return
     revisions[slot] = revision
     release(panes.remove(slot))
+    com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("iptv-multi-$slot", false)
     audible = MultiviewPolicy.audioAfterRemoval(audible, slot, panes.keys)
     if (audible >= 0) listen(token, audible)
   }

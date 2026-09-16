@@ -4,7 +4,7 @@ import {appControls} from './app-controls.js';
 const bounded=(value,min,max,label)=>{if(!Number.isSafeInteger(value)||value<min||value>max)fail(label+' is outside the allowed range.');return value;};
 export function validateAnnouncement(body,t=now()){
  const title=String(body.title||'').trim(),message=String(body.message||'').trim(),url=String(body.url||'').trim();
- if(!title||title.length>100||!message||message.length>1200)fail('Enter a title up to 100 characters and message up to 1,200 characters.');
+ if(!title||title.length>100||!message||message.length>3500)fail('Enter a title up to 100 characters and message up to 3,500 characters.');
  if(!['update','general'].includes(body.kind)||!['outdated','all','selected'].includes(body.audience))fail('Choose an announcement type and audience.');
  if(url){let parsed;try{parsed=new URL(url);}catch{fail('Enter a valid HTTPS release link.');}if(parsed.protocol!=='https:'||parsed.username||parsed.password||parsed.hash||url.length>2048)fail('Use an HTTPS release link without credentials or fragments.');}
  const version=bounded(body.version_code??0,0,2100000000,'Android version code');

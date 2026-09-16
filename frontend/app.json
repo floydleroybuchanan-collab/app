@@ -2,7 +2,7 @@
   "expo": {
     "name": "Charming MediaLab",
     "slug": "charm-iptv-purple-next",
-    "version": "2.2.0-rc.7",
+    "version": "2.2.0-rc.8",
     "orientation": "default",
     "icon": "./assets/medialab/medialab_launcher.png",
     "scheme": "charmiptv-purple",
@@ -16,7 +16,7 @@
       "edgeToEdgeEnabled": true,
       "allowBackup": false,
       "package": "com.charmiptv.app.purple.next.vodtest1",
-      "versionCode": 25,
+      "versionCode": 26,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",

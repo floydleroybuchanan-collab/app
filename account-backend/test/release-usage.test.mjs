@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {fixture} from './fixture.mjs';
+import {validateRelease} from '../website-release.js';
+const release={download_url:'https://example.com/app.apk',version:'2.2.0',build:194,release_date:'2026-09-15',size_bytes:155000000,title:'New release',notes:'Navigation improvements.'};
+test('release publishing is protected, validated and revision checked',async()=>{
+ const f=fixture();f.user('viewer');
+ assert.throws(()=>validateRelease({...release,download_url:'javascript:alert(1)'}));
+ assert.throws(()=>validateRelease({...release,release_date:'2026-02-30'}));
+ assert.equal((await f.request('/admin/bot/release',{token:f.token('viewer')})).status,403);
+ const old=(await f.request('/admin/bot/release',{token:f.ownerToken})).body.release;
+ const saved=await f.request('/admin/bot/release',{method:'PUT',token:f.ownerToken,body:{...release,revision:old.revision}});
+ assert.equal(saved.status,200);
+ assert.equal((await f.request('/public/app-release')).body.release.build,194);
+ assert.equal((await f.request('/admin/bot/release',{method:'PUT',token:f.ownerToken,body:{...release,revision:old.revision}})).status,409);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_jobs').get().n,0);
+});
+test('activity records only bounded observed playing time and rejects replay',async()=>{
+ const f=fixture();f.user('viewer');const token=f.token('viewer');
+ const beat=sequence=>f.request('/me/activity',{method:'POST',token,body:{mode:'vod',playing:true,sequence,build:26}});
+ assert.equal((await beat(100)).status,200);
+ f.db.prepare('UPDATE app_presence SET last_seen=last_seen-60').run();
+ await beat(101);await beat(101);
+ assert.equal(f.db.prepare('SELECT SUM(vod_seconds) n FROM app_usage_daily').get().n,60);
+ f.db.prepare('UPDATE app_presence SET last_seen=last_seen-600').run();await beat(102);
+ assert.equal(f.db.prepare('SELECT SUM(vod_seconds) n FROM app_usage_daily').get().n,60);
+ assert.equal((await f.request('/admin/bot/usage',{token})).status,403);
+ const u=(await f.request('/admin/bot/usage',{token:f.ownerToken})).body.usage;
+ assert.equal(u.vod_users,1);assert.equal(u.most[0].watch_seconds,60);
+});

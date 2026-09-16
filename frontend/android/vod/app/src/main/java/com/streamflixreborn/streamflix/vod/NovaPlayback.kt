@@ -224,6 +224,7 @@ class NovaPlayback : DialogFragment(), SurfaceHolder.Callback {
             if (epoch != revision.get()) return@postDelayed
             val p = native ?: return@postDelayed
             runCatching {
+                com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-nova", p.isPlaying)
                 position = p.currentPosition.toLong()
                 duration = p.duration.toLong()
                 if (!complete) nativeContent?.let { VodHistory.save(it, position, duration) }
@@ -250,6 +251,7 @@ class NovaPlayback : DialogFragment(), SurfaceHolder.Callback {
         }
     }
     private fun releaseNative(after: (() -> Unit)? = null) {
+        com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-nova", false)
         revision.incrementAndGet()
         worker.post {
             native?.let { p ->

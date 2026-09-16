@@ -1,3 +1,5 @@
+import {releaseAdmin} from './website-release.js';
+import {usageReport} from './app-usage.js';
 import {websiteAdmin} from './website-announcements.js';
 import {telegramUsername} from './telegram-contacts.js';
 import {brandedContent} from './branding.js';
@@ -9,6 +11,8 @@ const boolKeys=['enabled','auto_tokens','downloads_enabled','accounts_enabled','
 export async function botAdmin(request,env,auth,{json,safeJson}){
  if(!auth.isOwner&&!auth.profile.can_manage_bot)fail('The owner must grant Mr. Charm control access.',403);
  const url=new URL(request.url),path=url.pathname.slice('/admin/bot'.length),method=request.method,id=auth.user.id;
+ if(path==='/release')return releaseAdmin(request,env,auth,{json,safeJson});
+ if(path==='/usage'&&method==='GET')return json({success:true,usage:await usageReport(env,auth,url.searchParams.get('period')||'30')});
  const s=await settings(env);
  if(path==='/website'||path==='/website/send')return websiteAdmin(request,env,auth,{json,safeJson},s,path);
  if(path==='/community-link'&&method==='GET')return json({success:true,url:(await q(env,"SELECT value FROM bot_runtime WHERE key='community_join_request_link'").first())?.value||null});

@@ -5,11 +5,13 @@ let botTab='Dashboard';
 async function loadBot(){
  const section=heading('Mr. Charm Control Center','Manage your Telegram assistant, member links, support and editable content.');
  const tabs=el('div',undefined,'bot-tabs');section.append(tabs);
- for(const name of ['Dashboard','Members','Group Invites','Content','Downloads','Website','Support','Support Admins','Bot Settings','Audit Log'])tabs.append(button(name,()=>{botTab=name;return loadBot();},botTab===name?'primary':''));
+ for(const name of ['Dashboard','Members','Group Invites','Content','Downloads','Website','App Release','App Usage','Support','Support Admins','Bot Settings','Audit Log'])tabs.append(button(name,()=>{botTab=name;return loadBot();},botTab===name?'primary':''));
  const box=el('div',undefined,'bot-workspace');section.append(box);
  if(botTab==='Content')return botContent(box);
  if(botTab==='Downloads')return botDownloads(box);
  if(botTab==='Website')return botWebsite(box);
+ if(botTab==='App Release')return botRelease(box);
+ if(botTab==='App Usage')return botUsage(box);
  if(botTab==='Bot Settings')return botSettings(box);
  if(botTab==='Members')return botMembers(box);
  if(botTab==='Group Invites')return botGroupInvites(box);
@@ -71,6 +73,7 @@ async function botContent(box){
  },'primary'));
 }
  const on=check(body,c.key==='reminder'?'Message enabled':'Enabled','enabled',!!c.enabled),text=botText(body,'Message text',c.body);
+ if(['broadcast','reminder','welcome','waiting','acknowledgment'].includes(c.key))messageCounter(body,text,3500);
  const preview=el('div',undefined,'bot-preview');preview.hidden=true;body.append(preview);
  body.append(el('p','Blank content is saved as disabled. Use {name} in welcome and acknowledgment messages.','help'));
  const actions=el('div',undefined,'form-actions');body.append(actions);
@@ -150,7 +153,7 @@ async function botWebsite(box){
  box.append(el('h2','Website & scheduled announcements'),el('p','The Website button appears in Mr Charm. Save changes before sending. Scheduled posts go to the configured Telegram group; private bot replies stay private.','help'));
  const card=el('div',undefined,'card');box.append(card);
  const url=field(card,'Official website URL','websiteUrl',s.url,'url');
- const text=botText(card,'Announcement message',s.message);text.rows=4;text.maxLength=1200;
+ const text=botText(card,'Announcement message',s.message);text.rows=4;text.maxLength=3500;messageCounter(card,text,3500);
  const enabled=check(card,'Enable scheduled website announcements','websiteEnabled',s.enabled);
  const timezone=field(card,'Timezone (for example America/New_York)','websiteTimezone',s.timezone);
  const time=field(card,'Posting time in that timezone','websiteTime',s.time,'time');
@@ -164,3 +167,39 @@ async function botWebsite(box){
  box.append(button('Preview & send saved announcement',()=>{const body=openDialog('Send website announcement','This posts publicly in the configured Telegram group. The preview below uses the last saved settings.');body.append(el('p',s.message),el('p',s.url));const confirmSend=check(body,'I want to post this message to the group now','websiteSendConfirmed',false);const requestId=crypto.randomUUID();const send=button('Send now',async()=>{if(!confirmSend.checked){message('Confirm the group post first.');return;}send.disabled=true;try{await api('/admin/bot/website/send','POST',{confirm:true,revision:s.revision,request_id:requestId});$('dialog').close();await loadBot();message('Website announcement queued. Check delivery history for the result.');}catch(e){send.disabled=false;throw e;}},'primary');body.append(send);}));
  box.append(el('h3','Recent website deliveries'));for(const job of d.deliveries){const item=el('div',undefined,'card');item.append(el('strong',job.status),el('p',date(job.due_at)));if(job.error)item.append(el('p',job.error));if(job.status==='pending')item.append(button('Cancel queued post',async()=>{await api('/admin/bot/jobs/'+job.id,'DELETE');await loadBot();}));box.append(item);}if(!d.deliveries.length)box.append(el('p','No website announcements have been sent.'));
 }
+
+async function botRelease(box){
+ const {release:r}=await api('/admin/bot/release');
+ box.append(el('h2','Website app release'),el('p','Publish the website download destination and release details together. This does not send a Telegram announcement or an in-app update alert.','help'));
+ const card=el('div',undefined,'card');box.append(card);
+ const url=field(card,'HTTPS download URL','releaseUrl',r.download_url,'url');
+ const version=field(card,'Version','releaseVersion',r.version);
+ const build=field(card,'Build number','releaseBuild',r.build,'number');
+ const dateInput=field(card,'Release date','releaseDate',r.release_date,'date');
+ const size=field(card,'APK size in bytes','releaseSize',r.size_bytes,'number');
+ const title=field(card,'Update title','releaseTitle',r.title);
+ const notes=botText(card,'Release notes',r.notes);
+ card.append(button('Preview release',()=>{
+  const data={revision:r.revision,download_url:url.value.trim(),version:version.value.trim(),build:Number(build.value),release_date:dateInput.value,size_bytes:Number(size.value),title:title.value.trim(),notes:notes.value.trim()};
+  let link;try{link=new URL(data.download_url);}catch{message('Enter a valid HTTPS URL.');return;}
+  if(link.protocol!=='https:'||link.username||link.password||!data.version||!data.title||!data.notes||!Number.isSafeInteger(data.build)||data.build<1||!Number.isSafeInteger(data.size_bytes)||data.size_bytes<1||!data.release_date){message('Complete all fields with a valid version, date, build, size and HTTPS link.');return;}
+  const content=openDialog('Preview website release','Review the exact details before publishing.');
+  content.append(el('h3',data.title),el('p',data.version+' · Build '+data.build),el('p',data.release_date+' · '+(data.size_bytes/1000000).toFixed(1)+' MB'),el('p',data.download_url),el('pre',data.notes));
+  const publish=button('Publish website update',async()=>{publish.disabled=true;try{await api('/admin/bot/release','PUT',data);$('dialog').close();await loadBot();message('Website release published. The website refreshes the published details when opened.');}catch(error){publish.disabled=false;throw error;}},'primary');content.append(publish);
+ },'primary'));
+}
+async function botUsage(box,period='30'){
+ const {usage:u}=await api('/admin/bot/usage?period='+period);
+ box.replaceChildren(el('h2','App usage'));
+ const periods=el('div',undefined,'actions');for(const [value,label] of [['1','Today (UTC)'],['7','7 days'],['30','30 days'],['all','All time']])periods.append(button(label,()=>botUsage(box,value),period===value?'primary':''));box.append(periods);
+ box.append(el('p','Measured activity from supported builds only. Heartbeats expire after two minutes. Watch time excludes paused playback and idle menus. Least-used rankings exclude accounts with no measured playback. App visits are returns after a two-minute gap, not password logins.','help'));
+ box.append(el('p',`Online: ${u.online_users} · IPTV: ${u.iptv_users} · VOD: ${u.vod_users}`),el('p',`Active accounts: ${u.accounts.active_accounts} · Linked: ${u.accounts.linked_accounts} · Unlinked: ${u.accounts.unlinked_accounts}`),el('p','Tracking started: '+date(u.tracking_started_at)));
+ box.append(el('h3','Online now'));if(!u.online.length)box.append(el('p','No recent activity reported.'));
+ for(const row of u.online)box.append(el('p',row.username+' · '+row.mode.toUpperCase()+' · '+(row.playing?'Playing':'Browsing')+' · Build '+row.build));
+ for(const [key,label] of [['most','Top 10 watch time'],['least','Lowest 10 watch time'],['visits','Most app visits'],['signins','Most app sign-ins']]){
+  box.append(el('h3',label));if(!u[key].length)box.append(el('p','No measured playback yet.'));
+  u[key].forEach((x,i)=>box.append(el('p',`${i+1}. ${x.username} · ${(x.watch_seconds/3600).toFixed(1)} h watched · IPTV ${(x.iptv_seconds/3600).toFixed(1)} h · VOD ${(x.vod_seconds/3600).toFixed(1)} h · ${x.visits} visits · ${x.signins} sign-ins`)));
+ }
+}
+
+function messageCounter(parent,input,limit){input.maxLength=limit;const counter=el('p',undefined,'help');const update=()=>{counter.textContent=input.value.length.toLocaleString()+' / '+limit.toLocaleString()+' characters';};input.addEventListener('input',update);parent.append(counter);update();}

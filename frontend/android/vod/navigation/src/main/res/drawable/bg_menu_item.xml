@@ -1,1 +1,5 @@
-<selector xmlns:android="http://schemas.android.com/apk/res/android"><item android:state_focused="true"><shape><corners android:radius="14dp"/><solid android:color="#B57222B8"/><stroke android:width="2dp" android:color="#E7B4FF"/></shape></item><item android:state_selected="true"><shape><corners android:radius="14dp"/><gradient android:startColor="#909C2AEE" android:endColor="#457520C7"/><stroke android:width="1dp" android:color="#BD5BFF"/></shape></item><item><color android:color="#00000000"/></item></selector>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+<item android:state_focused="true"><shape><corners android:radius="10dp"/><gradient android:angle="270" android:startColor="#B5BC75E8" android:endColor="#AD46216C"/><stroke android:width="2dp" android:color="#F0D6FF"/></shape></item>
+<item android:state_selected="true"><shape><corners android:radius="10dp"/><gradient android:angle="270" android:startColor="#70D1A5EA" android:centerColor="#60522A73" android:endColor="#803B195D"/><stroke android:width="1dp" android:color="#BBDAB0F4"/></shape></item>
+<item><shape><corners android:radius="10dp"/><gradient android:angle="270" android:startColor="#45F0DFFF" android:centerColor="#30663587" android:endColor="#66291435"/><stroke android:width="1dp" android:color="#77CFAAED"/></shape></item>
+</selector>

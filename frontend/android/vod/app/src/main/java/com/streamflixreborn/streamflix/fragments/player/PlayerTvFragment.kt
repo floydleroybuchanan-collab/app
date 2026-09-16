@@ -590,6 +590,7 @@ class PlayerTvFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-main", false)
             super.onDestroyView()
             nextEpisodePrefetchJob?.cancel()
             clearBypassSession(dismissDialog = true)
@@ -1214,6 +1215,7 @@ class PlayerTvFragment : Fragment() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-main", isPlaying)
                     binding.pvPlayer.keepScreenOn = isPlaying
 
                     if (isPlaying) {

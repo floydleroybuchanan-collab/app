@@ -6,13 +6,13 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt": {
     "upstream": "567f17a971b1bef0ff4e9607031c0bcb4f5ddb20348c9a512ad97b61459ccca2",
-    "sha256": "18e04e87c59f04bffbafec6e833a90aa55c1b3e173d2766da9e243ac78e7ac13",
-    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection. RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
+    "sha256": "a3e50b500466592230ce4f031e647fe6a9f36ad8bd5f458f76225d296a97bdb0",
+    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection. RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume. RC8: report playback state for authorized admin usage totals; no stream URLs or titles reported, no playback behavior changed."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "ab7c9d42acff71a2358fa287c079337b87be909a40f7b7c4c320398042132bca",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume."
+    "sha256": "20f2ed0e11aed71628cb474ae67715d321b26f73968054cbe1cfc8f7eda5bebf",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume. RC8: report playback state for authorized admin usage totals; no stream URLs or titles reported, no playback behavior changed."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",

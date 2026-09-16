@@ -19,7 +19,7 @@ async function linkedUser(env,id,admin=false){
  if(!user)fail('The linked account is unavailable.',404);
  return {...user,telegram_id:id,telegram_username:m.username};
 }
-async function adminApi(env,id,s){
+export async function adminApi(env,id,s){
  if(!await currentTelegramAdmin(env,id,s,telegram))fail('Only current group admins can access these commands.',403);
  const user=await linkedUser(env,id,true);
  if(user.role!=='admin'||user.status!=='active')fail('Link your authorized panel administrator account through the app first. Group membership alone does not grant account-management permissions.',403);

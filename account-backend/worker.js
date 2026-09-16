@@ -1,3 +1,5 @@
+import {releaseConfig} from './website-release.js';
+import {usageHeartbeat} from './app-usage.js';
 import { handleAdminRequest } from "./admin-service.js";
 import {securityApi} from './account-security.js';
 import {announcementClient,legacyAnnouncementUpdate} from './announcements.js';
@@ -24,6 +26,8 @@ export default {
       if (request.method === "OPTIONS") return corsResponse(null, 204);
       const url = new URL(request.url);
       const path = url.pathname;
+      if(path==='/public/app-release' && request.method==='GET') return json({success:true,release:await releaseConfig(env)});
+      if(path==='/me/activity' && request.method==='POST'){const auth=await requireUser(request,env);if(!auth.ok)return auth.response;return usageHeartbeat(request,env,auth,{json,safeJson});}
       if(path === '/telegram/webhook') return await webhook(request,env);
       if(path.startsWith('/announcements')){
         const auth=await requireUser(request,env);if(!auth.ok)return auth.response;

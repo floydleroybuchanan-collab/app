@@ -190,6 +190,11 @@ class MainTvActivity : FragmentActivity() {
         }
     }
 
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (com.streamflixreborn.streamflix.charm.CharmPageDrawer.dispatch(this, event)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onStop() {
         binding.ivSplashOverlay.dismiss()
         super.onStop()

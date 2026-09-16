@@ -1,5 +1,7 @@
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 const COMMANDS = [
+ {id:'usage',command:'usage',phrase:'Usage',label:'📊 App Usage',description:'See online viewers, Telegram links and watch-time rankings privately',admin:true},
+ {id:'website_release',command:'website_release',phrase:'Website Release',label:'🌐 Website Release',description:'View the published app release and open the release editor',admin:true},
  {id:'website',command:'website',label:'🌐 Website',description:'Open the official website for downloads, installation and account help'},
  ...ACCOUNT_COMMANDS,...ADMIN_ACCOUNT_COMMANDS,
  {id:'user_commands',command:'user_commands',label:'👤 User Commands',description:'Choose a category to find your account and app commands'},

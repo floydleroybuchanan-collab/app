@@ -32,3 +32,11 @@ test('only authorized panel administrators can edit and send, with revision chec
 });
 
 test('fall clock change does not repeat a daily announcement',()=>{assert.equal(new Date(nextWebsitePost({...defaults,time:'01:30'},Date.parse('2026-11-01T05:31:00Z')/1000)*1000).toISOString(),'2026-11-02T06:30:00.000Z');});
+
+test('long announcement fits intact and combined URL length is bounded',()=>{
+ const message='👑 Welcome to Charming MediaLab.\n'.repeat(100);
+ assert.ok(message.length>2800 && message.length<3500);
+ assert.equal(validateWebsite({...defaults,message}).message,message.trim());
+ assert.throws(()=>validateWebsite({...defaults,message:'x'.repeat(3501)}));
+ assert.throws(()=>validateWebsite({...defaults,message:'x'.repeat(3500),url:'https://example.com/'+ 'x'.repeat(1000)}));
+});

@@ -12,5 +12,5 @@ export const COMMAND_MENUS=[
  {id:'menu:admin:sessions',admin:true,label:'📱 Sessions',description:'Review active logins or sign a user out.',commands:['manage_user_sessions','manage_signout_user','manage_revoke_sessions']},
  {id:'menu:admin:recovery',admin:true,label:'🔗 Telegram & recovery',description:'Manage verified Telegram links and password recovery.',commands:['manage_link_account','manage_relink_account','manage_unlink_account','manage_reset_user_password']},
  {id:'menu:admin:invites',admin:true,label:'🎟 Invitations',description:'Manage app registration and Telegram room invitations.',commands:['manage_create_app_invite','manage_invite_info','manage_cancel_invite','admin_invite','admin_invites','admin_revoke']},
- {id:'menu:admin:updates',admin:true,label:'📣 Updates & bot status',description:'Create an app update notice or check bot configuration.',commands:['notify_update','manage_bot_status']},
+ {id:'menu:admin:updates',admin:true,label:'📣 Updates & bot status',description:'Create an app update notice or check bot configuration.',commands:['notify_update','manage_bot_status','usage','website_release']},
 ];

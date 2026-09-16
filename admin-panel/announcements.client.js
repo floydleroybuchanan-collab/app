@@ -32,7 +32,7 @@ async function editAnnouncement(item={}){
  });
  const kind=select(f,'Type','kind',[['update','App update'],['general','General announcement']],item.kind||'update');
  const title=field(f,'Title','title',item.title||'A Charming MediaLab update is available','text',{required:true,maxLength:100});
- const label=el('label','Message'),messageInput=el('textarea');messageInput.value=item.message||'';messageInput.required=true;messageInput.maxLength=1200;messageInput.rows=5;label.append(messageInput);f.append(label);
+ const label=el('label','Message'),messageInput=el('textarea');messageInput.value=item.message||'';messageInput.required=true;messageInput.maxLength=3500;messageInput.rows=5;label.append(messageInput);f.append(label);messageCounter(f,messageInput,3500);
  const version=field(f,'APK Android version code (not the GitHub build number)','version',item.version_code||19,'number',{min:0,max:2100000000});
  const url=field(f,'Telegram release message or HTTPS download destination','url',item.url||'','url',{maxLength:2048});
  const audience=select(f,'Who should receive it?','audience',[['outdated','Everyone running an older version'],['all','Everyone — general announcements'],['selected','Selected accounts']],item.audience||'outdated');

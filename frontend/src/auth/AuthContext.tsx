@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { AppState } from "react-native";
+import { AppState, NativeModules } from "react-native";
 
 import {
   generateReferralInvite,
@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearLocalSession = useCallback(async (message?: string) => {
     tokenRef.current = null;
+    NativeModules.CharmVod?.setUsageSession?.(null);
     clearManagedContentAccess();
     lastValidatedAtRef.current = 0;
     setUser(null);
@@ -91,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     tokenRef.current = token;
+    NativeModules.CharmVod?.setUsageSession?.(token);
     lastValidatedAtRef.current = Date.now();
     setUser(result.data.user);
     setNotice(sourceNotice);
@@ -160,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return "This device could not securely save the session. Please try again.";
     }
     tokenRef.current = result.data.token;
+    NativeModules.CharmVod?.setUsageSession?.(result.data.token);
     lastValidatedAtRef.current = Date.now();
     setUser(result.data.user);
     setStatus("signed_in");
@@ -188,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return "This device could not securely save the session. Please try again.";
     }
     tokenRef.current = result.data.token;
+    NativeModules.CharmVod?.setUsageSession?.(result.data.token);
     lastValidatedAtRef.current = Date.now();
     setUser(result.data.user);
     setStatus("signed_in");
