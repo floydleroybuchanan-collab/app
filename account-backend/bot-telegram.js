@@ -178,7 +178,7 @@ async function conversation(env,id,text,data){
  await q(env,'UPDATE bot_conversations SET state=?1,json=?2,updated_at=?3 WHERE telegram_id=?4',next,JSON.stringify(d),now(),id).run();return true;
 }
 async function handleCommand(env,id,cmd,s){
- if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release')return usageCommand(env,id,cmd,s);
+ if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'||cmd==='update_report')return usageCommand(env,id,cmd,s);
  if(cmd==='admin'||cmd.startsWith('admin_')){
   if(!await currentTelegramAdmin(env,id,s,telegram))return send(env,id,'Only current group admins can access Admin tools.');
   if(cmd==='admin')return commandMenu(env,id,cmd,s);
@@ -257,13 +257,13 @@ export async function handleUpdate(env,u,s){
   return;
  }
  if(privateChat)await q(env,'UPDATE bot_members SET dm_started=1 WHERE telegram_id=?1',id).run();
- const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update|usage|website_release)$/i);
+ const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i);
  const cmd=cb?.data||start?.[1]||intent(text);
  if((['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:'))&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
   if(Object.hasOwn(LINK_INSTRUCTIONS,cmd)){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return await handleCommand(env,id,cmd,s);}
   if((cb||exactCommand(text)||/^\s*mr\.?\s*charm\s*$/i.test(text))&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))return await handleCommand(env,id,cmd,s);
-  if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'){
+  if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'||cmd==='update_report'){
    await event(env,id,'usage_requested',(privateChat?'private':'group')+' '+(cb?'button':'text'));
    await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
    const result=await handleCommand(env,id,cmd,s);

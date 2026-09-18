@@ -6,7 +6,7 @@ const SEND_METHODS = new Set(['sendMessage','editMessageText','sendRichMessage',
 export async function telegramTransport(env,method,body) {
  if(!env.TELEGRAM_BOT_TOKEN)throw Object.assign(new Error('Save TELEGRAM_BOT_TOKEN in Cloudflare first.'),{status:503});
  const response=await (env.TELEGRAM_FETCH||fetch)('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/'+method,{
-  method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)
+  method:'POST',headers:body instanceof FormData?{}:{'Content-Type':'application/json'},body:body instanceof FormData?body:JSON.stringify(body),signal:AbortSignal.timeout(15000)
  });
  const data=await response.json();
  if(!response.ok||!data.ok)throw Object.assign(new Error('Telegram could not complete '+method+' ('+(data.error_code||response.status)+').'),{

@@ -9,7 +9,7 @@ const config={enabled:true,group_id:'-100123456789',bot_username:'TestBot',accou
 async function setup(linked=true,admin=true){
  const f=fixture(),sent=[];f.env.TELEGRAM_BOT_TOKEN='fake';
  f.env.TELEGRAM_FETCH=async(url,options)=>{
-  const method=url.split('/').pop(),body=JSON.parse(options.body);sent.push({method,body});
+  const method=url.split('/').pop(),body=options.body instanceof FormData?Object.fromEntries(options.body):JSON.parse(options.body);sent.push({method,body});
   return Response.json({ok:true,result:method==='getChatMember'?{status:admin?'administrator':'member',user:{id:11111,first_name:'Renamed person',username:'new_name'}}:method==='getChatAdministrators'?[]:{message_id:sent.length}});
  };
  await member(f.env,{id:11111,first_name:'Original person',username:'old_name'},'member');
@@ -17,7 +17,7 @@ async function setup(linked=true,admin=true){
  const invoke=async(id)=>{
   f.db.prepare('DELETE FROM bot_rate').run();sent.length=0;
   await handleUpdate(f.env,{callback_query:{id:crypto.randomUUID(),data:id,from:{id:11111,first_name:'Renamed person',username:'new_name'},message:{chat:{id:11111,type:'private'}}}},config);
-  return sent.filter(c=>c.method==='sendMessage').map(c=>c.body.text).join('\n');
+  return sent.filter(c=>['sendMessage','sendRichMessage','sendDocument'].includes(c.method)).map(c=>c.body.text||c.body.rich_message?.html||c.body.caption).join('\n');
  };
  return {...f,sent,invoke};
 }

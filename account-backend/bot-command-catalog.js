@@ -1,5 +1,8 @@
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 const COMMANDS = [
+ {id:'linking:user',command:'account_linking',phrase:'Account Linking',label:'🔗 Account Linking Steps',description:'Step-by-step instructions for linking your own app account to Telegram'},
+ {id:'linking:admin',command:'admin_account_linking',phrase:'Admin Account Linking',label:'🛡 Admin Account Linking Steps',description:'Private administrator instructions for app and web-panel account linking',admin:true},
+ {id:'update_report',command:'update_report',phrase:'Update Report',label:'📄 Update & Link Report',description:'Download a private text file of accounts, reported app versions and Telegram links',admin:true},
  {id:'usage',command:'usage',phrase:'Usage',label:'📊 App Usage',description:'See online viewers, Telegram links and watch-time rankings privately',admin:true},
  {id:'website_release',command:'website_release',phrase:'Website Release',label:'🌐 Website Release',description:'View the published app release and open the release editor',admin:true},
  {id:'website',command:'website',label:'🌐 Website',description:'Open the official website for downloads, installation and account help'},
