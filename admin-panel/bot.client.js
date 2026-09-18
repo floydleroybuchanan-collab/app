@@ -2,6 +2,8 @@
 const BOT_LABELS={guide:'Charming MediaLab User Guide · full two-part version',rules:'Rules & Information',downloads:'Download message',whats_new:'What’s New',broadcast:'Admin Broadcast',status:'Service Status',welcome:'Member welcome',waiting:'Join-request welcome',acknowledgment:'Public acknowledgment',reminder:'Recurring announcement',about:'About Mr. Charm'};
 BOT_LABELS.app_help='Sources, Real-Debrid, Xtream & Multiview Help';
 let botTab='Dashboard';
+let botDashboardFilter='all';
+let botDeliveryStatus='all';
 async function loadBot(){
  const section=heading('Mr. Charm Control Center','Manage your Telegram assistant, member links, support and editable content.');
  const tabs=el('div',undefined,'bot-tabs');section.append(tabs);
@@ -19,12 +21,47 @@ async function loadBot(){
  if(botTab==='Support Admins')return botSupportAdmins(box);
  if(botTab==='Audit Log'){const d=await api('/admin/bot/events');return botEventList(box,d.events);}
  const d=await api('/admin/bot/dashboard');
- const stats=el('div',undefined,'stats');box.append(stats);
+ const controls=el('div',undefined,'form-actions'),label=el('label','Show '),filter=el('select');
+ filter.setAttribute('aria-label','Dashboard information');
+ for(const [value,text] of [['all','All dashboard information'],['recurring','Recurring announcement'],['deliveries','Recent deliveries'],['errors','Delivery errors'],['totals','Member and support totals'],['usage','Usage counts']]){const option=el('option',text);option.value=value;filter.append(option);}
+ const kinds=[...new Set(['broadcast','website',...d.jobs.map(j=>j.kind)])];
+ for(const kind of kinds){const option=el('option',({'broadcast':'Broadcasts','website':'Website announcements','website_manual':'Website announcements · manual','delete':'Message cleanup'}[kind]||kind.replaceAll('_',' ')));option.value='delivery:'+kind;filter.append(option);}
+ filter.value=botDashboardFilter;label.append(filter);
+ const statusLabel=el('label','Delivery status '),status=el('select');status.setAttribute('aria-label','Delivery status');
+ for(const value of ['all','pending','sending','sent','failed','canceled']){const option=el('option',value==='all'?'All statuses':value.charAt(0).toUpperCase()+value.slice(1));option.value=value;status.append(option);}status.value=botDeliveryStatus;statusLabel.append(status);
+ controls.append(label,statusLabel,button('Refresh status',()=>loadBot()));box.append(controls);
+ const sections=[];
+ function group(kind){const section=el('section');sections.push([kind,section]);box.append(section);return section;}
+ const stats=group('totals');stats.className='stats';
  for(const [label,n] of [['Telegram members recorded',d.members.n],['Unresolved support tickets',d.tickets.n]]){const card=el('div',undefined,'card stat');card.append(el('strong',String(n)),el('span',label));stats.append(card);}
- box.append(el('h2','Recent deliveries'),el('p','Saving content never sends a broadcast. Queued messages can be canceled before sending.','help'));
- for(const j of d.jobs){const card=el('div',undefined,'card');card.append(el('strong',j.kind+' · '+j.status),el('p',date(j.due_at)),el('p',j.error||j.body.slice(0,150)));if(j.status==='pending')card.append(button('Cancel queued message',async()=>{await api('/admin/bot/jobs/'+j.id,'DELETE');await loadBot();}));box.append(card);}
- if(!d.jobs.length)box.append(el('p','No deliveries yet.'));
- box.append(el('h2','Usage counts'));for(const a of d.analytics)box.append(el('p',a.action.replaceAll('_',' ')+': '+a.n));
+ const recurring=group('recurring'),r=d.recurring;
+ recurring.append(el('h2','Recurring announcement'));
+ if(r){const card=el('div',undefined,'card');recurring.append(card);
+ const time=n=>n?new Date(n*1000).toLocaleString(undefined,{timeZoneName:'short'}):'Not recorded';
+ card.append(el('strong',r.enabled?'Schedule enabled':r.blocked),el('p','Last successful post: '+time(r.last_sent?.created_at)),el('p','Next scheduled post: '+(!r.enabled?'Not scheduled':r.due_now?'Due now — waiting for the next scheduler check':time(r.next_at))),el('p','Repeats every '+r.interval_hours+' hours'),el('p','Last send error: '+(r.last_error?time(r.last_error.created_at)+' — '+r.last_error.detail:'None recorded')),
+ el('p','Public bot messages currently disappear after '+r.cleanup_minutes+' minutes. A successful post means Telegram accepted it; it may no longer be visible.','help'),el('p','Status checked: '+time(r.checked_at),'help'));
+ const history=el('details');history.append(el('summary','Recent announcement activity'));
+ for(const event of r.history){history.append(el('p',time(event.created_at)+' · '+({'reminder_sent':'Post accepted by Telegram','reminder_send_failed':'Post failed','reminder_delete_failed':'Previous-message cleanup warning'}[event.action]||event.action)+' · '+event.detail));}card.append(history);
+ }
+ const deliveryCards=[];
+ const deliveries=group('deliveries');deliveries.append(el('h2','Recent deliveries'),el('p','Queued broadcasts and website posts. Recurring announcements are listed separately above.','help'));
+ for(const j of d.jobs){const card=el('div',undefined,'card');card.append(el('strong',j.kind+' · '+j.status),el('p',date(j.due_at)),el('p',j.error||j.body.slice(0,150)));if(j.status==='pending')card.append(button('Cancel queued message',async()=>{await api('/admin/bot/jobs/'+j.id,'DELETE');await loadBot();}));deliveries.append(card);deliveryCards.push([j,card]);}
+ const noMatches=el('p','No deliveries match these filters.');deliveries.append(noMatches);
+ if(!d.jobs.length)deliveries.append(el('p','No queued delivery history yet.'));
+ const errors=group('errors');errors.append(el('h2','Delivery errors'));
+ const failed=d.jobs.filter(j=>j.status==='failed');
+ for(const j of failed)errors.append(el('p',date(j.due_at)+' · '+j.kind+' · '+j.error));
+ if(r?.last_error)errors.append(el('p',date(r.last_error.created_at)+' · Recurring announcement · '+r.last_error.detail));
+ if(!failed.length&&!r?.last_error)errors.append(el('p','No send errors recorded in the available history.'));
+ const usage=group('usage');usage.append(el('h2','Usage counts'));for(const a of d.analytics)usage.append(el('p',a.action.replaceAll('_',' ')+': '+a.n));
+ const applyFilter=()=>{botDashboardFilter=filter.value;botDeliveryStatus=status.value;
+ const deliveryKind=botDashboardFilter.startsWith('delivery:')?botDashboardFilter.slice(9):null;
+ for(const [kind,section] of sections)section.hidden=botDashboardFilter!=='all'&&botDashboardFilter!==kind&&!(kind==='deliveries'&&deliveryKind);
+ let matches=0;for(const [job,card] of deliveryCards){card.hidden=!!(deliveryKind&&job.kind!==deliveryKind&&!(deliveryKind==='website'&&job.kind==='website_manual'))||(botDeliveryStatus!=='all'&&job.status!==botDeliveryStatus);if(!card.hidden)matches++;}noMatches.hidden=matches>0;
+ statusLabel.hidden=!(botDashboardFilter==='all'||botDashboardFilter==='deliveries'||deliveryKind);
+ };
+ filter.addEventListener('change',applyFilter);status.addEventListener('change',applyFilter);applyFilter();
+
 }
 function botText(parent,label,value){const l=el('label',label),t=el('textarea');t.value=value||'';t.rows=16;l.append(t);parent.append(l);return t;}
 async function botGroupInvites(box){

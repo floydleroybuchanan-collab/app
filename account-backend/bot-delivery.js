@@ -50,7 +50,9 @@ export async function rememberResponse(env,method,body,result) {
   created_at=excluded.created_at,due_at=excluded.due_at,attempts=0,lease_until=0`,key,recipient,generation,chatId,messageId,ephemeral?1:0,now(),now()+RESPONSE_LIFETIME_SECONDS).run();
  // Keep multipart content from this action together; replace the preceding
  // action only after its successor was delivered successfully.
- for(const previous of await rows(env,'SELECT * FROM bot_responses WHERE recipient_id=?1 AND generation<>?2 ORDER BY created_at LIMIT 40',recipient,generation))await removeResponse(env,previous);
+ // Public group posts are independent announcements, not a single user's conversation.
+ // Preserve their expiration, but do not let a welcome/broadcast erase another post.
+ if(ephemeral||!chatId.startsWith('-'))for(const previous of await rows(env,'SELECT * FROM bot_responses WHERE recipient_id=?1 AND generation<>?2 ORDER BY created_at LIMIT 40',recipient,generation))await removeResponse(env,previous);
 }
 
 export async function cleanExpiredResponses(env) {

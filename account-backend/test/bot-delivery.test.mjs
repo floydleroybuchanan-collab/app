@@ -4,6 +4,16 @@ import {fixture} from './fixture.mjs';
 import {handleUpdate,telegram,botScheduled} from '../bot-telegram.js';
 import {cleanExpiredResponses} from '../bot-delivery.js';
 const configuration={enabled:true,group_id:'-100123456789',bot_username:'TestBot',accounts_enabled:true,downloads_enabled:true,reminder_enabled:false};
+test('public announcements coexist but retain their ten-minute cleanup',async()=>{
+ const f=setup();
+ await telegram(f.env,'sendMessage',{chat_id:configuration.group_id,text:'Recurring announcement'});
+ await telegram(f.env,'sendMessage',{chat_id:configuration.group_id,text:'Website announcement'});
+ assert.equal(f.calls.filter(c=>c.method==='deleteMessage').length,0);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_responses').get().n,2);
+ f.db.prepare('UPDATE bot_responses SET due_at=0').run();
+ await cleanExpiredResponses(f.env);
+ assert.equal(f.calls.filter(c=>c.method==='deleteMessage').length,2);
+});
 function setup(){
  const f=fixture(),calls=[];let sequence=0;
  f.env.TELEGRAM_BOT_TOKEN='local-fake';
