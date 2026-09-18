@@ -1,3 +1,5 @@
+import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
+import {LINK_INSTRUCTIONS} from './bot-link-instructions.js';
 import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
@@ -29,9 +31,12 @@ const activate=s=>({inline_keyboard:[[{text:'Activate Mr. Charm',url:'https://t.
 const groupHelp=()=>keyboard([['💜 Mr. Charm Help','help']]);
 export function splitText(text,max=3500){const out=[];while(text.length>max){let n=text.lastIndexOf('\n',max);if(n<max/2)n=max;out.push(text.slice(0,n));text=text.slice(n).replace(/^\n/,'');}if(text)out.push(text);return out;}
 const plain=text=>text.replace(/^#{1,6} /gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
-export async function send(env,id,text,reply_markup){let result;const chunks=splitText(plain(commandText(brandText(text))),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
+export async function send(env,id,text,reply_markup){
+ if(isRich(text)){const rich=readRich(text);try{return await telegram(env,'sendRichMessage',{chat_id:id,rich_message:{html:rich.html},...(reply_markup?{reply_markup}:{})});}catch(e){if(e.telegramCode!==400)throw e;await event(env,null,'rich_message_fallback','Telegram declined rich formatting; sending plain text.');text=rich.text;}}
+ let result;const chunks=splitText(plain(commandText(brandText(text))),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
  }return result;}
 async function show(env,id,key,s){const c=await content(env,key);if(!c.enabled||!c.body.trim())return send(env,id,'This information is currently unavailable. Please contact an Admin.');
+ if(isRich(c.body)){await send(env,id,c.body);await event(env,id,key+'_viewed');return;}
  if(key==='guide'){const marker='💜 YOUR Charming MediaLab GUIDE\nPART 2 OF 2',pos=c.body.indexOf(marker);if(pos>0){await send(env,id,c.body.slice(0,pos).trim());await send(env,id,c.body.slice(pos));}else await send(env,id,c.body);}
  else if(key==='rules'){
   const warning='VIOLATION OF ANY OF THESE RULES IS A LIFETIME BAN FROM THE Charming MediaLab APP AND THE TELEGRAM GROUP.';
@@ -101,7 +106,7 @@ async function account(env,id,s,tokenOnly){
   return send(env,id,'Your Charming MediaLab invitation token:\n'+inv.invite_code+'\n\n'+(inv.status==='used'?'Already used to register. Sign in using your app username and password.':'Use this once to register in the app.')+'\nKeep this token private.');
  }
  const count=u?await q(env,'SELECT COUNT(*) n FROM sessions WHERE user_id=?1 AND revoked=0 AND expires_at>?2',u.id,now()).first():null;
- return send(env,id,u?`My Account\nUsername: ${u.username}\nStatus: ${u.status}\nExpiration: ${u.expires_at===null?'Unlimited':new Date(u.expires_at*1000).toISOString()}\nTime remaining: ${u.expires_at===null?'Unlimited':Math.max(0,Math.ceil((u.expires_at-now())/86400))+' days'}\nActive logins: ${count.n} of ${u.max_sessions}\nTelegram: Linked\nInvitation: ${inv?.status||'No surviving record'}`:'Mr Charm recognizes your Telegram identity, but no verified app-account link is saved yet. '+(inv?'Your invitation is '+inv.status+'. Register in the app to activate your account.':'An Admin must check or link your existing account.'),keyboard([['🔑 My Token','token'],['Login help','issue:Login / Token'],['Account FAQ','faq'],['Contact an Admin','contact']]));
+ return send(env,id,u?`My Account\nUsername: ${u.username}\nStatus: ${u.status}\nExpiration: ${u.expires_at===null?'Unlimited':new Date(u.expires_at*1000).toISOString()}\nTime remaining: ${u.expires_at===null?'Unlimited':Math.max(0,Math.ceil((u.expires_at-now())/86400))+' days'}\nActive logins: ${count.n} of ${u.max_sessions}\nTelegram: Linked\nInvitation: ${inv?.status||'No surviving record'}`:'Mr Charm recognizes your Telegram identity, but no verified app-account link is saved yet. '+(inv?'Your invitation is '+inv.status+'. Register in the app to activate your account.':'An Admin must check or link your existing account.'),keyboard([['🔗 Account Linking','linking:user'],['🔑 My Token','token'],['Login help','issue:Login / Token'],['Account FAQ','faq'],['Contact an Admin','contact']]));
 }
 async function contact(env,id,s,selected=null){
  let live;
@@ -185,6 +190,13 @@ async function handleCommand(env,id,cmd,s){
   }
  }
  if(cmd==='user_commands'||cmd.startsWith('menu:'))return commandMenu(env,id,cmd,s);
+ if(Object.hasOwn(LINK_INSTRUCTIONS,cmd)){
+  const admin=await currentTelegramAdmin(env,id,s,telegram);
+  if(cmd!=='linking:user'&&!admin)return send(env,id,'Only current group admins can open these instructions.',keyboard([['🔗 Account Linking','linking:user'],['🏠 Main menu','help']]));
+  const options=[['👤 Link My User Account','linking:user']];
+  if(admin)options.push(['🛡 Administrator Linking','linking:admin'],['🤝 Helping Another User','linking:assist'],['📋 Web Panel & Recovery','linking:panel']);
+  return send(env,id,LINK_INSTRUCTIONS[cmd],keyboard([...options,['↩ Account Help','account'],['🏠 Main menu','help']]));
+ }
  if(cmd==='help')return help(env,id,s);
  if(cmd==='website'){const website=await websiteConfig(env);return send(env,id,'🌐 Charming MediaLab website\nDownload the app, read installation steps and find account help.',{inline_keyboard:[[{text:'🌐 Open website',url:website.url}],[{text:'↩ Main menu',callback_data:'help'}]]});}
  if(['account','token','downloads'].includes(cmd)||cmd.startsWith('issue:')||cmd==='troubleshooting'){
@@ -249,6 +261,7 @@ export async function handleUpdate(env,u,s){
  const cmd=cb?.data||start?.[1]||intent(text);
  if((['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:'))&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
+  if(Object.hasOwn(LINK_INSTRUCTIONS,cmd)){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return await handleCommand(env,id,cmd,s);}
   if((cb||exactCommand(text)||/^\s*mr\.?\s*charm\s*$/i.test(text))&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))return await handleCommand(env,id,cmd,s);
   if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'){
    await event(env,id,'usage_requested',(privateChat?'private':'group')+' '+(cb?'button':'text'));
@@ -318,8 +331,9 @@ export async function botScheduled(env){
   if(claimed.meta.changes){
    const messageKey='reminder_message:'+s.group_id;
    const previous=await q(env,'SELECT value FROM bot_runtime WHERE key=?1',messageKey).first();
-   if(previous){try{await telegram(env,'deleteMessage',{chat_id:s.group_id,message_id:Number(previous.value)});}catch(e){await event(env,null,'reminder_delete_failed',e.message);return;}}
-   try{const sent=await send(env,s.group_id,c.body);await q(env,'INSERT INTO bot_runtime VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value',messageKey,String(sent.message_id)).run();}catch(e){await event(env,null,'reminder_send_failed',e.message);}
+   // Cleanup is best effort: expired/deleted messages must never block the next announcement.
+   if(previous){try{await telegram(env,'deleteMessage',{chat_id:s.group_id,message_id:Number(previous.value)});}catch(e){await event(env,null,'reminder_delete_failed',e.message);}}
+   try{const sent=await send(env,s.group_id,c.body);await q(env,'INSERT INTO bot_runtime VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value',messageKey,String(sent.message_id)).run();await event(env,null,'reminder_sent','Recurring announcement delivered.');}catch(e){await event(env,null,'reminder_send_failed',e.message);}
   }
  }
  await env.DB.batch([q(env,'DELETE FROM bot_updates WHERE updated_at<?1',now()-7*86400),q(env,'DELETE FROM bot_rate WHERE window<?1',Math.floor(now()/60)-60),q(env,'DELETE FROM bot_conversations WHERE updated_at<?1',now()-86400),q(env,"UPDATE bot_jobs SET status='failed',error='Delivery interrupted. Check the group before sending again.' WHERE status='sending' AND due_at<?1",now()-300)]);

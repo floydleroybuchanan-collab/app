@@ -215,7 +215,7 @@ class CategoryViewHolder(
             }
 
             if (!providerName.isNullOrBlank() && providerName != UserPreferences.currentProvider?.name) {
-                Provider.providers.keys.find { it.name == providerName }?.let {
+                com.streamflixreborn.streamflix.fragments.search.SearchCatalog.resolve(providerName!!, Provider.providers.keys)?.let {
                     UserPreferences.currentProvider = it
                 }
             }

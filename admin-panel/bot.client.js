@@ -77,7 +77,7 @@ async function botContent(box){
  const preview=el('div',undefined,'bot-preview');preview.hidden=true;body.append(preview);
  body.append(el('p','Blank content is saved as disabled. Use {name} in welcome and acknowledgment messages.','help'));
  const actions=el('div',undefined,'form-actions');body.append(actions);
- actions.append(button('Save',async()=>{await api('/admin/bot/content/'+c.key,'PUT',{body:text.value,enabled:on.checked,revision:c.revision});await loadBot();message('Saved.');},'primary'),button('Preview',()=>{preview.replaceChildren();for(const line of text.value.split('\n'))preview.append(el(line.includes('VIOLATION OF ANY OF THESE RULES')?'h2':'div',line));preview.hidden=!preview.hidden;}),button('Clear / leave blank',()=>{text.value='';on.checked=false;message('Cleared in this editor. Press Save to apply.');}),button('History / Restore',()=>botHistory(c)));
+ actions.append(button('Save',async()=>{await api('/admin/bot/content/'+c.key,'PUT',{body:text.value,enabled:on.checked,revision:c.revision});await loadBot();message('Saved.');},'primary'),button('Preview',()=>{preview.replaceChildren();preview.append(richPreview(text.value));preview.hidden=!preview.hidden;}),button('Clear / leave blank',()=>{text.value='';on.checked=false;message('Cleared in this editor. Press Save to apply.');}),button('History / Restore',()=>botHistory(c)));
  if(c.key==='broadcast')actions.append(button('Send to group',()=>{
  const b=openDialog('Review broadcast','This sends the saved broadcast to your configured Telegram group.');b.append(el('pre',c.body,'bot-preview'));
  b.append(button('Send saved broadcast',async()=>{await api('/admin/bot/broadcast','POST',{revision:c.revision});$('dialog').close();message('Broadcast queued. Check Dashboard for delivery.');},'primary'));
@@ -173,18 +173,22 @@ async function botRelease(box){
  box.append(el('h2','Website app release'),el('p','Publish the website download destination and release details together. This does not send a Telegram announcement or an in-app update alert.','help'));
  const card=el('div',undefined,'card');box.append(card);
  const url=field(card,'HTTPS download URL','releaseUrl',r.download_url,'url');
+ const code=field(card,'Downloader code (optional)','releaseDownloader',r.downloader_code||'');
+ code.inputMode='numeric';code.maxLength=12;
+ card.append(el('p','Change either field independently. Leave the code blank to hide the TV Downloader option.','help'));
  const version=field(card,'Version','releaseVersion',r.version);
  const build=field(card,'Build number','releaseBuild',r.build,'number');
  const dateInput=field(card,'Release date','releaseDate',r.release_date,'date');
  const size=field(card,'APK size in bytes','releaseSize',r.size_bytes,'number');
  const title=field(card,'Update title','releaseTitle',r.title);
- const notes=botText(card,'Release notes',r.notes);
+ const notes=botText(card,'Release notes',r.notes);notes.maxLength=6000;
  card.append(button('Preview release',()=>{
-  const data={revision:r.revision,download_url:url.value.trim(),version:version.value.trim(),build:Number(build.value),release_date:dateInput.value,size_bytes:Number(size.value),title:title.value.trim(),notes:notes.value.trim()};
+  const data={revision:r.revision,download_url:url.value.trim(),downloader_code:code.value.trim(),version:version.value.trim(),build:Number(build.value),release_date:dateInput.value,size_bytes:Number(size.value),title:title.value.trim(),notes:notes.value.trim()};
+  if(data.downloader_code&&!/^\d{1,12}$/.test(data.downloader_code)){message('Enter digits only for the Downloader code, or leave it blank.');return;}
   let link;try{link=new URL(data.download_url);}catch{message('Enter a valid HTTPS URL.');return;}
   if(link.protocol!=='https:'||link.username||link.password||!data.version||!data.title||!data.notes||!Number.isSafeInteger(data.build)||data.build<1||!Number.isSafeInteger(data.size_bytes)||data.size_bytes<1||!data.release_date){message('Complete all fields with a valid version, date, build, size and HTTPS link.');return;}
   const content=openDialog('Preview website release','Review the exact details before publishing.');
-  content.append(el('h3',data.title),el('p',data.version+' · Build '+data.build),el('p',data.release_date+' · '+(data.size_bytes/1000000).toFixed(1)+' MB'),el('p',data.download_url),el('pre',data.notes));
+  content.append(el('h3',data.title),el('p',data.version+' · Build '+data.build),el('p',data.release_date+' · '+(data.size_bytes/1000000).toFixed(1)+' MB'),el('p',data.download_url),el('p','Downloader code: '+(data.downloader_code||'Hidden')),el('pre',data.notes));
   const publish=button('Publish website update',async()=>{publish.disabled=true;try{await api('/admin/bot/release','PUT',data);$('dialog').close();await loadBot();message('Website release published. The website refreshes the published details when opened.');}catch(error){publish.disabled=false;throw error;}},'primary');content.append(publish);
  },'primary'));
 }
@@ -202,4 +206,4 @@ async function botUsage(box,period='30'){
  }
 }
 
-function messageCounter(parent,input,limit){input.maxLength=limit;const counter=el('p',undefined,'help');const update=()=>{counter.textContent=input.value.length.toLocaleString()+' / '+limit.toLocaleString()+' characters';};input.addEventListener('input',update);parent.append(counter);update();}
+function messageCounter(parent,input,limit){input.maxLength=limit;const counter=el('p',undefined,'help');const update=()=>{counter.textContent=richPlain(input.value).length.toLocaleString()+' / '+limit.toLocaleString()+' characters';};input.addEventListener('input',update);parent.append(counter);update();}

@@ -26,6 +26,7 @@ test('release preflight exercises search and catalog rows and rejects broken pos
       return new Response(null, { headers: { 'content-type': badPoster ? 'text/html' : 'image/jpeg' } });
     }
     assert.equal(url.searchParams.get('api_key'), 'test-only-secret');
+    if (url.searchParams.get('query') === 'Mobland') return Response.json({ results: [{ id: 1, name: 'MobLand', media_type: 'tv' }] });
     return Response.json({ results: [{ id: 1, title: 'Test movie', poster_path: '/test.jpg' }] });
   };
   assert.equal((await verifyVodCatalog({ apiKey: 'test-only-secret', fetchImpl })).poster, true);

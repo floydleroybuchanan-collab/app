@@ -1,10 +1,11 @@
+import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {now,q,rows,fail,event} from './bot-store.js';
 import {appControls} from './app-controls.js';
 
 const bounded=(value,min,max,label)=>{if(!Number.isSafeInteger(value)||value<min||value>max)fail(label+' is outside the allowed range.');return value;};
 export function validateAnnouncement(body,t=now()){
  const title=String(body.title||'').trim(),message=String(body.message||'').trim(),url=String(body.url||'').trim();
- if(!title||title.length>100||!message||message.length>3500)fail('Enter a title up to 100 characters and message up to 3,500 characters.');
+ if(!title||title.length>100||!message||richLength(message)>3500)fail('Enter a title up to 100 characters and message up to 3,500 characters.');
  if(!['update','general'].includes(body.kind)||!['outdated','all','selected'].includes(body.audience))fail('Choose an announcement type and audience.');
  if(url){let parsed;try{parsed=new URL(url);}catch{fail('Enter a valid HTTPS release link.');}if(parsed.protocol!=='https:'||parsed.username||parsed.password||parsed.hash||url.length>2048)fail('Use an HTTPS release link without credentials or fragments.');}
  const version=bounded(body.version_code??0,0,2100000000,'Android version code');
@@ -46,7 +47,7 @@ export async function activeAnnouncements(env,userId,version){
 }
 export async function legacyAnnouncementUpdate(env,userId){
  const active=await activeAnnouncements(env,userId,null),a=active.find(item=>item.kind==='update');
- return a?{version_code:a.version_code,message:a.message.slice(0,3500),url:a.url}:null;
+ return a?{version_code:a.version_code,message:richPlain(a.message).slice(0,3500),url:a.url}:null;
 }
 export async function announcementAdmin(request,env,auth,helpers){
  if(!auth.isOwner&&!auth.profile.can_manage_announcements)fail('Announcement permission is required.',403);
@@ -84,8 +85,8 @@ export async function announcementClient(request,env,auth,helpers){
   if(list.length)await env.DB.batch(list.map(a=>q(env,`INSERT INTO app_announcement_receipts(announcement_id,user_id,session_id,installed_version,checked_at) VALUES(?1,?2,?3,?4,?5)
    ON CONFLICT(announcement_id,session_id) DO UPDATE SET installed_version=excluded.installed_version,checked_at=excluded.checked_at`,a.id,auth.user.id,auth.session.id,version,now())));
   const legacy=(await appControls(env)).update;
-  const output=list.map(({user_ids,created_by,...safe})=>safe);
-  if(legacy.version_code>version&&legacy.url&&!list.some(a=>a.kind==='update'&&a.version_code===legacy.version_code))output.push({id:'legacy:'+legacy.version_code,title:'Charming MediaLab update available',message:legacy.message,url:legacy.url,version_code:legacy.version_code,kind:'update',expires_at:now()+86400,reminder_hours:24,sound:false});
+  const output=list.map(({user_ids,created_by,...safe})=>({...safe,message:richPlain(safe.message)}));
+  if(legacy.version_code>version&&legacy.url&&!list.some(a=>a.kind==='update'&&a.version_code===legacy.version_code))output.push({id:'legacy:'+legacy.version_code,title:'Charming MediaLab update available',message:richPlain(legacy.message),url:legacy.url,version_code:legacy.version_code,kind:'update',expires_at:now()+86400,reminder_hours:24,sound:false});
   return json({success:true,announcements:output});
  }
  if(path==='/announcements/receipt'&&request.method==='POST'){
@@ -95,4 +96,3 @@ export async function announcementClient(request,env,auth,helpers){
  }
  fail('Method not allowed.',405);
 }
-

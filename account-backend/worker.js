@@ -1,3 +1,4 @@
+import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {releaseConfig} from './website-release.js';
 import {usageHeartbeat} from './app-usage.js';
 import { handleAdminRequest } from "./admin-service.js";
@@ -276,7 +277,7 @@ async function createContentAccess(request, env) {
     success: true,
     content: {
       expires_at: expiresAt,
-      app_policy: {...controls,...(announcement?{update:announcement}:{}),announcements_supported:true},
+      app_policy: {...controls,update:{...controls.update,message:richPlain(controls.update.message)},...(announcement?{update:announcement}:{}),announcements_supported:true},
       sources: contentSources,
       // Named pairs keep already-issued two-source APKs compatible while the
       // scalable array lets this and future APKs consume up to four slots.

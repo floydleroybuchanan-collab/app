@@ -1,3 +1,4 @@
+import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {releaseAdmin} from './website-release.js';
 import {usageReport} from './app-usage.js';
 import {websiteAdmin} from './website-announcements.js';
@@ -67,8 +68,8 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
   if(cm[2]&&method==='GET')return json({success:true,history:(await rows(env,'SELECT * FROM bot_content_history WHERE key=?1 ORDER BY id DESC LIMIT 20',key)).map(brandedContent)});
   if(method==='PUT'&&!cm[2]){
    const b=await safeJson(request),old=await content(env,key);if(b.revision!==old.revision)fail('Content changed. Refresh before saving.',409);
-   if(typeof b.body!=='string'||b.body.length>50000||typeof b.enabled!=='boolean')fail('Use text up to 50,000 characters and a valid enabled choice.');
-   if(['broadcast','reminder','welcome','waiting','acknowledgment'].includes(key)&&b.body.length>3500)fail('This message must be 3,500 characters or fewer.');
+   if(typeof b.body!=='string'||richLength(b.body)>50000||typeof b.enabled!=='boolean')fail('Use text up to 50,000 characters and a valid enabled choice.');
+   if(['broadcast','reminder','welcome','waiting','acknowledgment'].includes(key)&&richLength(b.body)>3500)fail('This message must be 3,500 characters or fewer.');
    // Store revision zero defaults first so the optimistic update is transactional.
    await q(env,'INSERT OR IGNORE INTO bot_content VALUES(?1,?2,?3,0,?4,NULL)',key,DEFAULT_CONTENT[key].body,DEFAULT_CONTENT[key].enabled,now()).run();
    const r=await env.DB.batch([

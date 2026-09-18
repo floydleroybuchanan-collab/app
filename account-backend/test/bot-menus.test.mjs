@@ -4,6 +4,7 @@ import {fixture} from './fixture.mjs';
 import {BOT_COMMANDS,commandButtons} from '../bot-command-catalog.js';
 import {COMMAND_MENUS,HOME_COMMANDS} from '../bot-menus.js';
 import {handleUpdate} from '../bot-telegram.js';
+import {richPlain,PREFIX} from '../rich-text.js';
 const config={enabled:true,group_id:'-100123456789',bot_username:'TestBot'};
 function setup(){
  const f=fixture(),sent=[],admins=new Set([11111]);f.env.TELEGRAM_BOT_TOKEN='fake';
@@ -14,10 +15,24 @@ function setup(){
  const invoke=async(id,data)=>{
   f.db.prepare('DELETE FROM bot_rate').run();
   await handleUpdate(f.env,{callback_query:{id:crypto.randomUUID(),data,from:{id,first_name:'Viewer'},message:{chat:{id:Number(config.group_id),type:'supergroup'},receiver_user:{id}}}},config);
-  return sent.filter(call=>call.method==='sendMessage').at(-1).body;
+  const body=sent.filter(call=>['sendMessage','sendRichMessage'].includes(call.method)).at(-1).body;
+  return {...body,text:body.rich_message?richPlain(PREFIX+body.rich_message.html):body.text};
  };
  return {...f,sent,admins,invoke};
 }
+
+test('account linking instructions use numbered spaced steps and recipient-only navigation',async()=>{
+ const f=setup();
+ const instructions=await f.invoke(22222,'linking:user');
+ assert.match(instructions.text,/1\. Open Charming/);
+ assert.match(instructions.text,/\n\n2\. Sign in/);
+ assert.equal(instructions.ephemeral_message_parameters.receiver_user_id,22222);
+ assert.ok(!instructions.reply_markup.inline_keyboard.flat().some(b=>b.callback_data==='linking:admin'));
+ assert.ok(instructions.text.length<3500);
+ for(const key of ['linking:admin','linking:assist','linking:panel'])assert.match((await f.invoke(22222,key)).text,/Only current group admins/);
+ const admin=await f.invoke(11111,'linking:user');
+ assert.ok(admin.reply_markup.inline_keyboard.flat().some(b=>b.callback_data==='linking:admin'));
+});
 test('home restores compact icon menu and keeps admin navigation private',async()=>{
  const f=setup(),user=await f.invoke(22222,'help');
  assert.equal(user.text,'Here’s what I can help you with. Click one of the buttons below.');

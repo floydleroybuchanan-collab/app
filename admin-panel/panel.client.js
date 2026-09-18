@@ -21,7 +21,7 @@ const LIMITS = {
 let token = sessionStorage.getItem("charm_admin_token") || localStorage.getItem("charm_admin_token") || "";
 let admin=null,creators=[],view="dashboard",generation=0,listState={};
 const permitted = key => !!admin?.is_owner || admin?.permissions?.[key]===1;
-function el(tag,text,className) { const n=document.createElement(tag); if(text!==undefined) n.textContent=text; if(className)n.className=className; return n; }
+function el(tag,text,className) { const n=document.createElement(tag); if(text!==undefined){if(window.CharmRich.isRich(text)){n.append(richPreview(text));}else n.textContent=text;} if(className)n.className=className; return n; }
 function button(text,action,className) { const b=el("button",text,className); b.type="button"; b.addEventListener("click",()=>run(action,b)); return b; }
 function message(text,error=false) { const target=$("dialog").open?$("dialogError"):$("notice"); target.textContent=text; target.classList.toggle("error",error); }
 async function run(action,button) { if(button)button.disabled=true; try{await action();}catch(e){message(e.message,true);}finally{if(button)button.disabled=false;} }

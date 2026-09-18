@@ -157,7 +157,7 @@ class TvShowViewHolder(
 
     private fun checkProviderAndRun(action: () -> Unit) {
         if (!tvShow.providerName.isNullOrBlank() && tvShow.providerName != UserPreferences.currentProvider?.name) {
-            Provider.providers.keys.find { it.name == tvShow.providerName }?.let {
+            com.streamflixreborn.streamflix.fragments.search.SearchCatalog.resolve(tvShow.providerName!!, Provider.providers.keys)?.let {
                 UserPreferences.currentProvider = it
             }
         }

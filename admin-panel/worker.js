@@ -7,11 +7,13 @@ import botScript from './bot.client.js';
 import appScript from './app-settings.client.js';
 import announcementScript from './announcements.client.js';
 
+import richCodec from './rich-codec.client.js';
+import richEditor from './rich-editor.client.js';
 export default {
   async fetch(request) {
     const path = new URL(request.url).pathname;
     if(path==='/announcements.js'&&['GET','HEAD'].includes(request.method))return new Response(request.method==='HEAD'?null:announcementScript,{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
-    const asset = { "/medialab-banner.png": [banner,"image/png"], "/medialab-wordmark.png": [wordmark,"image/png"], "/": [html, "text/html"], "/styles.css": [css, "text/css"], "/panel.js": [script, "text/javascript"], '/bot.js':[botScript,'text/javascript'], '/app-settings.js':[appScript,'text/javascript'] }[path];
+    const asset = { "/rich-codec.js":[richCodec,"text/javascript"], "/rich-editor.js":[richEditor,"text/javascript"], "/medialab-banner.png": [banner,"image/png"], "/medialab-wordmark.png": [wordmark,"image/png"], "/": [html, "text/html"], "/styles.css": [css, "text/css"], "/panel.js": [script, "text/javascript"], '/bot.js':[botScript,'text/javascript'], '/app-settings.js':[appScript,'text/javascript'] }[path];
     if (!asset || !["GET", "HEAD"].includes(request.method)) return new Response("Not found", { status: 404 });
     return new Response(request.method === "HEAD" ? null : asset[0], { headers: {
       "Content-Type": asset[1] + (asset[1].startsWith("text/") ? "; charset=utf-8" : ""),

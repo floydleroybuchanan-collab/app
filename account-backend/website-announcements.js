@@ -1,11 +1,12 @@
+import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {q,rows,now,fail,event} from './bot-store.js';
 export const DEFAULT_WEBSITE='https://charming-medialab.wasmer.app/';
 export function validateWebsite(input){
  const n={url:String(input.url||'').trim(),message:String(input.message||'').trim(),enabled:input.enabled,timezone:String(input.timezone||''),time:String(input.time||''),repeat:input.repeat,weekday:Number(input.weekday)};
  let u;try{u=new URL(n.url);}catch{fail('Enter a valid HTTPS website address.');}
  if(u.protocol!=='https:'||u.username||u.password||n.url.length>2048)fail('Use an HTTPS website address without a username or password.');
- if(!n.message||n.message.length>3500)fail('Enter a website message of 1–3,500 characters.');
- if(n.message.length+n.url.length+5>4096)fail('The message and website address together must fit within 4,096 characters.');
+ if(!n.message||richLength(n.message)>3500)fail('Enter a website message of 1–3,500 characters.');
+ if(richLength(n.message)+n.url.length+5>4096)fail('The message and website address together must fit within 4,096 characters.');
  if(typeof n.enabled!=='boolean'||!['daily','weekly'].includes(n.repeat)||!Number.isInteger(n.weekday)||n.weekday<0||n.weekday>6||!/^([01]\d|2[0-3]):[0-5]\d$/.test(n.time))fail('Choose a valid repeat interval, day and time.');
  try{new Intl.DateTimeFormat('en-US',{timeZone:n.timezone}).format();}catch{fail('Enter a valid timezone, such as America/New_York.');}
  return n;
@@ -24,7 +25,7 @@ export function nextWebsitePost(n,after){
  fail('Unable to calculate the next posting time.');
 }
 export async function websiteConfig(env){const r=await q(env,'SELECT * FROM website_announcements WHERE id=1').first();if(!r)fail('Website announcement setup is not installed.',503);return {...JSON.parse(r.json),revision:r.revision,next_at:r.next_at};}
-export const websiteBody=n=>n.message+'\n\n🌐 '+n.url;
+export const websiteBody=n=>richAppend(n.message,'\n\n🌐 '+n.url);
 export async function websiteAdmin(request,env,auth,helpers,s,path){
  const {json,safeJson}=helpers,current=await websiteConfig(env);
  if(path==='/website'&&request.method==='GET')return json({success:true,website:current,deliveries:await rows(env,"SELECT id,status,due_at,error FROM bot_jobs WHERE kind IN ('website','website_manual') ORDER BY id DESC LIMIT 10")});

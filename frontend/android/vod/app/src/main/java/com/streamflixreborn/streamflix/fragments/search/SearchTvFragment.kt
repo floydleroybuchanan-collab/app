@@ -106,11 +106,11 @@ class SearchTvFragment : Fragment() {
         val targetName = providerName?.takeIf { it.isNotBlank() } ?: return
         if (targetName == UserPreferences.currentProvider?.name) return
 
-        val targetProvider = Provider.providers.keys.find { it.name == targetName } ?: return
+        val targetProvider = SearchCatalog.resolve(targetName, Provider.providers.keys) ?: return
         UserPreferences.currentProvider = targetProvider
         Toast.makeText(
             requireContext(),
-            getString(R.string.switching_to_provider, targetName),
+            getString(R.string.switching_to_provider, SearchCatalog.displayName(targetName)),
             Toast.LENGTH_SHORT,
         ).show()
     }
@@ -296,7 +296,7 @@ class SearchTvFragment : Fragment() {
             onResult = { query ->
                 binding.btnSearchVoice.clearAnimation()
                 binding.etSearch.setText(query)
-                viewModel.search(query)
+                submitSearch()
             },
             onError = { msg ->
                 Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
@@ -399,12 +399,12 @@ class SearchTvFragment : Fragment() {
     private fun displayGlobalSearch(providerResults: List<ProviderResult>) {
         val categories = providerResults.map { providerResult ->
             val headerTitle = when (val state = providerResult.state) {
-                is ProviderResult.State.Loading -> "${providerResult.provider.name} - ${getString(R.string.searching)}"
-                is ProviderResult.State.Error -> "${providerResult.provider.name} - ${getString(R.string.search_error)}"
+                is ProviderResult.State.Loading -> "${SearchCatalog.displayName(providerResult.provider.name)} - ${getString(R.string.searching)}"
+                is ProviderResult.State.Error -> "${SearchCatalog.displayName(providerResult.provider.name)} - ${getString(R.string.search_error)}"
                 is ProviderResult.State.Success -> {
                     val count = state.results.size
                     val resultText = if (count == 1) getString(R.string.result) else getString(R.string.results)
-                    "${providerResult.provider.name} - $count $resultText"
+                    "${SearchCatalog.displayName(providerResult.provider.name)} - $count $resultText"
                 }
             }
 

@@ -33,6 +33,10 @@ export async function verifyVodCatalog({ apiKey, fetchImpl = globalThis.fetch } 
     typeof movie.poster_path === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(movie.poster_path));
   if (!candidate) throw new Error('Movies: no usable title and poster returned.');
   await catalog('search/multi', { query: candidate.title, page: '1' }, 'Search');
+  const mobland = await catalog('search/multi', { query: 'Mobland', page: '1' }, 'Mobland TV search');
+  if (!mobland.some(item => item.media_type === 'tv' && String(item.name).toLowerCase() === 'mobland')) {
+    throw new Error('Mobland TV search: the expected television result was missing.');
+  }
   await catalog('discover/tv', { with_networks: '213', page: '1' }, 'Netflix catalog row');
   let poster;
   try {

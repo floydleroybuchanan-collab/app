@@ -181,7 +181,7 @@ class MovieViewHolder(
 
     private fun checkProviderAndRun(action: () -> Unit) {
         if (!movie.providerName.isNullOrBlank() && movie.providerName != UserPreferences.currentProvider?.name) {
-            Provider.providers.keys.find { it.name == movie.providerName }?.let {
+            com.streamflixreborn.streamflix.fragments.search.SearchCatalog.resolve(movie.providerName!!, Provider.providers.keys)?.let {
                 UserPreferences.currentProvider = it
             }
         }

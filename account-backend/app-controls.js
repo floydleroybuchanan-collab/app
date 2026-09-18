@@ -1,3 +1,4 @@
+import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 const SOURCE_IDS = ['primary','secondary','tertiary','quaternary'];
 const fail = (message,status=400) => { throw Object.assign(new Error(message),{status}); };
 export function validateControls(input) {
@@ -10,7 +11,7 @@ export function validateControls(input) {
  for(const id of SOURCE_IDS) if(!Number.isInteger(limits[id])||limits[id]<0||limits[id]>4) fail('Provider pane limits must be 0 (unknown) through 4.');
  const update=input.update;
  if(!update||Object.keys(update).some(k=>!['version_code','message','url'].includes(k))||!Number.isInteger(update.version_code)||update.version_code<0||update.version_code>2100000000) fail('Invalid update settings.');
- if(typeof update.message!=='string'||update.message.length>3500||typeof update.url!=='string'||update.url.length>2048) fail('Update message or link is too long.');
+ if(typeof update.message!=='string'||richLength(update.message)>3500||typeof update.url!=='string'||update.url.length>2048) fail('Update message or link is too long.');
  if(update.url) {
   let parsed;try{parsed=new URL(update.url);}catch{fail('Use a valid HTTPS update link.');}
   if(parsed.protocol!=='https:'||parsed.username||parsed.password||parsed.hash) fail('Use an HTTPS update link without embedded credentials or fragments.');
@@ -25,7 +26,7 @@ export async function appControls(env) {
 async function readSettings(request) {
  const reader=request.body?.getReader();if(!reader) fail('A JSON object is required.');
  let length=0;const chunks=[];
- try {while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>8192){await reader.cancel();fail('App settings are too large.',413);}chunks.push(value);}}
+ try {while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>65536){await reader.cancel();fail('App settings are too large.',413);}chunks.push(value);}}
  finally {reader.releaseLock();}
  const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
  try {return JSON.parse(new TextDecoder().decode(bytes));}catch{fail('A valid JSON object is required.');}

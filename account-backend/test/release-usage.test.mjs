@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import {fixture} from './fixture.mjs';
 import {validateRelease} from '../website-release.js';
 const release={download_url:'https://example.com/app.apk',version:'2.2.0',build:194,release_date:'2026-09-15',size_bytes:155000000,title:'New release',notes:'Navigation improvements.'};
+
+test('Downloader code is independently editable, public, validated and removable',async()=>{
+ const f=fixture();
+ for(const code of ['abc','123<script>',1234567,'1234567890123'])assert.throws(()=>validateRelease({...release,downloader_code:code}));
+ let old=(await f.request('/admin/bot/release',{token:f.ownerToken})).body.release;
+ const save=body=>f.request('/admin/bot/release',{method:'PUT',token:f.ownerToken,body});
+ let result=await save({...release,revision:old.revision,downloader_code:'9503682'});
+ assert.equal(result.status,200);
+ assert.equal((await f.request('/public/app-release')).body.release.downloader_code,'9503682');
+ result=await save({...release,revision:result.body.release.revision,download_url:'https://example.com/new.apk'});
+ assert.equal(result.body.release.downloader_code,'9503682');
+ result=await save({...result.body.release,downloader_code:''});
+ assert.equal(result.body.release.downloader_code,'');
+ assert.equal(result.body.release.download_url,'https://example.com/new.apk');
+});
 test('release publishing is protected, validated and revision checked',async()=>{
  const f=fixture();f.user('viewer');
  assert.throws(()=>validateRelease({...release,download_url:'javascript:alert(1)'}));
