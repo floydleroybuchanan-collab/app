@@ -41,3 +41,10 @@ CharmIPTV Phoenix — Expo/React Native Android TV guide + IPTV player (`fronten
 
 ### Standard commands
 See `frontend/package.json` for `lint`, `test`, `typecheck`, and Expo scripts. Prefer those over inventing new ones.
+
+### Account build reporting — required for future releases
+- Preserve authenticated `/me/activity` reporting of the installed Android version code in every APK. Verify it uses the installed build metadata, not a hardcoded previous version.
+- Before delivering a new build, update and test `account-backend/account-update-report.js` release mappings against the verified APK version code, version name and GitHub workflow build number. Different APK releases should use distinct Android version codes; otherwise existing telemetry cannot distinguish them.
+- Do not promote testing builds to the public baseline without the owner's instruction. Current owner-confirmed public release is RC9 / build 196 / version code 27; RC10 / build 197 / version code 28 is testing. Update this record when promotion is explicitly authorized.
+- Preserve private admin-only export authorization and account scope, blank spacing between users, unknown-version labeling, and exclusion of usable credentials. Report last-observed versions honestly rather than asserting current installation state.
+
