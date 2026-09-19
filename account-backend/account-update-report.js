@@ -22,7 +22,7 @@ export async function accountUpdateReport(env,auth){
  return {target,generated_at:t,scope:scoped?'All accounts':'Only accounts assigned to this administrator',users:users.map(u=>{
   const seen=byUser.get(u.id)||[],builds=seen.map(p=>p.build).sort((a,b)=>a-b);
   const latest=seen.reduce((best,p)=>!best||p.last_seen>best.last_seen?p:best,null);
-  const updated=builds.some(b=>b===27||b===28||b===29),old=builds.some(b=>b<target);
+  const updated=builds.some(b=>b===27||b===28||b===29||b===30),old=builds.some(b=>b<target);
   return {...u,status:u.status==='active'&&u.expires_at&&u.expires_at<=t?'expired':u.status,builds,last_build:latest?.build||null,updated,linked:!!u.telegram,classification:!builds.length?'UNKNOWN':updated&&old?'MIXED':updated?'CURRENT OR NEWER':'OLDER ONLY'};
  })};
 }
@@ -32,12 +32,13 @@ export function releaseName(code){
  const older={19:[1,182],20:[2,184],21:[3,185],22:[4,186],23:[5,189],24:[6,190],25:[7,193],26:[8,195]};
  if(older[code]){const [rc,build]=older[code];return `Charming.MediaLab-2.2.0-RC${rc}-Sideload-${build} [OLDER RELEASE; version code ${code}]`;}
  if(code===27)return 'Charming.MediaLab-2.2.0-RC9-Sideload-196 [CURRENT PUBLIC RELEASE]';
+ if(code===30)return 'Charming.MediaLab-2.2.0-RC12-Sideload-200 [RELEASE APK - public rollout not yet confirmed]';
  if(code===29)return 'Charming.MediaLab-2.2.0-RC11-Sideload-198 [RELEASE APK - public rollout not yet confirmed]';
  if(code===28)return 'Charming.MediaLab-2.2.0-RC10-Sideload-197 [TEST BUILD]';
  return code?'Android version code '+code+' [exact release/build not mapped]':'Unknown - no app version reported';
 }
 export function formatAccountUpdateReport(r){
- const groups=[['NEW RELEASE APK REPORTED',u=>u.last_build===29],['TEST BUILD REPORTED',u=>u.last_build===28],['CURRENT PUBLIC RELEASE REPORTED',u=>u.last_build===27],['OLDER VERSION LAST REPORTED',u=>u.last_build&&u.last_build<27],['UNRECOGNIZED NEWER VERSION',u=>u.last_build>29],['UNKNOWN VERSION',u=>!u.last_build]];
+ const groups=[['NEW RELEASE APK REPORTED',u=>u.last_build===29||u.last_build===30],['TEST BUILD REPORTED',u=>u.last_build===28],['CURRENT PUBLIC RELEASE REPORTED',u=>u.last_build===27],['OLDER VERSION LAST REPORTED',u=>u.last_build&&u.last_build<27],['UNRECOGNIZED NEWER VERSION',u=>u.last_build>30],['UNKNOWN VERSION',u=>!u.last_build]];
  const lines=['CHARMING MEDIALAB - PRIVATE ADMIN ACCOUNT UPDATE REPORT',`Generated: ${time(r.generated_at)}`,`Scope: ${r.scope}`,'','PUBLIC RELEASE: '+releaseName(27),'TESTING ONLY: '+releaseName(28),'RC9 users are up to date. RC10 is not required for public users.','',`Accounts: ${r.users.length}`,`Linked: ${r.users.filter(u=>u.linked).length}`,`Public or test release observed: ${r.users.filter(u=>u.updated).length}`,`Release observed AND linked: ${r.users.filter(u=>u.updated&&u.linked).length}`,'','Versions below are last reported, not proof of what is installed now.',
  'Build names map the reported Android version code to our verified APK records.',
  'Rebuilds sharing a version code cannot be distinguished by older app telemetry.','Multiple versions may come from different devices or older retained sessions.','Unknown means no retained version report; it does not mean outdated.','Session records may disappear on logout/cleanup. No usable credentials are included.',''];
@@ -68,3 +69,4 @@ export function formatAccountUpdateReport(r){
  }
  return '\uFEFF'+lines.join('\r\n');
 }
+
