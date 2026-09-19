@@ -64,6 +64,27 @@ class SearchHeaderLayoutTest {
             for(label in listOf("Search","Everything","Movies","TV shows","People","All genres")) {
                 right();assertEquals("Reach $label at width $width",label,(root.findFocus() as TextView).text.toString())
             }
+            val posters=grid as androidx.leanback.widget.VerticalGridView
+            posters.setNumColumns(4)
+            posters.adapter=object:androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+                override fun getItemCount()=80
+                override fun onCreateViewHolder(parent:android.view.ViewGroup,type:Int)=object:androidx.recyclerview.widget.RecyclerView.ViewHolder(android.widget.Button(activity).apply {
+                    isFocusableInTouchMode=true;layoutParams=androidx.recyclerview.widget.RecyclerView.LayoutParams(100,140)
+                }){}
+                override fun onBindViewHolder(holder:androidx.recyclerview.widget.RecyclerView.ViewHolder,position:Int){(holder.itemView as TextView).text="Poster $position"}
+            }
+            for(position in listOf(0,4,20,40,76,20,4,0)) {
+                posters.selectedPosition=position
+                repeat(3) {
+                    root.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,View.MeasureSpec.EXACTLY))
+                    root.layout(0,0,width,height);shadowOf(Looper.getMainLooper()).idle()
+                }
+                val poster=posters.findViewHolderForAdapterPosition(position)!!.itemView
+                assertTrue("Poster $position top is clipped at $width: ${poster.top} < ${posters.paddingTop}",poster.top>=posters.paddingTop)
+                assertTrue("Poster $position bottom is clipped",poster.bottom<=posters.height-posters.paddingBottom)
+            }
+            assertEquals("Viewport extends to app bottom",height,posters.bottom)
+            assertEquals("Only a small bottom safety inset",8,posters.paddingBottom)
             controller.pause().stop().destroy()
         }
     }

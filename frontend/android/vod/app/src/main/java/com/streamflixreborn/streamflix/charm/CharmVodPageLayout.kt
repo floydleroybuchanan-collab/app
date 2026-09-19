@@ -131,6 +131,7 @@ object CharmVodPageLayout {
                 topToBottom = if (header.childCount > 0) header.id else ConstraintLayout.LayoutParams.UNSET
                 topToTop = if (header.childCount > 0) ConstraintLayout.LayoutParams.UNSET else ConstraintLayout.LayoutParams.PARENT_ID
                 bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+                bottomMargin = 0
                 marginStart = left; marginEnd = right; topMargin = if (header.childCount > 0) root.dp(12) else top
                 width = 0; height = 0
                 grid.layoutParams = this
@@ -142,16 +143,17 @@ object CharmVodPageLayout {
                 startToStart = ConstraintLayout.LayoutParams.PARENT_ID; topToTop = ConstraintLayout.LayoutParams.PARENT_ID
                 marginStart = left; topMargin = top
             }
-            grid.setPadding(0, root.dp(8), 0, root.dp(32))
+            grid.setPadding(0, root.dp(8), 0, root.dp(8))
             grid.clipToPadding = true
             grid.clipChildren = true
             grid.nextFocusLeftId = R.id.nav_main
             if (grid is VerticalGridView) {
                 grid.windowAlignment = BaseGridView.WINDOW_ALIGN_LOW_EDGE
-                grid.windowAlignmentOffset = 0
+                // Align the card top inside the clipping inset, not at y=0 behind it.
+                grid.windowAlignmentOffset = grid.paddingTop
                 grid.itemAlignmentOffset = 0
                 grid.itemAlignmentOffsetPercent = 0f
-                grid.isItemAlignmentOffsetWithPadding = true
+                grid.isItemAlignmentOffsetWithPadding = false
                 grid.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             }
         }
