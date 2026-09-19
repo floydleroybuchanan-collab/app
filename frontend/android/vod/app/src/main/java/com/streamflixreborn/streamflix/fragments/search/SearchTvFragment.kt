@@ -51,14 +51,56 @@ class SearchTvFragment : Fragment() {
     private var charmExplore: List<AppAdapter.Item>? = null
     private var charmFilter = "Everything"
 
+    private var searchStatus: android.widget.TextView? = null
+    private var searchToolbar: android.widget.LinearLayout? = null
+    private var filterRow: android.widget.LinearLayout? = null
+    private var headerWidth = -1
+    private var savedResultPosition = 0
+    private var restoreResultFocus = false
+
+    fun layoutSearchHeader(header: android.widget.LinearLayout, available: Int) {
+        if (searchToolbar != null && headerWidth == available) return
+        headerWidth = available
+        searchToolbar?.let { header.removeView(it) }
+        searchStatus?.let { header.removeView(it) }
+        val density = resources.displayMetrics.density
+        fun dp(n: Int) = (n * density).toInt()
+        val filters = filterRow ?: return
+        val search = binding.clSearch
+        (search.parent as? ViewGroup)?.removeView(search)
+        (filters.parent as? ViewGroup)?.removeView(filters)
+        val toolbar = android.widget.LinearLayout(requireContext()).apply { orientation=android.widget.LinearLayout.HORIZONTAL }
+        val go = com.streamflixreborn.streamflix.charm.CharmVodPageLayout.chip(header,"Search").apply {
+            id=View.generateViewId();setOnClickListener { submitSearch() };textSize=12f
+        }
+        val buttonWidth = dp(78); val height = dp(42);val gap=dp(5)
+        val oneRow = available >= dp(760)
+        toolbar.addView(search,android.widget.LinearLayout.LayoutParams(0,height,1f))
+        toolbar.addView(go,android.widget.LinearLayout.LayoutParams(buttonWidth,height).apply { marginStart=gap })
+        if(oneRow) toolbar.addView(filters,android.widget.LinearLayout.LayoutParams(-2,height).apply { marginStart=gap })
+        header.addView(toolbar,android.widget.LinearLayout.LayoutParams(-1,height))
+        if(!oneRow) header.addView(filters,android.widget.LinearLayout.LayoutParams(-1,height).apply { topMargin=gap })
+        for(i in 0 until filters.childCount) filters.getChildAt(i).layoutParams=android.widget.LinearLayout.LayoutParams(buttonWidth,height).apply { marginEnd=gap }
+        binding.etSearch.apply { textSize=13f;minHeight=0;setPadding(dp(8),0,0,0);layoutParams=(layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams).apply { this.height=height } }
+        binding.btnSearchClear.contentDescription="Clear search"
+        binding.btnSearchVoice.contentDescription="Voice search"
+        searchStatus=android.widget.TextView(requireContext()).apply {
+            text="Enter a title, choose a filter, then select Search";textSize=12f;setTextColor(0xFFD9C8EC.toInt());setPadding(0,dp(5),0,0)
+        }.also { header.addView(it) }
+        searchToolbar=toolbar
+        binding.btnSearchVoice.nextFocusRightId=go.id
+        binding.btnSearchClear.nextFocusRightId=if(binding.btnSearchVoice.visibility==View.VISIBLE)binding.btnSearchVoice.id else go.id
+        go.nextFocusRightId=filterFocusId
+    }
+
     var filterFocusId: Int = View.NO_ID
         private set
 
     fun designFilters(global: View): View {
-        val row = android.widget.LinearLayout(requireContext()).apply { orientation=android.widget.LinearLayout.HORIZONTAL }
+        val row = android.widget.LinearLayout(requireContext()).apply { orientation=android.widget.LinearLayout.HORIZONTAL }; filterRow=row
         listOf("Everything", "Movies", "TV shows", "People", "All genres").forEach { label ->
             row.addView(com.streamflixreborn.streamflix.charm.CharmVodPageLayout.chip(row,label).apply {
-                id=View.generateViewId(); textSize=12f;isSelected=label==charmFilter
+                id=View.generateViewId(); setPadding(6,0,6,0);textSize=12f;isSelected=label==charmFilter
                 setOnClickListener {
                     if(label=="All genres") com.streamflixreborn.streamflix.charm.CharmGenreMenu.show(this@SearchTvFragment,charmGenres.takeIf { it.isNotEmpty() })
                     else { charmFilter=label; for(i in 0 until row.childCount)row.getChildAt(i).isSelected=row.getChildAt(i)===this; renderSearchItems() }
@@ -74,20 +116,25 @@ class SearchTvFragment : Fragment() {
     }
 
     private fun renderSearchItems() {
-        appAdapter.submitList(charmSearchItems.filter { when(charmFilter) {
+        val filtered = charmSearchItems.filter { when(charmFilter) {
             "Movies" -> it is Movie; "TV shows" -> it is TvShow; "People" -> it is com.streamflixreborn.streamflix.models.People; else -> true
-        } }.onEach { when(it) { is Movie -> it.itemType=AppAdapter.Type.MOVIE_GRID_TV_ITEM; is TvShow -> it.itemType=AppAdapter.Type.TV_SHOW_GRID_TV_ITEM } })
+        } }.onEach { when(it) { is Movie -> it.itemType=AppAdapter.Type.MOVIE_GRID_TV_ITEM; is TvShow -> it.itemType=AppAdapter.Type.TV_SHOW_GRID_TV_ITEM } }
+        appAdapter.submitList(filtered)
+        searchStatus?.text=if(filtered.isEmpty()) "No matches — try another title or filter" else "${filtered.size} results"
+        if(restoreResultFocus && filtered.isNotEmpty()) binding.vgvSearch.post { if(_binding!=null) { binding.vgvSearch.selectedPosition=savedResultPosition.coerceAtMost(filtered.lastIndex);binding.vgvSearch.requestFocus();restoreResultFocus=false } }
     }
 
     private val appAdapter by lazy {
         AppAdapter().apply {
             onMovieClickListener = { movie ->
+                restoreResultFocus=true
                 switchProviderIfNeeded(movie.providerName)
                 findNavController().navigate(
                     SearchTvFragmentDirections.actionSearchToMovie(id = movie.id)
                 )
             }
             onTvShowClickListener = { tvShow ->
+                restoreResultFocus=true
                 switchProviderIfNeeded(tvShow.providerName)
                 findNavController().navigate(
                     SearchTvFragmentDirections.actionSearchToTvShow(
@@ -126,6 +173,7 @@ class SearchTvFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         initializeSearch()
+        binding.etSearch.setText(viewModel.query)
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
@@ -137,6 +185,7 @@ class SearchTvFragment : Fragment() {
                 }
                 when (state) {
                     is State.Searching, is State.GlobalSearching -> {
+                        searchStatus?.text="Searching…"
                         binding.isLoading.apply {
                             root.visibility = View.VISIBLE
                             pbIsLoading.visibility = View.VISIBLE
@@ -196,6 +245,9 @@ class SearchTvFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        savedResultPosition=binding.vgvSearch.selectedPosition.coerceAtLeast(0)
+        restoreResultFocus=binding.vgvSearch.hasFocus() || restoreResultFocus
+        searchStatus=null;searchToolbar=null;filterRow=null;headerWidth=-1
         super.onDestroyView()
         voiceHelper.stopRecognition()
         _binding = null
@@ -312,7 +364,6 @@ class SearchTvFragment : Fragment() {
         )
 
         binding.btnSearchVoice.apply {
-            requestFocus()
             visibility = if (voiceHelper.isAvailable()) View.VISIBLE else View.GONE
             setOnClickListener { if (!voiceHelper.isListening) voiceHelper.startWithPermissionCheck() }
         }
@@ -420,9 +471,11 @@ class SearchTvFragment : Fragment() {
             }
         }
 
-        currentGridColumns = 1
-        binding.vgvSearch.setNumColumns(currentGridColumns) // La lista de categorías es una sola columna vertical
-        appAdapter.submitList(categories)
+        currentGridColumns = 4
+        binding.vgvSearch.setNumColumns(currentGridColumns)
+        charmSearchItems=categories.flatMap { it.list }
+        renderSearchItems()
+        if(providerResults.any { it.state is ProviderResult.State.Loading }) searchStatus?.text="Searching… ${charmSearchItems.size} results so far"
         appAdapter.setOnLoadMoreListener(null)
     }
 }

@@ -21,7 +21,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     private val nav get() = (activity.supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)
     private var dialog: Dialog? = null
     private var origin: View? = null
-    private var rightReleasedAt = 0L
+    private var rightHeld = false
     private var consumeRightUp = false
     private var playbackControls: PlayerView? = null
     private val menu = Button(activity).apply {
@@ -39,7 +39,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             menu.bringToFront()
         }
         activity.lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) { dialog?.dismiss(); rightReleasedAt = 0 }
+            override fun onStop(owner: LifecycleOwner) { dialog?.dismiss(); rightHeld = false }
             override fun onDestroy(owner: LifecycleOwner) { instances.remove(activity) }
         })
     }
@@ -71,7 +71,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     fun open() {
         if (dialog?.isShowing == true || activity.isFinishing || root.findViewById<View>(R.id.iv_splash_overlay)?.visibility == View.VISIBLE) return
         origin = activity.currentFocus ?: root.findFocus()
-        rightReleasedAt = 0
+        rightHeld = false
         val page = pages[activeView()]
         val column = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(20), dp(20), dp(20)) }
         val scroll = ScrollView(activity).apply { isFillViewport = true; addView(column) }
@@ -130,17 +130,37 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         d.show()
     }
     fun dispatch(event: KeyEvent): Boolean {
-        if (event.keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) { if (event.action == KeyEvent.ACTION_DOWN) rightReleasedAt = 0; return false }
+        if (event.keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false
         if (event.action == KeyEvent.ACTION_UP) {
+            rightHeld = false
             if (consumeRightUp) { consumeRightUp = false; return true }
-            rightReleasedAt = event.eventTime; return false
+            return false
         }
-        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return false
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+        val fresh = !rightHeld && event.repeatCount == 0
+        rightHeld = true
+        if (!fresh || dialog?.isShowing == true) return false
         val focus = activity.currentFocus ?: root.findFocus() ?: return false
-        if (focus is EditText || focus is SeekBar || dialog?.isShowing == true) return false
-        val doubleTap = rightReleasedAt > 0 && event.eventTime - rightReleasedAt in 0..330
-        if (doubleTap) { consumeRightUp = true; open(); return true }
-        return false
+        if (focus is EditText || focus is SeekBar) return false
+        var parent = focus.parent
+        while (parent != null && parent !is androidx.recyclerview.widget.RecyclerView) parent = parent.parent
+        val grid = parent as? androidx.recyclerview.widget.RecyclerView ?: return false
+        val item = grid.findContainingItemView(focus) ?: return false
+        val position = grid.getChildAdapterPosition(item)
+        val count = grid.adapter?.itemCount ?: return false
+        if (position == androidx.recyclerview.widget.RecyclerView.NO_POSITION || count == 0) return false
+        // Horizontal shelves must reach the actual final item, never just the viewport edge.
+        if (grid.layoutManager?.canScrollHorizontally() == true) {
+            if (position != count - 1) return false
+        } else {
+            val sameRowToRight = (0 until grid.childCount).map(grid::getChildAt).any {
+                it !== item && it.left > item.left && kotlin.math.abs(it.top - item.top) < item.height / 2
+            }
+            if (sameRowToRight) return false
+        }
+        consumeRightUp = true
+        open()
+        return true
     }
     private fun verticalControls(view: View) {
         if (view is LinearLayout) view.orientation = LinearLayout.VERTICAL

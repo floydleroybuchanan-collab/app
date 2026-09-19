@@ -40,20 +40,32 @@ class PageDrawerTest {
         assertTrue("Restore origin: shown=${button.isShown}, attached=${button.isAttachedToWindow}, current=${activity.currentFocus}",button.isFocused);assertFalse(dialog.isShowing)
         controller.pause().stop().destroy()
     }
-    @Test fun doubleTapUsesTwoPressesNotHeldKeyRepeats() {
+    @Test fun rightOnlyOpensAtRowEndAndNeverFromHeldNavigation() {
         val controller=Robolectric.buildActivity(FragmentActivity::class.java)
         controller.get().setTheme(R.style.AppTheme_Tv)
         val activity=controller.setup().visible().get();val root=ConstraintLayout(activity);activity.setContentView(root)
-        val row=LinearLayout(activity).apply { orientation=LinearLayout.HORIZONTAL };root.addView(row,ConstraintLayout.LayoutParams(180,60))
-        val target=Button(activity).apply { isFocusableInTouchMode=true;text="Last poster" };row.addView(target,LinearLayout.LayoutParams(180,60))
+        val grid=androidx.recyclerview.widget.RecyclerView(activity).apply {
+            layoutManager=androidx.recyclerview.widget.GridLayoutManager(activity,4)
+            adapter=object: androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+                override fun getItemCount()=8
+                override fun onCreateViewHolder(parent: android.view.ViewGroup,type:Int)=object:androidx.recyclerview.widget.RecyclerView.ViewHolder(Button(activity).apply { isFocusableInTouchMode=true;layoutParams=androidx.recyclerview.widget.RecyclerView.LayoutParams(120,70) }){}
+                override fun onBindViewHolder(holder:androidx.recyclerview.widget.RecyclerView.ViewHolder,position:Int){(holder.itemView as Button).text="Poster $position"}
+            }
+        };root.addView(grid,ConstraintLayout.LayoutParams(480,300))
         val drawer=CharmPageDrawer(activity,root)
-        activity.window.decorView.measure(View.MeasureSpec.makeMeasureSpec(960,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(540,View.MeasureSpec.EXACTLY));activity.window.decorView.layout(0,0,960,540);shadowOf(Looper.getMainLooper()).idle();assertTrue("Action must take initial focus",target.requestFocus());assertSame("Activity must own action",target,root.findFocus())
-        assertFalse(drawer.dispatch(KeyEvent(1000,1000,KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_DPAD_RIGHT,0)))
-        assertFalse(drawer.dispatch(KeyEvent(1000,1100,KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_DPAD_RIGHT,1)))
-        assertFalse(drawer.dispatch(KeyEvent(1000,1120,KeyEvent.ACTION_UP,KeyEvent.KEYCODE_DPAD_RIGHT,0)))
-        assertTrue(drawer.dispatch(KeyEvent(1200,1200,KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_DPAD_RIGHT,0)))
+        activity.window.decorView.measure(View.MeasureSpec.makeMeasureSpec(960,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(540,View.MeasureSpec.EXACTLY));activity.window.decorView.layout(0,0,960,540);shadowOf(Looper.getMainLooper()).idle()
+        fun press(action:Int,time:Long,repeat:Int=0)=drawer.dispatch(KeyEvent(time,time,action,KeyEvent.KEYCODE_DPAD_RIGHT,repeat))
+        assertTrue(grid.findViewHolderForAdapterPosition(2)!!.itemView.requestFocus())
+        assertFalse(press(KeyEvent.ACTION_DOWN,1000));assertFalse(press(KeyEvent.ACTION_UP,1010))
+        assertFalse(press(KeyEvent.ACTION_DOWN,1100)) // Quick taps between posters never open it.
+        assertTrue(grid.findViewHolderForAdapterPosition(3)!!.itemView.requestFocus())
+        assertFalse(press(KeyEvent.ACTION_DOWN,1150,1)) // Held navigation arriving at edge.
+        assertFalse(press(KeyEvent.ACTION_UP,1200))
+        assertTrue(press(KeyEvent.ACTION_DOWN,1500))
         assertTrue(ShadowDialog.getLatestDialog().isShowing)
-        ShadowDialog.getLatestDialog().dismiss();controller.pause().stop().destroy()
+        ShadowDialog.getLatestDialog().dismiss();shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(grid.findViewHolderForAdapterPosition(3)!!.itemView.isFocused)
+        controller.pause().stop().destroy()
     }
     @Test fun menuFollowsPlayerControllerVisibility() {
         val controller=Robolectric.buildActivity(FragmentActivity::class.java)

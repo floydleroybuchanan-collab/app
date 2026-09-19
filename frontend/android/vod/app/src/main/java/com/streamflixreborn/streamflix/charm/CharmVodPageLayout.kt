@@ -69,7 +69,7 @@ object CharmVodPageLayout {
         val title = when (page) {
             "MoviesTvFragment" -> "Movies"
             "TvShowsTvFragment" -> "TV shows"
-            "SearchTvFragment" -> "Discover"
+            "SearchTvFragment" -> null
             "FavoritesTvFragment" -> "My list"
             "ProvidersTvFragment" -> "Choose your VOD source"
             else -> null
@@ -79,6 +79,12 @@ object CharmVodPageLayout {
                 text = label; textSize = 20f; setTextColor(0xFFECEBF2.toInt())
                 typeface = ResourcesCompat.getFont(context, R.font.charm_geist_semibold)
                 setPadding(0, 0, 0, dp(6))
+            })
+        }
+        if (page in setOf("HomeTvFragment", "MoviesTvFragment", "TvShowsTvFragment")) {
+            header.addView(TextView(root.context).apply {
+                text="At the last poster, press Right for Menu";textSize=12f;setTextColor(0xFFD9C8EC.toInt())
+                postDelayed({ visibility=View.INVISIBLE }, 8000)
             })
         }
         // Existing search/genre/favorite controls keep their IDs, listeners and values.
@@ -110,13 +116,13 @@ object CharmVodPageLayout {
             header.addView(CharmCatalogControls.controls(fragment,grid))
             (grid as? VerticalGridView)?.setNumColumns(4)
         }
-        val drawerControls = (0 until header.childCount).map { header.getChildAt(it) }.filter { it.getFocusables(View.FOCUS_FORWARD).isNotEmpty() }
+        val drawerControls = (0 until header.childCount).map { header.getChildAt(it) }.filter { page != "SearchTvFragment" && it.getFocusables(View.FOCUS_FORWARD).isNotEmpty() }
         drawerControls.forEach { header.removeView(it) }
         CharmPageDrawer.register(fragment, title ?: page.removeSuffix("TvFragment"), drawerControls)
         if (header.childCount > 0) root.addView(header)
-        grid.doOnLayout {
+        val fitPage = {
             val left = (root.width * .135f).toInt()
-            val top = (root.height * .247f).toInt()
+            val top = (root.height * (if (page in setOf("SearchTvFragment","HomeTvFragment","MoviesTvFragment","TvShowsTvFragment")) .29f else .247f)).toInt()
             val right = (root.width * .024f).toInt()
             (grid.layoutParams as? ConstraintLayout.LayoutParams)?.apply {
                 startToEnd = ConstraintLayout.LayoutParams.UNSET
@@ -130,11 +136,7 @@ object CharmVodPageLayout {
                 grid.layoutParams = this
             }
             val available = (root.width - left - right).coerceAtLeast(1)
-            if (page == "SearchTvFragment") header.findViewById<View>(R.id.cl_search)?.let { search ->
-                search.layoutParams = LinearLayout.LayoutParams((available * .76f).toInt(), -2).apply {
-                    gravity = Gravity.END; bottomMargin = root.dp(6)
-                }
-            }
+            if (fragment is com.streamflixreborn.streamflix.fragments.search.SearchTvFragment) fragment.layoutSearchHeader(header, available)
             header.measure(View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             if (header.childCount > 0) header.layoutParams = ConstraintLayout.LayoutParams(available, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 startToStart = ConstraintLayout.LayoutParams.PARENT_ID; topToTop = ConstraintLayout.LayoutParams.PARENT_ID
@@ -142,6 +144,7 @@ object CharmVodPageLayout {
             }
             grid.setPadding(0, root.dp(8), 0, root.dp(32))
             grid.clipToPadding = true
+            grid.clipChildren = true
             grid.nextFocusLeftId = R.id.nav_main
             if (grid is VerticalGridView) {
                 grid.windowAlignment = BaseGridView.WINDOW_ALIGN_LOW_EDGE
@@ -151,6 +154,10 @@ object CharmVodPageLayout {
                 grid.isItemAlignmentOffsetWithPadding = true
                 grid.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
             }
+        }
+        root.doOnLayout { root.post { fitPage() } }
+        root.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            if(r-l != oldR-oldL || b-t != oldB-oldT) root.post { fitPage() }
         }
         // The controls own a separate area; focus-driven grid scrolling cannot cover them.
         header.doOnLayout {
