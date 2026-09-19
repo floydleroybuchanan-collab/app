@@ -1,5 +1,7 @@
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 const COMMANDS = [
+ {id:'admin_kick',command:'kick',phrase:'Kick',label:'👢 Kick member',description:'Remove a group member by replying to their message or supplying their Telegram username or ID',admin:true},
+ {id:'admin_mute',command:'mute',phrase:'Mute',label:'🔇 Timed mute',description:'Stop a group member from posting for a specified number of minutes',admin:true},
  {id:'linking:user',command:'account_linking',phrase:'Account Linking',label:'🔗 Account Linking Steps',description:'Step-by-step instructions for linking your own app account to Telegram'},
  {id:'linking:admin',command:'admin_account_linking',phrase:'Admin Account Linking',label:'🛡 Admin Account Linking Steps',description:'Private administrator instructions for app and web-panel account linking',admin:true},
  {id:'update_report',command:'update_report',phrase:'Update Report',label:'📄 Update & Link Report',description:'Download a private text file of accounts, reported app versions and Telegram links',admin:true},

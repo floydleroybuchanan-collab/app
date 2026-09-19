@@ -1,6 +1,7 @@
 // Navigation is separate from executable command phrases and their authorization.
 export const HOME_COMMANDS=['website','guide','downloads','account','troubleshooting','rules','contact','about','app_help','whats_new','status'];
 export const COMMAND_MENUS=[
+ {id:'menu:admin:moderation',admin:true,label:'👢 Group moderation',description:'Kick a member or mute them temporarily. Current Telegram permissions are checked each time.',commands:['admin_kick','admin_mute']},
  {id:'menu:user:account',label:'👤 My account',description:'Check your account, devices and security.',commands:['my_account','account_status','my_sessions','sign_out_all','my_security']},
  {id:'menu:user:recovery',label:'🔐 Login & recovery',description:'Recover access or manage your Telegram link.',commands:['linking:user','forgot_password','link_telegram','unlink_my_account']},
  {id:'menu:user:access',label:'🎟 Invitations & access',description:'Request access, confirm registration or check your invitation.',commands:['request_access','confirm_registration','token','invite_status']},

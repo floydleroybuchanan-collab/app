@@ -1,6 +1,8 @@
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {currentRecurring,runRecurring} from './bot-recurring.js';
 import {LINK_INSTRUCTIONS} from './bot-link-instructions.js';
+import {banterReply,addressedText,pick,UNKNOWN_REPLIES} from './bot-banter.js';
+import {moderation} from './bot-moderation.js';
 import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
@@ -263,6 +265,9 @@ export async function handleUpdate(env,u,s){
  const cmd=cb?.data||start?.[1]||intent(text);
  if((['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:'))&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
+  if(await moderation(env,id,text,cmd,s,m,u.update_id,telegram,send))return;
+  const joke=!cb&&banterReply(text);
+  if(joke)return await send(env,id,joke,keyboard([['💜 Main menu','help']]));
   if(Object.hasOwn(LINK_INSTRUCTIONS,cmd)){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return await handleCommand(env,id,cmd,s);}
   if((cb||exactCommand(text)||/^\s*mr\.?\s*charm\s*$/i.test(text))&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))return await handleCommand(env,id,cmd,s);
   if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'||cmd==='update_report'){
@@ -287,6 +292,7 @@ export async function handleUpdate(env,u,s){
    if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Please contact an Admin.');
    if(await conversation(env,id,'',cb?.data))return;
   }else if(privateChat&&text&&!/^(\/|.*mr\.?\s*charm)/i.test(text)){if(await conversation(env,id,text,cb?.data))return;}
+  if(!cb&&cmd==='help'&&addressedText(text)&&!exactCommand(text))return await send(env,id,pick(UNKNOWN_REPLIES)+'\n\nType Mr Charm for the command buttons.',keyboard([['💜 Main menu','help']]));
   await handleCommand(env,id,cmd,s);
  }catch(e){
   if(e.status&&e.status<500&&!e.telegramCode)return send(env,id,e.message,keyboard([['Help','help']]));
