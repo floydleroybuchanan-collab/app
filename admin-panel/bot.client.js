@@ -39,7 +39,12 @@ async function loadBot(){
  if(r){const card=el('div',undefined,'card');recurring.append(card);
  const time=n=>n?new Date(n*1000).toLocaleString(undefined,{timeZoneName:'short'}):'Not recorded';
  card.append(el('strong',r.enabled?'Schedule enabled':r.blocked),el('p','Last successful post: '+time(r.last_sent?.created_at)),el('p','Next scheduled post: '+(!r.enabled?'Not scheduled':r.due_now?'Due now — waiting for the next scheduler check':time(r.next_at))),el('p','Repeats every '+r.interval_hours+' hours'),el('p','Last send error: '+(r.last_error?time(r.last_error.created_at)+' — '+r.last_error.detail:'None recorded')),
- el('p','Public bot messages currently disappear after '+r.cleanup_minutes+' minutes. A successful post means Telegram accepted it; it may no longer be visible.','help'),el('p','Status checked: '+time(r.checked_at),'help'));
+ el('p',r.retention==='until_next_recurring'?'Recurring announcements stay visible until the next scheduled recurring announcement is delivered. Other posts and cleanup timers do not remove them.':'Public bot messages currently disappear after '+r.cleanup_minutes+' minutes.','help'),el('p','Status checked: '+time(r.checked_at),'help'));
+ card.append(button('Push now',async()=>{
+  const saved=(await api('/admin/bot/content')).content.find(c=>c.key==='reminder');
+  const result=await api('/admin/bot/recurring/send','POST',{revision:saved.revision});
+  await loadBot();message('Recurring announcement sent. Next scheduled: '+date(result.recurring.next_at));
+ },'primary'));
  const history=el('details');history.append(el('summary','Recent announcement activity'));
  for(const event of r.history){history.append(el('p',time(event.created_at)+' · '+({'reminder_sent':'Post accepted by Telegram','reminder_send_failed':'Post failed','reminder_delete_failed':'Previous-message cleanup warning'}[event.action]||event.action)+' · '+event.detail));}card.append(history);
  }
@@ -102,11 +107,17 @@ async function botContent(box){
  const s=configuration.settings,schedule=el('div',undefined,'card');body.append(schedule);
  const enabled=check(schedule,'Recurring announcement enabled','reminder_enabled',s.reminder_enabled);
  const hours=field(schedule,'Announcement interval (hours)','reminder_hours',s.reminder_hours,'number',{min:1,max:24});
- schedule.append(el('p','Choose 1–24 whole hours. The previous recurring announcement is deleted before the next is posted. The message below must also be enabled and contain text.','help'));
+ schedule.append(el('p','Choose 1–24 whole hours. Enabling the schedule starts the timer now. Push now sends the saved message immediately and restarts that timer. The previous announcement stays until its replacement is delivered. Save text changes before pushing.','help'));
  schedule.append(button('Save announcement schedule',async()=>{
   if(!hours.reportValidity())return;
   await api('/admin/bot/settings','PUT',{...s,reminder_enabled:enabled.checked,reminder_hours:Number(hours.value)});
   await loadBot();message('Announcement schedule saved.');
+ },'primary'));
+ const recurring=(await api('/admin/bot/dashboard')).recurring;
+ schedule.append(el('p','Last sent: '+date(recurring.last_sent?.created_at)+' · Next scheduled: '+date(recurring.next_at),'help'));
+ schedule.append(button('Push now',async()=>{
+  const result=await api('/admin/bot/recurring/send','POST',{revision:c.revision});
+  await loadBot();message('Recurring announcement sent. Next scheduled: '+date(result.recurring.next_at));
  },'primary'));
 }
  const on=check(body,c.key==='reminder'?'Message enabled':'Enabled','enabled',!!c.enabled),text=botText(body,'Message text',c.body);

@@ -1,4 +1,5 @@
 import {recurringStatus} from './recurring-status.js';
+import {runRecurring,restartRecurring} from './bot-recurring.js';
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {releaseAdmin} from './website-release.js';
 import {usageReport} from './app-usage.js';
@@ -7,7 +8,7 @@ import {telegramUsername} from './telegram-contacts.js';
 import {brandedContent} from './branding.js';
 import {DEFAULT_CONTENT} from './bot-defaults.js';
 import {q,rows,settings,content,event,now,fail} from './bot-store.js';
-import {telegram} from './bot-telegram.js';
+import {telegram,send} from './bot-telegram.js';
 import {createGroupInvite,revokeGroupInvite,approveGroupInvite} from './bot-group-invites.js';
 const boolKeys=['enabled','auto_tokens','downloads_enabled','accounts_enabled','reminder_enabled'];
 export async function botAdmin(request,env,auth,{json,safeJson}){
@@ -16,6 +17,13 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
  if(path==='/release')return releaseAdmin(request,env,auth,{json,safeJson});
  if(path==='/usage'&&method==='GET')return json({success:true,usage:await usageReport(env,auth,url.searchParams.get('period')||'30')});
  const s=await settings(env);
+ if(path==='/recurring/send'&&method==='POST'){
+  const b=await safeJson(request),c=await content(env,'reminder');
+  if(b.revision!==c.revision)fail('Announcement text changed. Refresh before pushing.',409);
+  await runRecurring(env,s,send,telegram,{force:true});
+  await event(env,null,'reminder_pushed','Administrator pushed the saved recurring announcement and restarted its interval.',id);
+  return json({success:true,recurring:await recurringStatus(env,s)});
+ }
  if(path==='/website'||path==='/website/send')return websiteAdmin(request,env,auth,{json,safeJson},s,path);
  if(path==='/community-link'&&method==='GET')return json({success:true,url:(await q(env,"SELECT value FROM bot_runtime WHERE key='community_join_request_link'").first())?.value||null});
  if(path==='/community-link'&&method==='POST'){
@@ -61,6 +69,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
   n.app_version=String(b.app_version||'').slice(0,80);n.download_url=String(b.download_url||'').trim();
   if(n.download_url){let u;try{u=new URL(n.download_url);}catch{fail('Invalid download link.');}if(u.protocol!=='https:'||u.username||u.password)fail('Use an HTTPS download link without embedded credentials.');}
   delete n.revision;const r=await q(env,'UPDATE bot_settings SET json=?1,revision=revision+1 WHERE id=1 AND revision=?2',JSON.stringify(n),b.revision).run();if(!r.meta.changes)fail('Settings changed. Refresh.',409);
+  if(n.enabled&&n.reminder_enabled&&(!s.enabled||!s.reminder_enabled||n.reminder_hours!==s.reminder_hours||n.group_id!==s.group_id))await restartRecurring(env,n);
   await event(env,null,'settings_updated','',id);return json({success:true});
  }
  if(path==='/content'&&method==='GET')return json({success:true,content:await Promise.all(Object.keys(DEFAULT_CONTENT).map(k=>content(env,k)))});
@@ -76,7 +85,9 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
    const r=await env.DB.batch([
     q(env,'INSERT INTO bot_content_history(key,body,enabled,revision,updated_at,updated_by) SELECT key,body,enabled,revision,updated_at,updated_by FROM bot_content WHERE key=?1 AND revision=?2',key,b.revision),
     q(env,'UPDATE bot_content SET body=?1,enabled=?2,revision=revision+1,updated_at=?3,updated_by=?4 WHERE key=?5 AND revision=?6',b.body,b.enabled&&!!b.body.trim()?1:0,now(),id,key,b.revision)
-   ]);if(!r[1].meta.changes)fail('Content changed. Refresh.',409);await event(env,null,'content_updated',key,id);return json({success:true});
+   ]);if(!r[1].meta.changes)fail('Content changed. Refresh.',409);
+   if(key==='reminder'&&!old.enabled&&b.enabled&&b.body.trim()&&s.enabled&&s.reminder_enabled)await restartRecurring(env,s);
+   await event(env,null,'content_updated',key,id);return json({success:true});
   }
  }
  if(path==='/dashboard'&&method==='GET')return json({success:true,recurring:await recurringStatus(env,s),members:await q(env,'SELECT COUNT(*) n FROM bot_members').first(),tickets:await q(env,"SELECT COUNT(*) n FROM bot_support WHERE status<>'closed'").first(),analytics:await rows(env,'SELECT action,COUNT(*) n FROM bot_events GROUP BY action ORDER BY n DESC'),jobs:(await rows(env,'SELECT * FROM bot_jobs ORDER BY id DESC LIMIT 30')).map(brandedContent)});

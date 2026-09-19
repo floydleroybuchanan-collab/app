@@ -1,4 +1,5 @@
 import {now,q,rows,event} from './bot-store.js';
+import {currentRecurring} from './bot-recurring.js';
 
 export const RESPONSE_LIFETIME_SECONDS = 600;
 const SEND_METHODS = new Set(['sendMessage','editMessageText','sendRichMessage','sendPhoto','sendDocument','sendVideo','sendAudio','sendAnimation','sendVoice']);
@@ -16,6 +17,9 @@ export async function telegramTransport(env,method,body) {
 }
 
 async function removeResponse(env,row) {
+ if(!row.ephemeral&&await currentRecurring(env,row.chat_id,row.message_id)){
+  await q(env,'DELETE FROM bot_responses WHERE response_key=?1 AND generation=?2',row.response_key,row.generation).run();return;
+ }
  const claimed=await q(env,'UPDATE bot_responses SET lease_until=?1 WHERE response_key=?2 AND generation=?3 AND lease_until<=?4',now()+30,row.response_key,row.generation,now()).run();
  if(!claimed.meta.changes)return;
  try {
@@ -39,6 +43,9 @@ export async function rememberResponse(env,method,body,result) {
  const ephemeral=Number.isSafeInteger(result?.ephemeral_message_id);
  const messageId=ephemeral?result.ephemeral_message_id:result?.message_id;
  if(!Number.isSafeInteger(messageId)||messageId<=0)return;
+ if(!ephemeral&&env.BOT_RECURRING?.chatId===String(body.chat_id)){
+  env.BOT_RECURRING.ids.push(messageId);return;
+ }
  const recipient=String(body.ephemeral_message_parameters?.receiver_user_id||body.chat_id);
  const interaction=env.BOT_INTERACTION;
  const generation=interaction?.recipient===recipient?interaction.generation:crypto.randomUUID();

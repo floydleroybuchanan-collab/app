@@ -1,4 +1,5 @@
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
+import {currentRecurring,runRecurring} from './bot-recurring.js';
 import {LINK_INSTRUCTIONS} from './bot-link-instructions.js';
 import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
@@ -14,6 +15,7 @@ import {now,q,rows,settings,content,event,member,assignToken,fail} from './bot-s
 import {handleGroupJoinRequest,recordGroupAdmission,maintainGroupInvites,createGroupInvite,revokeGroupInvite} from './bot-group-invites.js';
 export const isMember=m=>['member','administrator','creator'].includes(m.status)||(m.status==='restricted'&&m.is_member===true);
 export async function telegram(env,method,body){
+ if(method==='deleteMessage'&&await currentRecurring(env,body.chat_id,body.message_id))return true;
  if(!env.TELEGRAM_BOT_TOKEN)fail('Save TELEGRAM_BOT_TOKEN in Cloudflare first.',503);
  body=brandedTelegramBody(body);
  if(body.reply_markup)body.reply_markup=commandButtons(body.reply_markup);
@@ -324,17 +326,6 @@ export async function botScheduled(env){
    await q(env,"UPDATE bot_jobs SET status='sent',message_id=COALESCE(?1,message_id) WHERE id=?2",result?.message_id||null,job.id).run();
   }catch(e){await q(env,"UPDATE bot_jobs SET status='failed',error=?1 WHERE id=?2",e.message,job.id).run();}
  }
- const c=await content(env,'reminder');
- if(s.reminder_enabled&&c.enabled&&c.body.trim()){
-  const t=now(),key='reminder_slot:'+s.group_id,slot=String(Math.floor(t/(s.reminder_hours*3600)));
-  const claimed=await q(env,'INSERT INTO bot_runtime VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value<>excluded.value',key,slot).run();
-  if(claimed.meta.changes){
-   const messageKey='reminder_message:'+s.group_id;
-   const previous=await q(env,'SELECT value FROM bot_runtime WHERE key=?1',messageKey).first();
-   // Cleanup is best effort: expired/deleted messages must never block the next announcement.
-   if(previous){try{await telegram(env,'deleteMessage',{chat_id:s.group_id,message_id:Number(previous.value)});}catch(e){await event(env,null,'reminder_delete_failed',e.message);}}
-   try{const sent=await send(env,s.group_id,c.body);await q(env,'INSERT INTO bot_runtime VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value',messageKey,String(sent.message_id)).run();await event(env,null,'reminder_sent','Recurring announcement delivered.');}catch(e){await event(env,null,'reminder_send_failed',e.message);}
-  }
- }
+ await runRecurring(env,s,send,telegram);
  await env.DB.batch([q(env,'DELETE FROM bot_updates WHERE updated_at<?1',now()-7*86400),q(env,'DELETE FROM bot_rate WHERE window<?1',Math.floor(now()/60)-60),q(env,'DELETE FROM bot_conversations WHERE updated_at<?1',now()-86400),q(env,"UPDATE bot_jobs SET status='failed',error='Delivery interrupted. Check the group before sending again.' WHERE status='sending' AND due_at<?1",now()-300)]);
 }

@@ -17,6 +17,6 @@ test('failed old-message deletion does not block recurring announcement or dupli
  await botScheduled(f.env);await botScheduled(f.env);
  assert.equal(sent.length,1);
  assert.equal(sent[0].chat_id,'-100123456789');
- assert.equal(f.db.prepare('SELECT value FROM bot_runtime WHERE key=?').get('reminder_message:-100123456789').value,'999');
+ assert.equal(f.db.prepare('SELECT value FROM bot_runtime WHERE key=?').get('reminder_message:-100123456789').value,'[999]');
  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM bot_events WHERE action='reminder_sent'").get().n,1);
 });

@@ -1,9 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fixture} from './fixture.mjs';
-import {handleUpdate,telegram,botScheduled} from '../bot-telegram.js';
+import {handleUpdate,telegram,botScheduled,send} from '../bot-telegram.js';
+import {replaceRecurring,recurringIds} from '../bot-recurring.js';
 import {cleanExpiredResponses} from '../bot-delivery.js';
 const configuration={enabled:true,group_id:'-100123456789',bot_username:'TestBot',accounts_enabled:true,downloads_enabled:true,reminder_enabled:false};
+test('recurring multipart posts survive other replies and timers until successful replacement',async()=>{
+ const f=setup(),chat=configuration.group_id;
+ await replaceRecurring(f.env,chat,'A'.repeat(5000),send,telegram);
+ const old=recurringIds(f.db.prepare('SELECT value FROM bot_runtime WHERE key=?').get('reminder_message:'+chat).value);
+ assert.equal(old.length,2);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_responses').get().n,0);
+ await telegram(f.env,'sendMessage',{chat_id:chat,text:'Other announcement'});
+ await telegram(f.env,'sendMessage',{chat_id:12345,text:'Private reply'});
+ f.db.prepare('UPDATE bot_responses SET due_at=0').run();await cleanExpiredResponses(f.env);
+ await telegram(f.env,'deleteMessage',{chat_id:chat,message_id:old[0]});
+ assert.ok(!f.calls.some(c=>c.method==='deleteMessage'&&old.includes(c.body.message_id)));
+ const checkpoint=f.calls.length;
+ await replaceRecurring(f.env,chat,'New scheduled announcement',send,telegram);
+ const replacement=f.calls.slice(checkpoint);
+ assert.equal(replacement[0].method,'sendMessage');
+ assert.deepEqual(replacement.filter(c=>c.method==='deleteMessage').map(c=>c.body.message_id),old);
+});
+test('failed next recurring post preserves current one, including legacy timer records',async()=>{
+ const f=setup(),chat=configuration.group_id;
+ await telegram(f.env,'sendMessage',{chat_id:chat,text:'Legacy recurring'});
+ f.db.prepare('INSERT INTO bot_runtime VALUES(?,?)').run('reminder_message:'+chat,'1');
+ f.db.prepare('UPDATE bot_responses SET due_at=0').run();await cleanExpiredResponses(f.env);
+ assert.equal(f.calls.filter(c=>c.method==='deleteMessage').length,0);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_responses').get().n,0);
+ const transport=f.env.TELEGRAM_FETCH;let parts=0;
+ f.env.TELEGRAM_FETCH=async(url,options)=>url.endsWith('sendMessage')&&++parts===2?Response.json({ok:false,error_code:500},{status:500}):transport(url,options);
+ await assert.rejects(replaceRecurring(f.env,chat,'B'.repeat(5000),send,telegram));
+ assert.equal(f.db.prepare('SELECT value FROM bot_runtime WHERE key=?').get('reminder_message:'+chat).value,'1');
+ assert.ok(!f.calls.some(c=>c.method==='deleteMessage'&&c.body.message_id===1));
+ assert.ok(f.calls.some(c=>c.method==='deleteMessage'&&c.body.message_id===2));
+});
 test('public announcements coexist but retain their ten-minute cleanup',async()=>{
  const f=setup();
  await telegram(f.env,'sendMessage',{chat_id:configuration.group_id,text:'Recurring announcement'});
