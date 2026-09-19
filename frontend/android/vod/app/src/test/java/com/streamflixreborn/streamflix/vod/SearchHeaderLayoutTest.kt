@@ -51,6 +51,19 @@ class SearchHeaderLayoutTest {
                 assertTrue("Inside width: $width $bounds",bounds.left>=0&&bounds.right<=width)
             }
             assertTrue("Usable results height",grid.height>height*.3f)
+            val input=root.findViewById<View>(R.id.et_search)
+            val clear=root.findViewById<View>(R.id.btn_search_clear)
+            assertTrue("Clear must have visible bounds",clear.width>0&&clear.height>0)
+            assertTrue(input.requestFocus())
+            fun right() {
+                root.findFocus()!!.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+                root.findFocus()!!.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+            }
+            right();assertSame("Actual SearchEditText must release focus to Clear",clear,root.findFocus())
+            right();assertEquals(R.id.btn_search_voice,root.findFocus()!!.id)
+            for(label in listOf("Search","Everything","Movies","TV shows","People","All genres")) {
+                right();assertEquals("Reach $label at width $width",label,(root.findFocus() as TextView).text.toString())
+            }
             controller.pause().stop().destroy()
         }
     }

@@ -91,6 +91,13 @@ class SearchTvFragment : Fragment() {
         binding.btnSearchVoice.nextFocusRightId=go.id
         binding.btnSearchClear.nextFocusRightId=if(binding.btnSearchVoice.visibility==View.VISIBLE)binding.btnSearchVoice.id else go.id
         go.nextFocusRightId=filterFocusId
+        listOf(binding.btnSearchClear,binding.btnSearchVoice).forEach { button ->
+            button.layoutParams=(button.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams).apply { width=dp(32);this.height=dp(32);dimensionRatio=null;topMargin=dp(5);bottomMargin=dp(5);marginEnd=dp(4) }
+        }
+        com.streamflixreborn.streamflix.charm.CharmSearchFocus.bind(
+            binding.etSearch, listOf(binding.btnSearchClear,binding.btnSearchVoice,go)+(0 until filters.childCount).map(filters::getChildAt),
+            binding.vgvSearch, { currentGridColumns }, { submitSearch() }
+        )
     }
 
     var filterFocusId: Int = View.NO_ID
