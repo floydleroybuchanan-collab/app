@@ -34,4 +34,4 @@ test('report command is private admin-only multipart text download with expiry',
  assert.equal(exactCommand('Mr Charm Account Linking'),'linking:user');assert.equal(exactCommand('Mr Charm Admin Account Linking'),'linking:admin');
 });
 
-test('older release mapping shows verified APK names',()=>{assert.match(releaseName(26),/RC8-Sideload-195/);assert.match(releaseName(24),/RC6-Sideload-190/);assert.match(releaseName(27),/CURRENT PUBLIC RELEASE/);assert.match(releaseName(28),/TEST BUILD/);assert.match(releaseName(99),/not mapped/);});
+test('older release mapping shows verified APK names',()=>{assert.match(releaseName(26),/RC8-Sideload-195/);assert.match(releaseName(24),/RC6-Sideload-190/);assert.match(releaseName(27),/CURRENT PUBLIC RELEASE/);assert.match(releaseName(28),/TEST BUILD/);assert.match(releaseName(29),/RC11-Sideload-198/);assert.match(releaseName(99),/not mapped/);});
