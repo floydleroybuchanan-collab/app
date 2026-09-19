@@ -1,7 +1,7 @@
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {currentRecurring,runRecurring} from './bot-recurring.js';
 import {LINK_INSTRUCTIONS} from './bot-link-instructions.js';
-import {banterReply,addressedText,pick,UNKNOWN_REPLIES} from './bot-banter.js';
+import {banterReply,addressedText,pick,UNKNOWN_REPLIES,sendHumor} from './bot-banter.js';
 import {moderation} from './bot-moderation.js';
 import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
@@ -24,7 +24,7 @@ export async function telegram(env,method,body){
  // Request-local routing: personal replies never fall back to public group messages.
  const target=env.BOT_GROUP_REPLY;
  if(target&&['sendMessage','sendRichMessage'].includes(method)&&String(body.chat_id)===target.user_id){
-  body={...body,chat_id:target.chat_id,ephemeral_message_parameters:{receiver_user_id:Number(target.user_id),...(target.callback_query_id?{callback_query_id:target.callback_query_id}:{})},...(target.message_thread_id?{message_thread_id:target.message_thread_id}:{})};
+  body={...body,chat_id:target.chat_id,...(env.BOT_PUBLIC_HUMOR?{}:{ephemeral_message_parameters:{receiver_user_id:Number(target.user_id),...(target.callback_query_id?{callback_query_id:target.callback_query_id}:{})}}),...(target.message_thread_id?{message_thread_id:target.message_thread_id}:{})};
  }
  const result=await telegramTransport(env,method,body);
  await rememberResponse(env,method,body,result);
@@ -267,7 +267,7 @@ export async function handleUpdate(env,u,s){
  try{
   if(await moderation(env,id,text,cmd,s,m,u.update_id,telegram,send))return;
   const joke=!cb&&banterReply(text);
-  if(joke)return await send(env,id,joke,keyboard([['💜 Main menu','help']]));
+  if(joke)return await sendHumor(env,id,joke,send);
   if(Object.hasOwn(LINK_INSTRUCTIONS,cmd)){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return await handleCommand(env,id,cmd,s);}
   if((cb||exactCommand(text)||/^\s*mr\.?\s*charm\s*$/i.test(text))&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))return await handleCommand(env,id,cmd,s);
   if(cmd==='usage'||cmd.startsWith('usage:')||cmd==='website_release'||cmd==='update_report'){
@@ -292,7 +292,7 @@ export async function handleUpdate(env,u,s){
    if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Please contact an Admin.');
    if(await conversation(env,id,'',cb?.data))return;
   }else if(privateChat&&text&&!/^(\/|.*mr\.?\s*charm)/i.test(text)){if(await conversation(env,id,text,cb?.data))return;}
-  if(!cb&&cmd==='help'&&addressedText(text)&&!exactCommand(text))return await send(env,id,pick(UNKNOWN_REPLIES)+'\n\nType Mr Charm for the command buttons.',keyboard([['💜 Main menu','help']]));
+  if(!cb&&cmd==='help'&&addressedText(text)&&!exactCommand(text))return await sendHumor(env,id,pick(UNKNOWN_REPLIES),send);
   await handleCommand(env,id,cmd,s);
  }catch(e){
   if(e.status&&e.status<500&&!e.telegramCode)return send(env,id,e.message,keyboard([['Help','help']]));

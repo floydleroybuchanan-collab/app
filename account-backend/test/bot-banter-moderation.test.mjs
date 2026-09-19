@@ -30,13 +30,15 @@ test('all exact joke triggers work, punctuation is normalized, unrelated speech 
  assert.equal(banterReply('Mr Charm save me from account problems'),null);
  assert.equal(banterReply('Mr Charm I want to kill myself'),null);
 });
-test('banter and unknown commands are private, while main menu and existing commands still work',async()=>{
+test('only new humor is public and button-free; account help and private chats stay private',async()=>{
  const f=setup();
  const joke=await f.invoke('Mr Charm fuck you',{id:22222});
- assert.ok(TRIGGER_REPLIES['fuck you'].includes(joke.text));assert.equal(joke.ephemeral_message_parameters.receiver_user_id,22222);
- const unknown=await f.invoke('Mr Charm abracadabra',{id:22222});assert.match(unknown.text,/Type Mr Charm/);
+ assert.ok(TRIGGER_REPLIES['fuck you'].includes(joke.text));assert.equal(joke.ephemeral_message_parameters,undefined);assert.equal(joke.chat_id,s.group_id);assert.equal(joke.reply_markup,undefined);
+ const unknown=await f.invoke('Mr Charm abracadabra',{id:22222});assert.ok(UNKNOWN_REPLIES.includes(unknown.text));assert.equal(unknown.reply_markup,undefined);assert.equal(unknown.ephemeral_message_parameters,undefined);
  assert.match((await f.invoke('Mr Charm',{id:22222})).text,/Here’s what I can help/);
- assert.match((await f.invoke('Mr Charm Account Linking',{id:22222})).text,/1\. Open Charming/);
+ const linking=await f.invoke('Mr Charm Account Linking',{id:22222});assert.match(linking.text,/1\. Open Charming/);assert.equal(linking.ephemeral_message_parameters.receiver_user_id,22222);
+ const dm=await f.invoke('Mr Charm fuck you',{id:22222,privateChat:true});assert.equal(String(dm.chat_id),'22222');assert.equal(dm.reply_markup,undefined);
+ assert.ok(f.db.prepare('SELECT * FROM bot_responses WHERE chat_id=?').all(s.group_id).every(r=>r.due_at-r.created_at===600));
 });
 test('normal users and admins lacking restriction rights cannot execute commands or forged buttons',async()=>{
  const f=setup();
@@ -48,7 +50,7 @@ test('normal users and admins lacking restriction rights cannot execute commands
 test('kick resolves verified username, removes without permanent ban and deduplicates retries',async()=>{
  const f=setup();await member(f.env,f.people.get(22222).user);
  const response=await f.invoke('Mr Charm Kick @viewer',{updateId:500});
- assert.match(response.text,/Removed from the group/);assert.equal(response.ephemeral_message_parameters.receiver_user_id,11111);
+ assert.match(response.text,/@viewer/);assert.equal(response.chat_id,s.group_id);assert.equal(response.ephemeral_message_parameters,undefined);assert.equal(response.reply_markup,undefined);
  assert.deepEqual(f.mutations().map(c=>c.method),['unbanChatMember']);assert.equal(f.mutations()[0].body.only_if_banned,false);
  await f.invoke('Mr Charm Kick @viewer',{updateId:500});assert.equal(f.mutations().length,1);
  assert.equal(f.db.prepare("SELECT COUNT(*) n FROM bot_events WHERE action='moderation_kick'").get().n,1);
@@ -56,7 +58,7 @@ test('kick resolves verified username, removes without permanent ban and dedupli
 test('timed mute uses minutes and Telegram expiry, reply targeting and alternate syntax work',async()=>{
  for(const [text,reply] of [['Mr Charm Mute 100',{id:22222}],['Mr Charm 22222 mute 100',null]]){
   const f=setup(),start=Math.floor(Date.now()/1000);const response=await f.invoke(text,{reply});
-  assert.match(response.text,/Muted for 100 minutes/);const request=f.mutations()[0].body;
+  assert.match(response.text,/@viewer/);assert.equal(response.ephemeral_message_parameters,undefined);assert.equal(response.reply_markup,undefined);const request=f.mutations()[0].body;
   assert.equal(request.user_id,22222);assert.equal(request.permissions.can_send_messages,false);
   assert.ok(request.until_date>=start+6000&&request.until_date<=start+6005);
  }

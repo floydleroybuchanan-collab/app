@@ -1,5 +1,5 @@
 import {q,rows,event,now,fail} from './bot-store.js';
-import {addressedText,pick} from './bot-banter.js';
+import {addressedText,pick,sendHumor} from './bot-banter.js';
 
 const KICK=[
  'Get the fuck outta here, {user}. Mr. Charm has spoken. 😂👋',
@@ -24,7 +24,7 @@ export function parseModeration(text){
  return m?{action:m[1].toLowerCase(),args:(m[2]||'').trim().split(/\s+/).filter(Boolean)}:null;
 }
 const markup={inline_keyboard:[[{text:'↩ Group moderation',callback_data:'menu:admin:moderation'}],[{text:'🛡 Admin Commands',callback_data:'admin'}]]};
-const instructions='👢 Kick removes a member; they can request to join again.\nMr Charm Kick @username\n\n🔇 Mute temporarily stops a member from posting. The number is minutes (1–525600).\nMr Charm Mute @username 100\n\nYou can use their numeric Telegram ID instead of @username. In the group, reply directly to their message with “Mr Charm Kick” or “Mr Charm Mute 100”.\n\nOnly Telegram admins with Restrict Members permission may act. Owners, admins and bots are protected. Confirmations are private. Existing restrictions are never replaced with a shorter mute.';
+const instructions='👢 Kick removes a member; they can request to join again.\nMr Charm Kick @username\n\n🔇 Mute temporarily stops a member from posting. The number is minutes (1–525600).\nMr Charm Mute @username 100\n\nYou can use their numeric Telegram ID instead of @username. In the group, reply directly to their message with “Mr Charm Kick” or “Mr Charm Mute 100”.\n\nOnly Telegram admins with Restrict Members permission may act. Owners, admins and bots are protected. Successful group actions get a public humor reply. Private-chat commands stay private. Existing restrictions are never replaced with a shorter mute.';
 export async function moderation(env,id,text,cmd,s,m,updateId,telegram,send){
  const parsed=parseModeration(text),button=['admin_kick','admin_mute'].includes(cmd);
  if(!parsed&&!button)return false;
@@ -69,6 +69,6 @@ export async function moderation(env,id,text,cmd,s,m,updateId,telegram,send){
  await q(env,'UPDATE bot_runtime SET value=?1 WHERE key=?2',JSON.stringify({action,targetId,at:now(),state:'done',...(action==='mute'?{until}: {})}),operation).run();
  await event(env,id,'moderation_'+action,'target='+targetId+(action==='mute'?' minutes='+minutes+' until='+until:''));
  const label=live.user.username?'@'+live.user.username:String(targetId);
- await send(env,id,pick(action==='kick'?KICK:MUTE).replaceAll('{user}',label).replaceAll('{minutes}',String(minutes))+'\n\n'+(action==='kick'?'Removed from the group. This is not a permanent ban.':'Muted for '+minutes+' minutes. Telegram will lift this mute automatically.'),markup);
+ await sendHumor(env,id,pick(action==='kick'?KICK:MUTE).replaceAll('{user}',label).replaceAll('{minutes}',String(minutes)),send);
  return true;
 }

@@ -40,6 +40,8 @@ export const TRIGGER_REPLIES = {
  'kill yourself':['Can’t. No pulse, no problem. 🤖😂','Nice try. I respawn every time you type ‘Mr. Charm.’','Delete myself? With your permission level? That’s fucking adorable. 😂','I’m software. The closest I get to dying is Cloudflare having a bad day.']
 };
 export const pick = list => list[crypto.getRandomValues(new Uint32Array(1))[0] % list.length];
+// Only these new replies opt into public delivery. Private chats stay private.
+export const sendHumor=(env,id,text,send)=>send({...env,BOT_PUBLIC_HUMOR:true},id,text);
 export function addressedText(text){
  const m=text.match(/^\s*mr\.?\s*charm\b[\s,:-]*(.*)$/is);return m?m[1].trim():null;
 }
