@@ -1,4 +1,5 @@
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
+import {EXPIRED_RETENTION_SECONDS,retainExpiredViewer} from './account-retention.js';
 import {releaseConfig} from './website-release.js';
 import {usageHeartbeat} from './app-usage.js';
 import { handleAdminRequest } from "./admin-service.js";
@@ -167,8 +168,8 @@ async function login(request, env) {
   const now = unixNow();
   if (user.role !== "admin" && user.status === "disabled") return json({ success: false, error: "This Charming MediaLab account has been disabled." }, 403);
   if (user.role !== "admin" && (user.status === "expired" || (user.expires_at !== null && Number(user.expires_at) <= now))) {
-    await deleteAccountData(env, user.id, "account_expired");
-    return json({ success: false, error: "This Charming MediaLab account expired and was permanently removed." }, 403);
+    await retainExpiredViewer(env, user.id, now);
+    return json({ success: false, error: "This Charming MediaLab account has expired. Contact an administrator to reactivate it within 30 days of expiration." }, 403);
   }
   await env.DB.prepare("UPDATE sessions SET revoked = 1 WHERE user_id = ?1 AND revoked = 0 AND expires_at <= ?2").bind(user.id, now).run();
   const countRow = await env.DB.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?1 AND revoked = 0 AND expires_at > ?2").bind(user.id, now).first();
@@ -197,28 +198,48 @@ async function issueSession(env, user, now) {
   return { token, expiresAt };
 }
 
-async function deleteAccountData(env, userId, reason) {
+async function deleteAccountData(env, userId, reason, expiredBefore=null) {
   const user = await env.DB.prepare("SELECT id,role FROM users WHERE id = ?1 LIMIT 1").bind(userId).first();
   if (!user) return false;
   if (user.role !== "user") throw statusError("Administrator accounts cannot be deleted through viewer-account controls.", 403);
   const now = unixNow();
-  await releaseReferralForAccount(env, userId, reason, now);
+  // A cleanup selection can become stale if an admin reactivates concurrently.
+  // Every statement in the transaction rechecks the same expiration condition.
+  const guard=expiredBefore===null?'':` AND EXISTS(SELECT 1 FROM users retained WHERE retained.id=?1 AND retained.role='user' AND retained.expires_at<=${Number(expiredBefore)})`;
+  const referralCleanup=[];
+  if(expiredBefore===null)await releaseReferralForAccount(env,userId,reason,now);
+  else {
+    const invitation=await env.DB.prepare("SELECT id,owner_user_id FROM referral_invites WHERE redeemed_by_user_id=?1 AND status='active' ORDER BY redeemed_at DESC LIMIT 1").bind(userId).first();
+    if(invitation){
+      referralCleanup.push(
+        env.DB.prepare("UPDATE referral_network_slots SET invite_id=NULL WHERE owner_user_id=?2 AND invite_id=?3"+guard).bind(userId,invitation.owner_user_id,invitation.id),
+        env.DB.prepare("UPDATE referral_slots SET consumed_at=NULL WHERE owner_user_id=?2 AND slot_number=(SELECT slot_number FROM referral_slots WHERE owner_user_id=?2 AND consumed_at IS NOT NULL AND invite_id IS NULL ORDER BY consumed_at DESC LIMIT 1)"+guard).bind(userId,invitation.owner_user_id),
+        env.DB.prepare("UPDATE referral_invites SET status='account_expired',redeemed_by_user_id=NULL,ended_at=?3,end_reason='account_expired' WHERE id=?2 AND status='active'"+guard).bind(userId,invitation.id,now)
+      );
+    }
+  }
   await env.DB.batch([
-    env.DB.prepare("UPDATE admin_user_attribution SET end_reason=?2 WHERE user_id=?1").bind(userId, reason),
-    env.DB.prepare("UPDATE invites SET redeemed_by_user_id=NULL WHERE redeemed_by_user_id=?1").bind(userId),
-    env.DB.prepare("UPDATE invites SET created_by_user_id=NULL WHERE created_by_user_id=?1").bind(userId),
-    env.DB.prepare("DELETE FROM audit_log WHERE user_id=?1 OR admin_user_id=?1").bind(userId),
-    env.DB.prepare("DELETE FROM password_reset_tokens WHERE user_id=?1").bind(userId),
-    env.DB.prepare("DELETE FROM user_preferences WHERE user_id=?1").bind(userId),
-    env.DB.prepare("DELETE FROM sessions WHERE user_id=?1").bind(userId),
-    env.DB.prepare("DELETE FROM users WHERE id=?1 AND role='user'").bind(userId),
+    ...referralCleanup,
+    env.DB.prepare("UPDATE admin_user_attribution SET end_reason=?2 WHERE user_id=?1"+guard).bind(userId, reason),
+    env.DB.prepare("UPDATE invites SET redeemed_by_user_id=NULL WHERE redeemed_by_user_id=?1"+guard).bind(userId),
+    env.DB.prepare("UPDATE invites SET created_by_user_id=NULL WHERE created_by_user_id=?1"+guard).bind(userId),
+    env.DB.prepare("DELETE FROM audit_log WHERE (user_id=?1 OR admin_user_id=?1)"+guard).bind(userId),
+    env.DB.prepare("DELETE FROM password_reset_tokens WHERE user_id=?1"+guard).bind(userId),
+    env.DB.prepare("DELETE FROM user_preferences WHERE user_id=?1"+guard).bind(userId),
+    env.DB.prepare("DELETE FROM sessions WHERE user_id=?1"+guard).bind(userId),
+    env.DB.prepare("DELETE FROM users WHERE id=?1 AND role='user'"+guard).bind(userId),
   ]);
   return true;
 }
 
 async function purgeExpiredAccounts(env, limit) {
-  const result = await env.DB.prepare(`SELECT id FROM users WHERE role = 'user' AND expires_at IS NOT NULL AND expires_at <= ?1 LIMIT ?2`).bind(unixNow(), limit).all();
-  for (const user of result.results || []) await deleteAccountData(env, user.id, "account_expired");
+  const at=unixNow(),cutoff=at-EXPIRED_RETENTION_SECONDS;
+  const result = await env.DB.prepare(`SELECT id FROM users WHERE role='user' AND (expires_at<=?1 OR (status!='expired' AND expires_at<=?2) OR (status='expired' AND (expires_at IS NULL OR expires_at>?2))) ORDER BY expires_at,id LIMIT ?3`).bind(cutoff,at,limit).all();
+  for (const user of result.results || []) {
+    await retainExpiredViewer(env,user.id,at);
+    const retained=await env.DB.prepare('SELECT expires_at FROM users WHERE id=?1').bind(user.id).first();
+    if(retained?.expires_at!==null&&retained?.expires_at<=cutoff)await deleteAccountData(env,user.id,'account_expired',cutoff);
+  }
   const endedAdmins=await env.DB.prepare("SELECT u.id FROM users u JOIN referral_invites i ON i.redeemed_by_user_id=u.id AND i.status='active' WHERE u.role='admin' AND u.expires_at IS NOT NULL AND u.expires_at<=?1 LIMIT ?2").bind(unixNow(),limit).all();
   for(const user of endedAdmins.results || []) await releaseReferralForAccount(env,user.id,"account_expired",unixNow());
   return (result.results || []).length;
@@ -241,8 +262,8 @@ async function requireUser(request, env, { panel = false } = {}) {
   }
   if (!(panel && user.role === "admin")) {
     if (user.expires_at !== null && Number(user.expires_at) <= now) {
-      if(user.role !== "admin") await deleteAccountData(env,user.id,"account_expired");
-      return {ok:false,response:json({success:false,error:user.role === "admin" ? "Your TV access expired. Your administrator panel access is unchanged." : "This account expired and was permanently removed."},401)};
+      if(user.role !== "admin") await retainExpiredViewer(env,user.id,now);
+      return {ok:false,response:json({success:false,error:user.role === "admin" ? "Your TV access expired. Your administrator panel access is unchanged." : "This account has expired. Contact an administrator to reactivate it within 30 days of expiration."},401)};
     }
     if (user.status !== "active") return {ok:false,response:json({success:false,error:"This viewing account is not active."},403)};
   }

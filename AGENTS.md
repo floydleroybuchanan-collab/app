@@ -48,3 +48,7 @@ See `frontend/package.json` for `lint`, `test`, `typecheck`, and Expo scripts. P
 - Do not promote testing builds to the public baseline without the owner's instruction. Current owner-confirmed public release is RC9 / build 196 / version code 27; RC10 / build 197 / version code 28 is testing. Update this record when promotion is explicitly authorized.
 - Preserve private admin-only export authorization and account scope, blank spacing between users, unknown-version labeling, and exclusion of usable credentials. Report last-observed versions honestly rather than asserting current installation state.
 
+### Expired viewer retention
+- Expired viewer accounts retain their identity, credentials, Telegram link and preferences for 30 days from `expires_at`; expired access and sessions must remain blocked. Repeated cleanup or failed logins must not restart this deadline.
+- Authorized admins can reactivate within that window by granting future time. Preserve account scope, permission and duration/capacity limits; revoke old sessions. At the deadline, permanent cleanup must recheck expiration inside its transaction so a stale cleanup cannot delete a reactivated account.
+- Explicit account deletion and self-cancellation remain immediate. Administrator panel accounts are excluded from viewer expiration deletion. Preserve Users → Expired Accounts, deletion deadlines, and Reactivate / Add Time controls.

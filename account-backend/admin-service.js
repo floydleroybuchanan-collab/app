@@ -1,6 +1,7 @@
 import { ADMIN_FLAGS, ADMIN_LIMITS, DAY, demandPermission, integer, invitationTerms, listingOptions, normalizeAdminProfile, policyError } from "./admin-policy.js";
 
 import {accountContact,saveAccountContact} from './telegram-contacts.js';
+import {EXPIRED_RETENTION_SECONDS,expiredViewer,deletionDue,retainExpiredViewer} from './account-retention.js';
 import { botAdmin } from './bot-admin.js';
 import { appControlsAdmin } from './app-controls.js';
 import {announcementAdmin} from './announcements.js';
@@ -51,6 +52,7 @@ function creatorWhere(url, auth, where, values, column) {
 async function targetUser(env, auth, id) {
   const row = await first(env, "SELECT u.*,a.admin_user_id AS creator_id,a.origin FROM users u LEFT JOIN admin_user_attribution a ON a.user_id=u.id WHERE u.id=?1 AND u.role='user'", [id]);
   if (!row || (!auth.isOwner && !auth.profile.can_manage_all && row.creator_id !== auth.user.id)) throw policyError("User not found in your permitted accounts.", 404);
+  if(deletionDue(row))throw policyError('The 30-day recovery period has ended. This account can no longer be reactivated.',410);
   return row;
 }
 async function targetInvite(env, auth, id) {
@@ -203,17 +205,35 @@ export async function handleAdminRequest(request, env, helpers) {
           throw policyError("The resulting time remaining exceeds your owner-assigned limit. Repeated extensions cannot bypass it.");
       }
       if (status === "expired" || (expiry !== null && expiry <= now)) {
-        demandPermission(auth, "can_delete_users");
-        if ((new URL(request.url)).searchParams.get("confirm_expire") !== "yes") throw policyError("This expires and permanently deletes the account. Confirm expiration first.", 400);
-        await deleteAccountData(env, user.id, "account_expired");
-        return json({ success: true, message: "Expired account and personal data permanently deleted." });
+        // Adding time explicitly reactivates a retained expired account. A status-only
+        // enable never grants access without a future expiration (or owner unlimited).
+        if(expiredViewer(user,now)&&body.status!=='expired'&&(body.extend_days!==undefined||body.expires_at!==undefined)&&(expiry===null||expiry>now)){
+          demandPermission(auth,'can_suspend');status='active';
+        }else{
+          if(expiredViewer(user,now)&&body.status==='active')throw policyError('Add time or set a future expiration to reactivate this account.',400);
+          demandPermission(auth, "can_delete_users");
+          if (url.searchParams.get("confirm_expire") !== "yes") throw policyError("Confirm expiration. Access stops now; the account is retained for 30 days before permanent deletion.", 400);
+          expiry=body.status==='expired'&&!expiredViewer(user,now)?now:expiredViewer(user,now)?user.expires_at:expiry;
+          if(expiry!==null&&expiry<=now-EXPIRED_RETENTION_SECONDS)throw policyError('Choose a more recent expiration date. That date is already beyond the 30-day recovery window.',400);
+          await stmt(env,"UPDATE users SET status='expired',expires_at=?2 WHERE id=?1 AND role='user'",[user.id,expiry??now]).run();
+          await retainExpiredViewer(env,user.id,now);
+          await audit(env,user.id,auth.user.id,'account_expired_retained',JSON.stringify({delete_after:(expiry??now)+EXPIRED_RETENTION_SECONDS}));
+          return json({ success: true, message: "Account expired. It can be reactivated for 30 days after expiration, then it is permanently deleted." });
+        }
+      }
+      if(expiredViewer(user,now)&&status==='active'){
+        demandPermission(auth,'can_suspend');demandPermission(auth,'can_change_time');
+        if(!auth.isOwner){
+          const capacity=await first(env,"SELECT p.max_open_accounts,(SELECT COUNT(*) FROM admin_user_attribution a JOIN users u ON u.id=a.user_id WHERE a.admin_user_id=p.user_id AND a.origin='admin_invite' AND (u.expires_at IS NULL OR u.expires_at>?2)) AS open_accounts FROM admin_profiles p WHERE p.user_id=?1",[user.creator_id,now]);
+          if(capacity&&user.origin==='admin_invite'&&capacity.open_accounts>=capacity.max_open_accounts)throw policyError('Reactivation would exceed the creating administrator’s open-account limit. Ask the owner to increase it.');
+        }
       }
       await env.DB.batch([
         stmt(env, "UPDATE users SET status=?1,max_sessions=?2,expires_at=?3 WHERE id=?4 AND role='user'", [status, sessions, expiry, user.id]),
         stmt(env, "UPDATE sessions SET revoked=1 WHERE user_id=?1 AND (?2!='active' OR id IN (SELECT id FROM sessions WHERE user_id=?1 AND revoked=0 AND expires_at>?3 ORDER BY created_at,id LIMIT MAX(0,(SELECT COUNT(*) FROM sessions WHERE user_id=?1 AND revoked=0 AND expires_at>?3)-?4)))", [user.id, status, now, sessions]),
       ]);
       await audit(env, user.id, auth.user.id, "user_updated", JSON.stringify({ status, max_sessions: sessions, expires_at: expiry }));
-      return json({ success: true, message: "User updated." });
+      return json({ success: true, message: expiredViewer(user,now)&&status==='active'?"Account reactivated. The user can sign in with their existing credentials.":"User updated." });
     }
   }
   const inviteMatch = path.match(/^\/admin\/invites\/([^/]+)(?:\/(revoke))?$/);
@@ -237,7 +257,7 @@ export async function handleAdminRequest(request, env, helpers) {
 
   if (path === "/admin/dashboard" && method === "GET") {
     const values = [now], where = ["u.role='user'", scope(auth, "a.admin_user_id", values)];
-    const counts = await first(env, `SELECT COUNT(*) AS total_users,COALESCE(SUM(u.status='active'),0) AS active_users,COALESCE(SUM(u.status='disabled'),0) AS disabled_users,
+    const counts = await first(env, `SELECT COUNT(*) AS total_users,COALESCE(SUM(u.status='active' AND (u.expires_at IS NULL OR u.expires_at>?1)),0) AS active_users,COALESCE(SUM(u.status='disabled'),0) AS disabled_users,COALESCE(SUM(u.status='expired' OR u.expires_at<=?1),0) AS retained_expired_users,
       COALESCE(SUM(u.expires_at IS NOT NULL AND u.expires_at>?1 AND u.expires_at<=?1+14*86400),0) AS expiring_soon,
       COALESCE(SUM((SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.revoked=0 AND s.expires_at>?1)),0) AS active_sessions
       FROM users u LEFT JOIN admin_user_attribution a ON a.user_id=u.id WHERE ${where.join(" AND ")}`, values);

@@ -81,10 +81,10 @@ async function loadView() {
     const section=heading("Overview","Viewer accounts and invitations within your permitted scope.");
     const data=await api("/admin/dashboard");if(ticket!==generation)return;
     const stats=el("div",undefined,"stats");
-    for(const [key,label] of Object.entries({total_users:"Current viewer accounts",active_users:"Active",disabled_users:"Disabled",expiring_soon:"Expiring within 14 days",active_sessions:"Active viewer sessions",unused_invites:"Unused valid codes",expired_users:"Expired · tracked",canceled_users:"Canceled · tracked",deleted_users:"Admin-deleted · tracked"})){
+    for(const [key,label] of Object.entries({total_users:"Current viewer accounts",active_users:"Active",disabled_users:"Disabled",retained_expired_users:"Expired · recoverable for 30 days",expiring_soon:"Expiring within 14 days",active_sessions:"Active viewer sessions",unused_invites:"Unused valid codes",expired_users:"Expired · permanently deleted",canceled_users:"Canceled · tracked",deleted_users:"Admin-deleted · tracked"})){
       const tile=el("div",undefined,"card stat");tile.append(el("strong",String(data.dashboard[key]||0)),el("span",label));stats.append(tile);
     }
-    section.append(stats,el("p","Ended-account totals are anonymous counts. Deleted account details are not retained; older history that was already erased cannot be reconstructed.","help"));
+    section.append(stats,button('View expired accounts',async()=>{await navigate('users');listState.status='expired';await loadView();}),el("p","Expired viewer accounts can be reactivated within 30 days of expiration. After that, personal data is permanently deleted and only anonymous totals remain. Previously deleted accounts cannot be recovered.","help"));
     if(!admin.is_owner){
       const box=el("div",undefined,"card");box.append(el("h2","Your owner-assigned limits"));
       for(const [key,[label]] of Object.entries(LIMITS))box.append(el("p",label+": "+admin.permissions[key]));
@@ -98,7 +98,7 @@ async function loadView() {
   if(view!=="activity"){
     const search=field(toolbar,["invites","users"].includes(view)?"Search account, token or Telegram":"Search","search",listState.search,"search");search.parentElement.classList.add("search");
     let debounce;search.addEventListener("input",()=>{clearTimeout(debounce);debounce=setTimeout(()=>{listState.search=search.value;listState.page=1;run(()=>loadView());},400);});
-    const statuses=view==="users"?["all","active","disabled","unlimited","expiring7","expiring14","expiring30"]:view==="admins"?["all","enabled","disabled"]:["all","unused","used","disabled","expired"];
+    const statuses=view==="users"?["all","active","disabled","expired","unlimited","expiring7","expiring14","expiring30"]:view==="admins"?["all","enabled","disabled"]:["all","unused","used","disabled","expired"];
     const status=select(toolbar,"Status","status",statuses.map(x=>[x,({expiring7:"Expiring in 7 days",expiring14:"Expiring in 14 days",expiring30:"Expiring in 30 days"})[x]||x]),listState.status);
     status.addEventListener("change",()=>{listState.status=status.value;listState.page=1;run(()=>loadView());});
   }
@@ -112,6 +112,10 @@ async function loadView() {
   const size=select(toolbar,"Per page","page_size",[[25,"25"],[50,"50"],[100,"100"]],listState.page_size);
   size.addEventListener("change",()=>{listState.page_size=Number(size.value);listState.page=1;run(()=>loadView());});
   toolbar.append(button("Refresh",()=>loadView()));
+  if(view==='users'){
+    toolbar.append(button('Expired Accounts',async()=>{listState.status='expired';listState.page=1;await loadView();}));
+    if(listState.status==='expired')section.append(el('p','Expired Accounts — Reactivate within 30 days of expiration to keep the same account. The deletion deadline is shown for each account.','help'));
+  }
   const loading=el("p","Loading…","muted");section.append(loading);
   const data=await api("/admin/"+view+"?"+new URLSearchParams(listState));if(ticket!==generation)return;
   loading.remove();const rows=data[view],pagination=data.pagination;
@@ -137,7 +141,7 @@ async function loadView() {
 }
 function userRow(u) {
   const actions=el("div",undefined,"actions");actions.append(button("Manage",()=>editUser(u)));if(permitted("can_manage_bot"))actions.append(button("Telegram",()=>editTelegramContact(u,"users")));
-  return [cell(u.username,u.email+(u.telegram_contact_username?" · Saved Telegram: @"+u.telegram_contact_username:"")+(u.telegram_id?" · Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · "+u.telegram_id:"")),badge(u.status),cell(remaining(u.expires_at),date(u.expires_at)),String(u.active_sessions)+" / "+u.max_sessions,
+  return [cell(u.username,u.email+(u.telegram_contact_username?" · Saved Telegram: @"+u.telegram_contact_username:"")+(u.telegram_id?" · Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · "+u.telegram_id:"")),badge(u.status),cell(remaining(u.expires_at),u.status==='expired'?'Deletes after: '+date(Number(u.expires_at)+30*86400):date(u.expires_at)),String(u.active_sessions)+" / "+u.max_sessions,
     cell(u.created_by_admin_name||"Unknown historical creator",u.origin==="referral"?"Via family / friend":u.origin==="admin_invite"?"Direct admin invite":"No surviving attribution"),cell(date(u.created_at),"Last login: "+date(u.last_login_at)),actions];
 }
 function inviteRow(i) {
@@ -190,6 +194,14 @@ function createInvitation() {
 }
 function editUser(u) {
   const body=openDialog("Manage "+u.username,"Viewer account controls. Changes affect only this account; deleted personal information cannot be restored.");
+  if(u.status==='expired'){
+    body.append(el('p','Expired: '+date(u.expires_at)+' · Permanent deletion after: '+date(Number(u.expires_at)+30*86400),'help'));
+    if(permitted('can_change_time')&&permitted('can_suspend'))body.append(button('Reactivate / Add Time',()=>{
+      $('dialog').close();const target=openDialog('Reactivate '+u.username,'Keep this account’s username, password, Telegram link and saved data. The new access period starts now; the user must sign in again.');
+      const rf=form(target,async()=>{const result=await api('/admin/users/'+u.id,'PATCH',{status:'active',extend_days:Number(days.value)});await saved(result.message);});
+      const days=field(rf,'New access period (days)','extend_days',Math.min(30,admin.is_owner?3650:admin.permissions.max_duration_days),'number',{required:true,min:1,max:admin.is_owner?3650:admin.permissions.max_duration_days});submit(rf,'Reactivate account');
+    },'primary'));
+  }
   if(u.telegram_id)body.append(el("p","Telegram: "+(u.telegram_username?"@"+u.telegram_username:u.telegram_name)+" · ID "+u.telegram_id+" · "+u.telegram_status));
   const f=form(body,async()=>{
     const changes={};
@@ -200,11 +212,11 @@ function editUser(u) {
     else if(expiry&&!expiry.disabled&&expiry.value!==initialDate)changes.expires_at=expiry.value?Math.floor(new Date(expiry.value).getTime()/1000):null;
     if(!Object.keys(changes).length){message("No account changes selected.");return;}
     const deleting=changes.status==="expired"||(changes.expires_at!=null&&changes.expires_at<=Date.now()/1000);
-    if(deleting&&!confirm("This will expire and permanently delete "+u.username+"'s account and personal information. Continue?"))return;
+    if(deleting&&!confirm("Expire "+u.username+"? Access stops and the account is retained for 30 days after expiration, then permanently deleted."))return;
     const result=await api("/admin/users/"+u.id+(deleting?"?confirm_expire=yes":""),"PATCH",changes);await saved(result.message);
   });
   const grid=el("div",undefined,"form-grid");f.append(grid);
-  const status=select(grid,"Status","status",[["active","Active"],["disabled","Banned (disabled)"],...(permitted("can_delete_users")?[["expired","Expire and permanently delete"]]:[])],u.status);status.disabled=!permitted("can_suspend")&&!permitted("can_delete_users");
+  const status=select(grid,"Status","status",[["active","Active"],["disabled","Banned (disabled)"],...(permitted("can_delete_users")||u.status==='expired'?[["expired","Expired · retain for 30 days"]]:[])],u.status);status.disabled=!permitted("can_suspend")&&!permitted("can_delete_users");
   const sessions=field(grid,"Simultaneous sessions","sessions",u.max_sessions,"number",{min:1,max:admin.is_owner?20:admin.permissions.max_sessions,required:true,disabled:!permitted("can_change_sessions")});
   const timeAllowed=permitted("can_change_time")&&(admin.is_owner||u.expires_at!==null);
   const initialDate=u.expires_at===null?"":new Date(u.expires_at*1000-new Date(u.expires_at*1000).getTimezoneOffset()*60000).toISOString().slice(0,16);
