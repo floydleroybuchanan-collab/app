@@ -3,7 +3,6 @@ package com.streamflixreborn.streamflix.charm
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import androidx.appcompat.app.AlertDialog
 import androidx.navigation.NavController
 import com.streamflixreborn.streamflix.R
 import org.json.JSONArray
@@ -20,13 +19,10 @@ object MediaLabSession {
         activity.finish()
     }
     fun showDrawer(activity: Activity) {
-        val entries = (0 until destinations.length()).map { destinations.getJSONObject(it) }
-        AlertDialog.Builder(activity).setTitle("Charming MediaLab")
-            .setItems(entries.map { it.getString("label") }.toTypedArray()) { _, position ->
-                val route = entries[position].getString("route")
-                if (route != "/vod") leave(activity, route)
-            }.setNegativeButton("Return to Video On Demand", null).show()
+        // Return to the host's actual first drawer, preserving this library's stack.
+        leave(activity, "medialab:drawer")
     }
+
     fun attach(activity: Activity, nav: NavController, intent: Intent) {
         val section = intent.getStringExtra("medialab.section")
         if (section == "sources") nav.navigate(R.id.providers)

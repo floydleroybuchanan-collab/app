@@ -105,6 +105,11 @@ class MainMobileActivity : FragmentActivity() {
         super.finish()
     }
 
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) com.streamflixreborn.streamflix.charm.VodFocusMemory.userNavigationEpoch++
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
@@ -126,6 +131,7 @@ class MainMobileActivity : FragmentActivity() {
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
 
+        supportFragmentManager.registerFragmentLifecycleCallbacks(com.streamflixreborn.streamflix.charm.VodFocusMemory(restoreFocus = false), true)
         _binding = ActivityMainMobileBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyThemeNavigationChrome()

@@ -14,7 +14,7 @@ import java.util.WeakHashMap
 /** A bookmark belongs to a fragment instance, never to a global Home/menu button.
  * Recycler steps use stable item IDs so insertions before the selection are safe.
  */
-class VodFocusMemory : FragmentManager.FragmentLifecycleCallbacks() {
+class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager.FragmentLifecycleCallbacks() {
     companion object { var userNavigationEpoch = 0L }
     private val bookmarks = WeakHashMap<Fragment, Bundle>()
     private val cleanup = WeakHashMap<Fragment, () -> Unit>()
@@ -119,6 +119,10 @@ class VodFocusMemory : FragmentManager.FragmentLifecycleCallbacks() {
                     } else false
                 }
                 if (restoredLayout) return true
+                if (!restoreFocus) {
+                    if (lists.isEmpty()) root.viewTreeObserver.removeOnPreDrawListener(this)
+                    return true
+                }
                 val target = if (steps != null) resolve(root, steps, true) else
                     root.findViewById<View>(com.streamflixreborn.streamflix.R.id.et_search)
                         ?: root.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== root && it !is RecyclerView && it.isShown && it.isEnabled }

@@ -11,7 +11,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
-import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
+import { PurpleTvShell, useIconRailFocusBoundary, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { PurpleDrawerButton } from "@/src/components/PurpleDrawerButton";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { TvCalibrationControls } from "@/src/components/TvCalibrationControls";
@@ -160,6 +160,7 @@ function formatTimeRemaining(value: number | string | null | undefined): string 
 }
 
 function SettingsScreenContent() {
+  const { openDrawer } = usePurpleTvDrawer();
   const { width: viewportWidth } = useWindowDimensions();
   const compact = viewportWidth < 700;
   const router = useRouter();
@@ -651,8 +652,8 @@ function SettingsScreenContent() {
 
             {section === "vod" ? <SettingsCard title="VOD Content & Sources" icon="film-outline">
               <Text style={styles.help}>Player, subtitles, display and startup settings are shared with Live TV. Manage VOD catalogs and source accounts here.</Text>
-              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("sources").then(route => { if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>Catalog providers</Text></Pressable>
-              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("vod-settings").then(route => { if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>VOD sources and accounts</Text></Pressable>
+              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("sources").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>Catalog providers</Text></Pressable>
+              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("vod-settings").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>VOD sources and accounts</Text></Pressable>
             </SettingsCard> : null}
             {section === "player" ? (
               <SettingsCard title="Playback" icon="play-circle-outline">

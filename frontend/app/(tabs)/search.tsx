@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -25,6 +26,7 @@ const SUGGESTIONS = ["News", "Sports", "Movies", "Kids", "Discovery"];
 type FocusZone = "keyboard" | "results" | "header" | null;
 
 function SearchScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const router = useRouter();
   const isFocused = useIsFocused();
   const { focusIconRail } = usePurpleTvDrawer();
@@ -413,7 +415,7 @@ function SearchScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 50, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -469,3 +471,5 @@ export default function SearchScreen() {
     </FocusedTabMount>
   );
 }
+
+const mobileStyles = { body: { flexDirection: "column" as const, gap: 12, paddingTop: 12 }, keyboardPanel: { flex: 0, maxWidth: undefined }, keys: { display: "none" as const }, searchBox: { height: 48 }, resultsPanel: { flex: 1, borderLeftWidth: 0, paddingLeft: 0 }, suggestion: { minHeight: 48 }, resultRow: { minHeight: 56 }, guideAction: { minHeight: 56, width: 96 }, resultName: { flex: 0 } };

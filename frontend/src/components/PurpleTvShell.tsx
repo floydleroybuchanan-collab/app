@@ -223,6 +223,7 @@ export function PurpleTvShell({
   watchingChannelId,
   secondaryDrawer,
   onIconRailNavigate,
+  onNavigate,
   onIconRailOpenMainDrawer,
 }: {
   active: Route;
@@ -235,6 +236,7 @@ export function PurpleTvShell({
   watchingChannelId?: string | null;
   secondaryDrawer?: React.ReactNode;
   onIconRailNavigate?: () => void;
+  onNavigate?: (route: string) => void;
   onIconRailOpenMainDrawer?: () => void;
 }) {
   const router = useRouter();
@@ -501,6 +503,7 @@ export function PurpleTvShell({
       // remote/focus tree before a different route mounts and claims focus.
       // A normal close can be rejected by the anti-bounce opening guard, which
       // previously allowed two live focus owners during rapid drawer selection.
+      onNavigate?.(route);
       closeDrawer({ force: true });
       if (source === "rail") onIconRailNavigateRef.current?.();
       if (route === active && pathname === route) {
@@ -516,7 +519,7 @@ export function PurpleTvShell({
         router.replace(route as any);
       });
     },
-    [active, closeDrawer, pathname, router],
+    [active, closeDrawer, onNavigate, pathname, router],
   );
 
   useEffect(() => () => {

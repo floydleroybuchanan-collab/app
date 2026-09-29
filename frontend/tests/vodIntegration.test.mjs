@@ -34,3 +34,13 @@ test('default provider is selected once and embedded VOD never offers upstream A
   assert.match(updater,/CHARM_VOD_EMBEDDED\) return null/);
   assert.match(updater,/CHARM_VOD_EMBEDDED\) return emptyList\(\)/);
 });
+
+test('VOD left boundary hands off to the host main drawer and preserves return state',()=>{
+  const native=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/MediaLabSession.kt');
+  const route=read('app/(tabs)/vod.tsx');
+  assert.match(native,/leave\(activity, "medialab:drawer"\)/);
+  assert.doesNotMatch(native,/AlertDialog|groupDrawer/);
+  assert.match(route,/route === "medialab:drawer"/);
+  assert.match(route,/openDrawer\(\{ focusTop: true \}\)/);
+  assert.match(route,/if \(route !== "\/vod"\) resumeAfterDrawer.current = false/);
+});

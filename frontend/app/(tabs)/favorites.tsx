@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -43,6 +44,7 @@ const FavoriteRow = memo(function FavoriteRow({
   onFocusChannel: (id: string | null) => void;
 }) {
   const programmes = useGuidePrograms(channel.id);
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const current = nowNext(programmes, now).current;
   const isTV = Platform.OS !== "web" && Platform.isTV;
   const progress = current ? progressPct(current, now) : 0;
@@ -79,6 +81,7 @@ const FavoriteRow = memo(function FavoriteRow({
 });
 
 function FavoritesScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const router = useRouter();
   const isFocused = useIsFocused();
   const {
@@ -275,7 +278,7 @@ function FavoritesScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 54, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, gap: 14 },
   headerLeft: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 },
@@ -317,3 +320,5 @@ export default function FavoritesScreen() {
     </FocusedTabMount>
   );
 }
+
+const mobileStyles = { header: { flexWrap: "wrap" as const, gap: 8 }, titleRow: { flexWrap: "wrap" as const }, addHint: { display: "none" as const }, searchHit: { width: 48, height: 48 }, folderChip: { minHeight: 48 }, row: { minHeight: 72, gap: 6 }, name: { flex: 1, width: undefined }, programBlock: { display: "none" as const }, time: { display: "none" as const }, guideButton: { minHeight: 48 }, empty: { paddingHorizontal: 12 } };

@@ -19,9 +19,12 @@ export function StartupVersion4({ onComplete }: { onComplete?: () => void }) {
   const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => subscribeProgress(setEpg), []);
   useEffect(() => {
+    if (completedForSession) return;
     const startedAt = Date.now();
     const timer = setInterval(() => {
-      setElapsedMs(Math.min(STARTUP_SEQUENCE_MS, Date.now() - startedAt));
+      const elapsed = Math.min(STARTUP_SEQUENCE_MS, Date.now() - startedAt);
+      setElapsedMs(elapsed);
+      if (elapsed >= STARTUP_SEQUENCE_MS) clearInterval(timer);
     }, 100);
     return () => clearInterval(timer);
   }, []);
