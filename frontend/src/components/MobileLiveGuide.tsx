@@ -13,10 +13,10 @@ import { FocusGuide } from "./TVFocusGuideView";
 import type { Channel } from "@/src/api";
 
 const saved = { group: "All", query: "", channel: "", offset: 0, columns: 0 };
-const Card = memo(function Card({ channel, width, now, favorite, locked, onPlay }: { channel: Channel; width: number; now: Date; favorite: boolean; locked: boolean; onPlay: (channel: Channel) => void }) {
+const Card = memo(function Card({ channel, width, height, now, favorite, locked, onPlay }: { channel: Channel; width: number; height: number; now: Date; favorite: boolean; locked: boolean; onPlay: (channel: Channel) => void }) {
   const programs = useGuidePrograms(channel.id);
   const { current, next } = nowNext(programs, now);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${channel.name}${locked ? ", locked" : ""}`} onPress={() => onPlay(channel)} style={({ focused }: any) => [styles.card, { width }, focused && styles.focus]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${channel.name}${locked ? ", locked" : ""}`} onPress={() => onPlay(channel)} style={({ focused }: any) => [styles.card, { width, height }, focused && styles.focus]}>
     <View style={styles.brand}><ChannelLogo name={channel.name} logo={channel.logo} size={38} /><Text numberOfLines={2} style={styles.name}>{channel.name}{favorite ? " ★" : ""}</Text></View>
     <Text numberOfLines={2} style={styles.program}>{locked ? "Locked channel · Tap to unlock" : current?.title || "Live TV"}</Text>
     {!locked && <><Text style={styles.muted}>{current ? `${fmtTime(current.start)}${current.stop ? ` – ${fmtTime(current.stop)}` : ""}` : "Program information unavailable"}</Text>
@@ -28,15 +28,17 @@ const Card = memo(function Card({ channel, width, now, favorite, locked, onPlay 
 /** Phone guide: bounded visible-row programme loading, no background preview decoder. */
 export function MobileLiveGuide() {
   const router = useRouter(), focused = useIsFocused();
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  const [availableWidth, setAvailableWidth] = useState(width);
+  const rowHeight = Math.ceil(184 * Math.max(1, fontScale)) + 8;
   const { channels, favorites, addRecent, patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache, loading, error, hardRefresh } = useStore();
   const parental = useParentalPin();
   const [group, setGroup] = useState(saved.group), [query, setQuery] = useState(saved.query);
   const [now, setNow] = useState(() => new Date());
   const [lockedChannel, setLockedChannel] = useState<Channel | null>(null), [pin, setPin] = useState(""), [pinError, setPinError] = useState("");
   const list = useRef<FlatList<Channel>>(null);
-  const columns = Math.max(1, Math.min(5, Math.floor((width - 24) / 175)));
-  const cardWidth = (width - 24 - (columns - 1) * 8) / columns;
+  const columns = Math.max(1, Math.min(5, Math.floor((availableWidth - 24) / 175)));
+  const cardWidth = (availableWidth - 24 - (columns - 1) * 8) / columns;
   const groups = useMemo(() => ["All", "Favorites", ...Array.from(new Set(channels.map(c => c.group || "Other"))).sort()], [channels]);
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
   const rows = useMemo(() => channels.filter(c => (group === "All" || (group === "Favorites" ? favoriteSet.has(c.id) : (c.group || "Other") === group)) && c.name.toLowerCase().includes(query.trim().toLowerCase())), [channels, group, favoriteSet, query]);
@@ -61,19 +63,19 @@ export function MobileLiveGuide() {
     if (!rows.length || restored.current === columns) return;
     restored.current = columns;
     const index = rows.findIndex(c => c.id === saved.channel);
-    const offset = saved.columns === columns ? saved.offset : Math.max(0, Math.floor(index / columns)) * 192;
+    const offset = saved.columns === columns ? saved.offset : Math.max(0, Math.floor(index / columns)) * rowHeight;
     requestAnimationFrame(() => list.current?.scrollToOffset({ offset, animated: false }));
-  }, [rows, columns]);
+  }, [rows, columns, rowHeight]);
   const play = useCallback((channel: Channel) => {
     if (!parental.ready) return;
     if (parental.isGroupLocked(channel.group) || parental.isGroupLocked(channel.source_group || "")) { setLockedChannel(channel); setPin(""); setPinError(""); return; }
     saved.channel = channel.id; addRecent(channel); openFullscreenPlayer(router, channel.id);
   }, [parental, addRecent, router]);
-  return <PurpleTvShell active="/guide"><View style={styles.page}>
+  return <PurpleTvShell active="/guide"><View style={styles.page} onLayout={event => setAvailableWidth(event.nativeEvent.layout.width)}>
     <TextInput accessibilityLabel="Search live channels" placeholder="Search live channels" placeholderTextColor="#AAA7BB" value={query} onChangeText={value => { saved.offset = 0; setQuery(value); }} style={styles.search} />
     <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={styles.groups} showsHorizontalScrollIndicator={false}>{groups.map(item => <Pressable key={item} onPress={() => { saved.offset = 0; setGroup(item); list.current?.scrollToOffset({ offset: 0, animated: false }); }} style={({ focused }: any) => [styles.chip, group === item && styles.selected, focused && styles.focus]}><Text style={styles.text}>{item}</Text></Pressable>)}</ScrollView>
-    <FlatList key={columns} ref={list} data={rows} numColumns={columns} keyExtractor={item => item.id} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} initialNumToRender={columns * 4} maxToRenderPerBatch={columns * 3} windowSize={5} onViewableItemsChanged={visible} viewabilityConfig={viewability} columnWrapperStyle={columns > 1 ? { gap: 8 } : undefined} getItemLayout={(_, index) => ({ length: 192, offset: index * 192, index })} onScroll={event => { saved.offset = event.nativeEvent.contentOffset.y; saved.columns = columns; }} scrollEventThrottle={100}
-      renderItem={({ item }) => <Card channel={item} width={cardWidth} now={now} favorite={favoriteSet.has(item.id)} locked={parental.isGroupLocked(item.group) || parental.isGroupLocked(item.source_group || "")} onPlay={play} />}
+    <FlatList key={columns} ref={list} data={rows} numColumns={columns} keyExtractor={item => item.id} keyboardShouldPersistTaps="handled" removeClippedSubviews={false} initialNumToRender={columns * 4} maxToRenderPerBatch={columns * 3} windowSize={5} onViewableItemsChanged={visible} viewabilityConfig={viewability} columnWrapperStyle={columns > 1 ? { gap: 8 } : undefined} getItemLayout={(_, index) => ({ length: rowHeight, offset: index * 192, index })} onScroll={event => { saved.offset = event.nativeEvent.contentOffset.y; saved.columns = columns; }} scrollEventThrottle={100}
+      renderItem={({ item }) => <Card channel={item} width={cardWidth} height={rowHeight - 8} now={now} favorite={favoriteSet.has(item.id)} locked={parental.isGroupLocked(item.group) || parental.isGroupLocked(item.source_group || "")} onPlay={play} />}
       ListEmptyComponent={<View style={{ padding: 20, gap: 12 }}><Text style={styles.text}>{loading ? "Loading channels…" : error || "No matching channels"}</Text><Pressable style={styles.chip} onPress={() => void hardRefresh()}><Text style={styles.text}>Reload channels</Text></Pressable></View>} />
     <Modal visible={!!lockedChannel} transparent onRequestClose={() => setLockedChannel(null)}><View style={styles.overlay}><FocusGuide trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.dialog}><Text style={styles.name}>Unlock channel group</Text><TextInput accessibilityLabel="Parental PIN" secureTextEntry keyboardType="number-pad" value={pin} onChangeText={setPin} style={styles.search} /><Text style={styles.muted}>{pinError}</Text><Pressable style={styles.chip} onPress={() => { if (!parental.verifyPin(pin)) { setPinError("Incorrect PIN"); return; } if (lockedChannel) { parental.unlockGroup(lockedChannel.group); parental.unlockGroup(lockedChannel.source_group || ""); saved.channel = lockedChannel.id; addRecent(lockedChannel); openFullscreenPlayer(router, lockedChannel.id); } setLockedChannel(null); }}><Text style={styles.text}>Unlock and watch</Text></Pressable><Pressable style={styles.chip} onPress={() => setLockedChannel(null)}><Text style={styles.text}>Cancel</Text></Pressable></FocusGuide></View></Modal>
   </View></PurpleTvShell>;

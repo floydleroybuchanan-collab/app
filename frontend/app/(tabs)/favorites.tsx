@@ -177,13 +177,15 @@ function FavoritesScreenContent() {
   return (
     <PurpleTvShell active="/favorites">
       <View style={styles.page}>
+        <FlatList data={items} keyExtractor={item => item.id} initialNumToRender={12} maxToRenderPerBatch={10} windowSize={7} removeClippedSubviews={false} contentContainerStyle={styles.list}
+        ListHeaderComponent={<>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <PurpleDrawerButton testID="favorites-open-drawer" />
             <View style={styles.headerCopy}>
-              <Text style={styles.kicker}>MY CHANNELS</Text>
+              <Text style={styles.kicker}>SAVED & FAVORITES</Text>
               <View style={styles.titleRow}>
-                <Text style={styles.title}>All Favorites</Text>
+                <Text style={styles.title}>Your Library</Text>
                 <Text numberOfLines={2} style={styles.addHint}>
                   {folderMode
                     ? "Long-press a channel to add or remove it from this folder. Use Rename to cycle the folder name."
@@ -242,15 +244,16 @@ function FavoritesScreenContent() {
           </Pressable>
         </View>
 
-        {items.length ? (
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.id}
-            initialNumToRender={12}
-            maxToRenderPerBatch={10}
-            windowSize={7}
-            removeClippedSubviews={false}
-            contentContainerStyle={styles.list}
+
+        </>}
+        ListEmptyComponent={<View style={styles.empty}>
+            <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
+            <Text style={styles.emptyTitle}>No favorites yet</Text>
+            <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
+            <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
+              <Text style={styles.guideText}>Open TV Guide</Text>
+            </Pressable>
+          </View>}
             renderItem={({ item, index }) => (
               <FavoriteRow
                 channel={item}
@@ -264,17 +267,7 @@ function FavoritesScreenContent() {
                 onFocusChannel={noteChannelFocus}
               />
             )}
-          />
-        ) : (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
-            <Text style={styles.emptyTitle}>No favorites yet</Text>
-            <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
-            <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
-              <Text style={styles.guideText}>Open TV Guide</Text>
-            </Pressable>
-          </View>
-        )}
+        />
       </View>
     </PurpleTvShell>
   );

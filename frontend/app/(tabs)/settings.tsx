@@ -109,7 +109,7 @@ type Tile = {
 };
 
 const TILES: Tile[] = [
-  { id: "vod", label: "VOD Content & Sources", icon: "film-outline" },
+  { id: "vod", label: "Content & Sources", icon: "film-outline" },
   { id: "general", label: "General", icon: "settings-outline" },
   { id: "player", label: "Player", icon: "play-circle-outline" },
   { id: "remote", label: "Remote Control", icon: "game-controller-outline" },
@@ -121,7 +121,7 @@ const TILES: Tile[] = [
   { id: "parental", label: "Parental", icon: "lock-closed-outline" },
   { id: "backup", label: "Backup & Restore", icon: "cloud-download-outline" },
   { id: "invites", label: "Invites", icon: "gift-outline" },
-  { id: "account", label: "Account", icon: "person-outline" },
+  { id: "account", label: "Accounts", icon: "person-outline" },
   { id: "about", label: "About", icon: "information-circle-outline" },
 ];
 

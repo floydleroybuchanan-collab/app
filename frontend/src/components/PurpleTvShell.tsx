@@ -604,8 +604,8 @@ export function PurpleTvShell({
         {
           paddingTop: mobile ? safeArea.top : edges.padding.top,
           paddingBottom: mobile ? safeArea.bottom : edges.padding.bottom,
-          paddingLeft: edges.padding.left,
-          paddingRight: edges.padding.right,
+          paddingLeft: mobile ? safeArea.left : edges.padding.left,
+          paddingRight: mobile ? safeArea.right : edges.padding.right,
           marginTop: edges.margin.top,
           marginBottom: edges.margin.bottom,
           marginLeft: edges.margin.left,
