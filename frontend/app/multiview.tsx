@@ -1,7 +1,8 @@
+import { MultiviewChannelSelector } from "@/src/components/MultiviewChannelSelector";
 import { isPlaybackGroupLocked } from "@/src/core/parentalPin";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, BackHandler, FlatList, Platform, Pressable, requireNativeComponent, ScrollView, StyleSheet, Text, TextInput, View, type ViewProps } from "react-native";
+import { AppState, BackHandler, Platform, Pressable, requireNativeComponent, ScrollView, StyleSheet, Text, View, type ViewProps } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { multiviewLayout } from "@/src/core/multiviewLayout";
 import { useMultiviewPreferences, loadMultiviewPreferences, getMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
@@ -40,9 +41,6 @@ export default function MultiviewScreen() {
   const [order, setOrder] = useState([0,1,2,3]);
   const [swapFrom, setSwapFrom] = useState<number | null>(null);
   const [labels, setLabels] = useState(true);
-  const [filter, setFilter] = useState("All");
-  const [sourceFilter, setSourceFilter] = useState("all");
-  const [groupFilter, setGroupFilter] = useState("all");
   const audioPreferences = useAudioTrackPreferences();
   const subtitlePreferences = useSubtitlePreferences();
   const token = useRef(`multiview-${Date.now()}-${++sequence}`).current;
@@ -54,8 +52,7 @@ export default function MultiviewScreen() {
   const [audible, setAudible] = useState(-1);
   const audibleRef = useRef(-1);
   const [picker, setPicker] = useState<number | null>(null);
-  const [query, setQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [states, setStates] = useState<Record<number, MultiviewEvent>>({});
   const active = useRef(false);
@@ -253,16 +250,6 @@ export default function MultiviewScreen() {
   const occupied = order.filter(slot => panes[slot]);
   const visible = preferences.automaticLayout && occupied.length ? occupied : order.filter(slot => slot < appPolicy.multiview_max);
   const positions = multiviewLayout(visible, enlarged);
-  const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
-  const recentIds = useMemo(() => new Set(recent.map(item => item.id)), [recent]);
-  const sources = useMemo(() => Array.from(new Map(channels.map(c => [c.playlist_id || "charm-primary", c.playlist_name || "Playlist 1"])).entries()), [channels]);
-  const groups = useMemo(() => Array.from(new Set(channels.filter(c => sourceFilter === "all" || (c.playlist_id || "charm-primary") === sourceFilter).map(c => c.source_group || c.group || "Other"))).sort(), [channels, sourceFilter]);
-  const results = useMemo(() => channels.filter(c => c.url && !hidden.has(c.id) &&
-    (sourceFilter === "all" || (c.playlist_id || "charm-primary") === sourceFilter) &&
-    (groupFilter === "all" || (c.source_group || c.group || "Other") === groupFilter) &&
-    (filter !== "Favorites" || favoriteIds.has(c.id)) && (filter !== "Recent" || recentIds.has(c.id)) &&
-    (!query || `${c.name} ${c.source_group || c.group}`.toLowerCase().includes(query.toLowerCase()))),
-    [channels, sourceFilter, groupFilter, filter, favoriteIds, recentIds, query, hidden]);
   const listen = (slot: number) => { if (!paneRef.current[slot]) return; multiview?.listen(token, slot); audibleRef.current=slot; setAudible(slot); };
   // A pending destination is not the selected playback screen. Cancel keeps
   // the original pane's menu/actions; choose() selects the destination on success.
@@ -312,20 +299,8 @@ export default function MultiviewScreen() {
       {action("Return to TV Guide", () => void exit())}
       </ScrollView>
     </FocusGuide>}
-    {picker != null && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
-      <Text style={styles.title}>Channel for screen {picker+1}</Text>
-      <TextInput accessibilityLabel="Search channels" value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
-      <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All",name))}</View>
-      {action(`Playlist: ${sources.find(([id])=>id===sourceFilter)?.[1] || "All Playlists"}`, () => {const ids=["all",...sources.map(([id])=>id)];setSourceFilter(ids[(ids.indexOf(sourceFilter)+1)%ids.length]);setGroupFilter("all");},false,false,"playlist-filter")}
-      {action(`Group: ${groupFilter === "all" ? "All groups" : groupFilter}`, () => {const ids=["all",...groups];setGroupFilter(ids[(ids.indexOf(groupFilter)+1)%ids.length]);},false,false,"group-filter")}
-      <Text style={styles.notice}>{results.length} channels · Each screen uses a provider connection</Text>
-      <FlatList data={results} keyExtractor={channel => channel.id} keyboardShouldPersistTaps="handled"
-        initialNumToRender={10} maxToRenderPerBatch={10} windowSize={5}
-        ListEmptyComponent={<Text style={styles.text}>No matching channels. Try All or another playlist.</Text>}
-        renderItem={({item}) => <Pressable onPress={() => {void choose(picker,item);}} style={({focused}: any) => [styles.row,focused && styles.focus]}><Text style={styles.text}>{item.name}</Text><Text style={styles.notice}>{item.playlist_name} · {item.source_group || item.group}</Text></Pressable>} />
-      <Text style={styles.notice}>{notice}</Text>
-      {action("Cancel", () => {setPicker(null);setQuery("");setMenu(true);})}
-    </FocusGuide>}
+    {picker != null && <MultiviewChannelSelector inputRef={firstPicker} preferredFocus={preferOverlayFocus} onFocusCapture={confirmOverlayFocus} slot={picker} channels={channels.filter(c => !hidden.has(c.id))} favorites={favorites} recent={recent} notice={notice}
+      onSelect={channel => void choose(picker, channel)} onCancel={() => {setPicker(null);setQuery("");setMenu(true);}} />}
   </View>;
 }
 const styles = StyleSheet.create({

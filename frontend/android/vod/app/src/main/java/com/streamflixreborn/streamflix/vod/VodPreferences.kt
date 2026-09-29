@@ -11,6 +11,6 @@ object VodPreferences {
         get() = prefs.getBoolean("debrid-search", true)
         set(value) { prefs.edit().putBoolean("debrid-search", value).apply() }
     var engine: String
-        get() = prefs.getString("engine", "media3") ?: "media3"
+        get() = "media3"
         set(value) { prefs.edit().putString("engine", value).apply() }
 }

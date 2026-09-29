@@ -29,16 +29,6 @@ open class GlideCustomModule : AppGlideModule() {
 
         val logging = HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)
 
-        val trustAllCerts = arrayOf<TrustManager>(
-            object : X509TrustManager {
-                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-            }
-        )
-        val sslContext = SSLContext.getInstance("TLS").apply { init(null, trustAllCerts, SecureRandom()) }
-        val trustManager = trustAllCerts[0] as X509TrustManager
-
         return Builder()
             .cache(appCache)
             .cookieJar(imageCookieJar)
@@ -78,8 +68,6 @@ open class GlideCustomModule : AppGlideModule() {
                 chain.proceed(fixedRequest)
             }
             .addInterceptor(logging)
-            .sslSocketFactory(sslContext.socketFactory, trustManager)
-            .hostnameVerifier { _, _ -> true }
             .dns(DnsResolver.doh)
             .build()
     }
@@ -88,9 +76,8 @@ open class GlideCustomModule : AppGlideModule() {
         context: Context, glide: Glide, registry: com.bumptech.glide.Registry
     ) {
         // Preserve the host's existing image client, TLS validation, and cookie behavior.
-        if (!com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
         val okHttpClient = getOkHttpClient(context)
-        registry.replace(
+        registry.append(
             GlideUrl::class.java,
             InputStream::class.java,
             AnimeOnlineNinjaCronetUrlLoader.Factory(context, okHttpClient),

@@ -1,7 +1,8 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
 import { MediaLabArt } from "@/src/components/MediaLabBrand";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -208,7 +209,8 @@ function LiveTvHomeScreenContent() {
           </View>
         </View>
 
-        <View style={styles.hero}>
+        <MediaLibraryShelf />
+        <View style={[styles.hero, !Platform.isTV && { flexDirection: "column" }]}>
           <LinearGradient
             colors={["rgba(124,58,237,0.18)", "rgba(12,10,27,0.80)", "#090914"]}
             start={{ x: 1, y: 0 }}
@@ -282,7 +284,7 @@ function LiveTvHomeScreenContent() {
             disabled={!heroChannel}
             nextFocusDown={firstRecentTag}
             onPress={() => heroChannel && play(heroChannel)}
-            style={({ focused }: any) => [styles.heroArtwork, focused && styles.heroArtworkFocused]}
+            style={({ focused }: any) => [styles.heroArtwork, !Platform.isTV && { minHeight: 160, flex: 0 }, focused && styles.heroArtworkFocused]}
             testID="home-last-channel-logo"
           >
             <View style={styles.heroGlow} />

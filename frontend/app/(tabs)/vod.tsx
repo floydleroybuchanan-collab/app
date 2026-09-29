@@ -1,19 +1,24 @@
+import { useIsFocused } from "@react-navigation/native";
+import { openMediaLibrary } from "@/src/core/mediaLibrary";
 import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { tvColors } from "@/src/theme";
 
 /** The host route blurs Live TV before launching the internal native VOD screen. */
 export default function VideoOnDemandScreen() {
+  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const launching = useRef(false);
+  const resumeAfterDrawer = useRef(false);
+  const isFocused = useIsFocused();
   const entered = useRef(false);
-  const { closeDrawer, openDrawer } = usePurpleTvDrawer();
+  const { closeDrawer, openDrawer, drawerOpen } = usePurpleTvDrawer();
 
   const openVod = useCallback(async () => {
     if (launching.current) return;
@@ -27,14 +32,26 @@ export default function VideoOnDemandScreen() {
       if (Platform.OS !== "android" || !NativeModules.CharmVod?.open) {
         throw new Error("Video OnDemand is available in the experimental Android APK.");
       }
-      await NativeModules.CharmVod.open();
+      const route = await openMediaLibrary();
+      if (route === "medialab:drawer") {
+        resumeAfterDrawer.current = true;
+        openDrawer({ focusTop: true });
+      } else router.replace((route || "/") as any);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
     } finally {
       launching.current = false;
       setOpening(false);
     }
-  }, [closeDrawer]);
+  }, [closeDrawer, openDrawer, router]);
+
+  useEffect(() => {
+    if (!isFocused) resumeAfterDrawer.current = false;
+    if (!drawerOpen && isFocused && resumeAfterDrawer.current) {
+      resumeAfterDrawer.current = false;
+      void openVod();
+    }
+  }, [drawerOpen, isFocused, openVod]);
 
   useFocusEffect(useCallback(() => {
     if (!entered.current) {
@@ -45,7 +62,7 @@ export default function VideoOnDemandScreen() {
   }, [openVod]));
 
   return (
-    <PurpleTvShell active="/vod">
+    <PurpleTvShell active="/vod" onNavigate={route => { if (route !== "/vod") resumeAfterDrawer.current = false; }}>
       <View style={styles.content}><MediaLabBackdrop />
         <MediaLabArt width={Math.min(width - 56, height * .75, 600)} />
         <Text style={styles.title}>Video OnDemand</Text>

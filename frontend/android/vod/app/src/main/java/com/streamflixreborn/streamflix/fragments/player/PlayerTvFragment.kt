@@ -1016,19 +1016,6 @@ class PlayerTvFragment : Fragment() {
         playbackListener?.let { player.removeListener(it) }
         playbackListener = null
 
-        if (!forceMedia3 && VodPreferences.engine == "nova") {
-            val resume = player.currentPosition
-            currentVideo = video
-            currentServer = server
-            player.stop()
-            player.clearMediaItems()
-            NovaPlayback.show(this, viewModel, video, server, resume, { v, selected, position ->
-                forceMedia3 = true
-                nativeResumePosition = position
-                displayVideo(v, selected)
-            }, { if (isAdded) findNavController().navigateUp() })
-            return
-        }
 
         savedSourcePosition = nativeResumePosition ?: player.currentPosition
         nativeResumePosition = null
@@ -1690,14 +1677,7 @@ class PlayerTvFragment : Fragment() {
         private var currentSoftwareDecoder = false
 
         private fun buildPlayer(extraBuffering: Boolean): ExoPlayer {
-            val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                    if (extraBuffering) 300_000 else DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
-                )
-                .build()
+            val loadControl = com.streamflixreborn.streamflix.charm.MediaLabPlayback.vodLoadControl()
 
             val renderersFactory = SubtitleOffsetRenderersFactory(requireContext()).apply {
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.N_MR1 || currentSoftwareDecoder) {
@@ -1707,7 +1687,7 @@ class PlayerTvFragment : Fragment() {
                     }
                 }
             }
-            val baseBuilder = ExoPlayer.Builder(requireContext(), renderersFactory)
+            val baseBuilder = com.streamflixreborn.streamflix.charm.MediaLabPlayback.builder(requireContext(), renderersFactory, DefaultMediaSourceFactory(dataSourceFactory), loadControl)
 
             return baseBuilder
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
@@ -1757,13 +1737,7 @@ class PlayerTvFragment : Fragment() {
                         true,
                     )
 
-                    val lang = UserPreferences.currentProvider?.language?.substringBefore("-")
-                    if (lang == "es") {
-                        player.trackSelectionParameters =
-                            player.trackSelectionParameters.buildUpon()
-                                .setPreferredAudioLanguage("spa")
-                                .build()
-                    }
+                    com.streamflixreborn.streamflix.charm.MediaLabPlayback.apply(player)
 
                     mediaSession = MediaSession.Builder(requireContext(), player)
                         .build()

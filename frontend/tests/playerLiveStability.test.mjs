@@ -52,7 +52,10 @@ test("direct MPEG-TS keeps its extractor while hardware video uses the Onn-safe 
   assert.match(native, /DefaultTsPayloadReaderFactory\.FLAG_DETECT_ACCESS_UNITS/);
   assert.match(native, /"transport" -> builder\.setMimeType\(MimeTypes\.VIDEO_MP2T\)/);
   assert.match(native, /setEnableDecoderFallback\(true\)/);
-  assert.match(native, /forceDisableMediaCodecAsynchronousQueueing\(\)/);
+  assert.match(native, /MediaLabPlayback\.builder/);
+  const shared = await source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/MediaLabPlayback.kt");
+  assert.match(shared, /MediaLabCodecPolicy.needsSynchronousCodec/);
+  assert.match(shared, /forceDisableMediaCodecAsynchronousQueueing\(\)/);
 });
 
 test("first frame is the stable-playing gate and cancels delayed recovery", async () => {

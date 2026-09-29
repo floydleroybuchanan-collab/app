@@ -44,14 +44,35 @@ class MainTvActivity : FragmentActivity() {
 
     private lateinit var updateAppDialog: UpdateAppTvDialog
 
+
+    override fun finish() {
+        if (!isFinishing) {
+            val snapshot = Bundle()
+            super.onSaveInstanceState(snapshot)
+            com.streamflixreborn.streamflix.charm.MediaLabSession.saveState("Tv:" + intent.getStringExtra("medialab.section"), snapshot)
+        }
+        super.finish()
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) com.streamflixreborn.streamflix.charm.VodFocusMemory.userNavigationEpoch++
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && binding.navMain.hasFocus()) {
+            com.streamflixreborn.streamflix.charm.MediaLabSession.showDrawer(this)
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(systemState: Bundle?) {
+        val savedInstanceState = systemState ?: com.streamflixreborn.streamflix.charm.MediaLabSession.takeState("Tv:" + intent.getStringExtra("medialab.section"))
         // Il setup delle preferenze è già avvenuto in StreamFlixApp
         setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
         
+        intent.putExtra("medialab.restored", savedInstanceState != null)
         super.onCreate(savedInstanceState)
         
         // Inizializza il provider con il context dell'attività per gestire eventuali bypass visibili
@@ -61,6 +82,7 @@ class MainTvActivity : FragmentActivity() {
         ZaluknijProvider.init(this)
         GuardaSerieProvider.init(this)
 
+        supportFragmentManager.registerFragmentLifecycleCallbacks(com.streamflixreborn.streamflix.charm.VodFocusMemory(), true)
         _binding = ActivityMainTvBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.setBackgroundDrawableResource(R.color.charm_vod_canvas)
@@ -72,11 +94,6 @@ class MainTvActivity : FragmentActivity() {
 
         adjustLayoutDelta(null, null)
 
-        if (BuildConfig.APP_LAYOUT == "mobile" || (BuildConfig.APP_LAYOUT != "tv" && !packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK))) {
-            finish()
-            startActivity(Intent(this, MainMobileActivity::class.java))
-            return
-        }
 
         if (savedInstanceState == null) {
             UserPreferences.currentProvider?.let {
@@ -85,6 +102,7 @@ class MainTvActivity : FragmentActivity() {
         }
 
         binding.navMain.setupWithNavController(navController)
+        com.streamflixreborn.streamflix.charm.MediaLabSession.attach(this, navController, intent)
         updateNavigationVisibility()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -162,10 +180,9 @@ class MainTvActivity : FragmentActivity() {
                     return
                 }
                 when (navController.currentDestination?.id) {
-                    R.id.home -> if (binding.navMain.hasFocus()) finish() else binding.navMain.requestFocus()
+                    R.id.home -> finish()
                     R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
-                        navigateToProviderHome(navController)
-                        binding.navMain.requestFocus()
+                        if (!navController.popBackStack()) finish()
                     }
                     else -> {
                         val handled = (getCurrentFragment() as? PlayerTvFragment)?.onBackPressed() ?: false
@@ -174,13 +191,7 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
         })
-        if (savedInstanceState == null) {
-            binding.ivSplashOverlay.play {
-                binding.navMainFragment.requestFocus()
-            }
-        } else {
-            binding.ivSplashOverlay.visibility = View.GONE
-        }
+        binding.ivSplashOverlay.visibility = View.GONE
     }
 
     override fun onStop() {
@@ -190,7 +201,7 @@ class MainTvActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.checkUpdate()
+        // Updates belong to the host application.
     }
 
     private fun applyThemeNavigationChrome() {

@@ -95,13 +95,30 @@ class MainMobileActivity : FragmentActivity() {
 
     private var updateAppDialog: UpdateAppMobileDialog? = null
 
+
+    override fun finish() {
+        if (!isFinishing) {
+            val snapshot = Bundle()
+            super.onSaveInstanceState(snapshot)
+            com.streamflixreborn.streamflix.charm.MediaLabSession.saveState("Mobile:" + intent.getStringExtra("medialab.section"), snapshot)
+        }
+        super.finish()
+    }
+
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) com.streamflixreborn.streamflix.charm.VodFocusMemory.userNavigationEpoch++
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(systemState: Bundle?) {
+        val savedInstanceState = systemState ?: com.streamflixreborn.streamflix.charm.MediaLabSession.takeState("Mobile:" + intent.getStringExtra("medialab.section"))
         setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
+        intent.putExtra("medialab.restored", savedInstanceState != null)
         super.onCreate(savedInstanceState)
 
         AnimeOnlineNinjaProvider.init(this)
@@ -115,6 +132,7 @@ class MainMobileActivity : FragmentActivity() {
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
 
+        supportFragmentManager.registerFragmentLifecycleCallbacks(com.streamflixreborn.streamflix.charm.VodFocusMemory(restoreFocus = false), true)
         _binding = ActivityMainMobileBinding.inflate(layoutInflater)
         setContentView(binding.root)
         applyThemeNavigationChrome()
@@ -141,14 +159,6 @@ class MainMobileActivity : FragmentActivity() {
             supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as NavHostFragment
         val navController = navHost.navController
 
-        if (BuildConfig.APP_LAYOUT == "tv" ||
-            (BuildConfig.APP_LAYOUT != "mobile" &&
-                packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK))
-        ) {
-            finish()
-            startActivity(Intent(this, MainTvActivity::class.java))
-            return
-        }
 
         if (savedInstanceState == null) {
             UserPreferences.currentProvider?.let {
@@ -165,18 +175,32 @@ class MainMobileActivity : FragmentActivity() {
             }
         }
 
-        viewModel.checkUpdate()
+        // Updates belong to the host application.
 
-        binding.bnvMain.setupWithNavController(navController)
+        binding.bnvMain.menu.findItem(R.id.charm_browse).isChecked = true
+        binding.bnvMain.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.charm_home -> com.streamflixreborn.streamflix.charm.MediaLabSession.leave(this, "/")
+                R.id.charm_live -> com.streamflixreborn.streamflix.charm.MediaLabSession.leave(this, "/guide")
+                R.id.charm_library -> com.streamflixreborn.streamflix.charm.MediaLabSession.leave(this, "/favorites")
+                R.id.charm_more -> com.streamflixreborn.streamflix.charm.MediaLabSession.showDrawer(this)
+            }
+            true
+        }
+        com.streamflixreborn.streamflix.charm.MediaLabSession.attach(this, navController, intent)
         binding.btnMainSearch.setOnClickListener {
             if (navController.currentDestination?.id != R.id.search) {
                 navController.navigate(R.id.search)
             }
         }
+        binding.charmBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
+        binding.btnMainMenu.setOnClickListener { com.streamflixreborn.streamflix.charm.MediaLabSession.showDrawer(this) }
         updateNavigationVisibility()
         updateBottomNavigationVisibility(navController.currentDestination?.id)
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
+            binding.charmHeader.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
+            binding.charmBack.visibility = if (destination.id == R.id.settings) View.GONE else View.VISIBLE
             updateNavigationVisibility(destination.id)
             updateBottomNavigationVisibility(destination.id)
             binding.mainContent.post { binding.mainContent.requestApplyInsets() }
@@ -232,7 +256,7 @@ class MainMobileActivity : FragmentActivity() {
                 }
 
                 if (UserPreferences.currentProvider != null && currentDestinationId == R.id.home) {
-                    closeTask()
+                    finish()
                     return
                 }
 
@@ -290,7 +314,7 @@ class MainMobileActivity : FragmentActivity() {
 
     private fun updateBottomNavigationVisibility(destinationId: Int?) {
         val showBottomNav =
-            UserPreferences.currentProvider != null && isTopLevelProviderDestination(destinationId)
+            UserPreferences.currentProvider != null && destinationId != R.id.player
         binding.bnvMain.visibility = if (showBottomNav) View.VISIBLE else View.GONE
         binding.btnMainSearch.visibility = if (
             UserPreferences.currentProvider != null &&
