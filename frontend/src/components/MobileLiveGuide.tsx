@@ -2,6 +2,7 @@ import { GuideSelectors } from "./GuideSelectors";
 import { usePlaylists } from "@/src/core/playlistRegistry";
 import { buildPlaylistMenu, providerGroupIdentity } from "@/src/core/playlistGuideMenu";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
+import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { applyGuideGroupOrder } from "@/src/core/guideGroupTabPreferences";
 import { playlistOwner } from "@/src/core/playlistCatalog";
 import { selectPlaylist, useSelectedPlaylist } from "@/src/core/playlistSelection";
@@ -42,7 +43,8 @@ export function MobileLiveGuide() {
   const { width, fontScale } = useWindowDimensions();
   const [availableWidth, setAvailableWidth] = useState(width);
 
-  const { channels, favorites, recent, recentIds, addRecent, patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache, loading, error, hardRefresh, hiddenGroups } = useStore();
+  const { channels, favorites, recent, recentIds, addRecent, patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache, loading, error, hardRefresh } = useStore();
+  const { hiddenGroups } = useGuideUiPreferences();
   const tabPrefs = useGuideGroupTabPreferences();
   const parental = useParentalPin();
   const playlists = usePlaylists();
