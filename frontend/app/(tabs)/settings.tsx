@@ -1,7 +1,9 @@
+import { openMediaLibrary } from "@/src/core/mediaLibrary";
+import { START_DESTINATIONS } from "@/src/core/startDestinations";
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { supportReport } from "@/src/core/supportReport";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -85,6 +87,7 @@ const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
 ];
 
 type Section =
+  | "vod"
   | "general"
   | "player"
   | "remote"
@@ -106,6 +109,7 @@ type Tile = {
 };
 
 const TILES: Tile[] = [
+  { id: "vod", label: "VOD Content & Sources", icon: "film-outline" },
   { id: "general", label: "General", icon: "settings-outline" },
   { id: "player", label: "Player", icon: "play-circle-outline" },
   { id: "remote", label: "Remote Control", icon: "game-controller-outline" },
@@ -156,6 +160,8 @@ function formatTimeRemaining(value: number | string | null | undefined): string 
 }
 
 function SettingsScreenContent() {
+  const { width: viewportWidth } = useWindowDimensions();
+  const compact = viewportWidth < 700;
   const router = useRouter();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
@@ -574,7 +580,7 @@ function SettingsScreenContent() {
                   onFocus={index === 0 ? tileEntryFocus.onFocus : undefined}
                   onBlur={index === 0 ? tileEntryFocus.onBlur : undefined}
                   onPress={() => choose(tile.id)}
-                  style={({ focused }: any) => [styles.tile, focused && styles.focused]}
+                  style={({ focused }: any) => [styles.tile, compact && { width: "46%", minHeight: 96 }, focused && styles.focused]}
                   testID={`settings-tile-${tile.id}`}
                 >
                   <View style={styles.tileIcon}><Ionicons name={tile.icon} size={27} color={tvColors.purpleSoft} /></View>
@@ -635,23 +641,24 @@ function SettingsScreenContent() {
                 </Text>
                 <ToggleRow label="24-hour clock" value={clock24h} onChange={setClock24h} />
                 <ChoiceRow<StartScreen>
-                  label="Start screen"
+                  label="Boot To Screen"
                   value={startScreen}
-                  options={[
-                    { label: "Home", value: "home" },
-                    { label: "Guide", value: "guide" },
-                    { label: "Last channel", value: "last_channel" },
-                  ]}
+                  options={START_DESTINATIONS.map(({ label, value }) => ({ label, value }))}
                   onChange={setStartScreen}
                 />
               </SettingsCard>
             ) : null}
 
+            {section === "vod" ? <SettingsCard title="VOD Content & Sources" icon="film-outline">
+              <Text style={styles.help}>Player, subtitles, display and startup settings are shared with Live TV. Manage VOD catalogs and source accounts here.</Text>
+              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("sources").then(route => { if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>Catalog providers</Text></Pressable>
+              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("vod-settings").then(route => { if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>VOD sources and accounts</Text></Pressable>
+            </SettingsCard> : null}
             {section === "player" ? (
               <SettingsCard title="Playback" icon="play-circle-outline">
-                <Text style={styles.settingLabel}>Live TV player</Text>
+                <Text style={styles.settingLabel}>Live TV & VOD player</Text>
                 <Text style={styles.help}>
-                  Live TV and multiview use Media3/ExoPlayer. VOD also offers optional Nova playback in its settings. Device capabilities determine which formats play smoothly.
+                  Live TV, VOD and multiview use Media3/ExoPlayer. Buffer size, audio language and subtitles apply across the app in its settings. Device capabilities determine which formats play smoothly.
                 </Text>
                 <ChoiceRow<PlayerControlsTimeoutMs>
                   label="Controls timeout"

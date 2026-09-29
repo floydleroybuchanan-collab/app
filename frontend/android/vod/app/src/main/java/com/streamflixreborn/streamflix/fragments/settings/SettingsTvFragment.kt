@@ -221,7 +221,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     }
 
     private fun renderCurrentScreen() {
-        setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey)
+        setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey ?: "screen_vod_sources")
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }

@@ -1,13 +1,15 @@
+import { openMediaLibrary } from "@/src/core/mediaLibrary";
 import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { useCallback, useRef, useState } from "react";
 import { NativeModules, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { tvColors } from "@/src/theme";
 
 /** The host route blurs Live TV before launching the internal native VOD screen. */
 export default function VideoOnDemandScreen() {
+  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,14 +29,15 @@ export default function VideoOnDemandScreen() {
       if (Platform.OS !== "android" || !NativeModules.CharmVod?.open) {
         throw new Error("Video OnDemand is available in the experimental Android APK.");
       }
-      await NativeModules.CharmVod.open();
+      const route = await openMediaLibrary();
+      router.replace((route || "/") as any);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
     } finally {
       launching.current = false;
       setOpening(false);
     }
-  }, [closeDrawer]);
+  }, [closeDrawer, router]);
 
   useFocusEffect(useCallback(() => {
     if (!entered.current) {

@@ -95,11 +95,22 @@ class MainMobileActivity : FragmentActivity() {
 
     private var updateAppDialog: UpdateAppMobileDialog? = null
 
+
+    override fun finish() {
+        if (!isFinishing) {
+            val snapshot = Bundle()
+            super.onSaveInstanceState(snapshot)
+            com.streamflixreborn.streamflix.charm.MediaLabSession.saveState("Mobile:" + intent.getStringExtra("medialab.section"), snapshot)
+        }
+        super.finish()
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(systemState: Bundle?) {
+        val savedInstanceState = systemState ?: com.streamflixreborn.streamflix.charm.MediaLabSession.takeState("Mobile:" + intent.getStringExtra("medialab.section"))
         setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
         super.onCreate(savedInstanceState)
@@ -141,14 +152,6 @@ class MainMobileActivity : FragmentActivity() {
             supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as NavHostFragment
         val navController = navHost.navController
 
-        if (BuildConfig.APP_LAYOUT == "tv" ||
-            (BuildConfig.APP_LAYOUT != "mobile" &&
-                packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK))
-        ) {
-            finish()
-            startActivity(Intent(this, MainTvActivity::class.java))
-            return
-        }
 
         if (savedInstanceState == null) {
             UserPreferences.currentProvider?.let {
@@ -165,18 +168,21 @@ class MainMobileActivity : FragmentActivity() {
             }
         }
 
-        viewModel.checkUpdate()
+        // Updates belong to the host application.
 
         binding.bnvMain.setupWithNavController(navController)
+        com.streamflixreborn.streamflix.charm.MediaLabSession.attach(this, navController, intent)
         binding.btnMainSearch.setOnClickListener {
             if (navController.currentDestination?.id != R.id.search) {
                 navController.navigate(R.id.search)
             }
         }
+        binding.btnMainMenu.setOnClickListener { com.streamflixreborn.streamflix.charm.MediaLabSession.showDrawer(this) }
         updateNavigationVisibility()
         updateBottomNavigationVisibility(navController.currentDestination?.id)
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
+            binding.btnMainMenu.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
             updateNavigationVisibility(destination.id)
             updateBottomNavigationVisibility(destination.id)
             binding.mainContent.post { binding.mainContent.requestApplyInsets() }
@@ -232,7 +238,7 @@ class MainMobileActivity : FragmentActivity() {
                 }
 
                 if (UserPreferences.currentProvider != null && currentDestinationId == R.id.home) {
-                    closeTask()
+                    finish()
                     return
                 }
 

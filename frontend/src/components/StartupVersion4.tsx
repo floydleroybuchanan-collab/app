@@ -13,7 +13,7 @@ const PLAYLIST_DOT_MS = 4_500;
 let completedForSession = false;
 
 /** Real-event startup gate: never sleeps and never waits for a complete XMLTV import. */
-export function StartupVersion4() {
+export function StartupVersion4({ onComplete }: { onComplete?: () => void }) {
   const { allChannels: channels, loading, windowStart, windowEnd } = useStore();
   const [epg, setEpg] = useState(INITIAL);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -39,8 +39,13 @@ export function StartupVersion4() {
     { label: `Loading M3U channels${channelsReady ? ` · ${channels.length}` : ""}`, ready: elapsedMs >= PLAYLIST_DOT_MS },
     { label: epgStarted ? `EPG ${epg.phase}` : freshCacheReady ? "EPG cache is fresh" : "Starting EPG in background", ready: sequenceComplete },
   ], [channels.length, channelsReady, elapsedMs, epg.phase, epgStarted, freshCacheReady, sequenceComplete]);
-  if (mayEnter) completedForSession = true;
-  if (completedForSession) return null;
+  useEffect(() => {
+    if (mayEnter || completedForSession) {
+      completedForSession = true;
+      onComplete?.();
+    }
+  }, [mayEnter, onComplete]);
+  if (completedForSession || mayEnter) return null;
   return (
     <View style={styles.overlay} testID="startup-version-4">
       <MediaLabBackdrop /><MediaLabStartupArt />

@@ -111,13 +111,13 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   private val density = resources.displayMetrics.density
-  private val channelWidth = 184f * density
+  private val channelWidth get() = min(184f * density, width * .36f)
   private val headerHeight = 38f * density
   private val rowHeight = 54f * density
   private val pad = 8f * density
 
   /** Three visible hours gives six equal 30-minute header columns on every TV size. */
-  private val visibleWindowMs = 3L * 60L * 60_000L
+  private val visibleWindowMs get() = (if (width / density < 600) 1L else 3L) * 60L * 60_000L
   private val horizontalPrefetchBeforeMs = 30L * 60_000L
   private val horizontalPrefetchAfterMs = 60L * 60_000L
   private val liveWindowHistoryMs = 60L * 60_000L
@@ -440,6 +440,60 @@ class NativeGuideView(context: Context) : View(context) {
     unregisterMemoryListener()
     io.shutdownNow()
     // Shared EPG databases remain process-owned; Guide disposal only stops its reader.
+  }
+
+  private var touchRows = 0f
+  private val touch = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+    override fun onDown(event: android.view.MotionEvent): Boolean {
+      if (!enabled || rows.isEmpty()) return false
+      touchRows = 0f
+      requestFocus()
+      parent?.requestDisallowInterceptTouchEvent(true)
+      return true
+    }
+    override fun onSingleTapUp(event: android.view.MotionEvent): Boolean {
+      if (event.y < headerHeight || rows.isEmpty()) return true
+      selectedRow = (firstVisibleRow + ((event.y - headerHeight) / rowHeight).toInt()).coerceIn(0, rows.lastIndex)
+      channelRailSelected = event.x < channelWidth
+      if (!channelRailSelected) {
+        selectedTimeMs = (viewportStartMs + ((event.x - channelWidth) / max(1f, width - channelWidth) * visibleWindowMs).toLong()).coerceIn(windowStartMs, windowEndMs - 1)
+      }
+      invalidate()
+      emitSelection(true, pressed = true)
+      return true
+    }
+    override fun onScroll(first: android.view.MotionEvent?, event: android.view.MotionEvent, dx: Float, dy: Float): Boolean {
+      if (!enabled || rows.isEmpty()) return false
+      if (abs(dy) >= abs(dx)) {
+        touchRows += dy
+        val delta = (touchRows / rowHeight).toInt()
+        if (delta != 0) {
+          touchRows -= delta * rowHeight
+          val visible = max(1, ((height - headerHeight) / rowHeight).toInt())
+          firstVisibleRow = (firstVisibleRow + delta).coerceIn(0, max(0, rows.size - visible))
+          selectedRow = selectedRow.coerceIn(firstVisibleRow, min(rows.lastIndex, firstVisibleRow + visible - 1))
+          emitRunway(delta)
+        }
+      } else {
+        liveFollowEnabled = false
+        viewportStartMs = (viewportStartMs + (dx / max(1f, width - channelWidth) * visibleWindowMs).toLong()).coerceIn(windowStartMs, max(windowStartMs, windowEndMs - visibleWindowMs))
+        selectedTimeMs = selectedTimeMs.coerceIn(viewportStartMs, min(windowEndMs - 1, viewportStartMs + visibleWindowMs - 1))
+      }
+      loadPrograms()
+      invalidate()
+      return true
+    }
+  })
+
+  @android.annotation.SuppressLint("ClickableViewAccessibility")
+  override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+    if (!enabled) return false
+    val handled = touch.onTouchEvent(event)
+    if (event.actionMasked == android.view.MotionEvent.ACTION_UP || event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
+      parent?.requestDisallowInterceptTouchEvent(false)
+      emitSelection(true)
+    }
+    return handled || event.actionMasked == android.view.MotionEvent.ACTION_UP
   }
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

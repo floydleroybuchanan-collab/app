@@ -17,16 +17,14 @@ test('adding screens two through four preserves the original playback selection 
   assert.match(screen, /setAudible\(slot\); setSelected\(slot\); setPicker\(null\)/);
 });
 
-test('picker, menu and pane share one bounded focus handoff with late ref resolution', () => {
-  assert.match(screen, /requestNativeFocusWithRetry\(\s*\(\) => picker != null \? firstPicker\.current : menu \? firstMenu\.current : paneNodes\.current\[selected\]/);
-  assert.match(screen, /\[0, 80, 160, 300, 560\], \(\) => focusConfirmed\.current/);
-  assert.doesNotMatch(screen, /priorPicker/);
-  assert.match(screen, /ref=\{pickerEntry \? firstPicker/);
-  assert.match(screen, /onFocusCapture=\{confirmOverlayFocus\}/);
-  assert.match(screen, /onFocus=\{\(\) => \{ if \(overlay\) return/);
-  assert.match(screen, /searchFocused && styles\.focus/);
-  assert.match(screen, /key=\{pickerEntry \? "picker-entry" : controlKey\}/);
-  assert.match(screen, /false,name === "All",name/);
-  assert.match(screen, /false,false,"playlist-filter"/);
-  assert.match(screen, /false,false,"group-filter"/);
+test('selector owns a bounded mounted page and shares overlay focus with the pane menu', async () => {
+  const picker = await readFile(new URL('../src/components/MultiviewChannelSelector.tsx', import.meta.url), 'utf8');
+  assert.match(screen, /inputRef=\{firstPicker\} preferredFocus=\{preferOverlayFocus\}/);
+  assert.match(picker, /initialNumToRender=\{PAGE\} maxToRenderPerBatch=\{PAGE\}/);
+  assert.match(picker, /removeClippedSubviews=\{false\}/);
+  assert.match(picker, /onFocus=\{\(\) => list.current\?\.scrollToIndex/);
+  assert.match(picker, /searchFocused && styles.focus/);
+  assert.match(picker, /keyExtractor=\{item => item.id\}/);
+  assert.match(picker, /onFocusCapture=\{onFocusCapture\}/);
+  assert.match(screen, /\[0, 80, 160, 300, 560\]/);
 });

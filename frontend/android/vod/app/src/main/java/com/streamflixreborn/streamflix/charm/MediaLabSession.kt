@@ -1,0 +1,42 @@
+package com.streamflixreborn.streamflix.charm
+
+import android.app.Activity
+import android.content.Intent
+import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
+import androidx.navigation.NavController
+import com.streamflixreborn.streamflix.R
+import org.json.JSONArray
+
+/** Shared host navigation contract. No Guide group navigation exists in VOD. */
+object MediaLabSession {
+    private val states = mutableMapOf<String, Bundle>()
+    var destinations = JSONArray()
+    fun takeState(layout: String): Bundle? = states.remove(layout)
+    fun saveState(layout: String, state: Bundle) { states[layout] = state }
+    fun clear() { states.clear() }
+    fun leave(activity: Activity, route: String) {
+        activity.setResult(Activity.RESULT_OK, Intent().putExtra("medialab.route", route))
+        activity.finish()
+    }
+    fun showDrawer(activity: Activity) {
+        val entries = (0 until destinations.length()).map { destinations.getJSONObject(it) }
+        AlertDialog.Builder(activity).setTitle("Charming MediaLab")
+            .setItems(entries.map { it.getString("label") }.toTypedArray()) { _, position ->
+                val route = entries[position].getString("route")
+                if (route != "/vod") leave(activity, route)
+            }.setNegativeButton("Return to Video On Demand", null).show()
+    }
+    fun attach(activity: Activity, nav: NavController, intent: Intent) {
+        val section = intent.getStringExtra("medialab.section")
+        if (section == "sources") nav.navigate(R.id.providers)
+        if (section == "vod-settings") nav.navigate(R.id.settings)
+        // General settings have one owner, reachable from either library.
+        nav.addOnDestinationChangedListener { _, destination, _ ->
+            if (destination.id == R.id.settings && section != "vod-settings") {
+                nav.popBackStack()
+                leave(activity, "/settings")
+            }
+        }
+    }
+}

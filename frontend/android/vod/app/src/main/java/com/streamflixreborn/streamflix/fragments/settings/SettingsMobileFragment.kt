@@ -222,7 +222,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
     }
 
     private fun renderCurrentScreen() {
-        setPreferencesFromResource(R.xml.settings_mobile, currentScreenState.rootKey)
+        setPreferencesFromResource(R.xml.settings_mobile, currentScreenState.rootKey ?: "screen_vod_sources")
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }

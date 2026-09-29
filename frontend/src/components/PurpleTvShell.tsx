@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -19,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { fonts, radius, spacing, tvColors } from "@/src/theme";
-import { combineTvEdgeInsets, getTvSafeInsets } from "@/src/utils/tvLayout";
+import { combineTvEdgeInsets, getTvSafeInsets, shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { useStore } from "@/src/store";
 import { evaluateDrawerBack } from "@/src/core/drawerNavigationPolicy";
@@ -256,9 +257,11 @@ export function PurpleTvShell({
   } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
+  const mobile = !shouldUseTvLayout(deviceLayoutMode);
+  const safeArea = useSafeAreaInsets();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = !mobile && railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -566,6 +569,7 @@ export function PurpleTvShell({
         onPress={() => navigate(item.route)}
         style={({ focused }: any) => [
           styles.navRow,
+          mobile && { minHeight: 48 },
           selected && styles.navRowSelected,
           selected && styles.navRowActiveMark,
           focused && styles.navRowFocused,
@@ -580,7 +584,7 @@ export function PurpleTvShell({
           />
           {showWatching ? <WatchingDot testID="purple-nav-live-watching" /> : null}
         </View>
-        <Text numberOfLines={1} style={[styles.navText, selected && styles.navTextSelected]}>{item.label}</Text>
+        <Text numberOfLines={1} style={[styles.navText, selected && styles.navTextSelected, mobile && { fontSize: 15 }]}>{item.label}</Text>
       </Pressable>
     );
   };
@@ -593,9 +597,10 @@ export function PurpleTvShell({
       onTouchStart={() => { lastRailInteractionRef.current = Date.now(); }}
       style={[
         styles.root,
+        mobile && { flexDirection: "column" },
         {
-          paddingTop: edges.padding.top,
-          paddingBottom: edges.padding.bottom,
+          paddingTop: mobile ? safeArea.top : edges.padding.top,
+          paddingBottom: mobile ? safeArea.bottom : edges.padding.bottom,
           paddingLeft: edges.padding.left,
           paddingRight: edges.padding.right,
           marginTop: edges.margin.top,
@@ -605,6 +610,11 @@ export function PurpleTvShell({
         },
       ]}
     >
+      {mobile && <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 12 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open main menu" style={{ minWidth: 48, minHeight: 48, justifyContent: "center" }} onPress={() => openDrawer({ focusTop: true })}><Ionicons name="menu" size={26} color="#fff" /></Pressable>
+        <Text style={{ color: "#fff", fontSize: 17 }}>{NAV.find(item => item.route === active)?.label}</Text>
+      </View>}
+      {mobile && drawerOpen && <Pressable accessibilityLabel="Close main menu" onPress={() => closeDrawer({ force: true })} style={{ ...StyleSheet.absoluteFillObject, backgroundColor: "#0009", zIndex: 19 }} />}
       <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
@@ -721,7 +731,7 @@ export function PurpleTvShell({
         </FocusGuide>
       </Animated.View>
 
-      {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
+      {drawerOpen && !mobile ? <View style={styles.sidebarSpacer} /> : null}
       {showIconRail ? (
         <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
           <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>

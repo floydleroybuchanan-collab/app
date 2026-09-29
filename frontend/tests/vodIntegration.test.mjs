@@ -11,10 +11,12 @@ test('VOD enters through the host after Live TV releases its decoders',()=>{
   const shell=read('src/components/PurpleTvShell.tsx');
   assert.match(shell,/label: "TV Guide"[^\n]+\n\s*\{ route: "\/vod", label: "Video OnDemand"/);
   const route=read('app/(tabs)/vod.tsx');
-  assert.ok(route.indexOf('await stopAllPlaybackSessions(')<route.indexOf('await NativeModules.CharmVod.open()'));
+  const entry=read('src/core/mediaLibrary.ts');
+  assert.ok(entry.indexOf('await stopAllPlaybackSessions(')<entry.indexOf('NativeModules.CharmVod.openSection('));
   assert.match(route,/if \(launching.current\) return/);
   const manifest=read('android/vod/app/src/main/embedded/AndroidManifest.xml');
-  assert.match(manifest,/MainTvActivity" android:exported="false" android:process=":vod"/);
+  assert.match(manifest,/MainTvActivity" android:exported="false"/);
+  assert.doesNotMatch(manifest,/android:process/);
   assert.doesNotMatch(manifest,/category.LAUNCHER|category.LEANBACK_LAUNCHER/);
 });
 test('VOD navigation uses a transparent proportional Charming MediaLab header mark',()=>{

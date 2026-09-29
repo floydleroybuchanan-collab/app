@@ -613,7 +613,7 @@ object NativePlaybackManager {
       // MediaCodec queueing while audio continues. Disable async so hardware
       // video can paint; FFmpeg remains the audio extension fallback.
       .forceDisableMediaCodecAsynchronousQueueing()
-    return ExoPlayer.Builder(context, renderers)
+    return com.streamflixreborn.streamflix.charm.MediaLabPlayback.builder(context, renderers, DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())), loadControl)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
       .setWakeMode(C.WAKE_MODE_NETWORK)

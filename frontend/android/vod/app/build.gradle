@@ -22,7 +22,7 @@ android {
         buildConfigField 'String', 'APPLICATION_ID', '"com.charmiptv.app.purple.next.vodtest1"'
         buildConfigField 'int', 'VERSION_CODE', '16'
         buildConfigField 'String', 'VERSION_NAME', '"2.1.0-rc.9"'
-        buildConfigField 'String', 'APP_LAYOUT', '"tv"'
+        buildConfigField 'String', 'APP_LAYOUT', '"auto"'
         buildConfigField 'boolean', 'CHARM_VOD_EMBEDDED', 'true'
         buildConfigField 'String', 'REAL_DEBRID_CLIENT_ID', quote(setting('REAL_DEBRID_CLIENT_ID') ?: 'X245A4XAIBGVM')
         ['TMDB_API_KEY', 'SUBDL_API_KEY', 'RABBITSTREAM_SOURCE_API'].each { key ->
