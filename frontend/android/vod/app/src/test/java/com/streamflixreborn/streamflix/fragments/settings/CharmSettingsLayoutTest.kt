@@ -44,7 +44,7 @@ class CharmSettingsLayoutTest {
         val screen=manager.inflateFromResource(activity,R.xml.settings_tv,null)
         CharmSettingsLayout.prepare(screen)
         val pages=(0 until screen.preferenceCount).map { screen.getPreference(it) }.filterIsInstance<PreferenceScreen>()
-        assertEquals(8,pages.size)
+        assertEquals(9,pages.size)
         for(page in listOf(screen)+pages) {
             val list=RecyclerView(activity)
             val design=CharmSettingsLayout(list) { _,_ -> }

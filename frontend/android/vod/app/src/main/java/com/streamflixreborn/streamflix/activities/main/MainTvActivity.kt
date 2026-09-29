@@ -3,6 +3,8 @@ package com.streamflixreborn.streamflix.activities.main
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import com.streamflixreborn.streamflix.charm.CharmHostSession
+import com.streamflixreborn.streamflix.charm.VodFocusMemory
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
@@ -44,15 +46,26 @@ class MainTvActivity : FragmentActivity() {
 
     private lateinit var updateAppDialog: UpdateAppTvDialog
 
+    override fun finish() {
+        if (CharmHostSession.embedded(this) && _binding != null) {
+            val state = Bundle()
+            super.onSaveInstanceState(state)
+            CharmHostSession.save(this, state)
+        }
+        super.finish()
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val restoredState = savedInstanceState ?: CharmHostSession.take(this)
         // Il setup delle preferenze è già avvenuto in StreamFlixApp
         setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
 
-        super.onCreate(savedInstanceState)
+        super.onCreate(restoredState)
+        supportFragmentManager.registerFragmentLifecycleCallbacks(VodFocusMemory(true), true)
         com.streamflixreborn.streamflix.charm.CharmDesign.install(this)
 
         // Inizializza il provider con il context dell'attività per gestire eventuali bypass visibili
@@ -75,18 +88,19 @@ class MainTvActivity : FragmentActivity() {
 
         adjustLayoutDelta(null, null)
 
-        if (BuildConfig.APP_LAYOUT == "mobile" || (BuildConfig.APP_LAYOUT != "tv" && !packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK))) {
+        if (!CharmHostSession.embedded(this) && (BuildConfig.APP_LAYOUT == "mobile" || (BuildConfig.APP_LAYOUT != "tv" && !packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)))) {
             finish()
             startActivity(Intent(this, MainMobileActivity::class.java))
             return
         }
 
-        if (savedInstanceState == null) {
+        if (restoredState == null) {
             UserPreferences.currentProvider?.let {
                 navController.navigate(R.id.home)
             }
         }
 
+        CharmHostSession.configure(this, navController, restoredState != null)
         binding.navMain.persistentLabels = true
         binding.navMain.setupWithNavController(navController)
         binding.vodSearch.setOnClickListener { if (navController.currentDestination?.id != R.id.search) navController.navigate(R.id.search) }
@@ -168,6 +182,7 @@ class MainTvActivity : FragmentActivity() {
                     binding.ivSplashOverlay.dismiss()
                     return
                 }
+                if ((getCurrentFragment() as? com.streamflixreborn.streamflix.fragments.settings.SettingsTvFragment)?.navigateBackInSettings() == true) return
                 when (navController.currentDestination?.id) {
                     R.id.home -> if (binding.navMain.hasFocus()) finish() else binding.navMain.requestFocus()
                     R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
@@ -181,7 +196,7 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
         })
-        if (savedInstanceState == null) {
+        if (restoredState == null && !CharmHostSession.embedded(this)) {
             binding.ivSplashOverlay.play {
                 binding.navMainFragment.requestFocus()
             }
@@ -191,6 +206,11 @@ class MainTvActivity : FragmentActivity() {
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN) VodFocusMemory.userNavigationEpoch++
+        if (CharmHostSession.embedded(this) && event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && binding.navMain.hasFocus()) {
+            CharmHostSession.leave(this, "medialab:drawer")
+            return true
+        }
         if (com.streamflixreborn.streamflix.charm.CharmPageDrawer.dispatch(this, event)) return true
         return super.dispatchKeyEvent(event)
     }

@@ -40,7 +40,7 @@
         android:id="@+id/bnv_main"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:theme="@style/Theme.AppCompat"
+        android:theme="@style/AppTheme.Mobile"
         app:itemIconTint="@color/nav_item_app"
         app:itemTextColor="@color/nav_item_app"
         app:itemTextAppearanceActive="@style/BottomNavLabelStyle"

@@ -181,6 +181,10 @@ class SearchTvFragment : Fragment() {
 
         initializeSearch()
         binding.etSearch.setText(viewModel.query)
+        val restoredQuery = savedInstanceState?.getString("medialab.query") ?: arguments?.getString("medialab.query")
+        if (viewModel.query.isBlank() && !restoredQuery.isNullOrBlank()) viewModel.search(restoredQuery)
+        binding.etSearch.setText(viewModel.query)
+        arguments?.remove("medialab.query")
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
@@ -249,6 +253,11 @@ class SearchTvFragment : Fragment() {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("medialab.query", viewModel.query)
     }
 
     override fun onDestroyView() {

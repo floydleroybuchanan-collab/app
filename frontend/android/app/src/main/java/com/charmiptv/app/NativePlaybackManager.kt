@@ -189,6 +189,9 @@ object NativePlaybackManager {
   private var resolvedUri: String? = null
   private var probeHttpResponseCode: Int? = null
   private var probeReason: String? = null
+  private var sourceFrameRate = 0f
+  private var droppedFrameWindow = 0
+  private var droppedFrameWindowMs = 0L
   private var videoMimeType: String? = null
   private var videoCodecs: String? = null
   private var audioMimeType: String? = null
@@ -254,6 +257,8 @@ object NativePlaybackManager {
       "bufferMs" to (instance?.totalBufferedDuration ?: 0L),
       "playing" to (instance?.isPlaying == true), "userPaused" to userPaused,
       "suppression" to (instance?.playbackSuppressionReason ?: 0),
+      "sourceFps" to sourceFrameRate, "displayHz" to (activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f),
+      "droppedInWindow" to droppedFrameWindow, "dropWindowMs" to droppedFrameWindowMs,
       "videoMime" to safeCode(videoMimeType), "audioMime" to safeCode(audioMimeType),
       "videoDecoder" to safeCode(videoDecoder), "audioDecoder" to safeCode(audioDecoder),
       "audioChannels" to audioChannelCount, "audioSampleRate" to audioSampleRate,
@@ -717,9 +722,16 @@ object NativePlaybackManager {
     }
     playbackListener = nextListener
     created.addListener(nextListener)
+    sourceFrameRate = 0f; droppedFrameWindow = 0; droppedFrameWindowMs = 0L
     val nextAnalytics = object : AnalyticsListener {
+      override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+        if (!isCurrent()) return
+        droppedFrameWindow = droppedFrames; droppedFrameWindowMs = elapsedMs
+        captureHealth("dropped-video-frames", created)
+      }
       override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
         if (!isCurrent()) return
+        sourceFrameRate = format.frameRate.takeIf { it > 0f } ?: 0f
         videoMimeType = format.sampleMimeType
         videoCodecs = format.codecs
         if (format.width > 0) videoWidth = format.width

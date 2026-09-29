@@ -769,6 +769,7 @@ class PlayerTvFragment : Fragment() {
             binding.pvPlayer.subtitleView?.apply {
                 setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * UserPreferences.captionTextSize)
                 setStyle(UserPreferences.captionStyle)
+                com.streamflixreborn.streamflix.charm.CharmSharedPlayback.captions(this)
                 setPadding(0, 0, 0, UserPreferences.captionMargin.dp(context))
             }
             binding.settings.setOnExtraBufferingSelectedListener {
@@ -1700,6 +1701,7 @@ class PlayerTvFragment : Fragment() {
                     DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
                     DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
                 )
+                .let { if (extraBuffering) it else com.streamflixreborn.streamflix.charm.CharmSharedPlayback.buffer(it) }
                 .build()
 
             val renderersFactory = SubtitleOffsetRenderersFactory(requireContext()).apply {
@@ -1772,7 +1774,8 @@ class PlayerTvFragment : Fragment() {
                         .build()
                 }
 
-            binding.pvPlayer.player = player
+            com.streamflixreborn.streamflix.charm.CharmSharedPlayback.apply(player)
+        binding.pvPlayer.player = player
             binding.settings.player = player
             binding.settings.subtitleView = binding.pvPlayer.subtitleView
             binding.settings.onSubtitlesClicked = {
@@ -1966,6 +1969,7 @@ class PlayerTvFragment : Fragment() {
             }
 
         // Bind new player to UI view
+        com.streamflixreborn.streamflix.charm.CharmSharedPlayback.apply(player)
         binding.pvPlayer.player = player
         binding.settings.player = player
         binding.settings.subtitleView = binding.pvPlayer.subtitleView
@@ -2020,3 +2024,4 @@ class PlayerTvFragment : Fragment() {
 
 
     }
+

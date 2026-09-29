@@ -40,8 +40,23 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   private var owner = NativePlaybackManager.Owner.NONE
+  private var canScheduleChildLayout = false
+  private var childLayoutPending = false
+  private val layoutChildren = Runnable {
+    try {
+      if (width > 0 && height > 0 && isAttachedToWindow) {
+        measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        layout(left, top, right, bottom)
+      }
+    } finally { childLayoutPending = false }
+  }
+  override fun requestLayout() {
+    super.requestLayout()
+    if (canScheduleChildLayout && !childLayoutPending) { childLayoutPending = true; post(layoutChildren) }
+  }
 
   init {
+    canScheduleChildLayout = true
     // React owns all transport controls. Media3's hidden controller and video
     // surface must never become a second, invisible D-pad focus destination.
     isFocusable = false
@@ -128,6 +143,7 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   fun releaseFromReact() {
+    removeCallbacks(layoutChildren); childLayoutPending = false
     if (owner != NativePlaybackManager.Owner.NONE) {
       val releasedOwner = owner
       NativePlaybackManager.detachSurface(releasedOwner, this)

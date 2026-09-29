@@ -146,7 +146,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        currentScreenState = SettingsScreenState(rootKey = rootKey, title = null)
+        currentScreenState = SettingsScreenState(rootKey = rootKey ?: if (requireActivity().intent.getStringExtra("medialab.section") == "accounts") "screen_connected_accounts" else null, title = null)
         renderCurrentScreen()
 
         val allProvidersToBackup = Provider.providers.keys.toMutableList().apply {
@@ -182,10 +182,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
         super.onCreate(savedInstanceState)
         settingsBackCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
-                if (screenBackStack.isEmpty()) return
-                currentScreenState = screenBackStack.removeLast()
-                settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
-                renderCurrentScreen()
+                navigateBackInSettings()
             }
         }
         requireActivity().onBackPressedDispatcher.addCallback(this, settingsBackCallback)
@@ -221,11 +218,20 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
         activity?.title = currentScreenState.title ?: getString(R.string.player_settings_title)
     }
 
+    fun navigateBackInSettings(): Boolean {
+        if (screenBackStack.isEmpty() && currentScreenState.rootKey == null) return false
+        currentScreenState = if (screenBackStack.isEmpty()) SettingsScreenState(null, null) else screenBackStack.removeLast()
+        settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
+        renderCurrentScreen()
+        return true
+    }
+
     private fun renderCurrentScreen() {
         setPreferencesFromResource(R.xml.settings_mobile, currentScreenState.rootKey)
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }
+        com.streamflixreborn.streamflix.charm.CharmSettingsNavigation.attach(this)
         applyScreenTitle()
     }
 

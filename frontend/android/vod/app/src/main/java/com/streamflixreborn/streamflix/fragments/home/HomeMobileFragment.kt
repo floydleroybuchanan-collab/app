@@ -137,9 +137,8 @@ class HomeMobileFragment : Fragment() {
 
         binding.ivProviderLogo.apply {
             Glide.with(context)
-                .load(UserPreferences.currentProvider?.logo?.takeIf { it.isNotEmpty() }
-                    ?: R.drawable.ic_provider_default_logo)
-                .error(R.drawable.ic_provider_default_logo)
+                .load(R.drawable.medialab_launcher)
+                .error(R.drawable.medialab_launcher)
                 .fitCenter()
                 .into(this)
 

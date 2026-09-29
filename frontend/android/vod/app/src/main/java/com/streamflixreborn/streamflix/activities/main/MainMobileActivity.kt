@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.os.Build
+import com.streamflixreborn.streamflix.charm.CharmHostSession
+import com.streamflixreborn.streamflix.charm.VodFocusMemory
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -95,14 +97,25 @@ class MainMobileActivity : FragmentActivity() {
 
     private var updateAppDialog: UpdateAppMobileDialog? = null
 
+    override fun finish() {
+        if (CharmHostSession.embedded(this) && _binding != null) {
+            val state = Bundle()
+            super.onSaveInstanceState(state)
+            CharmHostSession.save(this, state)
+        }
+        super.finish()
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val restoredState = savedInstanceState ?: CharmHostSession.take(this)
         setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
-        super.onCreate(savedInstanceState)
+        super.onCreate(restoredState)
+        supportFragmentManager.registerFragmentLifecycleCallbacks(VodFocusMemory(false), true)
         com.streamflixreborn.streamflix.charm.CharmDesign.install(this)
 
         AnimeOnlineNinjaProvider.init(this)
@@ -142,18 +155,17 @@ class MainMobileActivity : FragmentActivity() {
         val navHost =
             supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as NavHostFragment
         val navController = navHost.navController
-        com.streamflixreborn.streamflix.charm.CharmNavigation.install(this, binding.root)
 
-        if (BuildConfig.APP_LAYOUT == "tv" ||
+        if (!CharmHostSession.embedded(this) && (BuildConfig.APP_LAYOUT == "tv" ||
             (BuildConfig.APP_LAYOUT != "mobile" &&
-                packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK))
+                packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)))
         ) {
             finish()
             startActivity(Intent(this, MainTvActivity::class.java))
             return
         }
 
-        if (savedInstanceState == null) {
+        if (restoredState == null) {
             UserPreferences.currentProvider?.let {
                 navController.navigate(
                     R.id.home,
@@ -168,9 +180,11 @@ class MainMobileActivity : FragmentActivity() {
             }
         }
 
-        viewModel.checkUpdate()
+        CharmHostSession.configure(this, navController, restoredState != null)
+        if (!CharmHostSession.embedded(this)) viewModel.checkUpdate()
 
         binding.bnvMain.setupWithNavController(navController)
+        com.streamflixreborn.streamflix.charm.CharmNavigation.install(this, binding.root)
         binding.btnMainSearch.setOnClickListener {
             if (navController.currentDestination?.id != R.id.search) {
                 navController.navigate(R.id.search)
@@ -229,6 +243,7 @@ class MainMobileActivity : FragmentActivity() {
 
                 val currentDestinationId = navController.currentDestination?.id
 
+                if ((getCurrentFragment() as? com.streamflixreborn.streamflix.fragments.settings.SettingsMobileFragment)?.navigateBackInSettings() == true) return
                 if (currentDestinationId == R.id.settings) {
                     navigateToProviderHome(navController)
                     return
@@ -250,7 +265,7 @@ class MainMobileActivity : FragmentActivity() {
             }
         })
 
-        if (savedInstanceState == null) {
+        if (restoredState == null) {
             handleIntent(intent)
         }
     }
@@ -296,7 +311,7 @@ class MainMobileActivity : FragmentActivity() {
             UserPreferences.currentProvider != null && isTopLevelProviderDestination(destinationId)
         binding.bnvMain.visibility = if (showBottomNav) View.VISIBLE else View.GONE
         binding.btnMainSearch.visibility = if (
-            UserPreferences.currentProvider != null &&
+            !CharmHostSession.embedded(this) && UserPreferences.currentProvider != null &&
             isTopLevelProviderDestination(destinationId) &&
             destinationId != R.id.search
         ) View.VISIBLE else View.GONE
@@ -358,6 +373,7 @@ class MainMobileActivity : FragmentActivity() {
     }
 
     private fun closeTask() {
+        if (CharmHostSession.embedded(this)) { finish(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             finishAndRemoveTask()
         } else {

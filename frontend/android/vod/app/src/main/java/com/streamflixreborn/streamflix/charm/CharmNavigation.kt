@@ -70,6 +70,7 @@ object CharmNavigation {
         val nav = nav(activity) ?: return
         val isTv = parent.findViewById<View>(R.id.vod_brand_header) != null
         if (isTv) { CharmPageDrawer.install(activity, parent); return }
+        if (CharmHostSession.embedded(activity)) { CharmMobileChrome.install(activity, parent); return }
         val row = controls(activity).apply { id = View.generateViewId(); elevation = 8 * resources.displayMetrics.density }
         val stop = Button(activity).apply {
             text = "Stop and exit"; isAllCaps = false; isFocusable = true

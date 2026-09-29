@@ -1,6 +1,6 @@
 <resources>
 
-    <style name="AppTheme.Mobile" parent="Theme.AppCompat">
+    <style name="AppTheme.Mobile" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
         <item name="alertDialogTheme">@style/CharmDialog.Compat</item>
         <item name="android:alertDialogTheme">@style/CharmDialog.Framework</item>
         <item name="android:fontFamily">@font/charm_geist_regular</item>
