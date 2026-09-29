@@ -75,6 +75,25 @@ class CharmSettingsLayoutTest {
             }
         }
     }
+    @Test fun nestedSettingsNavigationIncludesSeparateAccountsAndSources() {
+        val activity=activity()
+        var opened: String?=null
+        val design=CharmSettingsLayout(RecyclerView(activity)) { key,_ -> opened=key }
+        activity.setContentView(design.root)
+        design.show("screen_connected_accounts","Accounts")
+        layout(design.root)
+        fun texts(view: View): List<android.widget.TextView> =
+            (if(view is android.widget.TextView) listOf(view) else emptyList()) +
+            (if(view is android.view.ViewGroup) (0 until view.childCount).flatMap { texts(view.getChildAt(it)) } else emptyList())
+        val labels=texts(design.root)
+        assertFalse(labels.any { it.text.toString()=="Sources & Real-Debrid" })
+        val accounts=labels.single { it.text.toString()=="Accounts" && it.isClickable }
+        assertTrue(accounts.isSelected)
+        accounts.performClick()
+        assertEquals("screen_connected_accounts",opened)
+        labels.single { it.text.toString()=="Content & sources" && it.isClickable }.performClick()
+        assertEquals("screen_vod_sources",opened)
+    }
     @Test fun settingCardsKeepActionsAndSwitchPersistence() {
         val activity=activity(); val manager=PreferenceManager(activity)
         val screen=manager.createPreferenceScreen(activity)

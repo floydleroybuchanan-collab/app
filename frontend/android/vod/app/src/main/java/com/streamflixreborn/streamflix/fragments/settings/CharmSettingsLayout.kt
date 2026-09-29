@@ -33,7 +33,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         addView(content, ViewGroup.LayoutParams(-1,-2))
     }
     private val pages = linkedMapOf(
-        "screen_vod_sources" to "Sources & Real-Debrid", "screen_content" to "Content & safety",
+        "screen_connected_accounts" to "Accounts", "screen_vod_sources" to "Content & sources", "screen_content" to "Content & safety",
         "screen_playback" to "Playback", "screen_appearance" to "Appearance", "screen_network" to "Connection & services",
         "screen_provider" to "Provider options", "screen_cloud_sync" to "Account & sync", "screen_backup" to "Backup & restore"
     )
@@ -78,6 +78,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
                 val preference = group.getPreference(i)
                 preference.isIconSpaceReserved = false
                 val icon = when(preference.key) {
+                    "screen_connected_accounts" -> R.drawable.charm_settings_account
                     "screen_vod_sources" -> R.drawable.charm_settings_sources
                     "screen_content" -> R.drawable.charm_settings_safety
                     "screen_playback" -> R.drawable.charm_settings_playback
