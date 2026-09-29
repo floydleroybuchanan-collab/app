@@ -104,6 +104,7 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
         }
     }.flowOn(Dispatchers.IO)
 
+    private var searchJob: kotlinx.coroutines.Job? = null
     var query = ""
     private var page = 1
 
@@ -111,18 +112,22 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
         search(query)
     }
 
-    fun search(query: String) = viewModelScope.launch(Dispatchers.IO) {
+    fun search(query: String): kotlinx.coroutines.Job {
+        searchJob?.cancel()
+        this.query = query
+        return viewModelScope.launch(Dispatchers.IO) {
         _state.emit(State.Searching)
 
         try {
             val results = ParentalControlUtils.filterItems(UserPreferences.currentProvider!!.search(query))
-            this@SearchViewModel.query = query
             page = 1
             _state.emit(State.SuccessSearching(results, results.isNotEmpty()))
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             Log.e("SearchViewModel", "search: ", e)
             _state.emit(State.FailedSearching(e))
         }
+        }.also { searchJob = it }
     }
 
     fun loadMore() = viewModelScope.launch(Dispatchers.IO) {

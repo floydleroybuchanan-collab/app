@@ -48,6 +48,11 @@ class SearchMobileFragment : Fragment() {
 
     private lateinit var voiceHelper: VoiceRecognitionHelper
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("medialab.searchQuery", viewModel.query)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -59,8 +64,8 @@ class SearchMobileFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val hostQuery = requireActivity().intent.getStringExtra("medialab.section")?.takeIf { it.startsWith("search:") }?.substringAfter(":")
-        if (savedInstanceState == null && !hostQuery.isNullOrBlank()) view.post { if (_binding != null && isAdded) { binding.etSearch.setText(hostQuery); viewModel.search(hostQuery) } }
+        val hostQuery = savedInstanceState?.getString("medialab.searchQuery") ?: requireActivity().intent.getStringExtra("medialab.section")?.takeIf { it.startsWith("search:") }?.substringAfter(":")
+        if (!hostQuery.isNullOrBlank() && viewModel.query != hostQuery) view.post { if (_binding != null && isAdded) { binding.etSearch.setText(hostQuery); viewModel.search(hostQuery) } }
 
         initializeSearch()
 

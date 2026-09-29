@@ -23,6 +23,7 @@
     <LinearLayout android:id="@+id/charm_header" android:layout_width="0dp" android:layout_height="56dp"
         android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="8dp" android:paddingEnd="8dp"
         android:background="#10101E" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent">
+        <Button android:id="@+id/charm_back" android:layout_width="48dp" android:layout_height="48dp" android:minWidth="0dp" android:padding="0dp" android:text="‹" android:textSize="28sp" android:contentDescription="Back" android:textColor="#FFFFFF" android:background="@drawable/bg_button_secondary_mobile" />
         <Button android:id="@+id/btn_main_menu" android:layout_width="wrap_content" android:layout_height="48dp" android:minWidth="64dp" android:text="Menu" android:textColor="#FFFFFF" android:backgroundTint="#3B1768" />
         <ImageView android:layout_width="40dp" android:layout_height="40dp" android:layout_marginStart="8dp" android:layout_marginEnd="8dp" android:src="@drawable/medialab_rail" android:scaleType="fitCenter" android:contentDescription="Charming MediaLab" />
         <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Charming MediaLab" android:textColor="#FFFFFF" android:textSize="16sp" android:maxLines="1" android:ellipsize="end" />

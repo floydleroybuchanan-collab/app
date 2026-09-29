@@ -193,12 +193,14 @@ class MainMobileActivity : FragmentActivity() {
                 navController.navigate(R.id.search)
             }
         }
+        binding.charmBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         binding.btnMainMenu.setOnClickListener { com.streamflixreborn.streamflix.charm.MediaLabSession.showDrawer(this) }
         updateNavigationVisibility()
         updateBottomNavigationVisibility(navController.currentDestination?.id)
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
             binding.charmHeader.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
+            binding.charmBack.visibility = if (destination.id == R.id.settings) View.GONE else View.VISIBLE
             updateNavigationVisibility(destination.id)
             updateBottomNavigationVisibility(destination.id)
             binding.mainContent.post { binding.mainContent.requestApplyInsets() }
