@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import { providerGroupDisabled } from "@/src/core/groupVisibility";
 import { providerGroupKey } from "@/src/core/playlistGuideMenu";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +25,7 @@ function cleanGroupName(raw: string): string {
 }
 
 export default function GroupSettingsScreen() {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const router = useRouter();
   const {playlistId} = useLocalSearchParams<{playlistId?:string}>();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
@@ -192,7 +194,7 @@ export default function GroupSettingsScreen() {
         </View>
 
         <View style={styles.scrollWrap}>
-          <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
+          <ScrollView keyboardShouldPersistTaps="handled" ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Playlist groups</Text>
             <Text style={styles.help}>New groups appear after a successful refresh. Disabling a group removes its channels from All Channels, search, favorites views and multiview. Saved favorites and group data return when enabled. Your saved visibility, display name and order survive refreshes.</Text>
@@ -297,7 +299,7 @@ export default function GroupSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, backgroundColor: tvColors.canvas, padding: 18 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2 },
@@ -326,3 +328,5 @@ const styles = StyleSheet.create({
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginVertical: 4 },
   disabled: { opacity: 0.35 },
 });
+
+

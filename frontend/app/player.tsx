@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -6,6 +7,7 @@ import {
   FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StatusBar as RNStatusBar,
   StyleSheet,
   Text,
@@ -29,7 +31,7 @@ import { useStore } from "@/src/store";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
-import { getTvSafeInsets } from "@/src/utils/tvLayout";
+import { getTvSafeInsets, shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocus, requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
@@ -64,6 +66,7 @@ const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
 };
 
 function AutoScrollProgramDescription({ text }: { text: string; activeKey: string }) {
+  const styles = useAdaptiveStyles(baseStyles, { descriptionViewport: { height: 42 } });
   if (!text) return null;
   return (
     <View style={styles.descriptionViewport}>
@@ -72,7 +75,13 @@ function AutoScrollProgramDescription({ text }: { text: string; activeKey: strin
   );
 }
 
+function AdaptivePlayerScroll({ children }: { children: React.ReactNode }) {
+  const { deviceLayoutMode } = useStore();
+  return shouldUseTvLayout(deviceLayoutMode) ? <>{children}</> : <ScrollView keyboardShouldPersistTaps="handled" focusable={false}>{children}</ScrollView>;
+}
+
 export default function PlayerScreen() {
+  const styles = useAdaptiveStyles(baseStyles, { bottomOverlay: { maxHeight: "75%" }, bottomContent: { paddingTop: 12 }, programCopy: { maxWidth: "100%" }, channelIdentity: { flex: 1, minWidth: 0 }, channelTitle: { flexShrink: 1 }, iconControl: { width: 48, height: 48 }, pauseControl: { width: 48, height: 48 }, tracksPanel: { maxHeight: 220 }, edgeTime: { width: 62 }, controlsSpacer: { flex: 0 } });
   const appPolicy=useAppPolicy();
   const router = useRouter();
   const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
@@ -614,7 +623,7 @@ export default function PlayerScreen() {
             <View style={styles.channelIdentity}>
               {channel ? <ChannelLogo name={channel.name} logo={channel.logo} disabled={!channelLogos} size={34} /> : null}
               <View>
-                <Text style={styles.channelTitle}>{channel ? `${channelNumbers ? `${numberById[channel.id] || ""}  ` : ""}${channel.name}` : "Live TV"}</Text>
+                <Text numberOfLines={2} style={styles.channelTitle}>{channel ? `${channelNumbers ? `${numberById[channel.id] || ""}  ` : ""}${channel.name}` : "Live TV"}</Text>
                 <Text numberOfLines={1} style={styles.nowText}>{current?.title || "Live channel"}</Text>
               </View>
             </View>
@@ -625,7 +634,7 @@ export default function PlayerScreen() {
             style={[styles.bottomOverlay, { paddingTop: 0 }]}
             onFocusCapture={() => { controlsFocusedRef.current = true; scheduleHide(); }}
             onBlurCapture={() => { controlsFocusedRef.current = false; }}>
-          <LinearGradient colors={["transparent", "rgba(5,4,13,0.90)", "rgba(5,4,13,0.98)"]} style={[styles.bottomContent, { paddingLeft: safe.left + 14, paddingRight: safe.right + 14, paddingBottom: insets.bottom + safe.bottom + 10 }]}>
+          <AdaptivePlayerScroll><LinearGradient colors={["transparent", "rgba(5,4,13,0.90)", "rgba(5,4,13,0.98)"]} style={[styles.bottomContent, { paddingLeft: safe.left + 14, paddingRight: safe.right + 14, paddingBottom: insets.bottom + safe.bottom + 10 }]}>
             <View style={styles.infoRow}><View style={styles.programCopy}>
               <View style={styles.liveLine}><View style={styles.livePill}><Text style={styles.livePillText}>LIVE</Text></View><Text style={styles.programTime}>{current ? `${fmtTime(current.start)}${current.stop ? ` - ${fmtTime(current.stop)}` : ""}` : "Streaming now"}</Text></View>
               <Text numberOfLines={1} style={styles.programTitle}>{current?.title || channel?.name || "Live TV"}</Text>
@@ -634,7 +643,7 @@ export default function PlayerScreen() {
             <View style={styles.progressRow}><Text style={styles.edgeTime}>{current ? fmtTime(current.start) : "LIVE"}</Text><View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View><Text style={styles.edgeTime}>{current?.stop ? fmtTime(current.stop) : "LIVE"}</Text></View>
 
             <View style={styles.controlsRow}>
-              {multiview && appPolicy.multiview_max>0 && <Pressable onPress={() => {
+              {shouldUseTvLayout(deviceLayoutMode) && multiview && appPolicy.multiview_max>0 && <Pressable onPress={() => {
                 if (exitInFlightRef.current) return;
                 exitInFlightRef.current = true;
                 void stopAllPlaybackSessions("superseded").then(() => router.replace({ pathname: "/multiview" as any, params: { channelId, returnGuideGroup: params.returnGuideGroup } })).catch(() => { exitInFlightRef.current = false; showNotice("The current player could not close. Try again."); });
@@ -652,7 +661,7 @@ export default function PlayerScreen() {
             </View>
 
             {tracksOpen ? (
-              <View style={styles.tracksPanel}>
+              <ScrollView style={styles.tracksPanel} keyboardShouldPersistTaps="handled">
                 <Text style={styles.controlLabel}>Audio</Text>
                 {audioTracks.length ? audioTracks.map((track) => (
                   <Pressable key={`a-${track.id}`} disabled={track.isSupported === false} onPress={() => { setAudioTrackId(track.id); audioPreferences.rememberChannelTrack(channelId, track.id); }} style={({ focused }: any) => [styles.trackRow, audioTrackId === track.id && styles.controlActive, track.isSupported === false && styles.trackUnsupported, focused && styles.focused]}>
@@ -662,7 +671,7 @@ export default function PlayerScreen() {
                 <Text style={[styles.controlLabel, { marginTop: 8 }]}>Subtitles</Text>
                 <Pressable ref={subtitlesOffRef} onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
                 {textTracks.map((track) => <Pressable key={`t-${track.id}`} onPress={() => setTextTrackId(track.id)} style={({ focused }: any) => [styles.trackRow, textTrackId === track.id && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>{track.name}</Text></Pressable>)}
-              </View>
+              </ScrollView>
             ) : null}
 
             {channelsOpen ? (
@@ -675,7 +684,7 @@ export default function PlayerScreen() {
                 )} />
               </View>
             ) : null}
-          </LinearGradient>
+          </LinearGradient></AdaptivePlayerScroll>
           </FocusGuide>
         </>
       ) : null}
@@ -683,7 +692,7 @@ export default function PlayerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000", overflow: "visible" },
   touchCatcher: { backgroundColor: "transparent" },
   errorOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.54)" },

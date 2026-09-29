@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -34,6 +35,7 @@ const REFRESH_OPTIONS: { label: string; value: SourceRefreshIntervalHours }[] = 
 type ActiveAction = "refresh-all" | "refresh-playlist" | "refresh-epg" | "rebuild" | "logo" | null;
 
 function EpgSourcesScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const router = useRouter();
   const [advanced, setAdvanced] = useState(false);
   const { iconRailEntryTag } = useIconRailFocusBoundary();
@@ -184,7 +186,7 @@ function EpgSourcesScreenContent() {
         {/* The shell owns the page-wide focus boundary, including All Settings.
             A nested upward trap here prevents returning to the fixed header. */}
         <View style={styles.scrollWrap}>
-          <ScrollView
+          <ScrollView keyboardShouldPersistTaps="handled"
             ref={scrollRef}
             removeClippedSubviews={false}
             focusable={false}
@@ -303,28 +305,34 @@ function EpgSourcesScreenContent() {
 }
 
 function Card({ title, icon, children }: { title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   return <View style={styles.card}><View style={styles.cardHeader}><Ionicons name={icon} size={16} color={tvColors.purpleSoft} /><Text style={styles.cardTitle}>{title}</Text></View>{children}</View>;
 }
 function SourceRow({ title, subtitle, status, onPress }: { title: string; subtitle: string; status: string; onPress?: () => void }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const content = <><View style={styles.sourceCopy}><Text style={styles.sourceTitle}>{title}</Text><Text style={styles.sourceSub}>{subtitle}</Text></View><Text style={styles.sourceStatus}>{status}</Text><Ionicons name={onPress ? "chevron-forward" : "lock-closed"} size={12} color={tvColors.textMuted} /></>;
   return onPress
     ? <Pressable onPress={onPress} style={({ focused }: any) => [styles.sourceRow, focused && styles.focused]}>{content}</Pressable>
     : <View style={styles.sourceRow}>{content}</View>;
 }
 function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   return <Pressable onPress={() => onChange(!value)} style={({ focused }: any) => [styles.settingRow, focused && styles.focused]}><Text style={styles.settingLabel}>{label}</Text><View style={[styles.toggle, value && styles.toggleOn]}><View style={[styles.knob, value && styles.knobOn]} /></View></Pressable>;
 }
 function ChoiceRow<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: { label: string; value: T }[]; onChange: (value: T) => void }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   return <View style={styles.choiceBlock}><Text style={styles.settingLabel}>{label}</Text><View style={styles.choices}>{options.map((option) => <Pressable key={String(option.value)} onPress={() => onChange(option.value)} style={({ focused }: any) => [styles.choice, option.value === value && styles.choiceActive, focused && styles.focused]}><Text style={[styles.choiceText, option.value === value && styles.choiceTextActive]}>{option.label}</Text></Pressable>)}</View></View>;
 }
 function Action({ label, icon, onPress, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   return <Pressable accessibilityState={{ busy: Boolean(disabled) }} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}><Ionicons name={icon} size={14} color="#fff" /><Text style={styles.actionText}>{label}</Text></Pressable>;
 }
 function Info({ label, value }: { label: string; value: string }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   return <View style={styles.infoRow}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View>;
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 14, paddingTop: 8 },
   header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
@@ -366,3 +374,4 @@ export default function EpgSourcesScreen() {
     </FocusedTabMount>
   );
 }
+

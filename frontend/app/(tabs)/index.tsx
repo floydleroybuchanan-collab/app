@@ -1,3 +1,5 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -44,6 +46,7 @@ function RecentChannelCard({
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
+  const styles = useAdaptiveStyles(baseStyles);
   const programs = useGuidePrograms(channel.id);
   const current = nowNext(programs, now).current;
   return (
@@ -73,6 +76,7 @@ function RecentChannelCard({
 }
 
 function LiveTvHomeScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, { hero: { flexDirection: "column", minHeight: 0 }, heroCopy: { flex: 0, padding: 16 }, heroArtwork: { flex: 0, minHeight: 150 }, heroTitle: { fontSize: 26 }, primaryButton: { minHeight: 48 }, heroDescription: { maxWidth: "100%" } });
   const router = useRouter();
   const isFocused = useIsFocused();
   const { focusIconRail } = usePurpleTvDrawer();
@@ -302,13 +306,14 @@ function LiveTvHomeScreenContent() {
               onPlay={play}
             />
           ))}
-        </ScrollView>
+          <MediaLibraryShelf />
+      </ScrollView>
       </ScrollView>
     </PurpleTvShell>
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { padding: 18, paddingBottom: 26, gap: 12 },
   topbar: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.2, marginTop: 2 },

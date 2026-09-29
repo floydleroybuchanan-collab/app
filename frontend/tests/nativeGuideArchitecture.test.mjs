@@ -110,8 +110,8 @@ test("Startup V4 uses ordered milestones and exits at eight seconds", async () =
   assert.match(startup, /const mayEnter = sequenceComplete/);
   assert.match(startup, /Starting EPG in background/);
   assert.match(startup, /let completedForSession = false/);
-  assert.match(startup, /if \(mayEnter\) completedForSession = true/);
-  assert.match(startup, /if \(completedForSession\) return null/);
+  assert.match(startup, /if \(mayEnter \|\| completedForSession\)/);
+  assert.match(startup, /if \(completedForSession \|\| mayEnter\) return null/);
 });
 
 test("settings recovery and drawer transition guard are wired", async () => {

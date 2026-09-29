@@ -1,6 +1,8 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, ScrollView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,6 +44,7 @@ const FavoriteRow = memo(function FavoriteRow({
   onLongPress: (id: string) => void;
   onFocusChannel: (id: string | null) => void;
 }) {
+  const styles = useAdaptiveStyles(baseStyles, { row: { flexWrap: "wrap", paddingVertical: 10 }, name: { flex: 1, width: undefined }, programBlock: { flexBasis: "100%" }, time: { width: undefined }, folderChip: { minHeight: 48 }, searchHit: { width: 48, height: 48 }, guideButton: { minHeight: 48 }, empty: { paddingHorizontal: 12 } });
   const programmes = useGuidePrograms(channel.id);
   const current = nowNext(programmes, now).current;
   const isTV = Platform.OS !== "web" && Platform.isTV;
@@ -79,6 +82,7 @@ const FavoriteRow = memo(function FavoriteRow({
 });
 
 function FavoritesScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, { row: { flexWrap: "wrap", paddingVertical: 10 }, name: { flex: 1, width: undefined }, programBlock: { flexBasis: "100%" }, time: { width: undefined }, folderChip: { minHeight: 48 }, searchHit: { width: 48, height: 48 }, guideButton: { minHeight: 48 }, empty: { paddingHorizontal: 12 } });
   const router = useRouter();
   const isFocused = useIsFocused();
   const {
@@ -239,6 +243,7 @@ function FavoritesScreenContent() {
 
         {items.length ? (
           <FlatList
+            ListFooterComponent={<MediaLibraryShelf kind="favorites" />}
             data={items}
             keyExtractor={(item) => item.id}
             initialNumToRender={12}
@@ -261,21 +266,21 @@ function FavoritesScreenContent() {
             )}
           />
         ) : (
-          <View style={styles.empty}>
+          <ScrollView contentContainerStyle={styles.empty}><MediaLibraryShelf kind="favorites" />
             <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
             <Text style={styles.emptyTitle}>No favorites yet</Text>
             <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
             <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
               <Text style={styles.guideText}>Open TV Guide</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         )}
       </View>
     </PurpleTvShell>
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 54, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, gap: 14 },
   headerLeft: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 },

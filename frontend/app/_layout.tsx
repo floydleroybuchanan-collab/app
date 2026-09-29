@@ -3,14 +3,14 @@ import { AppUpdateNotice } from "@/src/components/AppUpdateNotice";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect } from "react";
-import { LogBox, useWindowDimensions } from "react-native";
+import { LogBox, NativeModules, Platform, useWindowDimensions } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { useAppFonts } from "@/src/hooks/use-app-fonts";
-import { GuideProvider, useStore, type StartScreen } from "@/src/store";
+import { GuideProvider, useStore } from "@/src/store";
 import { ProgramModal } from "@/src/components/ProgramModal";
 import { ErrorBoundary } from "@/src/components/ErrorBoundary";
 import { PointerOverlay } from "@/src/components/PointerOverlay";
@@ -20,15 +20,11 @@ import { TvQuickActionsOverlay } from "@/src/components/TvQuickActionsOverlay";
 import { TvCalibrationFrame, TvCalibrationProvider } from "@/src/tvCalibration";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { StartupVersion4 } from "@/src/components/StartupVersion4";
-import { storage } from "@/src/utils/storage";
+import { startupTarget } from "@/src/core/startDestinations";
+import { shouldUseTvLayout } from "@/src/utils/tvLayout";
+import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { AuthProvider } from "@/src/auth/AuthContext";
 import { AccountGate } from "@/src/components/AccountGate";
-
-const START_SCREEN_KEY = "gs_start_screen";
-
-function resolveStartupScreen(value: unknown): StartScreen {
-  return value === "guide" || value === "last_channel" || value === "home" ? value : "home";
-}
 
 // Keep real errors visible for TV QA; only silence known noisy module warnings.
 LogBox.ignoreLogs([
@@ -80,66 +76,32 @@ function ReminderCleanup() {
   return null;
 }
 
-function StartScreenRedirect() {
+function StartScreenRedirect({ startupComplete }: { startupComplete: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { lastChannelId, loading, startScreen } = useStore();
-  const [startupPreference, setStartupPreference] = React.useState<StartScreen | null>(null);
-  const [startupPreferencesReady, setStartupPreferencesReady] = React.useState(false);
-  const doneRef = React.useRef(false);
-  const persistenceChainRef = React.useRef<Promise<void>>(Promise.resolve());
-  const lastQueuedStartScreenRef = React.useRef<StartScreen | null>(null);
-
+  const { lastChannelId, loading, startScreen, channels, deviceLayoutMode, startupReady } = useStore();
+  const policy = useAppPolicy();
+  const done = React.useRef(false);
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      const stored = resolveStartupScreen(await storage.getItem<string>(START_SCREEN_KEY, "home"));
-      if (!active) return;
-      setStartupPreference(stored);
-      setStartupPreferencesReady(true);
-    })();
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    // Store hydration reads gs_start_screen before loading can become false.
-    // Once hydrated, serialize writes so rapid Settings edits cannot finish out
-    // of order. Retry one silent AsyncStorage failure without creating a timer,
-    // polling loop, or repeated Guide/EPG/cache work.
-    if (loading) return;
-    const next = resolveStartupScreen(startScreen);
-    if (lastQueuedStartScreenRef.current === next) return;
-    lastQueuedStartScreenRef.current = next;
-    persistenceChainRef.current = persistenceChainRef.current.then(async () => {
-      const saved = await storage.setItem(START_SCREEN_KEY, next);
-      if (!saved) await storage.setItem(START_SCREEN_KEY, next);
-    });
-  }, [loading, startScreen]);
-
-  useEffect(() => {
-    if (doneRef.current || !startupPreferencesReady || !startupPreference) return;
+    if (done.current || loading || !startupReady || !startupComplete) return;
+    done.current = true;
+    // An explicit destination already opened during startup takes precedence.
     if (pathname && pathname !== "/" && pathname !== "/index") return;
-
-    if (startupPreference === "guide") {
-      doneRef.current = true;
-      router.replace("/guide" as any);
-      return;
-    }
-
-    if (startupPreference === "last_channel") {
-      // Last-channel playback needs the channel catalog hydrated first. If no
-      // remembered channel exists, Guide is the deterministic fallback.
-      if (loading) return;
-      doneRef.current = true;
-      if (lastChannelId) openFullscreenPlayer(router, lastChannelId);
-      else router.replace("/guide" as any);
-      return;
-    }
-
-    doneRef.current = true;
-  }, [lastChannelId, loading, pathname, router, startupPreference, startupPreferencesReady]);
-
+    const target = startupTarget(startScreen, {
+      nativeVod: Platform.OS === "android" && !!NativeModules.CharmVod,
+      multiviewAllowed: Platform.OS === "android" && shouldUseTvLayout(deviceLayoutMode) && policy.multiview_max > 0,
+      channelIds: channels.map(channel => channel.id), lastChannelId,
+    });
+    if (target.channelId) openFullscreenPlayer(router, target.channelId);
+    else if (target.route !== "/") router.replace(target.route as any);
+  }, [startupComplete, startupReady, loading, startScreen, channels, lastChannelId, deviceLayoutMode, pathname, policy.multiview_max, router]);
   return null;
+}
+
+function StartupCoordinator() {
+  const [complete, setComplete] = React.useState(false);
+  const finish = React.useCallback(() => setComplete(true), []);
+  return <><StartScreenRedirect startupComplete={complete} /><StartupVersion4 onComplete={finish} /></>;
 }
 
 export default function RootLayout() {
@@ -168,7 +130,6 @@ export default function RootLayout() {
                     <NotificationRouter />
                     <SourceRefreshScheduler />
                     <ReminderCleanup />
-                    <StartScreenRedirect />
                     <AppUpdateNotice />
                     <ErrorBoundary>
                       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0B0C12" } }}>
@@ -184,7 +145,7 @@ export default function RootLayout() {
                       <TvQuickActionsOverlay />
                     </ErrorBoundary>
                     <PointerOverlay />
-                    <StartupVersion4 />
+                    <StartupCoordinator />
                   </PurpleTvDrawerProvider>
                 </GuideProvider>
               </TvCalibrationFrame>

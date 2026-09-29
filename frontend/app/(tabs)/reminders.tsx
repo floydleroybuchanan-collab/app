@@ -1,3 +1,5 @@
+import { shouldUseTvLayout } from "@/src/utils/tvLayout";
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import {
@@ -21,7 +23,7 @@ import { fmtDayTime } from "@/src/utils/time";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
 
-const COLUMNS = 6;
+
 
 function formatEta(msLeft: number): string {
   if (msLeft <= 0) return "LIVE";
@@ -49,6 +51,7 @@ function ReminderCard({
   logos: boolean;
   onCancel: (key: string) => void;
 }) {
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const startMs = Date.parse(item.start);
   const msLeft = Number.isFinite(startMs) ? startMs - nowMs : 0;
   const when = fmtDayTime(item.start);
@@ -96,11 +99,12 @@ function ReminderCard({
 }
 
 function RemindersScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const router = useRouter();
   const isFocused = useIsFocused();
   const { width } = useWindowDimensions();
   const { openDrawer } = usePurpleTvDrawer();
-  const { reminders, removeReminder, channelById, channelLogos } = useStore();
+  const { reminders, removeReminder, channelById, channelLogos, deviceLayoutMode } = useStore();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const entryFocus = useTvRouteEntryFocus();
   const [contentWidth, setContentWidth] = useState(width);
@@ -133,11 +137,12 @@ function RemindersScreenContent() {
       .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   }, [channelById, reminders]);
 
+  const columns = shouldUseTvLayout(deviceLayoutMode) ? 6 : contentWidth < 600 ? 1 : contentWidth < 900 ? 2 : contentWidth < 1200 ? 4 : 6;
   const gap = contentWidth >= 1200 ? 14 : 10;
   const pagePad = 18;
   const cardWidth = Math.max(
     1,
-    Math.floor((contentWidth - pagePad * 2 - gap * (COLUMNS - 1) - 8) / COLUMNS),
+    Math.floor((contentWidth - pagePad * 2 - gap * (columns - 1) - 8) / columns),
   );
 
   const returnToGuide = useCallback(() => {
@@ -202,7 +207,8 @@ function RemindersScreenContent() {
         <FlatList
           data={upcoming}
           keyExtractor={(item) => item.key}
-          numColumns={COLUMNS}
+          key={columns}
+          numColumns={columns}
           columnWrapperStyle={[styles.row, { gap }]}
           contentContainerStyle={[styles.list, { gap }]}
           ListEmptyComponent={
@@ -229,7 +235,7 @@ function RemindersScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: {
     flex: 1,
     paddingHorizontal: 18,
@@ -412,3 +418,5 @@ export default function RemindersScreen() {
     </FocusedTabMount>
   );
 }
+
+const mobileStyles = { topBar: { flexWrap: "wrap" as const, gap: 8 }, topActions: { flexWrap: "wrap" as const }, returnButton: { minHeight: 48 }, cancelButton: { minHeight: 48 } };

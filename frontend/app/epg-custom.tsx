@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -33,6 +34,7 @@ function validHttpUrl(value: string): boolean {
 }
 
 export default function CustomEpgScreen() {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const router = useRouter();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { channels } = useStore();
@@ -301,7 +303,7 @@ export default function CustomEpgScreen() {
         </View>
 
         <View style={styles.scrollWrap}>
-          <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} scrollEnabled nestedScrollEnabled contentInsetAdjustmentBehavior="never">
+          <ScrollView keyboardShouldPersistTaps="handled" ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} scrollEnabled nestedScrollEnabled contentInsetAdjustmentBehavior="never">
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Guide ownership</Text>
               <Text style={styles.help}>Each playlist channel resolves to one Guide owner. A custom assignment overrides Charm EPG for that channel; the primary source is not queried for an overridden channel.</Text>
@@ -412,6 +414,7 @@ export default function CustomEpgScreen() {
 }
 
 function CycleSetting<T extends string | number>({ label, value, values, format, onChange }: { label: string; value: T; values: readonly T[]; format: (value: T) => string; onChange: (value: T) => void }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const cycle = () => {
     const index = Math.max(0, values.indexOf(value));
     onChange(values[(index + 1) % values.length] ?? values[0]);
@@ -419,7 +422,7 @@ function CycleSetting<T extends string | number>({ label, value, values, format,
   return <Pressable onPress={cycle} style={({ focused }: any) => [styles.row, focused && styles.focused]}><Text style={styles.rowText}>{label}</Text><Text style={styles.value}>{format(value)}</Text></Pressable>;
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, backgroundColor: tvColors.canvas, padding: 18 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 1.1 },
@@ -447,3 +450,4 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.35 },
   status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 10.5, paddingHorizontal: 3 },
 });
+

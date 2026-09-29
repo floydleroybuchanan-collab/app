@@ -46,6 +46,7 @@ test('each TV calibration button changes exactly one pixel on all four edges', (
 
 test('playlist actions remain focusable but cannot run while disabled', () => {
   const api = load('app/playlists.tsx', { react,
+    '@/src/utils/useAdaptiveStyles': { useAdaptiveStyles: base => base },
     'react-native': { StyleSheet: { create: value => value } },
     '@/src/theme': { fonts: {}, radius: {}, tvColors: {} },
   }, '\nexport { Action };');

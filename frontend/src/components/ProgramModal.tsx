@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React from "react";
 import { View, Text, StyleSheet, Pressable, BackHandler, ScrollView } from "react-native";
 import { usePathname, useRouter } from "expo-router";
@@ -12,6 +13,7 @@ import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 
 export function ProgramModal() {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const { activeProgram, closeProgram, toggleReminder, reminders } = useStore();
   const router = useRouter();
   const pathname = usePathname();
@@ -138,7 +140,7 @@ export function ProgramModal() {
             </Text>
             {!!program.category && <Text style={styles.category}>{program.category}</Text>}
             {!!program.desc && (
-              <ScrollView focusable onFocus={() => setDescriptionFocused(true)} onBlur={() => setDescriptionFocused(false)} style={[styles.descBox, {borderWidth:2,borderColor:descriptionFocused?"#FFFFFF":"transparent"}]} nestedScrollEnabled showsVerticalScrollIndicator>
+              <ScrollView keyboardShouldPersistTaps="handled" focusable onFocus={() => setDescriptionFocused(true)} onBlur={() => setDescriptionFocused(false)} style={[styles.descBox, {borderWidth:2,borderColor:descriptionFocused?"#FFFFFF":"transparent"}]} nestedScrollEnabled showsVerticalScrollIndicator>
                 <Text style={styles.desc}>{program.desc}</Text>
               </ScrollView>
             )}
@@ -184,7 +186,7 @@ export function ProgramModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
   backdrop: {
     flex: 1,

@@ -1,3 +1,4 @@
+import { resolveStartScreen, type StartScreen } from "./core/startDestinations";
 import { activeGroupChannels } from "@/src/core/groupVisibility";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
@@ -101,10 +102,6 @@ function readGuideWindowHours(value: string | number | null | undefined, fallbac
   return fallback;
 }
 
-function resolveStartScreen(value: string | null | undefined): StartScreen {
-  if (value === "guide" || value === "last_channel" || value === "home") return value;
-  return "home";
-}
 
 function resolveSleepTimerMinutes(value: unknown): SleepTimerMinutes {
   const n = Number(value);
@@ -118,7 +115,8 @@ export type SafePreviewMode = "on" | "delayed" | "surf" | "off";
 export type DeviceLayoutMode = "auto" | "tv" | "mobile";
 export type PlayerControlsTimeoutMs = 8000 | 15000 | 30000 | 60000;
 export type GuideWindowHours = 6 | 8 | 12 | 24;
-export type StartScreen = "home" | "guide" | "last_channel";
+
+export type { StartScreen } from "./core/startDestinations";
 export type SleepTimerMinutes = 0 | 15 | 30 | 60 | 90;
 export type { EpgGuideFilter, FavoriteFolder, PowerProfile };
 
@@ -145,6 +143,7 @@ export type Store = {
   windowStart: string;
   windowEnd: string;
   loading: boolean;
+  startupReady: boolean;
   refreshing: boolean;
   error: string | null;
   refresh: (silent?: boolean) => Promise<void>;
@@ -235,6 +234,7 @@ export function useStore(): Store {
 }
 
 export function GuideProvider({ children }: { children: React.ReactNode }) {
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
@@ -281,7 +281,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const [safePreviewMode, setSafePreviewModeState] = useState<SafePreviewMode>("delayed");
   const [channelNumbers, setChannelNumbersState] = useState(false);
   const [channelLogos, setChannelLogosState] = useState(true);
-  const [deviceLayoutMode, setDeviceLayoutModeState] = useState<DeviceLayoutMode>("tv");
+  const [deviceLayoutMode, setDeviceLayoutModeState] = useState<DeviceLayoutMode>("auto");
   const [playerControlsTimeoutMs, setPlayerControlsTimeoutMsState] = useState<PlayerControlsTimeoutMs>(8000);
   const [preferTvgIdOnly, setPreferTvgIdOnlyState] = useState(false);
   const [powerProfile, setPowerProfileState] = useState<PowerProfile>("normal");
@@ -498,11 +498,14 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     setTimeFormat24h(v);
     storage.setItem(CLOCK_24H_KEY, v);
   }, []);
+  const startScreenWrites = useRef<Promise<unknown>>(Promise.resolve());
   const setStartScreen = useCallback((v: StartScreen) => {
     settingsTouchedRef.current.add(START_SCREEN_KEY);
     const next = resolveStartScreen(v);
     setStartScreenState(next);
-    storage.setItem(START_SCREEN_KEY, next);
+    startScreenWrites.current = startScreenWrites.current.then(async () => {
+      if (!await storage.setItem(START_SCREEN_KEY, next)) await storage.setItem(START_SCREEN_KEY, next);
+    });
   }, []);
   const setSleepTimerMinutes = useCallback((v: SleepTimerMinutes) => {
     settingsTouchedRef.current.add(SLEEP_TIMER_MINUTES_KEY);
@@ -892,7 +895,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
       if (!settingsTouchedRef.current.has(CHANNEL_NUMBERS_KEY)) setChannelNumbersState(storedChannelNumbers);
       const storedChannelLogos = (await storage.getItem<boolean>(CHANNEL_LOGOS_KEY, true)) ?? true;
       if (!settingsTouchedRef.current.has(CHANNEL_LOGOS_KEY)) setChannelLogosState(storedChannelLogos);
-      const storedDeviceLayout = (await storage.getItem<DeviceLayoutMode>(DEVICE_LAYOUT_MODE_KEY, "tv")) || "tv";
+      const storedDeviceLayout = (await storage.getItem<DeviceLayoutMode>(DEVICE_LAYOUT_MODE_KEY, "auto")) || "auto";
       if (!settingsTouchedRef.current.has(DEVICE_LAYOUT_MODE_KEY)) setDeviceLayoutModeState(storedDeviceLayout);
       const storedPlayerTimeout = (await storage.getItem<PlayerControlsTimeoutMs>(PLAYER_TIMEOUT_KEY, 8000)) || 8000;
       if (!settingsTouchedRef.current.has(PLAYER_TIMEOUT_KEY)) setPlayerControlsTimeoutMsState(storedPlayerTimeout);
@@ -966,7 +969,8 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
       // never be launched from this interactive bootstrap effect.
       await refresh();
       if (disposed) return;
-    })();
+      setPreferencesReady(true);
+    })().catch(() => { if (!disposed) setPreferencesReady(true); });
     return () => { disposed = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1050,6 +1054,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const visibleChannelById = useCallback((id:string) => visibleIds.has(id) ? channelById(id) : undefined, [channelById,visibleIds]);
 
   const value: Store = useMemo(() => ({
+    startupReady: preferencesReady && groupVisibility.ready && legacyVisibility.ready,
     channels: visibleChannels, allChannels: channels, windowStart, windowEnd, loading, refreshing, error, refresh, hardRefresh,
     patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache,
     selectedDate, setSelectedDate, channelById: visibleChannelById,
@@ -1070,6 +1075,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     guideWindowHours, setGuideWindowHours, clock24h, setClock24h,
     startScreen, setStartScreen, sleepTimerMinutes, setSleepTimerMinutes,
   }), [
+    preferencesReady,groupVisibility.ready,legacyVisibility.ready,
     visibleChannels,visibleRecent,visibleRecentIds,visibleChannelById,visibleIds,
     channels, windowStart, windowEnd, loading, refreshing, error, refresh, hardRefresh,
     patchProgramsForChannelIds, retainGuideSlidingCache, releaseGuideSlidingCache,

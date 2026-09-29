@@ -1,3 +1,6 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
+import { START_DESTINATIONS } from "@/src/core/startDestinations";
+import { shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import {AccountSecurityDialog,type SecurityScreen} from '@/src/components/AccountSecurityDialog';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -156,7 +159,9 @@ function formatTimeRemaining(value: number | string | null | undefined): string 
 }
 
 function SettingsScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   const router = useRouter();
+  const openVodSettings = (section: string) => router.push({ pathname: "/vod", params: { section } } as any);
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
   const [securityScreen,setSecurityScreen]=useState<SecurityScreen|null>(null);
@@ -564,7 +569,7 @@ function SettingsScreenContent() {
 
         {!section ? (
           <FocusGuide style={styles.tileGridWrap}>
-            <ScrollView focusable={false}
+            <ScrollView keyboardShouldPersistTaps="handled" focusable={false}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.tileGrid}
             >
@@ -588,7 +593,7 @@ function SettingsScreenContent() {
           </FocusGuide>
         ) : (
           <FocusGuide style={styles.detailsWrap}>
-          <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.details}>
+          <ScrollView keyboardShouldPersistTaps="handled" focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.details}>
 
             {section === "general" ? (
               <SettingsCard title="Guide & channels" icon="list-outline">
@@ -638,13 +643,9 @@ function SettingsScreenContent() {
                 </Text>
                 <ToggleRow label="24-hour clock" value={clock24h} onChange={setClock24h} />
                 <ChoiceRow<StartScreen>
-                  label="Start screen"
+                  label="Boot To Screen"
                   value={startScreen}
-                  options={[
-                    { label: "Home", value: "home" },
-                    { label: "Guide", value: "guide" },
-                    { label: "Last channel", value: "last_channel" },
-                  ]}
+                  options={START_DESTINATIONS.filter(item => (item.value !== "multiview" || (shouldUseTvLayout(deviceLayoutMode) && appPolicy.multiview_max > 0)) && (!item.route.startsWith("/vod") || Platform.OS === "android")).map(({ label, value }) => ({ label, value }))}
                   onChange={setStartScreen}
                 />
               </SettingsCard>
@@ -652,6 +653,7 @@ function SettingsScreenContent() {
 
             {section === "player" ? (
               <SettingsCard title="Playback" icon="play-circle-outline">
+                <Action label="VOD source and player settings" icon="film-outline" onPress={() => openVodSettings("settings")} />
                 <Text style={styles.settingLabel}>Live TV player</Text>
                 <Text style={styles.help}>
                   Live TV and multiview use Media3/ExoPlayer. VOD also offers optional Nova playback in its settings. Device capabilities determine which formats play smoothly.
@@ -1100,6 +1102,7 @@ function SettingsScreenContent() {
 
             {section === "account" ? (
               <SettingsCard title="Account" icon="person-outline">
+                <Action label="Real-Debrid account" icon="person-circle-outline" onPress={() => openVodSettings("accounts")} />
                 <InfoRow label="Username" value={accountUser?.username || "—"} />
                 {accountUser?.email ? <InfoRow label="Email" value={accountUser.email} /> : null}
                 <InfoRow label="Status" value={accountUser?.status || "Active"} />
@@ -1233,6 +1236,7 @@ function SettingsScreenContent() {
 }
 
 function SettingsCard({ title, icon, children }: { title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode }) {
+  const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -1245,6 +1249,7 @@ function SettingsCard({ title, icon, children }: { title: string; icon: React.Co
 }
 
 function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+  const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   return (
     <Pressable onPress={() => onChange(!value)} style={({ focused }: any) => [styles.settingRow, focused && styles.focused]}>
       <Text style={styles.settingLabel}>{label}</Text>
@@ -1254,6 +1259,7 @@ function ToggleRow({ label, value, onChange }: { label: string; value: boolean; 
 }
 
 function ChoiceRow<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: { label: string; value: T }[]; onChange: (value: T) => void }) {
+  const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   return (
     <View style={styles.choiceBlock}>
       <Text style={styles.settingLabel}>{label}</Text>
@@ -1273,6 +1279,7 @@ function ChoiceRow<T extends string | number>({ label, value, options, onChange 
 }
 
 function Action({ label, icon, onPress, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean }) {
+  const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   return (
     <Pressable disabled={disabled} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}>
       <Ionicons name={icon} size={14} color="#fff" />
@@ -1282,6 +1289,7 @@ function Action({ label, icon, onPress, disabled }: { label: string; icon: React
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -1290,7 +1298,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, minWidth: 0, padding: 14, overflow: "hidden" },
   header: { minHeight: 52, flexShrink: 0, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, backgroundColor: tvColors.canvas },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -1384,3 +1392,4 @@ export default function SettingsScreen() {
     </FocusedTabMount>
   );
 }
+

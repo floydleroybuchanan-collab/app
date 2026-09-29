@@ -1,3 +1,5 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BackHandler,
@@ -52,6 +54,8 @@ function nextValue<T>(values: readonly T[], current: T): T {
 }
 
 export function TvQuickActionsOverlay() {
+  const safe = useSafeAreaInsets();
+  const styles = useAdaptiveStyles(baseStyles, { drawer: { width: "100%", maxWidth: 520, paddingTop: safe.top + 12, paddingBottom: safe.bottom + 12 }, close: { width: 48, height: 48 }, value: { maxWidth: "42%" } });
   const router = useRouter();
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ channelId?: string }>();
@@ -480,6 +484,7 @@ function Action({
   preferredFocus?: boolean;
   buttonRef?: React.Ref<any>;
 }) {
+  const styles = useAdaptiveStyles(baseStyles);
   return (
     <Pressable
       ref={buttonRef}
@@ -496,7 +501,7 @@ function Action({
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, zIndex: 10000, flexDirection: "row", justifyContent: "flex-end" },
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
   drawer: { width: 390, maxWidth: "46%", height: "100%", backgroundColor: "rgba(12,10,25,0.985)", borderLeftWidth: 1, borderLeftColor: tvColors.lineStrong, paddingTop: 24, paddingHorizontal: 14, paddingBottom: 18 },

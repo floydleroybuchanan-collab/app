@@ -1,3 +1,6 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
+import { shouldUseTvLayout } from "@/src/utils/tvLayout";
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -25,10 +28,11 @@ const SUGGESTIONS = ["News", "Sports", "Movies", "Kids", "Discovery"];
 type FocusZone = "keyboard" | "results" | "header" | null;
 
 function SearchScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, { body: { flexDirection: "column", gap: 12 }, keyboardPanel: { flex: 0, maxWidth: undefined }, resultsPanel: { flex: 1, borderLeftWidth: 0, paddingLeft: 0 }, searchBox: { minHeight: 48 }, input: { minHeight: 48 }, resultRow: { minHeight: 56 }, guideAction: { minHeight: 48 } });
   const router = useRouter();
   const isFocused = useIsFocused();
   const { focusIconRail } = usePurpleTvDrawer();
-  const { channels, addRecent, channelLogos } = useStore();
+  const { channels, addRecent, channelLogos, deviceLayoutMode } = useStore();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -39,7 +43,7 @@ function SearchScreenContent() {
   const focusResultsWhenReadyRef = useRef(false);
   const focusZoneRef = useRef<FocusZone>(null);
   const keyboardIndexRef = useRef(0);
-  const isTV = Platform.OS !== "web" && Platform.isTV;
+  const isTV = shouldUseTvLayout(deviceLayoutMode);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 180);
@@ -274,7 +278,7 @@ function SearchScreenContent() {
               ) : null}
             </View>
 
-            <View style={styles.keys}>
+            {isTV && <View style={styles.keys}>
               {KEYS.map((key, index) => (
                 <Pressable
                   key={key}
@@ -329,7 +333,7 @@ function SearchScreenContent() {
               >
                 <Ionicons name="search" size={15} color="#fff" />
               </Pressable>
-            </View>
+            </View>}
           </View>
 
           <View style={styles.resultsPanel}>
@@ -343,7 +347,8 @@ function SearchScreenContent() {
                 ))}
               </>
             ) : (
-              <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.resultsScroll}>
+              <ScrollView keyboardShouldPersistTaps="handled" focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.resultsScroll}>
+                <MediaLibraryShelf query={debouncedQuery} />
                 {results.channels.length ? <Text style={styles.resultsTitle}>Channels</Text> : null}
                 {results.channels.map((channel, index) => (
                   <FocusGuide key={channel.id} style={styles.resultBlock} trapFocusRight>
@@ -401,7 +406,7 @@ function SearchScreenContent() {
                 {!results.channels.length && !results.programs.length ? (
                   <View style={styles.noResults}>
                     <Ionicons name="search-outline" size={28} color={tvColors.purpleSoft} />
-                    <Text style={styles.noResultsText}>No matches for “{debouncedQuery}”</Text>
+                    <Text style={styles.noResultsText}>No live TV matches for “{debouncedQuery}”</Text>
                   </View>
                 ) : null}
               </ScrollView>
@@ -413,7 +418,7 @@ function SearchScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 50, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },

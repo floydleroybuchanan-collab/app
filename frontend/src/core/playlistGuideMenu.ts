@@ -43,8 +43,14 @@ export function buildPlaylistMenu(
   });
   const count = sections.reduce((total, section) => total + section.count, 0);
   const favoriteCount = Array.from(bySource.values()).reduce((total, bucket) => total + bucket.favorites, 0);
+  const allGroups = new Map<string, PlaylistMenuGroup>();
+  for (const bucket of bySource.values()) for (const item of bucket.groups.values()) {
+    const previous = allGroups.get(item.key);
+    allGroups.set(item.key, { ...item, count: item.count + (previous?.count || 0) });
+  }
   sections.push({ id: "all", label: "All Playlists", count, groups: [
     { key: "All", label: "All Channels", count }, { key: "Favorites", label: "Favorites", count: favoriteCount },
+    ...allGroups.values(),
   ] });
   return [sections[sections.length-1], ...sections.slice(0,-1)];
 }

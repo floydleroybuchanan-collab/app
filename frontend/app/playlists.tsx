@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import { encodeXtream, decodeXtream } from "@/src/core/xtream";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -19,6 +20,7 @@ import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 import { useAuth } from "@/src/auth/AuthContext";
 
 function Action({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const styles = useAdaptiveStyles(baseStyles, {});
   // Keep the current native focus owner mounted and focusable during a refresh.
   // Actions remain inert while disabled; disabling the native view loses D-pad focus.
   return <Pressable accessibilityRole="button" focusable accessibilityState={{ disabled }} onPress={() => { if (!disabled) onPress(); }}
@@ -26,6 +28,7 @@ function Action({ label, onPress, disabled = false }: { label: string; onPress: 
 }
 
 export default function PlaylistsScreen() {
+  const styles = useAdaptiveStyles(baseStyles, {});
   const router = useRouter();
   const [advanced, setAdvanced] = useState<string | null>(null);
   const { notice } = useAuth();
@@ -164,7 +167,7 @@ export default function PlaylistsScreen() {
   </View></PurpleTvShell>;
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 14, paddingTop: 8 },
   header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
@@ -181,3 +184,4 @@ const styles = StyleSheet.create({
   message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },
   health: { color: "#D8C4FF", fontFamily: fonts.semibold, fontSize: 8.5, lineHeight: 13 },
 });
+

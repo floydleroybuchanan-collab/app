@@ -1,3 +1,6 @@
+import { GuideSelectors } from "@/src/components/GuideSelectors";
+import { MobileLiveGuide } from "@/src/components/MobileLiveGuide";
+import { shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
 import { applyGuideGroupOrder } from "@/src/core/guideGroupTabPreferences";
 import { buildPlaylistMenu, providerGroupIdentity } from "@/src/core/playlistGuideMenu";
@@ -223,6 +226,7 @@ function PurpleGuideScreenContent() {
   const activePlaylist = playlists.some((item) => item.id === selectedPlaylist && item.enabled) ? selectedPlaylist : "all";
   const router = useRouter();
   const isFocused = useIsFocused();
+  const [selectorOpen, setSelectorOpen] = useState(false);
   const { drawerOpen, openDrawer, closeDrawer, focusIconRail } = usePurpleTvDrawer();
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
@@ -451,11 +455,11 @@ function PurpleGuideScreenContent() {
       return;
     }
 
-    if (!quickActionsOpen && !activeProgram && !drawerOpen && !groupDrawerOpen) {
+    if (!selectorOpen && !quickActionsOpen && !activeProgram && !drawerOpen && !groupDrawerOpen) {
       setRemoteContext("guide");
       setGuideNavigationActive(true);
     }
-  }, [activeProgram, drawerOpen, groupDrawerOpen, isFocused, pinPromptGroup, quickActionsOpen]);
+  }, [activeProgram, drawerOpen, groupDrawerOpen, isFocused, pinPromptGroup, quickActionsOpen, selectorOpen]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -1070,6 +1074,9 @@ function PurpleGuideScreenContent() {
     >
       <View style={styles.page}>
         <EpgProgressBar />
+        <GuideSelectors mobile={false} onOpenChange={setSelectorOpen} playlists={playlistMenu.map(item => ({ key: item.id, label: item.label, count: item.count }))}
+          groups={[...(playlistMenu.find(item => item.id === activePlaylist)?.groups || []), { key: "Recent", label: "Recent" }, ...customGuideGroups.groups.map(item => ({ key: item.name, label: item.name }))]}
+          playlist={activePlaylist} group={group} onPlaylist={id => choosePlaylistGroup(id, "All")} onGroup={key => choosePlaylistGroup(activePlaylist, key)} />
         {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
           <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>
           <Pressable focusable onPress={() => router.push("/playlists" as any)} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>
@@ -1117,7 +1124,7 @@ function PurpleGuideScreenContent() {
               hidePreview={hidePreview}
               muted={mutePreview}
               onToggleMute={() => setMutePreview(!mutePreview)}
-              previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
+              previewId={selectorOpen || safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
               previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
@@ -1139,7 +1146,7 @@ function PurpleGuideScreenContent() {
                 channels={filtered}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
-                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
+                active={isFocused && !selectorOpen && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
                 restoreChannelId={guideSessionChannelId}
                 restoreTimeMs={restoreTimeMs}
                 reloadGeneration={resetToken}
@@ -1227,9 +1234,10 @@ const styles = StyleSheet.create({
 });
 
 export default function PurpleGuideScreen() {
+  const { deviceLayoutMode } = useStore();
   return (
     <FocusedTabMount>
-      <PurpleGuideScreenContent />
+      {shouldUseTvLayout(deviceLayoutMode) ? <PurpleGuideScreenContent /> : <MobileLiveGuide />}
     </FocusedTabMount>
   );
 }

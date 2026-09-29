@@ -136,6 +136,7 @@ export async function setHiddenGuideGroups(next: string[]): Promise<void> {
 }
 
 export function useGuideUiPreferences(): Snapshot & {
+  ready: boolean;
   setPinnedGroups: (next: string[]) => void;
   setHidePreview: (next: boolean) => void;
   setMutePreview: (next: boolean) => void;
@@ -145,9 +146,10 @@ export function useGuideUiPreferences(): Snapshot & {
 } {
   useGuideGroupTabPreferences();
   const [value, setValue] = useState(cached);
+  const [ready, setReady] = useState(loaded);
   useEffect(() => {
     let mounted = true;
-    void load().then((next) => { if (mounted) setValue(next); });
+    void load().then((next) => { if (mounted) { setValue(next); setReady(true); } });
     const listener = (next: Snapshot) => { if (mounted) setValue(next); };
     listeners.add(listener);
     return () => { mounted = false; listeners.delete(listener); };
@@ -155,6 +157,7 @@ export function useGuideUiPreferences(): Snapshot & {
 
   return {
     ...value,
+    ready,
     setPinnedGroups: useCallback((next: string[]) => {
       const nextValue = sanitizeGroupList(next, 24);
       setValue((prev) => ({ ...prev, pinnedGroups: nextValue }));
