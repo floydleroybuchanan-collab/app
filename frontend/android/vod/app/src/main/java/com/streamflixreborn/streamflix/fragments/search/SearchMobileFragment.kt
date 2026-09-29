@@ -59,6 +59,8 @@ class SearchMobileFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        val hostQuery = requireActivity().intent.getStringExtra("medialab.section")?.takeIf { it.startsWith("search:") }?.substringAfter(":")
+        if (savedInstanceState == null && !hostQuery.isNullOrBlank()) view.post { if (_binding != null && isAdded) { binding.etSearch.setText(hostQuery); viewModel.search(hostQuery) } }
 
         initializeSearch()
 

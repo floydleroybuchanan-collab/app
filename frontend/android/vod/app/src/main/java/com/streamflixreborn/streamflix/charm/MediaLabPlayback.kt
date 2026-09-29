@@ -19,8 +19,15 @@ object MediaLabPlayback {
         val background = when (settings.optString("background")) { "none" -> android.graphics.Color.TRANSPARENT; "solid" -> android.graphics.Color.BLACK; else -> 0x99000000.toInt() }
         prefs.captionStyle = androidx.media3.ui.CaptionStyleCompat(android.graphics.Color.WHITE, background, android.graphics.Color.TRANSPARENT, androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE, android.graphics.Color.BLACK, null)
     }
-    fun builder(context: Context, renderers: RenderersFactory, source: MediaSource.Factory, loadControl: LoadControl): ExoPlayer.Builder =
-        ExoPlayer.Builder(context, renderers).setMediaSourceFactory(source).setLoadControl(loadControl).setWakeMode(C.WAKE_MODE_NETWORK)
+    fun builder(context: Context, renderers: RenderersFactory, source: MediaSource.Factory, loadControl: LoadControl): ExoPlayer.Builder {
+        // Retain the known Onn/Amlogic black-picture workaround. Other devices
+        // use Media3's platform defaults instead of globally disabling async codecs.
+        if (renderers is androidx.media3.exoplayer.DefaultRenderersFactory && MediaLabCodecPolicy.needsSynchronousCodec(
+            android.os.Build.MANUFACTURER, android.os.Build.BRAND, android.os.Build.HARDWARE, android.os.Build.MODEL)) {
+            renderers.forceDisableMediaCodecAsynchronousQueueing()
+        }
+        return ExoPlayer.Builder(context, renderers).setMediaSourceFactory(source).setLoadControl(loadControl).setWakeMode(C.WAKE_MODE_NETWORK)
+    }
     fun vodLoadControl(): LoadControl {
         val max = when (settings.optString("buffer", "stable")) { "low_latency" -> 15000; "balanced" -> 30000; else -> 50000 }
         return DefaultLoadControl.Builder().setBufferDurationsMs(minOf(15000, max), max, 1500, 3000)

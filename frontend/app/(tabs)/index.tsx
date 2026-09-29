@@ -1,3 +1,4 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
 import { MediaLabArt } from "@/src/components/MediaLabBrand";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
@@ -208,6 +209,7 @@ function LiveTvHomeScreenContent() {
           </View>
         </View>
 
+        <MediaLibraryShelf />
         <View style={[styles.hero, !Platform.isTV && { flexDirection: "column" }]}>
           <LinearGradient
             colors={["rgba(124,58,237,0.18)", "rgba(12,10,27,0.80)", "#090914"]}

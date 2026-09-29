@@ -1,3 +1,4 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
 import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
@@ -207,6 +208,7 @@ function FavoritesScreenContent() {
           </View>
         </View>
 
+        <MediaLibraryShelf kind="favorites" />
         <View style={styles.folderRow}>
           <Pressable hasTVPreferredFocus={preferInitialFocus && items.length > 0} onFocus={() => setPreferInitialFocus(false)} onPress={() => setFolderId("all")} style={({ focused }: any) => [styles.folderChip, folderId === "all" && styles.folderActive, focused && styles.focused]}>
             <Text style={styles.folderText}>All</Text>

@@ -191,6 +191,11 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
         requireActivity().onBackPressedDispatcher.addCallback(this, settingsBackCallback)
     }
 
+    override fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, state: Bundle?): View {
+        val content = super.onCreateView(inflater, container, state)
+        return com.streamflixreborn.streamflix.charm.SettingsChrome.wrap(this, content)
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         SettingsListStyler.attach(view, isTv = false)
@@ -222,7 +227,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
     }
 
     private fun renderCurrentScreen() {
-        setPreferencesFromResource(R.xml.settings_mobile, currentScreenState.rootKey ?: "screen_vod_sources")
+        setPreferencesFromResource(R.xml.settings_mobile, currentScreenState.rootKey ?: if (requireActivity().intent.getStringExtra("medialab.section") == "accounts") "screen_vod_accounts" else "screen_vod_sources")
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }

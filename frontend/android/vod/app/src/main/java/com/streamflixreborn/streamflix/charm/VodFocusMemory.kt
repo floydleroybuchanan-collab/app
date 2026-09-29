@@ -17,6 +17,7 @@ import java.util.WeakHashMap
 class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager.FragmentLifecycleCallbacks() {
     companion object { var userNavigationEpoch = 0L }
     private val bookmarks = WeakHashMap<Fragment, Bundle>()
+    private val pendingRestore = WeakHashMap<Fragment, () -> Unit>()
     private val cleanup = WeakHashMap<Fragment, () -> Unit>()
 
     private fun path(root: View, target: View): ArrayList<Bundle>? {
@@ -101,11 +102,11 @@ class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager
         val saved = bookmarks[f]
         val steps = saved?.getParcelableArrayList<Bundle>("focus")
         val lists = saved?.getParcelableArrayList<Bundle>("lists").orEmpty().toMutableList()
-        var attempts = 0
+        pendingRestore.remove(f)?.invoke()
         val entryEpoch = userNavigationEpoch
         val listener = object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
-                if (!f.isResumed || f.view !== root || userNavigationEpoch != entryEpoch || ++attempts > 180) {
+                if (!f.isResumed || f.view !== root || userNavigationEpoch != entryEpoch) {
                     if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnPreDrawListener(this)
                     return true
                 }
@@ -132,15 +133,17 @@ class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager
                 return true
             }
         }
+        pendingRestore[f] = { if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnPreDrawListener(listener) }
         root.viewTreeObserver.addOnPreDrawListener(listener)
     }
 
     override fun onFragmentPaused(fm: FragmentManager, f: Fragment) {
         f.view?.let { capture(f, it) }
+        pendingRestore.remove(f)?.invoke()
     }
     override fun onFragmentSaveInstanceState(fm: FragmentManager, f: Fragment, outState: Bundle) {
         f.view?.let { capture(f, it) }
         bookmarks[f]?.let { outState.putBundle("charm.focus", it) }
     }
-    override fun onFragmentViewDestroyed(fm: FragmentManager, f: Fragment) { cleanup.remove(f)?.invoke() }
+    override fun onFragmentViewDestroyed(fm: FragmentManager, f: Fragment) { pendingRestore.remove(f)?.invoke(); cleanup.remove(f)?.invoke() }
 }

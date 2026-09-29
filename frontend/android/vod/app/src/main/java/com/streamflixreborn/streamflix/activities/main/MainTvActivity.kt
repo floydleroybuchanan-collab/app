@@ -72,6 +72,7 @@ class MainTvActivity : FragmentActivity() {
         // Il setup delle preferenze è già avvenuto in StreamFlixApp
         setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
         
+        intent.putExtra("medialab.restored", savedInstanceState != null)
         super.onCreate(savedInstanceState)
         
         // Inizializza il provider con il context dell'attività per gestire eventuali bypass visibili

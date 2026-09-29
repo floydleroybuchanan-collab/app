@@ -40,8 +40,27 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   private var owner = NativePlaybackManager.Owner.NONE
+  private var canScheduleChildLayout = false
+  private var childLayoutPending = false
+  private val layoutChildren = Runnable {
+    try {
+      if (width > 0 && height > 0 && isAttachedToWindow) {
+        measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        layout(left, top, right, bottom)
+      }
+    } finally { childLayoutPending = false }
+  }
+
+  // Fabric owns the host bounds, but Media3 must remeasure its aspect-ratio child
+  // when the decoded size or orientation changes. Coalesce requests, never poll.
+  override fun requestLayout() {
+    super.requestLayout()
+    if (canScheduleChildLayout && !childLayoutPending) { childLayoutPending = true; post(layoutChildren) }
+  }
+
 
   init {
+    canScheduleChildLayout = true
     setBackgroundColor(Color.TRANSPARENT)
     unclipVideoAncestors(this)
   }
@@ -123,6 +142,7 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
   }
 
   fun releaseFromReact() {
+    removeCallbacks(layoutChildren); childLayoutPending = false
     if (owner != NativePlaybackManager.Owner.NONE) {
       val releasedOwner = owner
       NativePlaybackManager.detachSurface(releasedOwner, this)

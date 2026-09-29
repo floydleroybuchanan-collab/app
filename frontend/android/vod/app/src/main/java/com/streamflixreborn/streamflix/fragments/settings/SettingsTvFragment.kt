@@ -221,12 +221,17 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     }
 
     private fun renderCurrentScreen() {
-        setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey ?: "screen_vod_sources")
+        setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey ?: if (requireActivity().intent.getStringExtra("medialab.section") == "accounts") "screen_vod_accounts" else "screen_vod_sources")
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }
         applyScreenTitle()
         view?.post { listView?.requestFocus() }
+    }
+
+    override fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, state: Bundle?): View {
+        val content = super.onCreateView(inflater, container, state)
+        return com.streamflixreborn.streamflix.charm.SettingsChrome.wrap(this, content)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

@@ -1,3 +1,4 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
 import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
@@ -346,6 +347,7 @@ function SearchScreenContent() {
               </>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.resultsScroll}>
+                <MediaLibraryShelf query={debouncedQuery} />
                 {results.channels.length ? <Text style={styles.resultsTitle}>Channels</Text> : null}
                 {results.channels.map((channel, index) => (
                   <FocusGuide key={channel.id} style={styles.resultBlock} trapFocusRight>

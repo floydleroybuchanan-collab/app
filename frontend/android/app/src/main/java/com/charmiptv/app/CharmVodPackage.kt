@@ -1,5 +1,16 @@
 package com.charmiptv.app
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import com.streamflixreborn.streamflix.models.Movie
+import com.streamflixreborn.streamflix.models.TvShow
+import com.streamflixreborn.streamflix.models.Episode
+import com.streamflixreborn.streamflix.adapters.AppAdapter
+import com.streamflixreborn.streamflix.utils.UserPreferences
+import com.streamflixreborn.streamflix.utils.ParentalControlUtils
+import com.streamflixreborn.streamflix.database.AppDatabase
+import org.json.JSONArray
+import org.json.JSONObject
 import android.app.Activity
 import android.app.UiModeManager
 import android.content.Context
@@ -19,6 +30,8 @@ import com.streamflixreborn.streamflix.activities.main.MainTvActivity
 /** One internal screen in this APK; no external package, install, or deep link. */
 class CharmVodModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     private var pending: Promise? = null
+    private val libraryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var searchJob: Job? = null
 
     init {
         context.addActivityEventListener(object : BaseActivityEventListener() {
@@ -31,6 +44,50 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     }
 
     override fun getName() = "CharmVod"
+
+    private suspend fun itemsJson(items: List<AppAdapter.Item>): String {
+        val result = JSONArray()
+        for (item in ParentalControlUtils.filterItems(items.take(30))) {
+            val value = when (item) {
+                is Movie -> JSONObject().put("id", item.id).put("title", item.title).put("poster", item.poster).put("section", "movie:" + item.id)
+                is TvShow -> JSONObject().put("id", item.id).put("title", item.title).put("poster", item.poster).put("section", "show:" + item.id)
+                is Episode -> item.tvShow?.let { show -> JSONObject().put("id", item.id).put("title", show.title + " · " + (item.title ?: "Episode " + item.number)).put("poster", show.poster).put("section", "show:" + show.id) }
+                else -> null
+            }
+            if (value != null) result.put(value)
+        }
+        return result.toString()
+    }
+
+    @ReactMethod
+    fun libraryItems(kind: String, promise: Promise) {
+        libraryScope.launch {
+            try {
+                if (UserPreferences.currentProvider == null) { promise.resolve("[]"); return@launch }
+                val db = AppDatabase.getInstance(context)
+                val items: List<AppAdapter.Item> = if (kind == "favorites") {
+                    db.movieDao().getFavorites().first() + db.tvShowDao().getFavorites().first()
+                } else {
+                    (db.movieDao().getWatchingMovies().first() + db.episodeDao().getWatchingEpisodes().first())
+                        .sortedByDescending { (it as? com.streamflixreborn.streamflix.models.WatchItem)?.watchHistory?.lastEngagementTimeUtcMillis ?: 0 }
+                }
+                promise.resolve(itemsJson(items))
+            } catch (error: Exception) { promise.reject("E_LIBRARY", "Your library could not be loaded.", error) }
+        }
+    }
+
+    @ReactMethod
+    fun searchLibrary(query: String, promise: Promise) {
+        searchJob?.cancel()
+        searchJob = libraryScope.launch {
+            try {
+                val provider = UserPreferences.currentProvider
+                if (provider == null || query.isBlank()) { promise.resolve("[]"); return@launch }
+                promise.resolve(itemsJson(withTimeout(20_000) { provider.search(query.take(200)) }))
+            } catch (error: CancellationException) { promise.resolve("[]") }
+              catch (error: Exception) { promise.reject("E_LIBRARY_SEARCH", "Movie and series search is unavailable. Try again.", error) }
+        }
+    }
 
     @ReactMethod
     fun open(promise: Promise) { openSection("library", "{}", "[]", promise) }
@@ -65,6 +122,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     override fun invalidate() {
         pending?.reject("E_VOD_CLOSED", "Charming MediaLab's screen was recreated.")
         pending = null
+        libraryScope.cancel()
         super.invalidate()
     }
 

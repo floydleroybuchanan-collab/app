@@ -651,9 +651,9 @@ function SettingsScreenContent() {
             ) : null}
 
             {section === "vod" ? <SettingsCard title="VOD Content & Sources" icon="film-outline">
-              <Text style={styles.help}>Player, subtitles, display and startup settings are shared with Live TV. Manage VOD catalogs and source accounts here.</Text>
-              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("sources").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>Catalog providers</Text></Pressable>
-              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("vod-settings").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>VOD sources and accounts</Text></Pressable>
+              <Text style={styles.help}>Player, subtitles, display and startup settings are shared with Live TV. Manage VOD catalogs and source selection here. Connected services are in Accounts.</Text>
+              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("sources").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route === "/settings") setSection(null); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>Catalog providers</Text></Pressable>
+              <Pressable style={styles.action} onPress={() => { void openMediaLibrary("vod-settings").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route === "/settings") setSection(null); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Video On Demand", error.message)); }}><Text style={styles.actionText}>Source selection preferences</Text></Pressable>
             </SettingsCard> : null}
             {section === "player" ? (
               <SettingsCard title="Playback" icon="play-circle-outline">
@@ -1104,6 +1104,8 @@ function SettingsScreenContent() {
 
             {section === "account" ? (
               <SettingsCard title="Account" icon="person-outline">
+              <Action label="Real-Debrid account" icon="person-circle-outline" onPress={() => { void openMediaLibrary("accounts").then(route => { if (route === "medialab:drawer") openDrawer({ focusTop: true }); else if (route === "/settings") setSection(null); else if (route) router.replace(route as any); }).catch(error => Alert.alert("Accounts", error.message)); }} />
+
                 <InfoRow label="Username" value={accountUser?.username || "—"} />
                 {accountUser?.email ? <InfoRow label="Email" value={accountUser.email} /> : null}
                 <InfoRow label="Status" value={accountUser?.status || "Active"} />

@@ -9,10 +9,10 @@ import org.json.JSONArray
 
 /** Shared host navigation contract. No Guide group navigation exists in VOD. */
 object MediaLabSession {
-    private val states = mutableMapOf<String, Bundle>()
+    private val states = linkedMapOf<String, Bundle>()
     var destinations = JSONArray()
     fun takeState(layout: String): Bundle? = states.remove(layout)
-    fun saveState(layout: String, state: Bundle) { states[layout] = state }
+    fun saveState(layout: String, state: Bundle) { states.remove(layout); states[layout] = state; while (states.size > 8) states.remove(states.keys.first()) }
     fun clear() { states.clear() }
     fun leave(activity: Activity, route: String) {
         activity.setResult(Activity.RESULT_OK, Intent().putExtra("medialab.route", route))
@@ -25,11 +25,21 @@ object MediaLabSession {
 
     fun attach(activity: Activity, nav: NavController, intent: Intent) {
         val section = intent.getStringExtra("medialab.section")
-        if (section == "sources") nav.navigate(R.id.providers)
-        if (section == "vod-settings") nav.navigate(R.id.settings)
+        if (!intent.getBooleanExtra("medialab.restored", false)) {
+            when (section?.substringBefore(":")) {
+                "movie" -> nav.navigate(R.id.movie, Bundle().apply { putString("id", requireNotNull(section).substringAfter(":")) })
+                "show" -> nav.navigate(R.id.tv_show, Bundle().apply { putString("id", requireNotNull(section).substringAfter(":")); putString("poster", null); putString("banner", null) })
+                "sources" -> nav.navigate(R.id.providers)
+                "movies" -> nav.navigate(R.id.movies)
+                "series" -> nav.navigate(R.id.tv_shows)
+                "favorites" -> nav.navigate(R.id.favorites)
+                "search" -> nav.navigate(R.id.search)
+            }
+        }
+        if ((section == "vod-settings" || section == "accounts") && !intent.getBooleanExtra("medialab.restored", false)) nav.navigate(R.id.settings)
         // General settings have one owner, reachable from either library.
         nav.addOnDestinationChangedListener { _, destination, _ ->
-            if (destination.id == R.id.settings && section != "vod-settings") {
+            if (destination.id == R.id.settings && section != "vod-settings" && section != "accounts") {
                 nav.popBackStack()
                 leave(activity, "/settings")
             }

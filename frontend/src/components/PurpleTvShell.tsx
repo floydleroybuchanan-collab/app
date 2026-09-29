@@ -804,6 +804,9 @@ export function PurpleTvShell({
       >
         {children}
       </FocusGuide>
+      {mobile && <View style={{ flexDirection: "row", backgroundColor: "#10101E", borderTopWidth: 1, borderColor: "#25233A" }}>
+        {([{ route: "/", label: "Home", icon: "home-outline" }, { route: "/guide", label: "Live", icon: "tv-outline" }, { route: "/vod", label: "Browse", icon: "film-outline" }, { route: "/favorites", label: "Library", icon: "heart-outline" }, { route: null, label: "More", icon: "menu" }] as const).map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityState={{ selected: item.route === active }} onPress={() => item.route ? navigate(item.route) : openDrawer({ focusTop: true })} style={({ focused }: any) => ({ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 3, backgroundColor: focused || item.route === active ? "#3B1768" : "transparent" })}><Ionicons name={item.icon} size={20} color={item.route === active ? "#B76CFF" : "#AAA7BB"} /><Text style={{ fontSize: 12, color: item.route === active ? "#fff" : "#AAA7BB" }}>{item.label}</Text></Pressable>)}
+      </View>}
       {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
     </View>
   );

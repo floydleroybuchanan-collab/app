@@ -2,4 +2,11 @@
     <style name="AppTheme.CharmVodEntrance" parent="AppTheme.Tv">
         <item name="android:windowBackground">@color/charm_vod_canvas</item>
     </style>
+    <style name="AppTheme.CharmingMobile" parent="AppTheme.Mobile">
+        <item name="colorPrimary">#7C3AED</item><item name="colorPrimaryDark">#070711</item>
+        <item name="colorAccent">#B76CFF</item><item name="android:colorAccent">#B76CFF</item>
+        <item name="android:windowBackground">#070711</item><item name="android:colorBackground">#070711</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColorPrimary">#FFFFFF</item><item name="android:textColorSecondary">#AAA7BB</item>
+    </style>
 </resources>
