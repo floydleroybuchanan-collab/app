@@ -21,7 +21,7 @@ import org.robolectric.annotation.ConscryptMode
 import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk=[35], application=Application::class)
+@Config(sdk=[35], application=Application::class, qualifiers="w960dp-h540dp-land-mdpi")
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class PageDrawerTest {
     @Test fun drawerClaimsFocusAndRestoresOriginEvenWhenClosedImmediately() {

@@ -45,6 +45,8 @@ class AdaptiveVodTest {
         }
     }
 
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Config(sdk=[35], application=Application::class, qualifiers="w360dp-h640dp-port-mdpi")
     @Test fun mobileGlassButtonsKeepWhiteLabelsAndTouchTargets() {
         val context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.AppTheme_Mobile)
         val row = android.widget.LinearLayout(context).apply {
