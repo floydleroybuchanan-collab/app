@@ -35,3 +35,25 @@ test('report command is private admin-only multipart text download with expiry',
 });
 
 test('older release mapping shows verified APK names',()=>{assert.match(releaseName(26),/RC8-Sideload-195/);assert.match(releaseName(24),/RC6-Sideload-190/);assert.match(releaseName(27),/CURRENT PUBLIC RELEASE/);assert.match(releaseName(28),/TEST BUILD/);assert.match(releaseName(29),/RC11-Sideload-198/);assert.match(releaseName(99),/not mapped/);});
+
+ test('rebuild reports retain public baseline, recognize test APKs and label unknown versions honestly',async()=>{
+ const f=fixture();
+ for(const [name,build] of [['base200',30],['rebuild209',31],['future',99]]){
+  f.user(name);
+  await f.request('/me/activity',{method:'POST',token:f.token(name),body:{sequence:1,mode:'idle',playing:false,build}});
+ }
+ const r=await accountUpdateReport(f.env,auth);
+ assert.equal(r.target,27);
+ assert.equal(r.users.find(u=>u.username==='base200').updated,true);
+ assert.equal(r.users.find(u=>u.username==='rebuild209').updated,true);
+ assert.equal(r.users.find(u=>u.username==='future').classification,'UNRECOGNIZED');
+ assert.equal(r.users.find(u=>u.username==='future').updated,false);
+ assert.match(releaseName(30),/RC12-Sideload-200/);
+ assert.match(releaseName(31),/RC13-Sideload-209/);
+ assert.match(releaseName(31),/TEST BUILD/);
+ const report=formatAccountUpdateReport(r);
+ assert.match(report,/TEST BUILD REPORTED \(2\)/);
+ assert.match(report,/UNRECOGNIZED NEWER VERSION \(1\)/);
+ assert.match(report,/RC9-Sideload-196 \[CURRENT PUBLIC RELEASE\]/);
+ assert.match(releaseName(99),/not mapped/);
+});
