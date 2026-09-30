@@ -45,6 +45,29 @@ class AdaptiveVodTest {
         }
     }
 
+    @Test fun mobileGlassButtonsKeepWhiteLabelsAndTouchTargets() {
+        val context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.AppTheme_Mobile)
+        val row = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF211039.toInt(), 0xFF090D23.toInt()))
+        }
+        for (label in listOf("Back", "Search", "Menu")) {
+            val button = android.widget.Button(context).apply { text=label; isAllCaps=false }
+            CharmMobileChrome.styleGlassButton(button)
+            assertEquals(android.graphics.Color.WHITE, button.currentTextColor)
+            assertTrue(button.background is android.graphics.drawable.RippleDrawable)
+            assertTrue(button.minimumHeight >= (48*context.resources.displayMetrics.density).toInt())
+            row.addView(button, android.widget.LinearLayout.LayoutParams(0, 56, 1f).apply { setMargins(3,4,3,4) })
+        }
+        row.measure(View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(64, View.MeasureSpec.EXACTLY))
+        row.layout(0,0,360,64)
+        val bitmap=android.graphics.Bitmap.createBitmap(360,64,android.graphics.Bitmap.Config.ARGB_8888)
+        row.draw(android.graphics.Canvas(bitmap))
+        java.io.File("build/charm-design-checks").mkdirs()
+        java.io.File("build/charm-design-checks/mobile-glass-buttons.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }
+        bitmap.recycle()
+    }
+
     @Test fun sharedPlaybackProfilesProduceValidLoadControlOnOldAndNewAndroid() {
         for (profile in listOf("low_latency", "balanced", "stable")) {
             CharmSharedPlayback.configure("{\"buffer\":\"$profile\",\"size\":\"large\",\"background\":\"dim\"}")

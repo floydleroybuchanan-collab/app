@@ -142,25 +142,58 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         if (!fresh || dialog?.isShowing == true) return false
         val focus = activity.currentFocus ?: root.findFocus() ?: return false
         if (focus is EditText || focus is SeekBar) return false
-        var parent = focus.parent
-        while (parent != null && parent !is androidx.recyclerview.widget.RecyclerView) parent = parent.parent
-        val grid = parent as? androidx.recyclerview.widget.RecyclerView ?: return false
-        val item = grid.findContainingItemView(focus) ?: return false
-        val position = grid.getChildAdapterPosition(item)
-        val count = grid.adapter?.itemCount ?: return false
-        if (position == androidx.recyclerview.widget.RecyclerView.NO_POSITION || count == 0) return false
-        // Horizontal shelves must reach the actual final item, never just the viewport edge.
-        if (grid.layoutManager?.canScrollHorizontally() == true) {
-            if (position != count - 1) return false
-        } else {
-            val sameRowToRight = (0 until grid.childCount).map(grid::getChildAt).any {
-                it !== item && it.left > item.left && kotlin.math.abs(it.top - item.top) < item.height / 2
-            }
-            if (sameRowToRight) return false
-        }
+        if (nav?.navController?.currentDestination?.id == R.id.player) return false
+        if (!atRightEdge(focus)) return false
         consumeRightUp = true
         open()
         return true
+    }
+    // Compare focusable controls, not just their containing RecyclerView item.
+    // Hero/detail rows can contain several buttons inside one full-width item.
+    private fun hasControlToRight(scope: ViewGroup, focus: View): Boolean {
+        val bounds = android.graphics.Rect()
+        if (!focus.getGlobalVisibleRect(bounds)) return true
+        return scope.getFocusables(View.FOCUS_FORWARD).any { candidate ->
+            if (candidate === focus || !candidate.isShown || !candidate.isEnabled || candidate is ViewGroup && candidate.hasFocus()) false
+            else {
+                val other = android.graphics.Rect()
+                candidate.getGlobalVisibleRect(other) && other.centerX() > bounds.centerX() &&
+                    other.top < bounds.bottom && other.bottom > bounds.top
+            }
+        }
+    }
+    private fun atRightEdge(focus: View): Boolean {
+        // Respect explicit next-focus wiring before intercepting navigation.
+        if (focus.nextFocusRightId != View.NO_ID) {
+            val next = root.findViewById<View>(focus.nextFocusRightId)
+            if (next != null && next !== focus && next.isShown && next.isEnabled && next.isFocusable) return false
+        }
+        var parent = focus.parent
+        while (parent != null && parent !is androidx.recyclerview.widget.RecyclerView) parent = parent.parent
+        val grid = parent as? androidx.recyclerview.widget.RecyclerView
+        if (grid == null) {
+            val page = activeView() as? ViewGroup ?: return false
+            var ancestor: View? = focus
+            while (ancestor != null && ancestor !== page) ancestor = ancestor.parent as? View
+            return ancestor === page && !hasControlToRight(page, focus)
+        }
+        if (grid.isComputingLayout || grid.scrollState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return false
+        val item = grid.findContainingItemView(focus) ?: return false
+        if (item is ViewGroup && hasControlToRight(item, focus)) return false
+        val position = grid.getChildAdapterPosition(item)
+        val count = grid.adapter?.itemCount ?: return false
+        if (position == androidx.recyclerview.widget.RecyclerView.NO_POSITION || count == 0) return false
+        val manager = grid.layoutManager ?: return false
+        // Do not mistake a temporarily non-scrollable Leanback shelf for a vertical row.
+        if (grid is androidx.leanback.widget.HorizontalGridView || manager.canScrollHorizontally()) {
+            return position == count - 1
+        }
+        if (manager is androidx.recyclerview.widget.GridLayoutManager) {
+            val spans = manager.spanSizeLookup
+            val rowEnd = position == count - 1 || spans.getSpanGroupIndex(position, manager.spanCount) != spans.getSpanGroupIndex(position + 1, manager.spanCount)
+            if (!rowEnd) return false
+        }
+        return !hasControlToRight(grid, focus)
     }
     private fun verticalControls(view: View) {
         if (view is LinearLayout) view.orientation = LinearLayout.VERTICAL

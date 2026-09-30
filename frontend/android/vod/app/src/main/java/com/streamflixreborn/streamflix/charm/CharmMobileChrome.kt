@@ -12,20 +12,34 @@ import com.streamflixreborn.streamflix.R
 
 /** Space is reserved for the header: it never floats above the catalog. */
 object CharmMobileChrome {
+    internal fun styleGlassButton(button: Button) {
+        CharmPageDrawer.glass(button)
+        button.textSize = 14f
+        button.setTypeface(button.typeface, android.graphics.Typeface.BOLD)
+        button.setShadowLayer(2f * button.resources.displayMetrics.density, 0f, 1f, 0xCC000000.toInt())
+        button.minWidth = 0; button.minimumWidth = 0
+        button.setPadding(0, 0, 0, 0)
+        button.minimumHeight = (48 * button.resources.displayMetrics.density).toInt()
+        // Keep touch feedback visible while retaining the translucent fill.
+        button.background = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(0x44FFFFFF), button.background,
+            android.graphics.drawable.ColorDrawable(android.graphics.Color.WHITE))
+    }
     fun install(activity: FragmentActivity, root: ConstraintLayout) {
         val nav = (activity.supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)?.navController ?: return
         val dp = root.resources.displayMetrics.density
         val header = LinearLayout(activity).apply {
             id = View.generateViewId(); orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setBackgroundColor(0xFF10101E.toInt())
+            setBackgroundColor(0x6610101E)
         }
         val logo = ImageView(activity).apply { setImageResource(R.drawable.medialab_launcher); contentDescription = "Charming MediaLab" }
         header.addView(logo, LinearLayout.LayoutParams((44*dp).toInt(), (44*dp).toInt()))
         fun button(label: String, run: () -> Unit) = Button(activity).apply {
             text = label; isAllCaps = false; textSize = 12f; minWidth = 0; minimumWidth = 0
-            setPadding(0,0,0,0); setOnClickListener { run() }
-            header.addView(this, LinearLayout.LayoutParams(0, (48*dp).toInt(), 1f))
+            styleGlassButton(this)
+            setOnClickListener { run() }
+            header.addView(this, LinearLayout.LayoutParams(0, (48*dp).toInt(), 1f).apply { setMargins((3*dp).toInt(), (4*dp).toInt(), (3*dp).toInt(), (4*dp).toInt()) })
         }
         button("Back") { activity.onBackPressedDispatcher.onBackPressed() }
         button("Search") { if (nav.currentDestination?.id != R.id.search) nav.navigate(R.id.search) }
