@@ -17,14 +17,18 @@ test('adding screens two through four preserves the original playback selection 
   assert.match(screen, /setAudible\(slot\); setSelected\(slot\); setPicker\(null\)/);
 });
 
-test('selector owns a bounded mounted page and shares overlay focus with the pane menu', async () => {
+test('picker owns a measured modal and keeps channel scrolling separate from its footer', async () => {
   const picker = await readFile(new URL('../src/components/MultiviewChannelSelector.tsx', import.meta.url), 'utf8');
   assert.match(screen, /inputRef=\{firstPicker\} preferredFocus=\{preferOverlayFocus\}/);
-  assert.match(picker, /initialNumToRender=\{PAGE\} maxToRenderPerBatch=\{PAGE\}/);
+  assert.match(picker, /<Modal visible transparent/);
+  assert.match(picker, /onRequestClose=\{\(\) => open \? closeOptions\(\) : onCancel\(\)\}/);
+  assert.match(picker, /height: geometry.panelHeight/);
+  assert.match(picker, /testID="multiview-channel-viewport"/);
+  assert.match(picker, /height: listHeight/);
+  assert.match(picker, /testID="multiview-picker-footer"/);
+  assert.doesNotMatch(picker, /<FlatList/);
   assert.match(picker, /removeClippedSubviews=\{false\}/);
-  assert.match(picker, /onFocus=\{\(\) => list.current\?\.scrollToIndex/);
-  assert.match(picker, /searchFocused && styles.focus/);
-  assert.match(picker, /keyExtractor=\{item => item.id\}/);
+  assert.match(picker, /pickerFocusOffset\(index, columns, rowHeight, listHeight, rows.length\)/);
   assert.match(picker, /onFocusCapture=\{onFocusCapture\}/);
   assert.match(screen, /\[0, 80, 160, 300, 560\]/);
 });
