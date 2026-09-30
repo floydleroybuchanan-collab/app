@@ -22,7 +22,7 @@ export async function accountUpdateReport(env,auth){
  return {target,generated_at:t,scope:scoped?'All accounts':'Only accounts assigned to this administrator',users:users.map(u=>{
   const seen=byUser.get(u.id)||[],builds=seen.map(p=>p.build).sort((a,b)=>a-b);
   const latest=seen.reduce((best,p)=>!best||p.last_seen>best.last_seen?p:best,null);
-  const updated=builds.some(b=>b===27||b===28||b===29||b===30||b===31||b===32),old=builds.some(b=>b<target);
+  const updated=builds.some(b=>b===27||b===28||b===29||b===30||b===31||b===32||b===33),old=builds.some(b=>b<target);
   return {...u,status:u.status==='active'&&u.expires_at&&u.expires_at<=t?'expired':u.status,builds,last_build:latest?.build||null,updated,linked:!!u.telegram,classification:!builds.length?'UNKNOWN':!updated&&!old?'UNRECOGNIZED':updated&&old?'MIXED':updated?'CURRENT OR NEWER':'OLDER ONLY'};
  })};
 }
@@ -34,14 +34,15 @@ export function releaseName(code){
  if(code===27)return 'Charming.MediaLab-2.2.0-RC9-Sideload-196 [CURRENT PUBLIC RELEASE]';
  if(code===29)return 'Charming.MediaLab-2.2.0-RC11-Sideload-198 [RELEASE APK - public rollout not yet confirmed]';
  if(code===30)return 'Charming.MediaLab-2.2.0-RC12-Sideload-200 [TEST BUILD; protected rebuild base]';
+ if(code===33)return 'Charming.MediaLab-2.2.0-RC13-Sideload-212 [TEST BUILD; Multiview Design 1 picker corrections]';
  if(code===32)return 'Charming.MediaLab-2.2.0-RC13-Sideload-211 [TEST BUILD; TV drawer and Guide corrections]';
  if(code===31)return 'Charming.MediaLab-2.2.0-RC13-Sideload-209 [TEST BUILD; combined rebuild]';
  if(code===28)return 'Charming.MediaLab-2.2.0-RC10-Sideload-197 [TEST BUILD]';
  return code?'Android version code '+code+' [exact release/build not mapped]':'Unknown - no app version reported';
 }
 export function formatAccountUpdateReport(r){
- const groups=[['NEW RELEASE APK REPORTED',u=>u.last_build===29],['TEST BUILD REPORTED',u=>[28,30,31,32].includes(u.last_build)],['CURRENT PUBLIC RELEASE REPORTED',u=>u.last_build===27],['OLDER VERSION LAST REPORTED',u=>u.last_build&&u.last_build<27],['UNRECOGNIZED NEWER VERSION',u=>u.last_build>32],['UNKNOWN VERSION',u=>!u.last_build]];
- const lines=['CHARMING MEDIALAB - PRIVATE ADMIN ACCOUNT UPDATE REPORT',`Generated: ${time(r.generated_at)}`,`Scope: ${r.scope}`,'','PUBLIC RELEASE: '+releaseName(27),'TESTING ONLY: '+[28,30,31,32].map(releaseName).join('; '),'RC9 users are up to date. RC10 is not required for public users.','',`Accounts: ${r.users.length}`,`Linked: ${r.users.filter(u=>u.linked).length}`,`Public or test release observed: ${r.users.filter(u=>u.updated).length}`,`Release observed AND linked: ${r.users.filter(u=>u.updated&&u.linked).length}`,'','Versions below are last reported, not proof of what is installed now.',
+ const groups=[['NEW RELEASE APK REPORTED',u=>u.last_build===29],['TEST BUILD REPORTED',u=>[28,30,31,32,33].includes(u.last_build)],['CURRENT PUBLIC RELEASE REPORTED',u=>u.last_build===27],['OLDER VERSION LAST REPORTED',u=>u.last_build&&u.last_build<27],['UNRECOGNIZED NEWER VERSION',u=>u.last_build>33],['UNKNOWN VERSION',u=>!u.last_build]];
+ const lines=['CHARMING MEDIALAB - PRIVATE ADMIN ACCOUNT UPDATE REPORT',`Generated: ${time(r.generated_at)}`,`Scope: ${r.scope}`,'','PUBLIC RELEASE: '+releaseName(27),'TESTING ONLY: '+[28,30,31,32,33].map(releaseName).join('; '),'RC9 users are up to date. RC10 is not required for public users.','',`Accounts: ${r.users.length}`,`Linked: ${r.users.filter(u=>u.linked).length}`,`Public or test release observed: ${r.users.filter(u=>u.updated).length}`,`Release observed AND linked: ${r.users.filter(u=>u.updated&&u.linked).length}`,'','Versions below are last reported, not proof of what is installed now.',
  'Build names map the reported Android version code to our verified APK records.',
  'Rebuilds sharing a version code cannot be distinguished by older app telemetry.','Multiple versions may come from different devices or older retained sessions.','Unknown means no retained version report; it does not mean outdated.','Session records may disappear on logout/cleanup. No usable credentials are included.',''];
  for(const [title,predicate] of groups){

@@ -38,7 +38,7 @@ test('older release mapping shows verified APK names',()=>{assert.match(releaseN
 
  test('rebuild reports retain public baseline, recognize test APKs and label unknown versions honestly',async()=>{
  const f=fixture();
- for(const [name,build] of [['base200',30],['rebuild209',31],['corrected211',32],['future',99]]){
+ for(const [name,build] of [['base200',30],['rebuild209',31],['corrected211',32],['multiview212',33],['future',99]]){
   f.user(name);
   await f.request('/me/activity',{method:'POST',token:f.token(name),body:{sequence:1,mode:'idle',playing:false,build}});
  }
@@ -54,8 +54,11 @@ test('older release mapping shows verified APK names',()=>{assert.match(releaseN
  assert.match(releaseName(32),/RC13-Sideload-211/);
  assert.match(releaseName(32),/TEST BUILD/);
  assert.equal(r.users.find(u=>u.username==='corrected211').updated,true);
+ assert.match(releaseName(33),/RC13-Sideload-212/);
+ assert.match(releaseName(33),/TEST BUILD/);
+ assert.equal(r.users.find(u=>u.username==='multiview212').updated,true);
  const report=formatAccountUpdateReport(r);
- assert.match(report,/TEST BUILD REPORTED \(3\)/);
+ assert.match(report,/TEST BUILD REPORTED \(4\)/);
  assert.match(report,/UNRECOGNIZED NEWER VERSION \(1\)/);
  assert.match(report,/RC9-Sideload-196 \[CURRENT PUBLIC RELEASE\]/);
  assert.match(releaseName(99),/not mapped/);
