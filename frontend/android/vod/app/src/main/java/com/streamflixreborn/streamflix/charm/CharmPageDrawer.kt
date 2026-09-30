@@ -57,8 +57,9 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         playbackControls = playerView
         fun update(visibility: Int) {
             if (playbackControls !== playerView) return
-            val hadFocus = menu.hasFocus()
+            val hadFocus = menu.hasFocus() || donate.hasFocus()
             menu.visibility = visibility
+            donate.visibility = visibility
             if (visibility != View.VISIBLE && hadFocus) playerView.requestFocus()
         }
         playerView.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { update(it) })
@@ -66,7 +67,11 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     }
     private fun unbindPlayerControls(playerView: PlayerView) {
         playerView.setControllerVisibilityListener(null as PlayerView.ControllerVisibilityListener?)
-        if (playbackControls === playerView) { playbackControls = null; menu.visibility = View.VISIBLE }
+        if (playbackControls === playerView) {
+            playbackControls = null
+            menu.visibility = View.VISIBLE
+            donate.visibility = View.VISIBLE
+        }
     }
     fun register(fragment: Fragment, title: String, controls: List<View>) {
         val view = fragment.view ?: return
