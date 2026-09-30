@@ -34,7 +34,7 @@ export function releaseName(code){
  if(code===27)return 'Charming.MediaLab-2.2.0-RC9-Sideload-196 [CURRENT PUBLIC RELEASE]';
  if(code===29)return 'Charming.MediaLab-2.2.0-RC11-Sideload-198 [RELEASE APK - public rollout not yet confirmed]';
  if(code===30)return 'Charming.MediaLab-2.2.0-RC12-Sideload-200 [TEST BUILD; protected rebuild base]';
- if(code===34)return 'Charming.MediaLab-2.2.0-RC13-Sideload-213 [TEST BUILD; secure Lightning donations]';
+ if(code===34)return 'Charming.MediaLab-2.2.0-RC13-Sideload-214 [TEST BUILD; secure Lightning donations]';
  if(code===33)return 'Charming.MediaLab-2.2.0-RC13-Sideload-212 [TEST BUILD; Multiview Design 1 picker corrections]';
  if(code===32)return 'Charming.MediaLab-2.2.0-RC13-Sideload-211 [TEST BUILD; TV drawer and Guide corrections]';
  if(code===31)return 'Charming.MediaLab-2.2.0-RC13-Sideload-209 [TEST BUILD; combined rebuild]';

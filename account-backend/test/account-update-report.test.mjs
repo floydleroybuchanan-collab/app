@@ -57,7 +57,7 @@ test('older release mapping shows verified APK names',()=>{assert.match(releaseN
  assert.match(releaseName(33),/RC13-Sideload-212/);
  assert.match(releaseName(33),/TEST BUILD/);
  assert.equal(r.users.find(u=>u.username==='multiview212').updated,true);
- assert.match(releaseName(34),/RC13-Sideload-213/);
+ assert.match(releaseName(34),/RC13-Sideload-214/);
  assert.equal(r.users.find(u=>u.username==='donations213').updated,true);
  const report=formatAccountUpdateReport(r);
  assert.match(report,/TEST BUILD REPORTED \(5\)/);

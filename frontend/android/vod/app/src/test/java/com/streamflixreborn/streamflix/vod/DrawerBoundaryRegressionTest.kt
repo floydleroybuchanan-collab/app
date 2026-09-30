@@ -72,7 +72,7 @@ class DrawerBoundaryRegressionTest {
             dialog.dismiss();shadowOf(Looper.getMainLooper()).idle();assertTrue(last.isFocused)
         }
         // The explicit top-right Menu remains an independent opening action.
-        val menu=(0 until root.childCount).map(root::getChildAt).filterIsInstance<Button>().single()
+        val menu=(0 until root.childCount).map(root::getChildAt).filterIsInstance<Button>().single { it.text.toString().contains("Menu") }
         menu.performClick();assertTrue(ShadowDialog.getLatestDialog().isShowing)
         ShadowDialog.getLatestDialog().dismiss();controller.pause().stop().destroy()
     }

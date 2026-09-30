@@ -73,11 +73,13 @@ class PageDrawerTest {
         val activity=controller.setup().visible().get();val root=ConstraintLayout(activity);activity.setContentView(root)
         val playerView=androidx.media3.ui.PlayerView(activity);root.addView(playerView,ConstraintLayout.LayoutParams(960,540))
         val drawer=CharmPageDrawer(activity,root)
-        val menu=(0 until root.childCount).map(root::getChildAt).filterIsInstance<Button>().single()
+        val buttons=(0 until root.childCount).map(root::getChildAt).filterIsInstance<Button>()
+        val menu=buttons.single { it.text.toString().contains("Menu") }
+        val donate=buttons.single { it.text.toString().contains("Donate") }
         drawer.bindPlayerControls(playerView)
-        playerView.showController();assertEquals(View.VISIBLE,menu.visibility)
-        playerView.hideController();shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1));assertEquals(View.GONE,menu.visibility)
-        playerView.showController();assertEquals(View.VISIBLE,menu.visibility)
+        playerView.showController();assertEquals(View.VISIBLE,menu.visibility);assertEquals(View.VISIBLE,donate.visibility)
+        playerView.hideController();shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1));assertEquals(View.GONE,menu.visibility);assertEquals(View.GONE,donate.visibility)
+        playerView.showController();assertEquals(View.VISIBLE,menu.visibility);assertEquals(View.VISIBLE,donate.visibility)
         controller.pause().stop().destroy()
     }
 }
