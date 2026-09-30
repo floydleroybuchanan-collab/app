@@ -32,6 +32,15 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     @ReactMethod fun libraryItems(kind: String, promise: Promise) = readLibrary(if (kind == "favorites") "favorites" else "continue", null, promise)
     @ReactMethod fun searchLibrary(query: String, promise: Promise) = readLibrary("search", query.take(200), promise)
 
+    @ReactMethod
+    fun copyDonationInvoice(invoice: String, promise: Promise) {
+        try {
+            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Lightning payment request", invoice))
+            promise.resolve(true)
+        } catch (error: Exception) { promise.reject("E_DONATION_COPY", "Could not copy the payment request.", error) }
+    }
+
     init {
         context.addActivityEventListener(object : BaseActivityEventListener() {
             override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {

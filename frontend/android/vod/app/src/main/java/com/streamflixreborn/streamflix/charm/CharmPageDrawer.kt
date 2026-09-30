@@ -28,7 +28,14 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         id = View.generateViewId(); text = "☰ Menu"; isAllCaps = false; textSize = 12f
         isFocusable = true; setOnClickListener { open() }; glass(this)
     }
+    private val donate = Button(activity).apply {
+        id = View.generateViewId(); text = "₿ Donate"; isAllCaps = false; textSize = 12f
+        isFocusable = true; setOnClickListener { CharmHostSession.leave(activity, "medialab:donate") }; glass(this)
+    }
     init {
+        root.addView(donate, ConstraintLayout.LayoutParams(-2, -2).apply {
+            endToStart = menu.id; topToTop = 0; marginEnd = dp(8); topMargin = dp(10)
+        })
         root.addView(menu, ConstraintLayout.LayoutParams(-2, -2).apply {
             endToEnd = 0; topToTop = 0; marginEnd = dp(16); topMargin = dp(10)
         })
@@ -36,7 +43,9 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         nav?.navController?.addOnDestinationChangedListener { _, destination, _ ->
             dialog?.dismiss()
             menu.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
+            donate.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
             menu.bringToFront()
+            donate.bringToFront()
         }
         activity.lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) { dialog?.dismiss(); rightHeld = false }

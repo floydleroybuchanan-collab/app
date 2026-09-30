@@ -43,6 +43,7 @@ object CharmMobileChrome {
         }
         button("Back") { activity.onBackPressedDispatcher.onBackPressed() }
         button("Search") { if (nav.currentDestination?.id != R.id.search) nav.navigate(R.id.search) }
+        button("Donate") { CharmHostSession.leave(activity, "medialab:donate") }
         button("Menu") { CharmHostSession.leave(activity, "medialab:drawer") }
         root.addView(header, ConstraintLayout.LayoutParams(0, -2).apply { topToTop=0; startToStart=0; endToEnd=0 })
         val host = root.findViewById<View>(R.id.nav_main_fragment)

@@ -18,6 +18,7 @@ import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
+import { DonationButton } from "@/src/components/DonationDialog";
 
 function RecentChannelCard({
   channel,
@@ -194,7 +195,7 @@ function LiveTvHomeScreenContent() {
   );
 
   return (
-    <PurpleTvShell active="/">
+    <PurpleTvShell active="/" headerRight={<DonationButton compact />}>
       <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
         <View style={styles.hero}>
           <LinearGradient

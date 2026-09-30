@@ -25,6 +25,7 @@ import { shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { AuthProvider } from "@/src/auth/AuthContext";
 import { AccountGate } from "@/src/components/AccountGate";
+import { DonationProvider } from "@/src/components/DonationDialog";
 
 // Keep real errors visible for TV QA; only silence known noisy module warnings.
 LogBox.ignoreLogs([
@@ -121,7 +122,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, width, height, overflow: "visible", backgroundColor: "transparent" }}>
       <SafeAreaProvider>
         <StatusBar hidden />
-        <AuthProvider>
+        <DonationProvider><AuthProvider>
           <AccountGate>
             <TvCalibrationProvider>
               <TvCalibrationFrame>
@@ -151,7 +152,7 @@ export default function RootLayout() {
               </TvCalibrationFrame>
             </TvCalibrationProvider>
           </AccountGate>
-        </AuthProvider>
+        </AuthProvider></DonationProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

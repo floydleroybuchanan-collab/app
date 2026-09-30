@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { tvColors } from "@/src/theme";
+import { useDonation } from "@/src/components/DonationDialog";
 
 /** The host route blurs Live TV before launching the internal native VOD screen. */
 export default function VideoOnDemandScreen() {
@@ -19,6 +20,7 @@ export default function VideoOnDemandScreen() {
   const launching = useRef(false);
   const entered = useRef(false);
   const { closeDrawer, openDrawer } = usePurpleTvDrawer();
+  const showDonation = useDonation();
 
   const openVod = useCallback(async () => {
     if (launching.current) return;
@@ -35,6 +37,7 @@ export default function VideoOnDemandScreen() {
       const preferences = await mediaLibraryPreferences();
       const route = await NativeModules.CharmVod.openAdaptive(deviceLayoutMode, section || "home", JSON.stringify(preferences));
       if (route === "medialab:drawer") openDrawer({ focusTop: true });
+      else if (route === "medialab:donate") showDonation(() => void openVod());
       else if (route === "/settings" || route === "/guide" || route === "/favorites" || route === "/") router.replace(route);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
@@ -42,7 +45,7 @@ export default function VideoOnDemandScreen() {
       launching.current = false;
       setOpening(false);
     }
-  }, [closeDrawer, deviceLayoutMode, section, openDrawer, router]);
+  }, [closeDrawer, deviceLayoutMode, section, openDrawer, router, showDonation]);
 
   useFocusEffect(useCallback(() => {
     if (!entered.current) {

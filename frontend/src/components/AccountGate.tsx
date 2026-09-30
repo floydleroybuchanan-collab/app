@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { DonationButton } from "./DonationDialog";
 
 import { useAuth } from "@/src/auth/AuthContext";
 import { fonts, radius, tvColors } from "@/src/theme";
@@ -321,6 +322,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           testID="account-community" style={({focused})=>[styles.linkButton,styles.communityButton,focused&&styles.focused]}>
           <Text style={styles.communityText}>Telegram community ↗</Text>
         </Pressable>
+        <View style={{marginTop:12,alignItems:"center"}}><DonationButton /></View>
       </View>
     </ScrollView></FocusGuide>{securityScreen&&<AccountSecurityDialog kind={securityScreen} initialLogin={username} registration={{invite_code:inviteCode,username,email}} onApproved={async token=>{const message=await register(inviteCode,username,email,password,token);if(message)throw new Error(message);setPassword('');setConfirmPassword('');setSecurityScreen(null);}} onClose={()=>setSecurityScreen(null)}/>}</View>
   );
