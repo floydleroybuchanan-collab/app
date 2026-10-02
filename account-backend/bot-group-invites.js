@@ -191,7 +191,10 @@ export async function maintainGroupInvites(env,allowApproval=true){
  // revocation of previously used or administratively canceled links.
  await q(env,"UPDATE bot_group_invites SET status='expired' WHERE status IN ('active','pending') AND expires_at<=?1 AND lease_until<=?1",now()).run();
  await q(env,"UPDATE bot_group_invites SET status='failed',last_error='Creation interrupted; no link was delivered.' WHERE status='creating' AND lease_until<=?1",now()).run();
- const pending=await rows(env,`SELECT * FROM bot_group_invites WHERE lease_until<=?1 AND (status='approving' OR (status IN ('used','revoked','expired') AND invite_link IS NOT NULL AND (revoked_at IS NULL OR EXISTS(SELECT 1 FROM bot_group_invite_attempts a WHERE a.invite_id=bot_group_invites.id AND a.outcome IN ('waiting','received','approving'))))) ORDER BY last_attempt_at,created_at LIMIT 30`,now());
+ const pending=await rows(env,`SELECT * FROM bot_group_invites WHERE lease_until<=?1 AND (status='approving' OR (status IN ('used','revoked','expired') AND invite_link IS NOT NULL AND revoked_at IS NULL))
+  UNION SELECT i.* FROM bot_group_invite_attempts a JOIN bot_group_invites i ON i.id=a.invite_id
+  WHERE a.outcome IN ('waiting','received','approving') AND i.lease_until<=?1 AND i.status IN ('used','revoked','expired') AND i.invite_link IS NOT NULL
+  ORDER BY last_attempt_at,created_at LIMIT 30`,now());
  for(const invite of pending){
   let token;
   try{token=await lock(env,invite.id);await q(env,'UPDATE bot_group_invites SET last_attempt_at=?1 WHERE id=?2',now(),invite.id).run();const current=await get(env,invite.id);if(current.status==='approving')await resumeAdmission(env,current,allowApproval);else await revokeLink(env,current);}
