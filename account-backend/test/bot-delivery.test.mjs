@@ -84,6 +84,17 @@ test('failed deletion is retained and retried even when bot is disabled',async()
  await botScheduled(f.env);
  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_responses').get().n,0);
 });
+test('new replies respect failed cleanup backoff and log safe error categories',async()=>{
+ const f=setup();await telegram(f.env,'sendMessage',{chat_id:12345,text:'First reply'});
+ let deletions=0;const original=f.env.TELEGRAM_FETCH;
+ f.env.TELEGRAM_FETCH=async(url,options)=>{if(url.endsWith('deleteMessage')){deletions++;return Response.json({ok:false,error_code:429,parameters:{retry_after:60}},{status:429});}return original(url,options);};
+ await telegram(f.env,'sendMessage',{chat_id:12345,text:'Second reply'});
+ assert.equal(deletions,1);
+ await telegram(f.env,'sendMessage',{chat_id:12345,text:'Third reply'});
+ assert.equal(deletions,2);
+ assert.equal(f.db.prepare('SELECT attempts FROM bot_responses WHERE message_id=1').get().attempts,1);
+ assert.match(f.db.prepare("SELECT detail FROM bot_events WHERE action='response_cleanup_retry' LIMIT 1").get().detail,/deleteMessage.*429.*rate limited/);
+});
 test('forged admin buttons are denied and do not appear in normal help',async()=>{
  const f=setup(),user={id:12345,first_name:'Viewer'},message={chat:{id:12345,type:'private'}};
  await handleUpdate(f.env,{callback_query:{id:'admin-request',from:user,message,data:'admin'}},configuration);

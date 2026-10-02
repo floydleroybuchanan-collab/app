@@ -29,6 +29,7 @@ export async function telegramTransport(env,method,body) {
 }
 
 async function removeResponse(env,row) {
+ if(row.attempts>0&&row.due_at>now())return;
  if(!row.ephemeral&&await currentRecurring(env,row.chat_id,row.message_id)){
   await q(env,'DELETE FROM bot_responses WHERE response_key=?1 AND generation=?2',row.response_key,row.generation).run();return;
  }
@@ -46,7 +47,7 @@ async function removeResponse(env,row) {
   }
   const delay=Math.max(30,Math.min(3600,Number(e.retryAfter)||30*2**Math.min(row.attempts,6)));
   await q(env,'UPDATE bot_responses SET attempts=attempts+1,due_at=?1,lease_until=0 WHERE response_key=?2 AND generation=?3',now()+delay,row.response_key,row.generation).run();
-  await event(env,row.recipient_id,'response_cleanup_retry',e.telegramCode?String(e.telegramCode):'network');
+  await event(env,row.recipient_id,'response_cleanup_retry',telegramFailure(e));
  }
 }
 
