@@ -5,6 +5,7 @@ import {telegram,send} from './bot-telegram.js';
 const keyboard=items=>({inline_keyboard:items.map(([text,value])=>[{text,callback_data:'announce:'+value}]).concat([[{text:'Cancel · Admin tools',callback_data:'admin'}]])});
 async function store(env,id,step,data){await q(env,'INSERT INTO bot_conversations VALUES(?1,?2,?3,?4) ON CONFLICT(telegram_id) DO UPDATE SET state=excluded.state,json=excluded.json,updated_at=excluded.updated_at',id,'announce:'+step,JSON.stringify(data),now()).run();}
 export async function botAnnouncementFlow(env,id,text,cmd,s){
+ env={...env,BOT_NAVIGATION:{userId:id,parent:'menu:admin:updates'}};
  const existing=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();
  const draft=existing?.state.startsWith('announce:')?existing:null;
  const addressed=text.match(/^\s*mr(?:\.\s*|\s+)charm\b[\s,:-]*(.*)$/is);

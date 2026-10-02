@@ -16,7 +16,7 @@ const callback=data=>({callback_query:{id:'test-cb',from:{id:90001,first_name:'V
 test('all five enabled admins get buttons when only two have public usernames; hidden callback rechecks selection',async()=>{
  const f=await setup();await handleUpdate(f.env,callback('contact'),config);
  const body=f.sent.at(-1).body;assert.match(body.text,/Support Admins \(5\)/);
- const buttons=body.reply_markup.inline_keyboard.flat();assert.equal(buttons.length,6);assert.equal(buttons.filter(b=>b.url).length,2);assert.equal(buttons.filter(b=>b.callback_data?.startsWith('contact-admin:')).length,3);
+ const buttons=body.reply_markup.inline_keyboard.flat();assert.equal(buttons.filter(b=>!b.callback_data?.startsWith('nav:')).length,6);assert.ok(buttons.some(b=>b.callback_data==='nav:help'));assert.equal(buttons.filter(b=>b.url).length,2);assert.equal(buttons.filter(b=>b.callback_data?.startsWith('contact-admin:')).length,3);
  await handleUpdate(f.env,callback('contact-admin:10003'),config);assert.match(f.sent.at(-1).body.text,/Admin 3/);assert.match(f.sent.at(-1).body.text,/No public Telegram username/);
  await q(f.env,'UPDATE bot_support_admins SET enabled=0 WHERE telegram_id=?1','10003').run();
  await handleUpdate(f.env,callback('contact-admin:10003'),config);assert.match(f.sent.at(-1).body.text,/no longer available/);

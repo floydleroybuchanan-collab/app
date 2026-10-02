@@ -8,6 +8,7 @@ import {moderation} from './bot-moderation.js';
 import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
+import {navigationDestination,navigationParent,withNavigation} from './bot-navigation.js';
 import {supportContacts} from './telegram-contacts.js';
 import {telegramTransport,rememberResponse,cleanExpiredResponses,telegramFailure,permanentAdminAnnouncement} from './bot-delivery.js';
 import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu,migrateCommandMenus,commandButtons,commandText} from './bot-commands.js';
@@ -40,6 +41,7 @@ const groupHelp=()=>keyboard([['💜 Mr. Charm Help','help']]);
 export function splitText(text,max=3500){const out=[];while(text.length>max){let n=text.lastIndexOf('\n',max);if(n<max/2)n=max;out.push(text.slice(0,n));text=text.slice(n).replace(/^\n/,'');}if(text)out.push(text);return out;}
 const plain=text=>text.replace(/^#{1,6} /gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
 export async function send(env,id,text,reply_markup){
+ reply_markup=withNavigation(env,id,reply_markup);
  if(isRich(text)){const rich=readRich(text);try{return await telegram(env,'sendRichMessage',{chat_id:id,rich_message:{html:rich.html},...(reply_markup?{reply_markup}:{})});}catch(e){if(e.telegramCode!==400)throw e;await event(env,null,'rich_message_fallback','Telegram declined rich formatting; sending plain text.');text=rich.text;}}
  let result;const chunks=splitText(plain(commandText(brandText(text))),4000);for(let i=0;i<chunks.length;i++){result=await telegram(env,'sendMessage',{chat_id:id,text:chunks[i],...(i===chunks.length-1&&reply_markup?{reply_markup}:{})});
  }return result;}
@@ -180,6 +182,7 @@ async function notifySupportAdmins(env,ticketId,requesterId,details){
  }
 }
 async function conversation(env,id,text,data){
+ env={...env,BOT_NAVIGATION:{userId:id,parent:'troubleshooting'}};
  const c=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();if(!c)return false;
  if(now()-c.updated_at>3600){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return false;}
  const d=JSON.parse(c.json);let next,prompt;
@@ -300,10 +303,18 @@ export async function handleUpdate(env,u,s){
  }
  if(privateChat)await q(env,'UPDATE bot_members SET dm_started=1 WHERE telegram_id=?1',id).run();
  const start=text.match(/^\/start(?:@\w+)?\s+(help|admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i);
- const cmd=cb?.data||start?.[1]||intent(text);
+ let cmd=cb?.data||start?.[1]||intent(text);
+ const destination=navigationDestination(cmd);
+ if(cmd.startsWith('nav:')){
+  if(!destination)return send(env,id,'This navigation button is no longer available.',keyboard([['Main menu','help']]));
+  await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+  cmd=destination;
+ }
+ env={...env,BOT_NAVIGATION:{userId:id,parent:navigationParent(cmd)||(cmd==='help'&&addressedText(text)&&!exactCommand(text)?'help':null)}};
  const directMenu=cb||internalStart||exactCommand(text)||addressedText(text)==='';
- if(directMenu&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+ if(!destination&&directMenu&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
+  if(destination)return await handleCommand(env,id,cmd,s);
   if(await moderation(env,id,text,cmd,s,m,u.update_id,telegram,send))return;
   const joke=!cb&&banterReply(text);
   if(joke)return await sendHumor(env,id,joke,send);

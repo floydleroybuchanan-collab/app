@@ -3,13 +3,14 @@ import {telegramTransport} from './bot-delivery.js';
 import {adminApi} from './bot-account-management.js';
 import {send,telegram} from './bot-telegram.js';
 import {rememberResponse} from './bot-delivery.js';
+import {withNavigation} from './bot-navigation.js';
 const buttons=items=>({inline_keyboard:items.map(([text,callback_data])=>[{text,callback_data}])});
 const hours=n=>(Number(n||0)/3600).toFixed(1)+' h';
 
 async function report(env,id,text,reply_markup){
  const message_id=env.BOT_CALLBACK_MESSAGE;
  if(!env.BOT_GROUP_REPLY&&Number.isSafeInteger(message_id)&&message_id>0){
-  const body={chat_id:id,message_id,text,reply_markup};
+  const body={chat_id:id,message_id,text,reply_markup:withNavigation(env,id,reply_markup)};
   try{return await telegram(env,'editMessageText',body);}
   catch(error){
    if(error.telegramCode===400&&/message is not modified/i.test(error.description||'')){
@@ -32,6 +33,7 @@ export async function usageCommand(env,id,cmd,s){
   const body=new FormData();body.set('chat_id',String(id));
   body.set('caption','Private account update report. Save the text file before this bot message expires in 10 minutes. Versions are last reported, not a live installation check.');
   body.set('document',new Blob([text],{type:'text/plain;charset=utf-8'}),'Charming-MediaLab-Account-Report-'+new Date().toISOString().slice(0,10)+'.txt');
+  body.set('reply_markup',JSON.stringify(withNavigation(env,id,buttons([['Back','nav:menu:admin:updates'],['Main menu','nav:help']]))));
   const result=await telegramTransport(env,'sendDocument',body);
   await rememberResponse(env,'sendDocument',{chat_id:id},result);return result;
  }

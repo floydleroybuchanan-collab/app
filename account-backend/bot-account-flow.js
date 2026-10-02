@@ -23,6 +23,7 @@ async function personalAdmission(env,id,s,applicationId){
 }
 
 export async function accountFlow(env,id,text,cmd,s){
+ env={...env,BOT_NAVIGATION:{userId:id,parent:'account'}};
  const start=text.match(/^\/start(?:@\w+)?\s+flow_([a-f0-9]{48})$/i);
  const phraseCode=text.trim().match(/^mr\.?\s+charm\s+(link my account|forgot password|request app access|confirm registration)\s+((?:[A-Z2-9]{4}[- ]?){2})$/i);
  const code=(phraseCode?.[2]||text.trim()).match(/^(?:[A-Z2-9]{4}[- ]?){2}$/i);

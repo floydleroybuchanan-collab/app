@@ -107,6 +107,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await send(env,id,'Completed: '+data.label,buttons([['Admin Commands','admin']]));return true;
  }
  if(!command&&state?.state==='manage:input'&&addressedText(text)){
+  env={...env,BOT_NAVIGATION:{userId:id,parent:'admin'}};
   if(state.updated_at<now()-600){await clear(env,id);fail('This admin request expired. Start again.',409);}
   const data=JSON.parse(state.json);command=ADMIN_ACCOUNT_COMMANDS.find(c=>c.id===data.command);args=addressedText(text).trim();
  }
