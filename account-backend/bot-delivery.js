@@ -3,6 +3,11 @@ import {currentRecurring} from './bot-recurring.js';
 
 export const RESPONSE_LIFETIME_SECONDS = 600;
 const SEND_METHODS = new Set(['sendMessage','editMessageText','sendRichMessage','sendPhoto','sendDocument','sendVideo','sendAudio','sendAnimation','sendVoice']);
+export async function permanentAdminAnnouncement(env,chatId,messageId){
+ if(!String(chatId).startsWith('-'))return false;
+ if(await currentRecurring(env,chatId,messageId))return true;
+ return !!await q(env,"SELECT 1 AS protected FROM bot_jobs WHERE kind='broadcast' AND chat_id=?1 AND message_id=?2 LIMIT 1",String(chatId),Number(messageId)).first();
+}
 
 // Classify errors without storing Telegram URLs, tokens, or message contents.
 export function telegramFailure(e){
@@ -30,7 +35,7 @@ export async function telegramTransport(env,method,body) {
 
 async function removeResponse(env,row) {
  if(row.attempts>0&&row.due_at>now())return;
- if(!row.ephemeral&&await currentRecurring(env,row.chat_id,row.message_id)){
+ if(!row.ephemeral&&await permanentAdminAnnouncement(env,row.chat_id,row.message_id)){
   await q(env,'DELETE FROM bot_responses WHERE response_key=?1 AND generation=?2',row.response_key,row.generation).run();return;
  }
  const claimed=await q(env,'UPDATE bot_responses SET lease_until=?1 WHERE response_key=?2 AND generation=?3 AND lease_until<=?4',now()+30,row.response_key,row.generation,now()).run();
@@ -52,6 +57,7 @@ async function removeResponse(env,row) {
 }
 
 export async function rememberResponse(env,method,body,result) {
+ if(env.BOT_JOIN_DELIVERY||env.BOT_PERSISTENT_ANNOUNCEMENT)return;
  if(!SEND_METHODS.has(method))return;
  const ephemeral=Number.isSafeInteger(result?.ephemeral_message_id);
  const messageId=ephemeral?result.ephemeral_message_id:result?.message_id;
@@ -67,19 +73,19 @@ export async function rememberResponse(env,method,body,result) {
  // deadline cannot accidentally delete a newer response with the same ID.
  await q(env,`INSERT INTO bot_responses(response_key,recipient_id,generation,chat_id,message_id,ephemeral,created_at,due_at)
   VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(response_key) DO UPDATE SET generation=excluded.generation,
-  created_at=excluded.created_at,due_at=excluded.due_at,attempts=0,lease_until=0`,key,recipient,generation,chatId,messageId,ephemeral?1:0,now(),now()+RESPONSE_LIFETIME_SECONDS).run();
+  created_at=excluded.created_at,due_at=excluded.due_at,attempts=0,lease_until=0`,key,recipient,generation,chatId,messageId,ephemeral?1:0,now(),!ephemeral&&!chatId.startsWith('-')?0:now()+RESPONSE_LIFETIME_SECONDS).run();
  // Keep multipart content from this action together; replace the preceding
  // action only after its successor was delivered successfully.
  // Public group posts are independent announcements, not a single user's conversation.
  // Preserve their expiration, but do not let a welcome/broadcast erase another post.
- if(ephemeral||!chatId.startsWith('-'))for(const previous of await rows(env,'SELECT * FROM bot_responses WHERE recipient_id=?1 AND generation<>?2 ORDER BY created_at LIMIT 40',recipient,generation))await removeResponse(env,previous);
+ if(ephemeral||!chatId.startsWith('-'))for(const previous of await rows(env,'SELECT * FROM bot_responses WHERE recipient_id=?1 AND generation<>?2 AND chat_id=?3 ORDER BY created_at LIMIT 40',recipient,generation,chatId))await removeResponse(env,previous);
 }
 
 export async function cleanExpiredResponses(env) {
- for(const row of await rows(env,'SELECT * FROM bot_responses WHERE due_at<=?1 AND lease_until<=?1 ORDER BY due_at LIMIT 80',now()))await removeResponse(env,row);
+ for(const row of await rows(env,"SELECT * FROM bot_responses WHERE chat_id GLOB '-*' AND due_at<=?1 AND lease_until<=?1 ORDER BY due_at LIMIT 80",now()))await removeResponse(env,row);
  // Telegram cannot delete ordinary messages older than 48 hours. Retain an
  // audit event for failures, but do not retry an impossible operation forever.
- const expired=await rows(env,'SELECT DISTINCT recipient_id FROM bot_responses WHERE created_at<?1',now()-47*3600);
+ const expired=await rows(env,"SELECT DISTINCT recipient_id FROM bot_responses WHERE chat_id GLOB '-*' AND created_at<?1",now()-47*3600);
  for(const row of expired)await event(env,row.recipient_id,'response_cleanup_expired','Telegram deletion window exceeded');
- await q(env,'DELETE FROM bot_responses WHERE created_at<?1',now()-47*3600).run();
+ await q(env,"DELETE FROM bot_responses WHERE chat_id GLOB '-*' AND created_at<?1",now()-47*3600).run();
 }

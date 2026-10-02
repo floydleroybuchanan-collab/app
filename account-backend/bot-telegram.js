@@ -1,3 +1,4 @@
+import {handleAutomaticJoinRequest} from './bot-auto-join.js';
 import {queueJoinReport,deliverJoinReport} from './bot-join-reports.js';
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {currentRecurring,runRecurring} from './bot-recurring.js';
@@ -8,7 +9,7 @@ import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
 import {supportContacts} from './telegram-contacts.js';
-import {telegramTransport,rememberResponse,cleanExpiredResponses,telegramFailure} from './bot-delivery.js';
+import {telegramTransport,rememberResponse,cleanExpiredResponses,telegramFailure,permanentAdminAnnouncement} from './bot-delivery.js';
 import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu,migrateCommandMenus,commandButtons,commandText} from './bot-commands.js';
 import {accountFlow} from './bot-account-flow.js';
 import {botAnnouncementFlow} from './bot-announcements.js';
@@ -18,7 +19,7 @@ import {now,q,rows,settings,content,event,member,assignToken,fail} from './bot-s
 import {handleGroupJoinRequest,recordGroupAdmission,maintainGroupInvites,createGroupInvite,revokeGroupInvite} from './bot-group-invites.js';
 export const isMember=m=>['member','administrator','creator'].includes(m.status)||(m.status==='restricted'&&m.is_member===true);
 export async function telegram(env,method,body){
- if(method==='deleteMessage'&&await currentRecurring(env,body.chat_id,body.message_id))return true;
+ if(method==='deleteMessage'&&await permanentAdminAnnouncement(env,body.chat_id,body.message_id))return true;
  if(!env.TELEGRAM_BOT_TOKEN)fail('Save TELEGRAM_BOT_TOKEN in Cloudflare first.',503);
  body=brandedTelegramBody(body);
  if(body.reply_markup)body.reply_markup=commandButtons(body.reply_markup);
@@ -33,6 +34,8 @@ export async function telegram(env,method,body){
 }
 const keyboard=items=>({inline_keyboard:items.map(([text,data])=>[{text,callback_data:data}])});
 const activate=s=>({inline_keyboard:[[{text:'Activate Mr. Charm',url:'https://t.me/'+s.bot_username+'?start=help'}]]});
+const isAddressed=text=>/^\s*mr(?:\.\s*|\s+)charm\b/i.test(text);
+const isInternalStart=text=>/^\/start(?:@\w+)?\s+(?:help|flow_[a-f0-9]{48}|admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i.test(text.trim());
 const groupHelp=()=>keyboard([['💜 Mr. Charm Help','help']]);
 export function splitText(text,max=3500){const out=[];while(text.length>max){let n=text.lastIndexOf('\n',max);if(n<max/2)n=max;out.push(text.slice(0,n));text=text.slice(n).replace(/^\n/,'');}if(text)out.push(text);return out;}
 const plain=text=>text.replace(/^#{1,6} /gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
@@ -161,6 +164,21 @@ async function inviteCommand(env,id,text,m,s,updateId){
 }
 const topics=['Installing the App','Login / Token','Channel Won’t Play','Buffering / Freezing','Guide / EPG','Sound but No Picture','Black Screen','App Won’t Update','Other'];
 async function troubleshooting(env,id){return send(env,id,'What are you having trouble with?',keyboard(topics.map(t=>[t,'issue:'+t])));}
+async function notifySupportAdmins(env,ticketId,requesterId,details){
+ const recipients=new Set((await rows(env,'SELECT telegram_id FROM bot_support_admins WHERE enabled=1 ORDER BY name')).map(a=>String(a.telegram_id)));
+ try{
+  const s=await settings(env);
+  if(s.group_id){const live=await telegram(env,'getChatAdministrators',{chat_id:s.group_id});for(const admin of live)if(!admin.user.is_bot)recipients.add(String(admin.user.id));}
+ }catch(error){await event(env,null,'support_admin_lookup_failed',telegramFailure(error));}
+ if(!recipients.size)return;
+ const member=await q(env,'SELECT name,username FROM bot_members WHERE telegram_id=?1',requesterId).first();
+ const who=member?.username?'@'+member.username:member?.name||'Telegram ID '+requesterId;
+ const text=['New support ticket #'+ticketId,'From: '+who,'Issue: '+(details.topic||'Other'),'Device: '+(details.device||'Not provided'),'Scope: '+(details.scope||'Not provided'),'Audio: '+(details.audio||'Not provided'),'Details: '+(details.details||'No additional details'),'Open Mr. Charm Control Center → Support tickets to respond.'].join('\n');
+ for(const adminId of recipients){
+  try{await send(env,adminId,text,{inline_keyboard:[[{text:'Open support tickets',url:'https://charmiptv-admin.agentleakage.workers.dev/#bot'}]]});}
+  catch(error){await event(env,adminId,'support_admin_notification_failed','ticket '+ticketId+' · '+String(error.telegramCode||'delivery'));}
+ }
+}
 async function conversation(env,id,text,data){
  const c=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();if(!c)return false;
  if(now()-c.updated_at>3600){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return false;}
@@ -173,7 +191,8 @@ async function conversation(env,id,text,data){
   next='details';prompt=env.BOT_GROUP_REPLY?'Would you like me to send your answers to the Admins as a support ticket?':'Begin your reply with Mr Charm, then describe what happened and any error message. Do not include passwords or tokens. I’ll include your earlier answers in a support ticket.';
  }else if(c.state==='details'){
   if(!text&&data!=='answer:Send ticket')return false;d.details=(text||'Member requested Admin help using the group buttons. Please follow up for further details.').slice(0,1800).replace(/CHM-[A-Z0-9-]+/gi,'[token removed]');
-  await env.DB.batch([q(env,'INSERT INTO bot_support(telegram_id,summary,created_at,updated_at) VALUES(?1,?2,?3,?3)',id,JSON.stringify(d),now()),q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id)]);
+  const saved=await env.DB.batch([q(env,'INSERT INTO bot_support(telegram_id,summary,created_at,updated_at) VALUES(?1,?2,?3,?3)',id,JSON.stringify(d),now()),q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id)]);
+  await notifySupportAdmins(env,saved[0].meta.last_row_id,id,d);
   await event(env,id,'support_opened',d.topic);await send(env,id,'Your support ticket is saved for the Admins with your troubleshooting answers.');return true;
  }else return false;
  const result=await send(env,id,prompt,next==='scope'?keyboard([['Everything','answer:Everything'],['Only some channels','answer:Some channels']]):['audio','result'].includes(next)?keyboard([['Yes','answer:Yes'],['No','answer:No']]):next==='details'&&env.BOT_GROUP_REPLY?keyboard([['Send ticket to Admins','answer:Send ticket'],['Back to Help','help']]):undefined);
@@ -228,6 +247,7 @@ async function handleCommand(env,id,cmd,s){
 }
 export async function handleUpdate(env,u,s){
  if(u.chat_join_request){const j=u.chat_join_request;if(String(j.chat.id)!==s.group_id||j.from.is_bot)return;
+  if(s.group_invite_approval!=='manual')return handleAutomaticJoinRequest(env,u,s);
   if(await handleGroupJoinRequest(env,u,s))return;
   await member(env,j.from,'pending');await q(env,'UPDATE bot_members SET requested_at=?1 WHERE telegram_id=?2',j.date,String(j.from.id)).run();await event(env,String(j.from.id),'join_requested');
   const c=await content(env,'waiting');if(c.enabled&&c.body.trim()){
@@ -241,6 +261,8 @@ export async function handleUpdate(env,u,s){
   await event(env,id,'membership_changed',live.status);
   if(isMember(live)&&!isMember(j.old_chat_member)){
    await q(env,'UPDATE bot_members SET joined_at=?1 WHERE telegram_id=?2',j.date,id).run();
+   const onboarding=await q(env,"SELECT * FROM bot_join_requests WHERE group_id=?1 AND telegram_id=?2 AND state='approved' AND approved_at<=?3 AND approved_at>=?3-300",s.group_id,id,j.date).first();
+   if(onboarding){await queueJoinReport(env,s,live.user,j.date,{token:onboarding.token_id?'Yes · existing invitation':'No · linked account',welcome:onboarding.welcome_sent?'Yes · delivered before approval':'Not delivered',setup:onboarding.token_sent?'Yes · delivered before approval':'Not delivered'},send,telegram);return;}
    const outcome={token:'No',welcome:'Not enabled',setup:'Not sent · no invitation available'};
    const failure=e=>'Failed · '+telegramFailure(e);
    let invitation;
@@ -261,8 +283,8 @@ export async function handleUpdate(env,u,s){
  // User-entered text is silent unless it starts with the assistant's name.
  // Telegram callback queries and narrowly-scoped /start deep links are events
  // created by our own buttons and remain available for existing workflows.
- const addressed=/^\s*mr(?:\.\s*|\s+)charm\b/i.test(text);
- const internalStart=privateChat&&/^\/start(?:@\w+)?\s+(?:help|flow_[a-f0-9]{48}|admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i.test(text.trim());
+ const addressed=isAddressed(text);
+ const internalStart=privateChat&&isInternalStart(text);
  if(!cb&&!addressed&&!internalStart)return;
  if(cb)await telegram(env,'answerCallbackQuery',{callback_query_id:cb.id});
  const id=String(user.id);await member(env,user);
@@ -330,8 +352,9 @@ export async function webhook(request,env){
  let u;try{u=JSON.parse(raw);}catch{return new Response('Bad request',{status:400});}
  if(!Number.isSafeInteger(u.update_id))return new Response('Bad update',{status:400});
  const s=await settings(env);if(!s.enabled)return new Response('OK');
+ if(u.message&&!isAddressed(u.message.text||'')&&!(u.message.chat?.type==='private'&&isInternalStart(u.message.text||'')))return new Response('OK');
  const r=await q(env,"INSERT INTO bot_updates VALUES(?1,'processing',?2) ON CONFLICT(id) DO UPDATE SET status='processing',updated_at=excluded.updated_at WHERE bot_updates.status='failed' OR (bot_updates.status='processing' AND bot_updates.updated_at<?2-60)",u.update_id,now()).run();
- if(!r.meta.changes)return new Response('OK');
+ if(!r.meta.changes){if(u.chat_join_request){const previous=await q(env,'SELECT status FROM bot_updates WHERE id=?1',u.update_id).first();if(previous?.status!=='done')return new Response('Still processing',{status:503});}return new Response('OK');}
  try{await handleUpdate(env,u,s);await q(env,"UPDATE bot_updates SET status='done' WHERE id=?1",u.update_id).run();return new Response('OK');}
  catch(e){await q(env,"UPDATE bot_updates SET status='failed',updated_at=?2 WHERE id=?1",u.update_id,now()).run();await event(env,null,'telegram_error',e.telegramCode?String(e.telegramCode):'delivery_or_service_error');return new Response('Retry later',{status:503});}
 }
@@ -341,16 +364,16 @@ export async function botScheduled(env){
  const s=await settings(env);
  try{await maintainGroupInvites(env,s.enabled);}catch(e){await event(env,null,'group_invite_maintenance_failed',telegramFailure(e));}
  if(s.enabled){try{await migrateCommandMenus(env,s,telegram);}catch(e){await event(env,null,'command_menu_sync_failed',e.telegramCode?String(e.telegramCode):'network');}}
- await q(env,"UPDATE bot_jobs SET status='pending',due_at=?1 WHERE kind IN ('join_report','join_report_discovery') AND status='sending' AND due_at<?2",now(),now()-300).run();
+ await q(env,"UPDATE bot_jobs SET status=CASE WHEN kind IN ('join_report','join_report_discovery') THEN 'pending' ELSE 'failed' END,due_at=CASE WHEN kind IN ('join_report','join_report_discovery') THEN ?1 ELSE due_at END,error=CASE WHEN kind IN ('join_report','join_report_discovery') THEN error ELSE 'Delivery interrupted. Check the group before sending again.' END WHERE status='sending' AND due_at<?2",now(),now()-300).run();
  if(!s.enabled)return;
  try{await queueWebsitePost(env,s);}catch(e){await event(env,null,'website_queue_failed',telegramFailure(e));}
  for(const job of await rows(env,"SELECT * FROM bot_jobs WHERE status='pending' AND due_at<=?1 ORDER BY id LIMIT 20",now())){
   if(['join_report','join_report_discovery'].includes(job.kind)){await deliverJoinReport(env,job,send,telegram);continue;}
   const claimed=await q(env,"UPDATE bot_jobs SET status='sending' WHERE id=?1 AND status='pending'",job.id).run();if(!claimed.meta.changes)continue;
-  try{const result=job.kind==='delete'?await telegram(env,'deleteMessage',{chat_id:job.chat_id,message_id:job.message_id}):await send(env,job.chat_id,job.body);
+  try{const result=job.kind==='delete'?await telegram(env,'deleteMessage',{chat_id:job.chat_id,message_id:job.message_id}):await send(job.kind==='broadcast'?{...env,BOT_PERSISTENT_ANNOUNCEMENT:true}:env,job.chat_id,job.body);
    await q(env,"UPDATE bot_jobs SET status='sent',message_id=COALESCE(?1,message_id) WHERE id=?2",result?.message_id||null,job.id).run();
   }catch(e){await q(env,"UPDATE bot_jobs SET status='failed',error=?1 WHERE id=?2",e.message,job.id).run();}
  }
  try{await runRecurring(env,s,send,telegram);}catch(e){await event(env,null,'recurring_delivery_failed',telegramFailure(e));}
- await env.DB.batch([q(env,'DELETE FROM bot_updates WHERE updated_at<?1',now()-7*86400),q(env,'DELETE FROM bot_rate WHERE window<?1',Math.floor(now()/60)-60),q(env,'DELETE FROM bot_conversations WHERE updated_at<?1',now()-86400),q(env,"UPDATE bot_jobs SET status='failed',error='Delivery interrupted. Check the group before sending again.' WHERE status='sending' AND due_at<?1",now()-300)]);
+ await env.DB.batch([q(env,'DELETE FROM bot_updates WHERE updated_at<?1',now()-7*86400),q(env,'DELETE FROM bot_rate WHERE window<?1',Math.floor(now()/60)-60),q(env,'DELETE FROM bot_conversations WHERE updated_at<?1',now()-86400)]);
 }

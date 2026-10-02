@@ -1,4 +1,5 @@
 import {telegramLinkHelp,ADMIN_LINK_STEPS} from './telegram-link-help.js';
+import {addressedText} from './bot-banter.js';
 import {BOT_COMMANDS} from './bot-command-catalog.js';
 import {ACCOUNT_COMMANDS,ADMIN_ACCOUNT_COMMANDS} from './bot-account-commands.js';
 import {q,rows,now,fail,event} from './bot-store.js';
@@ -105,15 +106,15 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await event(env,id,'admin_action_completed',data.command+':'+(data.targetId||data.path),api.auth.user.id);
   await send(env,id,'Completed: '+data.label,buttons([['Admin Commands','admin']]));return true;
  }
- if(!command&&state?.state==='manage:input'&&text&&!/^(mr\.?\s*charm|\/)/i.test(text)){
+ if(!command&&state?.state==='manage:input'&&addressedText(text)){
   if(state.updated_at<now()-600){await clear(env,id);fail('This admin request expired. Start again.',409);}
-  const data=JSON.parse(state.json);command=ADMIN_ACCOUNT_COMMANDS.find(c=>c.id===data.command);args=text.trim();
+  const data=JSON.parse(state.json);command=ADMIN_ACCOUNT_COMMANDS.find(c=>c.id===data.command);args=addressedText(text).trim();
  }
  if(!command)return false;
  if(command.command==='bot_status'){
   if(!await currentTelegramAdmin(env,id,s,telegram))fail('Only current group admins can access these commands.',403);
   await clear(env,id);
-  await send(env,id,`Mr. Charm: ${s.enabled?'Enabled':'Disabled'}\nAccount requests: ${s.accounts_enabled?'Enabled':'Paused'}\nDownloads: ${s.downloads_enabled?'Enabled':'Paused'}\nPersonal replies expire after ten minutes.`,buttons([['Admin Commands','admin']]));return true;
+  await send(env,id,`Mr. Charm: ${s.enabled?'Enabled':'Disabled'}\nAccount requests: ${s.accounts_enabled?'Enabled':'Paused'}\nDownloads: ${s.downloads_enabled?'Enabled':'Paused'}\nPrivate replies remain until your next private action. Recipient-only group replies expire after ten minutes.`,buttons([['Admin Commands','admin']]));return true;
  }
  const {call,auth}=await adminApi(env,id,s);
  if(command.command==='userinfo'&&message.reply_to_message?.from)args=String(message.reply_to_message.from.id);
@@ -125,7 +126,7 @@ export async function accountManagement(env,id,text,cmd,s,message){
   await send(env,id,'Continue privately to use '+command.label+'.',{inline_keyboard:[[{text:'Open private Admin Commands',url:'https://t.me/'+s.bot_username+'?start='+command.id}]]});return true;
  }
  if(!env.BOT_GROUP_REPLY&&!args&&state?.state==='manage:resume'&&state.updated_at>=now()-600){const saved=JSON.parse(state.json);if(saved.command===command.id)args=saved.args;}
- if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\n${command.description}${['link_account','relink_account'].includes(command.command)?'\n\n'+ADMIN_LINK_STEPS[1]:''}\n\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nEnter ${command.usage} now. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
+ if(command.usage&&!args){await save(env,id,'manage:input',{command:command.id});await send(env,id,`${command.label}\n${command.description}${['link_account','relink_account'].includes(command.command)?'\n\n'+ADMIN_LINK_STEPS[1]:''}\n\nUsage: ${BOT_COMMANDS.find(x=>x.id===command.id)?.label||("Mr Charm "+command.phrase)} ${command.usage}\nBegin your reply with Mr Charm, then enter ${command.usage}. Never send passwords.`,buttons([['Cancel','manage:cancel']]));return true;}
  await clear(env,id);
  const parts=args.split(/\s+/),name=parts[0],extra=parts.slice(1).join(' '),key=command.command;
  let action=null;

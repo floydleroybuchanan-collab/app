@@ -39,6 +39,7 @@ export async function currentRecurring(env,chatId,messageId){
 export async function replaceRecurring(env,chatId,text,send,remove){
  const key='reminder_message:'+chatId;
  const previous=recurringIds((await q(env,'SELECT value FROM bot_runtime WHERE key=?1',key).first())?.value);
+ for(const id of previous){await q(env,'DELETE FROM bot_responses WHERE chat_id=?1 AND message_id=?2 AND ephemeral=0',String(chatId),id).run();await q(env,"UPDATE bot_jobs SET status='canceled' WHERE kind='delete' AND status='pending' AND chat_id=?1 AND message_id=?2",String(chatId),id).run();}
  const delivery={chatId:String(chatId),ids:[]};
  try {
   await send({...env,BOT_RECURRING:delivery},chatId,text);
@@ -49,6 +50,5 @@ export async function replaceRecurring(env,chatId,text,send,remove){
   for(const id of delivery.ids)try{await remove(env,'deleteMessage',{chat_id:chatId,message_id:id});}catch{}
   throw e;
  }
- for(const id of previous)try{await remove(env,'deleteMessage',{chat_id:chatId,message_id:id});}catch(e){await event(env,null,'reminder_delete_failed',e.message);}
- await event(env,null,'reminder_sent','Recurring announcement delivered; retained until its scheduled replacement.');
+ await event(env,null,'reminder_sent','Recurring announcement delivered; retained until manually deleted.');
 }

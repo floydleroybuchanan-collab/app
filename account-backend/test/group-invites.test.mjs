@@ -6,7 +6,7 @@ import {handleUpdate,botScheduled,webhook} from '../bot-telegram.js';
 import {createGroupInvite,maintainGroupInvites,revokeGroupInvite,approveGroupInvite} from '../bot-group-invites.js';
 
 const config={enabled:true,group_id:'-100123456789',bot_username:'TestBot',auto_tokens:true,token_days:90,connections:2,invite_days:7,accounts_enabled:true,downloads_enabled:true,reminder_enabled:false,reminder_hours:6,group_invite_approval:'automatic'};
-async function setup(mode='automatic'){
+async function setup(mode='manual'){
  const f=fixture(),calls=[],members=new Map(),s={...config,group_invite_approval:mode};let next=0;
  f.env.TELEGRAM_BOT_TOKEN='test-only';f.env.TELEGRAM_WEBHOOK_SECRET='test-secret';
  await q(f.env,'UPDATE bot_settings SET json=?1',JSON.stringify(s)).run();

@@ -23,6 +23,6 @@ test('private usage callbacks leave their latest report readable',async()=>{
   assert.equal(response.method,'editMessageText','callbacks update the same report rather than deleting it');
   assert.ok(!calls.some(c=>c.method==='deleteMessage'&&c.body.message_id===seq),section+' must retain newest report');
   const row=f.db.prepare('SELECT * FROM bot_responses WHERE message_id=?').get(seq);
-  assert.ok(row&&row.due_at-row.created_at===600,'report should remain for ten minutes');
+  assert.ok(row&&row.due_at===0,'private report remains until the next private action');
  }
 });

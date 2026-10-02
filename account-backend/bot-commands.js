@@ -17,6 +17,7 @@ export async function currentTelegramAdmin(env,id,s,telegram) {
 // Telegram's slash-command menu cannot represent spaced phrases. Use the
 // recipient-only inline command buttons, and remove the old scoped lists.
 export async function syncCommandMenu(env,id,s,isAdmin,telegram) {
+ if(await q(env,'SELECT value FROM bot_runtime WHERE key=?1','phrase-menu-v1:'+id).first())return;
  await telegram(env,'deleteMyCommands',{scope:{type:'chat',chat_id:Number(id)}});
  if(s.group_id)await telegram(env,'deleteMyCommands',{scope:{type:'chat_member',chat_id:s.group_id,user_id:Number(id)}});
  await q(env,'INSERT OR REPLACE INTO bot_runtime(key,value) VALUES(?1,?2)','phrase-menu-v1:'+id,'done').run();

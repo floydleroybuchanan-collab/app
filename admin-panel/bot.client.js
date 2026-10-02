@@ -39,7 +39,7 @@ async function loadBot(){
  if(r){const card=el('div',undefined,'card');recurring.append(card);
  const time=n=>n?new Date(n*1000).toLocaleString(undefined,{timeZoneName:'short'}):'Not recorded';
  card.append(el('strong',r.enabled?'Schedule enabled':r.blocked),el('p','Last successful post: '+time(r.last_sent?.created_at)),el('p','Next scheduled post: '+(!r.enabled?'Not scheduled':r.due_now?'Due now — waiting for the next scheduler check':time(r.next_at))),el('p','Repeats every '+r.interval_hours+' hours'),el('p','Last send error: '+(r.last_error?time(r.last_error.created_at)+' — '+r.last_error.detail:'None recorded')),
- el('p',r.retention==='until_next_recurring'?'Recurring announcements stay visible until the next scheduled recurring announcement is delivered. Other posts and cleanup timers do not remove them.':'Public bot messages currently disappear after '+r.cleanup_minutes+' minutes.','help'),el('p','Status checked: '+time(r.checked_at),'help'));
+ el('p',r.retention==='until_manual_deletion'?'Recurring announcements stay visible until you manually delete them. Later announcements and cleanup timers do not remove them.':'Public bot messages currently disappear after '+r.cleanup_minutes+' minutes.','help'),el('p','Status checked: '+time(r.checked_at),'help'));
  card.append(button('Push now',async()=>{
   const saved=(await api('/admin/bot/content')).content.find(c=>c.key==='reminder');
   const result=await api('/admin/bot/recurring/send','POST',{revision:saved.revision});
@@ -107,7 +107,7 @@ async function botContent(box){
  const s=configuration.settings,schedule=el('div',undefined,'card');body.append(schedule);
  const enabled=check(schedule,'Recurring announcement enabled','reminder_enabled',s.reminder_enabled);
  const hours=field(schedule,'Announcement interval (hours)','reminder_hours',s.reminder_hours,'number',{min:1,max:24});
- schedule.append(el('p','Choose 1–24 whole hours. Enabling the schedule starts the timer now. Push now sends the saved message immediately and restarts that timer. The previous announcement stays until its replacement is delivered. Save text changes before pushing.','help'));
+ schedule.append(el('p','Choose 1–24 whole hours. Enabling the schedule starts the timer now. Push now sends the saved message immediately and restarts that timer. Earlier announcements remain until you manually delete them. Save text changes before pushing.','help'));
  schedule.append(button('Save announcement schedule',async()=>{
   if(!hours.reportValidity())return;
   await api('/admin/bot/settings','PUT',{...s,reminder_enabled:enabled.checked,reminder_hours:Number(hours.value)});

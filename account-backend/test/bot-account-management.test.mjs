@@ -15,6 +15,12 @@ async function setup(){
  const last=()=>sent.filter(s=>s.method==='sendMessage').at(-1)?.body.text;
  return {...f,sent,admins,link,message,callback,last};
 }
+test('private admin input accepts a prefixed answer after a button prompt',async()=>{
+ const f=await setup();f.user('alice');
+ await f.callback(11111,'manage_userinfo');assert.match(f.last(),/Begin your reply with Mr Charm/);
+ await f.message(11111,'alice');assert.equal(f.db.prepare("SELECT state FROM bot_conversations WHERE telegram_id='11111'").get().state,'manage:input');
+ await f.message(11111,'Mr Charm alice');assert.match(f.last(),/alice\nStatus: active/);
+});
 test('own account commands isolate sessions and require confirmation before revoking',async()=>{
  const f=await setup();f.user('alice');f.user('bob');await f.link(22222,'alice');await f.link(33333,'bob');f.token('alice');f.token('bob');
  await f.message(22222,'Mr Charm My Sessions');assert.match(f.last(),/alice\nActive sessions: 1/);assert.doesNotMatch(f.last(),/bob/);

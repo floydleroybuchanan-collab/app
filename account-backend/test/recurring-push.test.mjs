@@ -30,7 +30,7 @@ test('push endpoint requires bot permission, saved revision and enabled schedule
  await assert.rejects(botAdmin(req(),f.env,{...owner,isOwner:false},helpers),/grant Mr. Charm/);
  await assert.rejects(botAdmin(req(-1),f.env,owner,helpers),/changed/);
  const result=await (await botAdmin(req(),f.env,owner,helpers)).json();
- assert.equal(result.success,true);assert.equal(result.recurring.retention,'until_next_recurring');
+ assert.equal(result.success,true);assert.equal(result.recurring.retention,'until_manual_deletion');
  f.db.prepare('UPDATE bot_settings SET json=?').run(JSON.stringify({...config,reminder_enabled:false}));
  await assert.rejects(botAdmin(req(),f.env,owner,helpers),/Enable the bot/);
 });

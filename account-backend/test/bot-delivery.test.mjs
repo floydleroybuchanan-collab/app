@@ -19,7 +19,7 @@ test('recurring multipart posts survive other replies and timers until successfu
  await replaceRecurring(f.env,chat,'New scheduled announcement',send,telegram);
  const replacement=f.calls.slice(checkpoint);
  assert.equal(replacement[0].method,'sendMessage');
- assert.deepEqual(replacement.filter(c=>c.method==='deleteMessage').map(c=>c.body.message_id),old);
+ assert.deepEqual(replacement.filter(c=>c.method==='deleteMessage').map(c=>c.body.message_id),[]);
 });
 test('failed next recurring post preserves current one, including legacy timer records',async()=>{
  const f=setup(),chat=configuration.group_id;
@@ -69,12 +69,12 @@ test('private and recipient-only replies replace previous action and expire with
  await handleUpdate(f.env,message(34567,'Mr Charm Help'),configuration);
  f.db.prepare('UPDATE bot_responses SET due_at=0').run();
  await cleanExpiredResponses(f.env);
- assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_responses').get().n,0);
- assert.ok(f.calls.some(c=>c.method==='deleteMessage'&&c.body.chat_id==='34567'));
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM bot_responses').get().n,1);
+ assert.ok(!f.calls.some(c=>c.method==='deleteMessage'&&c.body.chat_id==='34567'));
  assert.ok(f.calls.filter(c=>c.method==='sendMessage'&&String(c.body.chat_id).startsWith('-')).every(c=>c.body.ephemeral_message_parameters));
 });
 test('failed deletion is retained and retried even when bot is disabled',async()=>{
- const f=setup();await telegram(f.env,'sendMessage',{chat_id:12345,text:'Private reply'});
+ const f=setup();await telegram(f.env,'sendMessage',{chat_id:configuration.group_id,text:'Group reply'});
  f.db.prepare('UPDATE bot_responses SET due_at=0').run();
  const original=f.env.TELEGRAM_FETCH;
  f.env.TELEGRAM_FETCH=async(url,options)=>url.endsWith('deleteMessage')?Response.json({ok:false,error_code:429,parameters:{retry_after:60}},{status:429}):original(url,options);

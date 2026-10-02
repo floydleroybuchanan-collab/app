@@ -5,6 +5,7 @@ import {handleUpdate} from '../bot-telegram.js';
 import {member} from '../bot-store.js';
 import {banterReply,TRIGGER_REPLIES,UNKNOWN_REPLIES} from '../bot-banter.js';
 import {richPlain,PREFIX} from '../rich-text.js';
+import {commandText} from '../bot-command-catalog.js';
 const s={enabled:true,group_id:'-100123456789',bot_username:'TestBot'};
 function setup(){
  const f=fixture(),calls=[],people=new Map([
@@ -35,7 +36,7 @@ test('only new humor is public and button-free; account help and private chats s
  const f=setup();
  const joke=await f.invoke('Mr Charm fuck you',{id:22222});
  assert.ok(TRIGGER_REPLIES['fuck you'].includes(joke.text));assert.equal(joke.ephemeral_message_parameters,undefined);assert.equal(joke.chat_id,s.group_id);assert.equal(joke.reply_markup,undefined);
- const unknown=await f.invoke('Mr Charm abracadabra',{id:22222});assert.ok(UNKNOWN_REPLIES.includes(unknown.text));assert.equal(unknown.reply_markup,undefined);assert.equal(unknown.ephemeral_message_parameters,undefined);
+ const unknown=await f.invoke('Mr Charm abracadabra',{id:22222});assert.ok(UNKNOWN_REPLIES.map(commandText).includes(unknown.text));assert.equal(unknown.reply_markup,undefined);assert.equal(unknown.ephemeral_message_parameters,undefined);
  assert.match((await f.invoke('Mr Charm',{id:22222})).text,/Here’s what I can help/);
  const linking=await f.invoke('Mr Charm Account Linking',{id:22222});assert.match(linking.text,/1\. Open Charming/);assert.equal(linking.ephemeral_message_parameters.receiver_user_id,22222);
  const dm=await f.invoke('Mr Charm fuck you',{id:22222,privateChat:true});assert.equal(String(dm.chat_id),'22222');assert.equal(dm.reply_markup,undefined);

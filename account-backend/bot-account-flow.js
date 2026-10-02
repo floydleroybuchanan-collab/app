@@ -17,7 +17,7 @@ async function personalAdmission(env,id,s,applicationId){
  }
  let invitation=await q(env,"SELECT * FROM bot_group_invites WHERE telegram_id=?1 AND status IN('active','pending') AND (expires_at IS NULL OR expires_at>?2) ORDER BY created_at DESC LIMIT 1",id,now()).first();
  if(!invitation)invitation=await createGroupInvite(env,s,{telegram_id:id,recipient_label:m.name.slice(0,100)||'New applicant',username:m.username,expires_at:now()+86400,approved:true},'application:'+id,'application:'+applicationId);
- return send(env,id,'Your personal room invitation is ready. Request to join and wait for an Admin to approve you. After approval, choose My app invitation here to get your registration code.\n\nThis link is tied to your Telegram account.',{
+ return send(env,id,'Your personal room invitation is ready. Request to join. Mr Charm delivers your private setup instructions and registration token before automatically approving an eligible request. Delivery or eligibility problems remain pending for Admin review.\n\nThis link is tied to your Telegram account.',{
   inline_keyboard:[[{text:'Request to join the room',url:invitation.invite_link}],[{text:'Check my app invitation',callback_data:'token'}],[{text:'Help',callback_data:'help'}]]
  });
 }

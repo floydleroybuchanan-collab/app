@@ -10,5 +10,5 @@ export async function recurringStatus(env,s,t=now()) {
  const blocked=!s.enabled?'Bot is disabled':!env.TELEGRAM_BOT_TOKEN?'Bot token is missing':!s.group_id?'Telegram group is not configured':!s.reminder_enabled?'Recurring schedule is disabled':!message.enabled?'Announcement message is disabled':!message.body.trim()?'Announcement message is blank':null;
  return {enabled:!blocked,blocked,interval_hours:interval/3600,last_sent:lastSent||null,last_error:lastError||null,
   next_at:blocked?null:next,due_now:!blocked&&next<=t,
-  cleanup_minutes:null,retention:'until_next_recurring',history,checked_at:t};
+  cleanup_minutes:null,retention:'until_manual_deletion',history,checked_at:t};
 }
