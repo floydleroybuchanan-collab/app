@@ -87,7 +87,7 @@ export async function botAdmin(request,env,auth,{json,safeJson}){
     q(env,'UPDATE bot_content SET body=?1,enabled=?2,revision=revision+1,updated_at=?3,updated_by=?4 WHERE key=?5 AND revision=?6',b.body,b.enabled&&!!b.body.trim()?1:0,now(),id,key,b.revision)
    ]);if(!r[1].meta.changes)fail('Content changed. Refresh.',409);
    if(key==='reminder'&&!old.enabled&&b.enabled&&b.body.trim()&&s.enabled&&s.reminder_enabled)await restartRecurring(env,s);
-   await event(env,null,'content_updated',key,id);return json({success:true});
+   await event(env,null,'content_updated',key,id);return json({success:true,content:await content(env,key)});
   }
  }
  if(path==='/dashboard'&&method==='GET')return json({success:true,recurring:await recurringStatus(env,s),members:await q(env,'SELECT COUNT(*) n FROM bot_members').first(),tickets:await q(env,"SELECT COUNT(*) n FROM bot_support WHERE status<>'closed'").first(),analytics:await rows(env,'SELECT action,COUNT(*) n FROM bot_events GROUP BY action ORDER BY n DESC'),jobs:(await rows(env,'SELECT * FROM bot_jobs ORDER BY id DESC LIMIT 30')).map(brandedContent)});

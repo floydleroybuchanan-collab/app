@@ -125,7 +125,7 @@ async function botContent(box){
  const preview=el('div',undefined,'bot-preview');preview.hidden=true;body.append(preview);
  body.append(el('p','Blank content is saved as disabled. Use {name} in welcome and acknowledgment messages.','help'));
  const actions=el('div',undefined,'form-actions');body.append(actions);
- actions.append(button('Save',async()=>{await api('/admin/bot/content/'+c.key,'PUT',{body:text.value,enabled:on.checked,revision:c.revision});await loadBot();message('Saved.');},'primary'),button('Preview',()=>{preview.replaceChildren();preview.append(richPreview(text.value));preview.hidden=!preview.hidden;}),button('Clear / leave blank',()=>{text.value='';on.checked=false;message('Cleared in this editor. Press Save to apply.');}),button('History / Restore',()=>botHistory(c)));
+ actions.append(button('Save',async()=>{const result=await api('/admin/bot/content/'+c.key,'PUT',{body:text.value,enabled:on.checked,revision:c.revision});Object.assign(c,result.content);message('Saved. You can send it now.');},'primary'),button('Preview',()=>{preview.replaceChildren();preview.append(richPreview(text.value));preview.hidden=!preview.hidden;}),button('Clear / leave blank',()=>{text.value='';on.checked=false;message('Cleared in this editor. Press Save to apply.');}),button('History / Restore',()=>botHistory(c)));
  if(c.key==='broadcast')actions.append(button('Send to group',()=>{
  const b=openDialog('Review broadcast','This sends the saved broadcast to your configured Telegram group.');b.append(el('pre',c.body,'bot-preview'));
  b.append(button('Send saved broadcast',async()=>{await api('/admin/bot/broadcast','POST',{revision:c.revision});$('dialog').close();message('Broadcast queued. Check Dashboard for delivery.');},'primary'));

@@ -7,17 +7,18 @@ async function store(env,id,step,data){await q(env,'INSERT INTO bot_conversation
 export async function botAnnouncementFlow(env,id,text,cmd,s){
  const existing=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();
  const draft=existing?.state.startsWith('announce:')?existing:null;
- if(cmd!=='notify_update'&&!cmd.startsWith('announce:')&&!(draft&&text&&!text.startsWith('/')&&!/mr\.?\s*charm/i.test(text)))return false;
+ const addressed=text.match(/^\s*mr(?:\.\s*|\s+)charm\b[\s,:-]*(.*)$/is);
+ if(cmd!=='notify_update'&&!cmd.startsWith('announce:')&&!(draft&&addressed))return false;
  if(!await currentTelegramAdmin(env,id,s,telegram))fail('Only current group admins can create app announcements.',403);
  if(env.BOT_GROUP_REPLY){
   await send(env,id,'Continue privately to compose the update notice. Only you can see the setup.',{inline_keyboard:[[{text:'Open private update editor',url:'https://t.me/'+s.bot_username+'?start=notify_update'}]]});return true;
  }
  if(cmd==='notify_update'){
   await store(env,id,'title',{kind:'update',version_code:0,audience:'outdated',user_ids:[],sound:true,reminder_hours:24});
-  await send(env,id,'Update announcement · private admin editor\n\nEnter the title. Example: A new Charming MediaLab update is available.\n\nNothing is sent until you preview and publish.',keyboard([]));return true;
+  await send(env,id,'Update announcement · private admin editor\n\nBegin each typed answer with Mr Charm. Enter the title. Example: Mr Charm A new Charming MediaLab update is available.\n\nNothing is sent until you preview and publish.',keyboard([]));return true;
  }
  if(!draft||now()-draft.updated_at>600){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();fail('This update editor expired. Choose Notify Update to start again.',410);}
- const data=JSON.parse(draft.json),step=draft.state.slice(9),answer=cmd.startsWith('announce:')?cmd.slice(9):text.trim();
+ const data=JSON.parse(draft.json),step=draft.state.slice(9),answer=cmd.startsWith('announce:')?cmd.slice(9):addressed?.[1].trim()||'';
  let next,prompt,choices=[];
  if(step==='title'){if(!answer||answer.length>100)fail('Use a title of 1–100 characters.');data.title=answer;next='message';prompt='Enter the message users should see (up to 3,500 characters).';}
  else if(step==='message'){if(!answer||answer.length>3500)fail('Use a message of 1–3,500 characters.');data.message=answer;next='version';prompt='Enter the APK’s Android version code. This is not the GitHub build number. Use the Android version code in your release guide (for example, 21).';}
@@ -59,5 +60,5 @@ export async function botAnnouncementFlow(env,id,text,cmd,s){
   await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();return true;
  }
  else return false;
- await store(env,id,next,data);await send(env,id,prompt,keyboard(choices));return true;
+ await store(env,id,next,data);await send(env,id,prompt+(!choices.length?'\n\nBegin your typed reply with Mr Charm.':''),keyboard(choices));return true;
 }

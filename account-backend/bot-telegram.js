@@ -1,3 +1,4 @@
+import {queueJoinReport,deliverJoinReport} from './bot-join-reports.js';
 import {isRich,readRich,richPlain,richLength,richAppend} from './rich-text.js';
 import {currentRecurring,runRecurring} from './bot-recurring.js';
 import {LINK_INSTRUCTIONS} from './bot-link-instructions.js';
@@ -7,7 +8,7 @@ import {usageCommand} from './bot-usage.js';
 import {websiteConfig,queueWebsitePost} from './website-announcements.js';
 import {HOME_COMMANDS,COMMAND_MENUS} from './bot-menus.js';
 import {supportContacts} from './telegram-contacts.js';
-import {telegramTransport,rememberResponse,cleanExpiredResponses} from './bot-delivery.js';
+import {telegramTransport,rememberResponse,cleanExpiredResponses,telegramFailure} from './bot-delivery.js';
 import {BOT_COMMANDS,exactCommand,currentTelegramAdmin,syncCommandMenu,migrateCommandMenus,commandButtons,commandText} from './bot-commands.js';
 import {accountFlow} from './bot-account-flow.js';
 import {botAnnouncementFlow} from './bot-announcements.js';
@@ -169,7 +170,7 @@ async function conversation(env,id,text,data){
  else if(c.state==='audio'){d.audio=(data||text||'').replace('answer:','').slice(0,300);next='result';prompt='Try these steps:\n1. Close and reopen Charming MediaLab.\n2. Check another channel and your internet connection.\n3. Restart your device.\n'+(/Guide/.test(d.topic)?'4. In Settings, clear the guide cache and reload the guide.':/Login/.test(d.topic)?'4. Check your username and password. Invitation codes are only used for initial registration.':/Install|Update/.test(d.topic)?'4. Use the current download and allow installation from Downloader in your device settings.':'4. Note which channels fail and any error shown.')+'\n\nDid that fix the issue?';}
  else if(c.state==='result'){
   if(data==='answer:Yes'){await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();await send(env,id,'Glad that helped. Type Mr. Charm Help anytime.');return true;}
-  next='details';prompt=env.BOT_GROUP_REPLY?'Would you like me to send your answers to the Admins as a support ticket?':'Describe what happened and any error message. Do not include passwords or tokens. I’ll include your earlier answers in a support ticket.';
+  next='details';prompt=env.BOT_GROUP_REPLY?'Would you like me to send your answers to the Admins as a support ticket?':'Begin your reply with Mr Charm, then describe what happened and any error message. Do not include passwords or tokens. I’ll include your earlier answers in a support ticket.';
  }else if(c.state==='details'){
   if(!text&&data!=='answer:Send ticket')return false;d.details=(text||'Member requested Admin help using the group buttons. Please follow up for further details.').slice(0,1800).replace(/CHM-[A-Z0-9-]+/gi,'[token removed]');
   await env.DB.batch([q(env,'INSERT INTO bot_support(telegram_id,summary,created_at,updated_at) VALUES(?1,?2,?3,?3)',id,JSON.stringify(d),now()),q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id)]);
@@ -190,7 +191,7 @@ async function handleCommand(env,id,cmd,s){
   if(['admin_invite','admin_revoke'].includes(cmd)){
    if(env.BOT_GROUP_REPLY)return send(env,id,'Open Mr. Charm privately to enter invitation details.',{inline_keyboard:[[{text:'Continue privately',url:'https://t.me/'+s.bot_username+'?start='+cmd}]]});
    await q(env,'INSERT INTO bot_conversations VALUES(?1,?2,?3,?4) ON CONFLICT(telegram_id) DO UPDATE SET state=excluded.state,json=excluded.json,updated_at=excluded.updated_at',id,cmd,'{}',now()).run();
-   return send(env,id,cmd==='admin_invite'?'Enter the recipient’s name or Telegram numeric ID followed by the duration in minutes. Example: John Smith 60.':'Enter the invitation ID from Recent room invitations.',keyboard([['Cancel','admin']]));
+   return send(env,id,cmd==='admin_invite'?'Begin with Mr Charm, then enter the recipient’s name or Telegram numeric ID followed by the duration in minutes. Example: Mr Charm John Smith 60.':'Begin with Mr Charm, then enter the invitation ID from Recent room invitations.',keyboard([['Cancel','admin']]));
   }
  }
  if(cmd==='user_commands'||cmd.startsWith('menu:'))return commandMenu(env,id,cmd,s);
@@ -219,7 +220,7 @@ async function handleCommand(env,id,cmd,s){
  if(cmd==='troubleshooting')return troubleshooting(env,id);
  if(cmd.startsWith('issue:')){
   const topic=cmd.slice(6);if(!topics.includes(topic))return;
-  await q(env,"INSERT INTO bot_conversations VALUES(?1,'device',?2,?3) ON CONFLICT(telegram_id) DO UPDATE SET state='device',json=excluded.json,updated_at=excluded.updated_at",id,JSON.stringify({topic}),now()).run();return send(env,id,env.BOT_GROUP_REPLY?'What device are you using? Choose a button below.':'What device are you using? Please type its name and model.',env.BOT_GROUP_REPLY?keyboard(['Fire TV / Fire Stick','Onn box','Android TV / Google TV','Android phone / tablet','Other / Not sure'].map(d=>[d,'answer:'+d])):undefined);
+  await q(env,"INSERT INTO bot_conversations VALUES(?1,'device',?2,?3) ON CONFLICT(telegram_id) DO UPDATE SET state='device',json=excluded.json,updated_at=excluded.updated_at",id,JSON.stringify({topic}),now()).run();return send(env,id,env.BOT_GROUP_REPLY?'What device are you using? Choose a button below.':'What device are you using? Begin your reply with Mr Charm, then type its name and model.',env.BOT_GROUP_REPLY?keyboard(['Fire TV / Fire Stick','Onn box','Android TV / Google TV','Android phone / tablet','Other / Not sure'].map(d=>[d,'answer:'+d])):undefined);
  }
  if(cmd==='faq')return send(env,id,'Your invitation is for one registration. After registration, sign in with your username and password. Do not share your invitation or account. Your connection allowance is simultaneous logins, not permanently registered devices. Admins can review expired or disabled accounts. Use Forgot Password in the app, then privately approve the request with your linked Telegram account. Enter the new password only in the app. Mr. Charm never reveals or asks for your password.');
  if(['guide','rules','whats_new','status','about','app_help'].includes(cmd))return show(env,id,cmd,s);
@@ -234,21 +235,36 @@ export async function handleUpdate(env,u,s){
   }return;
  }
  if(u.chat_member){const j=u.chat_member;if(String(j.chat.id)!==s.group_id||j.new_chat_member.user.is_bot)return;
-  await recordGroupAdmission(env,j);
+  try{await recordGroupAdmission(env,j);}catch(e){if(!e.telegramCode)throw e;await event(env,String(j.new_chat_member.user.id),'group_admission_telegram_retry',telegramFailure(e));}
   const id=String(j.new_chat_member.user.id),live=await telegram(env,'getChatMember',{chat_id:s.group_id,user_id:Number(id)});
   await member(env,live.user,live.status==='restricted'&&live.is_member?'restricted_member':live.status);
   await event(env,id,'membership_changed',live.status);
   if(isMember(live)&&!isMember(j.old_chat_member)){
-   await q(env,'UPDATE bot_members SET joined_at=?1 WHERE telegram_id=?2',j.date,id).run();await assignToken(env,id,s);
-   const c=await content(env,'welcome');if(c.enabled&&c.body.trim())await send({...env,BOT_GROUP_REPLY:{chat_id:s.group_id,user_id:id}},id,c.body.replaceAll('{name}',live.user.first_name),groupHelp());
+   await q(env,'UPDATE bot_members SET joined_at=?1 WHERE telegram_id=?2',j.date,id).run();
+   const outcome={token:'No',welcome:'Not enabled',setup:'Not sent · no invitation available'};
+   const failure=e=>'Failed · '+telegramFailure(e);
+   let invitation;
+   try{invitation=await assignToken(env,id,s);outcome.token=invitation?'Yes · '+invitation.status:'No · no eligible invitation';}catch(e){outcome.token=failure(e);}
+   const privateEnv={...env,BOT_INTERACTION:{recipient:id,generation:crypto.randomUUID()},BOT_GROUP_REPLY:{chat_id:s.group_id,user_id:id}};
+   try{const c=await content(env,'welcome');if(c.enabled&&c.body.trim()){await send(privateEnv,id,c.body.replaceAll('{name}',live.user.first_name),groupHelp());outcome.welcome='Yes';}}catch(e){outcome.welcome=failure(e);}
+   if(invitation?.status==='unused'&&(invitation.expires_at===null||invitation.expires_at>now())){
+    try{await send(privateEnv,id,'Your private Charming MediaLab app invitation is ready.\n\nRegistration token: '+invitation.invite_code+'\n\nAccount setup\n1. Open Charming MediaLab.\n2. Choose I Have an Invitation.\n3. Enter this token once and create your username and password.\n4. Keep your password private.\n\nAccount linking\nYour Telegram identity is attached to this invitation. After registration, open Settings → Account → Link Telegram / Account Recovery and follow the on-screen confirmation if the app asks you to verify the link. Type Mr Charm Account Linking anytime for the full directions.',keyboard([['🔗 Full Account Linking Directions','linking:user'],['🔑 My Token','token'],['🏠 Help','help']]));outcome.setup='Yes';}catch(e){outcome.setup=failure(e);}
+   }
+   await queueJoinReport(env,s,live.user,j.date,outcome,send,telegram);
   }return;
  }
  const cb=u.callback_query,m=cb?.message||u.message,user=cb?.from||m?.from;
  if(!m||!user||user.is_bot||m.sender_chat)return;
  const privateChat=m.chat.type==='private';if(!privateChat&&String(m.chat.id)!==s.group_id)return;
  if(privateChat&&String(m.chat.id)!==String(user.id))return;
+ const text=u.message?.text||'';
+ // User-entered text is silent unless it starts with the assistant's name.
+ // Telegram callback queries and narrowly-scoped /start deep links are events
+ // created by our own buttons and remain available for existing workflows.
+ const addressed=/^\s*mr(?:\.\s*|\s+)charm\b/i.test(text);
+ const internalStart=privateChat&&/^\/start(?:@\w+)?\s+(?:help|flow_[a-f0-9]{48}|admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i.test(text.trim());
+ if(!cb&&!addressed&&!internalStart)return;
  if(cb)await telegram(env,'answerCallbackQuery',{callback_query_id:cb.id});
- const text=u.message?.text||'';if(!privateChat&&!cb&&!/\bmr\.?\s*charm\b/i.test(text)&&!/^\/help(?:@\w+)?(?:\s|$)/i.test(text))return;
  const id=String(user.id);await member(env,user);
  env={...env,BOT_INTERACTION:{recipient:id,generation:crypto.randomUUID()},BOT_CALLBACK_MESSAGE:privateChat&&cb?m.message_id:null};
  if(cb&&m.receiver_user&&String(m.receiver_user.id)!==id)return;
@@ -261,9 +277,10 @@ export async function handleUpdate(env,u,s){
   return;
  }
  if(privateChat)await q(env,'UPDATE bot_members SET dm_started=1 WHERE telegram_id=?1',id).run();
- const start=text.match(/^\/start(?:@\w+)?\s+(admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i);
+ const start=text.match(/^\/start(?:@\w+)?\s+(help|admin_\w+|manage_\w+|notify_update|usage|website_release|update_report)$/i);
  const cmd=cb?.data||start?.[1]||intent(text);
- if((['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:'))&&(text.startsWith('/')||/mr\.?\s*charm/i.test(text)||cb))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
+ const directMenu=cb||internalStart||exactCommand(text)||addressedText(text)==='';
+ if(directMenu&&(['help','admin','user_commands'].includes(cmd)||cmd.startsWith('menu:')))await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
  try{
   if(await moderation(env,id,text,cmd,s,m,u.update_id,telegram,send))return;
   const joke=!cb&&banterReply(text);
@@ -279,19 +296,19 @@ export async function handleUpdate(env,u,s){
   if(await accountManagement(env,id,text,cmd,s,m))return;
   if(await botAnnouncementFlow(env,id,text,cmd,s))return;
   if(await accountFlow(env,id,text,cmd,s))return;
-  if(privateChat&&text&&!/^(\/|.*mr\.?\s*charm)/i.test(text)){
+  if(privateChat&&addressed){
    const draft=await q(env,'SELECT * FROM bot_conversations WHERE telegram_id=?1',id).first();
    if(draft&&['admin_invite','admin_revoke'].includes(draft.state)){
     await q(env,'DELETE FROM bot_conversations WHERE telegram_id=?1',id).run();
     if(now()-draft.updated_at>600)return send(env,id,'This admin action expired. Open Admin tools to start again.');
-    return await inviteCommand(env,id,'Mr Charm '+(draft.state==='admin_invite'?'Invite ':'Revoke ')+text,m,s,u.update_id);
+    return await inviteCommand(env,id,'Mr Charm '+(draft.state==='admin_invite'?'Invite ':'Revoke ')+addressedText(text),m,s,u.update_id);
    }
   }
   if(/^\s*mr\.?\s*charm\s+(?:invites?|revoke)\b/i.test(text))return await inviteCommand(env,id,text,m,s,u.update_id);
   if(cmd.startsWith('answer:')){
    if(!await authorizedMember(env,id,s))return send(env,id,'Member access required. Please contact an Admin.');
    if(await conversation(env,id,'',cb?.data))return;
-  }else if(privateChat&&text&&!/^(\/|.*mr\.?\s*charm)/i.test(text)){if(await conversation(env,id,text,cb?.data))return;}
+  }else if(privateChat&&addressed){if(await conversation(env,id,addressedText(text),cb?.data))return;}
   if(!cb&&cmd==='help'&&addressedText(text)&&!exactCommand(text))return await sendHumor(env,id,pick(UNKNOWN_REPLIES),send);
   await handleCommand(env,id,cmd,s);
  }catch(e){
@@ -320,18 +337,20 @@ export async function webhook(request,env){
 }
 export async function botScheduled(env){
  if(!env.TELEGRAM_BOT_TOKEN)return;
- await cleanExpiredResponses(env);
+ try{await cleanExpiredResponses(env);}catch(e){await event(env,null,'response_cleanup_failed',telegramFailure(e));}
  const s=await settings(env);
- await maintainGroupInvites(env,s.enabled);
- if(s.enabled)await migrateCommandMenus(env,s,telegram);
+ try{await maintainGroupInvites(env,s.enabled);}catch(e){await event(env,null,'group_invite_maintenance_failed',telegramFailure(e));}
+ if(s.enabled){try{await migrateCommandMenus(env,s,telegram);}catch(e){await event(env,null,'command_menu_sync_failed',e.telegramCode?String(e.telegramCode):'network');}}
+ await q(env,"UPDATE bot_jobs SET status='pending',due_at=?1 WHERE kind IN ('join_report','join_report_discovery') AND status='sending' AND due_at<?2",now(),now()-300).run();
  if(!s.enabled)return;
- await queueWebsitePost(env,s);
+ try{await queueWebsitePost(env,s);}catch(e){await event(env,null,'website_queue_failed',telegramFailure(e));}
  for(const job of await rows(env,"SELECT * FROM bot_jobs WHERE status='pending' AND due_at<=?1 ORDER BY id LIMIT 20",now())){
+  if(['join_report','join_report_discovery'].includes(job.kind)){await deliverJoinReport(env,job,send,telegram);continue;}
   const claimed=await q(env,"UPDATE bot_jobs SET status='sending' WHERE id=?1 AND status='pending'",job.id).run();if(!claimed.meta.changes)continue;
   try{const result=job.kind==='delete'?await telegram(env,'deleteMessage',{chat_id:job.chat_id,message_id:job.message_id}):await send(env,job.chat_id,job.body);
    await q(env,"UPDATE bot_jobs SET status='sent',message_id=COALESCE(?1,message_id) WHERE id=?2",result?.message_id||null,job.id).run();
   }catch(e){await q(env,"UPDATE bot_jobs SET status='failed',error=?1 WHERE id=?2",e.message,job.id).run();}
  }
- await runRecurring(env,s,send,telegram);
+ try{await runRecurring(env,s,send,telegram);}catch(e){await event(env,null,'recurring_delivery_failed',telegramFailure(e));}
  await env.DB.batch([q(env,'DELETE FROM bot_updates WHERE updated_at<?1',now()-7*86400),q(env,'DELETE FROM bot_rate WHERE window<?1',Math.floor(now()/60)-60),q(env,'DELETE FROM bot_conversations WHERE updated_at<?1',now()-86400),q(env,"UPDATE bot_jobs SET status='failed',error='Delivery interrupted. Check the group before sending again.' WHERE status='sending' AND due_at<?1",now()-300)]);
 }

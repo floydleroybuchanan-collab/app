@@ -23,7 +23,8 @@ function setup(){
  return {...f,calls,people,invoke,mutations:()=>calls.filter(c=>['unbanChatMember','banChatMember','restrictChatMember'].includes(c.method))};
 }
 test('all exact joke triggers work, punctuation is normalized, unrelated speech is not matched',()=>{
- assert.equal(UNKNOWN_REPLIES.length,25);
+ assert.equal(UNKNOWN_REPLIES.length,225);
+ assert.equal(new Set(UNKNOWN_REPLIES).size,225);
  for(const [key,list] of Object.entries(TRIGGER_REPLIES))assert.ok(list.includes(banterReply('Mr Charm '+key+'!')));
  assert.ok(banterReply('MR. CHARM your gay'));
  assert.equal(banterReply('fuck you'),null);

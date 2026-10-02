@@ -16,7 +16,7 @@ async function setup(mode='automatic'){
   if(method==='createChatInviteLink')result={invite_link:'https://t.me/+test-'+(++next),creates_join_request:true};
   if(method==='getChatMember')result={status:members.get(String(body.user_id))||'left',user:{id:body.user_id,first_name:'Tester'}};
   if(method==='approveChatJoinRequest')members.set(String(body.user_id),'member');
-  if(method==='getChatAdministrators')result=[];
+  if(method==='getChatAdministrators')result=[{status:'administrator',user:{id:777,first_name:'Owner'}}];
   if(method==='sendMessage')result={message_id:++next};
   return Response.json({ok:true,result});
  };
@@ -38,7 +38,7 @@ test('shared Settings link requires approval, is reusable and never restores or 
 });
 
 test('seven independent links; only matching ID can be approved; consumed link revoked; app tokens unchanged until membership update',async()=>{
- const f=await setup(),invites=await Promise.all(Array.from({length:7},(_,n)=>f.create(100+n)));
+ const f=await setup(),invites=await Promise.all(Array.from({length:7},(_,n)=>f.create(100+n)));f.members.set('777','administrator');
  assert.equal(new Set(invites.map(i=>i.invite_link)).size,7);
  for(const c of f.calls.filter(c=>c.method==='createChatInviteLink')){assert.equal(c.body.creates_join_request,true);assert.equal(c.body.member_limit,undefined);assert.ok(c.body.expire_date>NOW());}
  await handleUpdate(f.env,f.join(invites[0],999,1),f.s);
@@ -50,6 +50,8 @@ test('seven independent links; only matching ID can be approved; consumed link r
  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM invites').get().n,0);
  await handleUpdate(f.env,{chat_member:{chat:{id:Number(f.s.group_id)},date:NOW(),old_chat_member:{status:'left'},new_chat_member:{status:'member',user:{id:100,first_name:'Tester'}},invite_link:{invite_link:invites[0].invite_link}}},f.s);
  assert.ok(f.record(invites[0].id).joined_at);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM invites').get().n,1);
+ const memberSetup=f.calls.find(c=>c.method==='sendMessage'&&c.body.ephemeral_message_parameters?.receiver_user_id===100&&/Account setup/.test(c.body.text));assert.ok(memberSetup);assert.match(memberSetup.body.text,/Registration token:/);
+ const adminReport=f.calls.find(c=>c.method==='sendMessage'&&c.body.ephemeral_message_parameters?.receiver_user_id===777&&/New member delivery report/.test(c.body.text));assert.ok(adminReport);assert.match(adminReport.body.text,/Token assigned: Yes/);assert.match(adminReport.body.text,/Account-linking directions included: Yes/);assert.doesNotMatch(adminReport.body.text,/CHM-[A-Z0-9-]+/);
  await handleUpdate(f.env,f.join(invites[0],100,2),f.s);
  assert.equal(f.calls.filter(c=>c.method==='approveChatJoinRequest').length,1);
 });

@@ -43,7 +43,7 @@ export function fixture() {
     }
     return {
       bind: (...v) => prepare(sql,v),
-      _run() { const r=execute("run"); return { meta:{changes:Number(r.changes)} }; },
+      _run() { const r=execute("run"); return { meta:{changes:Number(r.changes),last_row_id:Number(r.lastInsertRowid)} }; },
       async run() { return this._run(); },
       async all() { return {results:execute("all")}; },
       async first() { return execute("get") || null; },

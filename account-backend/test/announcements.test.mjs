@@ -34,7 +34,7 @@ test('private admin wizard checks current rights at every step and publishes onl
  f.env.TELEGRAM_BOT_TOKEN='local';f.env.TELEGRAM_FETCH=async(url,options)=>{const method=url.split('/').pop(),body=JSON.parse(options.body);calls.push({method,body});return Response.json({ok:true,result:method==='getChatMember'?{status:isAdmin?'administrator':'member',user:{id:body.user_id}}:{message_id:calls.length}});};
  const s={enabled:true,group_id:'-100123',bot_username:'TestBot'},user={id:12345,first_name:'Admin'},chat={id:12345,type:'private'};
  const type=text=>handleUpdate(f.env,{message:{from:user,chat,text}},s),press=data=>handleUpdate(f.env,{callback_query:{id:crypto.randomUUID(),from:user,message:{chat},data:'announce:'+data}},s);
- await type('Mr Charm Notify Update');await type('New version ready');await type('Get the new APK in Telegram.');await type('19');await type('https://t.me/Example/123');await press('outdated');await press('now');await press('7');await press('24');await press('yes');
+ await type('Mr Charm Notify Update');await type('Mr Charm New version ready');await type('Mr Charm Get the new APK in Telegram.');await type('Mr Charm 19');await type('Mr Charm https://t.me/Example/123');await press('outdated');await press('now');await press('7');await press('24');await press('yes');
  assert.equal(f.db.prepare('SELECT status FROM app_announcements').get().status,'draft');
  isAdmin=false;await press('publish');assert.equal(f.db.prepare('SELECT status FROM app_announcements').get().status,'draft');
  isAdmin=true;await press('publish');assert.equal(f.db.prepare('SELECT status FROM app_announcements').get().status,'published');

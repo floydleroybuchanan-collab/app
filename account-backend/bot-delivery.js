@@ -4,6 +4,18 @@ import {currentRecurring} from './bot-recurring.js';
 export const RESPONSE_LIFETIME_SECONDS = 600;
 const SEND_METHODS = new Set(['sendMessage','editMessageText','sendRichMessage','sendPhoto','sendDocument','sendVideo','sendAudio','sendAnimation','sendVoice']);
 
+// Classify errors without storing Telegram URLs, tokens, or message contents.
+export function telegramFailure(e){
+ const code=e.telegramCode,description=String(e.description||'').toLowerCase();
+ const reason=code===429?'rate limited':code===401?'bot credential rejected':code===403?'bot blocked or access denied':
+  /not enough rights|administrator|chat_admin_required/.test(description)?'bot permission missing':
+  /user not found|participant|member/.test(description)?'recipient unavailable':
+  /parse|entity|format/.test(description)?'message formatting rejected':
+  /chat not found/.test(description)?'chat unavailable':code>=500?'Telegram service error':
+  /timeout|abort/i.test(e.name||'')?'request timed out':code?'request rejected':'network or delivery error';
+ return (e.telegramMethod?e.telegramMethod+' · ':'')+(code?'Telegram '+code+' · ':'')+reason;
+}
+
 export async function telegramTransport(env,method,body) {
  if(!env.TELEGRAM_BOT_TOKEN)throw Object.assign(new Error('Save TELEGRAM_BOT_TOKEN in Cloudflare first.'),{status:503});
  const response=await (env.TELEGRAM_FETCH||fetch)('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/'+method,{

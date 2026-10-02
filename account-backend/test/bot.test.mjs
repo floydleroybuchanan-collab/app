@@ -38,7 +38,7 @@ test('token only private, membership rechecked, blank optional menus hidden, def
  await handleUpdate(f.env,{message:{chat:{id:-100123456789,type:'supergroup'},from:{id:12345,first_name:'Tester'},text:'Mr.Charm my token'}},configuration);
  const msgs=f.sent.filter(s=>s.method==='sendMessage');assert.ok(msgs.some(s=>s.body.chat_id===configuration.group_id&&s.body.ephemeral_message_parameters?.receiver_user_id===12345&&s.body.text.includes(inv.invite_code)));assert.ok(!msgs.some(s=>!s.body.ephemeral_message_parameters&&s.body.text.includes(inv.invite_code)));
  f.sent.length=0;await handleUpdate(f.env,{message:{chat:{id:12345,type:'private'},from:{id:12345,first_name:'Tester'},text:'/help'}},configuration);
- assert.ok(!JSON.stringify(f.sent).includes('What’s New'));
+ assert.equal(f.sent.length,0);
  f.env.TELEGRAM_FETCH=async()=>Response.json({ok:true,result:{status:'left',user:{id:12345,first_name:'Tester'}}});
  // Run with a capturing rejected membership response.
  const out=[];f.env.TELEGRAM_FETCH=async(url,opt)=>{const b=JSON.parse(opt.body);out.push(b);return Response.json({ok:true,result:url.endsWith('getChatMember')?{status:'left',user:{id:12345,first_name:'Tester'}}:{message_id:1}});};
@@ -54,17 +54,31 @@ test('saved broadcasts do not send until queued, scheduler claims once, cancelle
  assert.equal(f.db.prepare('SELECT status FROM bot_jobs').get().status,'sent');
 });
 test('normal-language recognition and Telegram sized guide parts',()=>{assert.equal(intent('Hey Mr. Charm send me the guide'),'guide');assert.equal(intent('Mr Charm where do I get the app?'),'downloads');assert.equal(intent('Mr.Charm my token'),'token');assert.ok(splitText('a'.repeat(9000)).every(s=>s.length<=3500));});
+test('user text requires Mr Charm at the beginning while callbacks and internal deep links still work',async()=>{
+ const f=setup(),user={id:12345,first_name:'Tester'},privateMessage=text=>({message:{chat:{id:12345,type:'private'},from:user,text}}),groupMessage=text=>({message:{chat:{id:Number(configuration.group_id),type:'supergroup'},from:user,text}});
+ for(const text of ['/help','/status','/admin','/account','/download','help','please Mr Charm help','@TestBot help']){
+  const before=f.sent.length;await handleUpdate(f.env,privateMessage(text),configuration);assert.equal(f.sent.length,before,text);
+ }
+ for(const text of ['ordinary group conversation','hey Mr Charm help','@TestBot help']){
+  const before=f.sent.length;await handleUpdate(f.env,groupMessage(text),configuration);assert.equal(f.sent.length,before,text);
+ }
+ await handleUpdate(f.env,privateMessage('mR. ChArM help'),configuration);assert.match(f.sent.findLast(s=>s.method==='sendMessage').body.text,/Here’s what I can help/);
+ const beforeReply=f.sent.length;await handleUpdate(f.env,{message:{chat:{id:Number(configuration.group_id),type:'supergroup'},from:user,text:'help',reply_to_message:{from:{id:900,is_bot:true,username:'TestBot'}}}},configuration);assert.equal(f.sent.length,beforeReply);
+ const cb={callback_query:{id:'strict-gate-callback',from:user,data:'help',message:{chat:{id:12345,type:'private'}}}};await handleUpdate(f.env,cb,configuration);assert.ok(f.sent.some(s=>s.method==='answerCallbackQuery'&&s.body.callback_query_id==='strict-gate-callback'));
+ const beforeStart=f.sent.length;await handleUpdate(f.env,privateMessage('/start'),configuration);assert.equal(f.sent.length,beforeStart);
+ await handleUpdate(f.env,privateMessage('/start help'),configuration);assert.match(f.sent.findLast(s=>s.method==='sendMessage').body.text,/Here’s what I can help/);
+});
 test('full guide puts a fresh help menu after its two ordered messages and private troubleshooting stores answers',async()=>{
  const f=setup(),user={id:34567,first_name:'Guide Tester'},privateMessage=text=>({message:{chat:{id:34567,type:'private'},from:user,text}});
  await handleUpdate(f.env,privateMessage('Mr. Charm Guide'),configuration);
  const guide=f.sent.filter(s=>s.method==='sendMessage').map(s=>s.body.text);assert.equal(guide.length,3);assert.match(guide[0],/PART 1 OF 2/);assert.match(guide[1],/PART 2 OF 2/);assert.match(guide[2],/Click one of the buttons below/);assert.ok(guide.slice(0,2).every(s=>s.length<=4096));
  const cb=data=>({callback_query:{id:crypto.randomUUID(),from:user,data,message:{chat:{id:34567,type:'private'}}}});
  await handleUpdate(f.env,cb('issue:Black Screen'),configuration);
- await handleUpdate(f.env,privateMessage('Onn box'),configuration);
+ await handleUpdate(f.env,privateMessage('Mr Charm Onn box'),configuration);
  await handleUpdate(f.env,cb('answer:Everything'),configuration);
  await handleUpdate(f.env,cb('answer:Yes'),configuration);
  await handleUpdate(f.env,cb('answer:No'),configuration);
- await handleUpdate(f.env,privateMessage('Black screen on every channel, build 167.'),configuration);
+ await handleUpdate(f.env,privateMessage('Mr Charm Black screen on every channel, build 167.'),configuration);
  const ticket=f.db.prepare('SELECT * FROM bot_support').get();assert.ok(ticket);const detail=JSON.parse(ticket.summary);assert.equal(detail.device,'Onn box');assert.equal(detail.audio,'Yes');assert.equal(detail.scope,'Everything');assert.match(detail.details,/167/);
 });
 test('combined ban revokes unused invitation even if Telegram refuses the ban',async()=>{

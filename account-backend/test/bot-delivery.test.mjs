@@ -88,7 +88,7 @@ test('forged admin buttons are denied and do not appear in normal help',async()=
  const f=setup(),user={id:12345,first_name:'Viewer'},message={chat:{id:12345,type:'private'}};
  await handleUpdate(f.env,{callback_query:{id:'admin-request',from:user,message,data:'admin'}},configuration);
  assert.match(f.calls.findLast(c=>c.method==='sendMessage').body.text,/Only current group admins/);
- await handleUpdate(f.env,{message:{...message,from:user,text:'/help'}},configuration);
+ await handleUpdate(f.env,{message:{...message,from:user,text:'Mr Charm help'}},configuration);
  const help=f.calls.findLast(c=>c.method==='sendMessage').body;
  assert.ok(!JSON.stringify(help.reply_markup).includes('Admin tools'));
  assert.ok(f.calls.filter(c=>c.method==='setMyCommands').every(c=>c.body.commands.every(command=>command.command!=='admin')));
