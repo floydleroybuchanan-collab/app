@@ -262,6 +262,16 @@ export async function handleUpdate(env,u,s){
   const id=String(j.new_chat_member.user.id),live=await telegram(env,'getChatMember',{chat_id:s.group_id,user_id:Number(id)});
   await member(env,live.user,live.status==='restricted'&&live.is_member?'restricted_member':live.status);
   await event(env,id,'membership_changed',live.status);
+  if(isMember(j.old_chat_member)&&!isMember(j.new_chat_member)){
+   const key='departure:'+s.group_id+':'+id+':'+j.date;
+   if(!await q(env,'SELECT value FROM bot_runtime WHERE key=?1',key).first()){
+    const user=j.new_chat_member.user;
+    const name=user.username?'@'+user.username:[user.first_name,user.last_name].filter(Boolean).join(' ')||'Telegram user '+id;
+    const at=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'long',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit',timeZoneName:'short'}).format(new Date(j.date*1000));
+    await send({...env,BOT_PERSISTENT_ANNOUNCEMENT:true},s.group_id,name+" — Bye bitch we didn’t want your ass here anyway you fucking loser! At "+at+" you lost access for being a cunt.");
+    await q(env,'INSERT OR REPLACE INTO bot_runtime(key,value) VALUES(?1,?2)',key,'sent').run();
+   }
+  }
   if(isMember(live)&&!isMember(j.old_chat_member)){
    await q(env,'UPDATE bot_members SET joined_at=?1 WHERE telegram_id=?2',j.date,id).run();
    const onboarding=await q(env,"SELECT * FROM bot_join_requests WHERE group_id=?1 AND telegram_id=?2 AND state='approved' AND approved_at<=?3 AND approved_at>=?3-300",s.group_id,id,j.date).first();
