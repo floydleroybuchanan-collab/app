@@ -1,0 +1,24 @@
+name: Read-only playlist and EPG health probe
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [codex/feed-health-probe]
+    paths: [.github/workflows/feed-health-probe.yml, operations/feed-health/runner-feed-check.py]
+permissions:
+  contents: read
+concurrency:
+  group: feed-health-probe
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Read configured feeds without modifying service data
+        env:
+          M3U_URL: ${{ secrets.M3U_URL }}
+          EPG_URL: ${{ secrets.EPG_URL }}
+          M3U_URL_2: ${{ secrets.M3U_URL_2 }}
+          EPG_URL_2: ${{ secrets.EPG_URL_2 }}
+        run: python3 operations/feed-health/runner-feed-check.py
