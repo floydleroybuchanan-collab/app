@@ -1,5 +1,5 @@
 """Read-only feed checks. Credentials are environment-only; output contains no URLs."""
-import os, json, time, hashlib, urllib.request, urllib.error, gzip, io, tempfile
+import os, json, time, hashlib, urllib.request, urllib.error, urllib.parse, gzip, io, tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
@@ -28,9 +28,12 @@ def inspect_file(file, kind):
                 match = re.search(r'tvg-id=["\']([^"\']+)', line)
                 if match: ids.add(match[1])
             elif line.startswith(('http://', 'https://')): streams += 1
+        epg_urls=[]
+        for match in re.finditer(r'(?:url-tvg|x-tvg-url|tvg-url)=["\']([^"\']+)', first, re.I):
+            epg_urls.extend(u.strip() for u in match[1].split(',') if u.strip())
         return {'status': 'readable' if entries and streams else 'empty_playlist',
                 'readable': bool(entries and streams), 'channels': entries,
-                'http_stream_entries': streams, 'unique_tvg_ids': len(ids), '_ids': ids}
+                'http_stream_entries': streams, 'unique_tvg_ids': len(ids), '_ids': ids, '_epg_urls':epg_urls}
     channels = set(); programmes = current = future = expired = invalid = 0
     earliest = latest = None; root = None
     for event, element in ET.iterparse(file, events=('start', 'end')):
@@ -79,6 +82,11 @@ def probe(url, kind):
                 result.update(inspect_file(file, kind))
     except urllib.error.HTTPError as error:
         result.update(status='access_denied' if error.code in (401,403) else 'http_error', http_status=error.code)
+        import re
+        text=re.sub('<[^>]*>', ' ', error.read(16384).decode('utf-8','replace'))
+        match=re.search(r'Error\s+(1\d{3})\b',text,re.I)
+        result['cloudflare_error']=match[1] if match else None
+        result['ip_denied']=bool(re.search(r'(?:banned|blocked) your IP|IP address.{0,30}(?:banned|blocked)',text,re.I))
         error.close()
     except ET.ParseError: result.update(status='invalid_xml', readable=False)
     except OverflowError: result['status'] = 'size_limit_exceeded'
@@ -91,10 +99,20 @@ def main():
     output = {'checked_at': datetime.now(timezone.utc).isoformat(), 'vantage': 'GitHub Actions', 'sources': []}
     for label, suffix in [('primary',''),('secondary','_2')]:
         playlist = probe(os.getenv('M3U_URL'+suffix, ''), 'playlist')
-        epg = probe(os.getenv('EPG_URL'+suffix, ''), 'epg')
+        epg_url=os.getenv('EPG_URL'+suffix, '')
+        epg = probe(epg_url, 'epg')
+        embedded=playlist.pop('_epg_urls',[])
+        alternatives=[]
+        if not epg.get('readable') and epg_url.startswith('http://'):
+            candidate=probe('https://'+epg_url[7:],'epg');candidate.pop('_ids',None);alternatives.append({'method':'same_host_https','result':candidate})
+        known_hosts={urllib.parse.urlsplit(epg_url).hostname,urllib.parse.urlsplit(os.getenv('M3U_URL'+suffix,'')).hostname}
+        for url in embedded[:2]:
+            if url!=epg_url and urllib.parse.urlsplit(url).hostname in known_hosts:
+                candidate=probe(url,'epg');candidate.pop('_ids',None);alternatives.append({'method':'playlist_embedded_same_host_guide','result':candidate})
         playlist_ids, epg_ids = playlist.pop('_ids', set()), epg.pop('_ids', set())
         output['sources'].append({'source': label, 'playlist': playlist, 'epg': epg,
-           'matching_tvg_ids': len(playlist_ids & epg_ids), 'playlist_tvg_ids_missing_from_epg': len(playlist_ids - epg_ids),
+           'matching_tvg_ids': len(playlist_ids & epg_ids) if epg.get('readable') else None, 'playlist_tvg_ids_missing_from_epg': len(playlist_ids - epg_ids) if epg.get('readable') else None,
+           'embedded_guide_matches_configured':epg_url in embedded,'embedded_guide_count':len(embedded),'alternatives':alternatives,
            'playback': 'not tested; feed readability does not prove individual streams play'})
     with open('feed-health-result.json','w',encoding='utf-8') as file: json.dump(output,file,indent=2)
     print(json.dumps(output,indent=2))
