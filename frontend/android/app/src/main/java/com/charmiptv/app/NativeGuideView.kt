@@ -218,6 +218,17 @@ class NativeGuideView(context: Context) : View(context) {
   fun setWindowStart(start: Double) = setWindow(start, windowEndMs.toDouble())
   fun setWindowEnd(end: Double) = setWindow(windowStartMs.toDouble(), end)
 
+  private var overlayMode = false
+  var rightBoundaryEnabled = false
+  fun setOverlayMode(value: Boolean) {
+    overlayMode = value
+    background.alpha = if (value) 0 else 255
+    header.alpha = if (value) 205 else 255
+    rowSurface.alpha = if (value) 100 else 255
+    cell.alpha = if (value) 130 else 255
+    invalidate()
+  }
+
   fun setClock24h(value: Boolean) {
     if (value == use24HourClock) return
     use24HourClock = value
@@ -444,6 +455,10 @@ class NativeGuideView(context: Context) : View(context) {
 
   override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
     if (!enabled) return super.onKeyDown(keyCode, event)
+    if (rightBoundaryEnabled && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+      if (event.repeatCount == 0) emit("rightBoundary", null)
+      return true
+    }
     if (rows.isEmpty()) {
       if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { emit("topLeftBoundary", null); return true }
       return super.onKeyDown(keyCode, event)
@@ -653,6 +668,7 @@ class NativeGuideView(context: Context) : View(context) {
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
       channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(119, 74, 219) else Color.rgb(26, 22, 38)
+      channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected)) 205 else 255
       canvas.drawRect(0f, top, channelWidth, top + rowHeight - density, channel)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)

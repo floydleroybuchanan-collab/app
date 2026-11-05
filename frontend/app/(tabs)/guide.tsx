@@ -31,6 +31,9 @@ import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
 import { PurpleGuideGroupDrawer } from "@/src/components/PurpleGuideGroupDrawer";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { GuidePreviewRail } from "@/src/components/GuidePreviewRail";
+import { GuideEpgAssignDrawer } from "@/src/components/GuideEpgAssignDrawer";
+import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
+import { guidePreviewLayout } from "@/src/core/guidePreviewLayout";
 import { EpgProgressBar } from "@/src/components/EpgProgressBar";
 import { Channel, Program } from "@/src/api";
 import { useStore } from "@/src/store";
@@ -104,6 +107,14 @@ function isPreviewProtocolSupported(channel: Channel | null | undefined): boolea
  * canvas and screen shell therefore stay render-stable while the cursor moves;
  * metadata still updates synchronously and decoder tuning remains delayed.
  */
+function GuideAssignmentPane({ channelById, fallbackId, ...props }: {
+  channelById: (id: string) => Channel | undefined | null;
+  fallbackId: string;
+} & Omit<React.ComponentProps<typeof GuideEpgAssignDrawer>, "channel">) {
+  const selection = useGuideSelection();
+  return <GuideEpgAssignDrawer {...props} channel={channelById(selection.channelId || fallbackId) || null} />;
+}
+
 function GuideSelectionPreview({
   width,
   channelById,
@@ -174,6 +185,7 @@ function GuideSelectionPreview({
     };
   }, [channel, liveCurrent, liveNext, programs, selection]);
   const unsupportedPreviewProtocol = !isPreviewProtocolSupported(channel);
+  const previewLayout = guidePreviewLayout(width);
   const previewVisible =
     !hidePreview &&
     !unsupportedPreviewProtocol &&
@@ -208,7 +220,7 @@ function GuideSelectionPreview({
         guideFocusTag={guideFocusTag}
       />
       {!hidePreview && unsupportedPreviewProtocol ? (
-        <View pointerEvents="none" style={styles.unsupportedPreview} testID="guide-preview-unsupported-protocol">
+        <View pointerEvents="none" style={[styles.unsupportedPreview, { width: previewLayout.previewWidth, height: previewLayout.previewHeight }]} testID="guide-preview-unsupported-protocol">
           <Ionicons name="warning-outline" size={22} color={tvColors.purpleSoft} />
           <Text style={styles.unsupportedPreviewTitle}>Unsupported stream protocol</Text>
           <Text style={styles.unsupportedPreviewText}>This build uses Media3. Ask your provider for an HTTP(S) HLS, DASH, or MPEG-TS URL.</Text>
@@ -227,7 +239,29 @@ function PurpleGuideScreenContent() {
   const isFocused = useIsFocused();
   const { drawerOpen, openDrawer, closeDrawer, focusIconRail } = usePurpleTvDrawer();
   const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
+  const [groupDrawerMounted, setGroupDrawerMounted] = useState(false);
+  useEffect(() => {
+    if (groupDrawerOpen) { setGroupDrawerMounted(true); return; }
+    const timer = setTimeout(() => setGroupDrawerMounted(false), 350);
+    return () => clearTimeout(timer);
+  }, [groupDrawerOpen]);
+  const [guideSurfaceWidth, setGuideSurfaceWidth] = useState<number | null>(null);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const [assignChannelId, setAssignChannelId] = useState<string | null>(null);
+  const [assignFocused, setAssignFocused] = useState(false);
+  useEffect(() => {
+    if (!isFocused) return;
+    const listener = DeviceEventEmitter.addListener("CharmGuideAssignEpg", (value: { channelId?: string }) => {
+      if (!value?.channelId) return;
+      closeDrawer({ force: true });
+      setGroupDrawerOpen(false);
+      setPreviewActionsFocused(false);
+      resetGuideSelection(value.channelId);
+      setAssignChannelId(value.channelId);
+      setAssignFocused(true);
+    });
+    return () => listener.remove();
+  }, [closeDrawer, isFocused]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   useFocusEffect(
     useCallback(() => {
@@ -313,6 +347,15 @@ function PurpleGuideScreenContent() {
   const [previewFocusRequestToken, setPreviewFocusRequestToken] = useState(0);
   const [nativeGuideFocusTag, setNativeGuideFocusTag] = useState<number | null>(null);
   const [resetToken, setResetToken] = useState(0);
+  const assignmentFocusRetry = useRef<(() => void) | null>(null);
+  useEffect(() => () => assignmentFocusRetry.current?.(), []);
+  const returnFromAssignment = useCallback(() => {
+    setAssignFocused(false);
+    assignmentFocusRetry.current?.();
+    assignmentFocusRetry.current = requestNativeFocusWithRetry(nativeGuideFocusTag);
+  }, [nativeGuideFocusTag]);
+  const closeAssignment = useCallback(() => { setAssignChannelId(null); returnFromAssignment(); }, [returnFromAssignment]);
+  const reloadAssignedGuide = useCallback(() => { setResetToken((value) => value + 1); }, []);
   const [restoreTimeMs, setRestoreTimeMs] = useState<number | null>(null);
   const [jumpFilterBypassId, setJumpFilterBypassId] = useState<string | null>(null);
   const [pinPromptGroup, setPinPromptGroup] = useState<string | null>(null);
@@ -406,6 +449,7 @@ function PurpleGuideScreenContent() {
 
   useTvBackHandler(
     useCallback(() => {
+      if (assignChannelId) { setAssignFocused(false); setAssignChannelId(null); return true; }
       if (drawerOpen || activeProgram) return false;
       if (groupDrawerOpen) {
         setGroupDrawerOpen(false);
@@ -414,7 +458,7 @@ function PurpleGuideScreenContent() {
       }
       setGroupDrawerOpen(true);
       return true;
-    }, [activeProgram, drawerOpen, groupDrawerOpen, openDrawer]),
+    }, [activeProgram, assignChannelId, drawerOpen, groupDrawerOpen, openDrawer]),
     !pinPromptGroup,
   );
 
@@ -443,9 +487,10 @@ function PurpleGuideScreenContent() {
       return;
     }
 
-    if (quickActionsOpen || activeProgram || pinPromptGroup) {
+    if (quickActionsOpen || activeProgram || pinPromptGroup || assignFocused) {
       setGuideNavigationActive(false);
     }
+    if (assignFocused) return;
 
     if (pinPromptGroup) {
       pinModalOwnedRef.current = true;
@@ -457,7 +502,7 @@ function PurpleGuideScreenContent() {
       setRemoteContext("guide");
       setGuideNavigationActive(true);
     }
-  }, [activeProgram, drawerOpen, groupDrawerOpen, isFocused, pinPromptGroup, quickActionsOpen]);
+  }, [activeProgram, assignFocused, drawerOpen, groupDrawerOpen, isFocused, pinPromptGroup, quickActionsOpen]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -772,8 +817,8 @@ function PurpleGuideScreenContent() {
   }, [channelById, safePreviewMode]);
 
   const guideTopPanelWidth = useMemo(
-    () => Math.max(0, screenWidth - 24),
-    [screenWidth],
+    () => Math.max(0, guideSurfaceWidth ?? screenWidth - 24),
+    [guideSurfaceWidth, screenWidth],
   );
   const armPreviewForChannel = useCallback(
     (channel: Channel) => {
@@ -1049,20 +1094,20 @@ function PurpleGuideScreenContent() {
     <PurpleTvShell
       active="/guide"
       watchingChannelId={lastChannelId}
-      secondaryDrawer={groupDrawerOpen ? (
+      secondaryDrawer={groupDrawerMounted ? (
         <PurpleGuideGroupDrawer
-          open
+          open={groupDrawerOpen}
+          interactive={groupDrawerOpen && !drawerOpen}
           groups={playlistDrawerRows}
           onCloseToGuide={() => setGroupDrawerOpen(false)}
           onFocusIconRail={focusIconRail}
           onOpenMainDrawer={() => {
-            setGroupDrawerOpen(false);
             openDrawer();
           }}
         />
       ) : null}
       onIconRailNavigate={() => setGroupDrawerOpen(false)}
-      onIconRailOpenMainDrawer={() => setGroupDrawerOpen(false)}
+      onIconRailOpenMainDrawer={() => setGroupDrawerOpen(true)}
       footerAction={{
         label: "Guide Sources",
         icon: "refresh-outline",
@@ -1070,7 +1115,7 @@ function PurpleGuideScreenContent() {
         testID: "guide-open-sources",
       }}
     >
-      <View style={styles.page}>
+      <View style={{ flex: 1, flexDirection: "row" }}><View style={styles.page}>
         <EpgProgressBar />
         {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
           <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>
@@ -1106,7 +1151,10 @@ function PurpleGuideScreenContent() {
             </Pressable>
           </View>
         ) : (
-          <View style={styles.body}>
+          <View style={styles.body} onLayout={(event) => {
+            const width = Math.max(0, event.nativeEvent.layout.width);
+            setGuideSurfaceWidth((previous) => previous != null && Math.abs(previous - width) < 1 ? previous : width);
+          }}>
             <GuideSelectionPreview
               width={guideTopPanelWidth}
               channelById={filteredChannelById}
@@ -1119,7 +1167,7 @@ function PurpleGuideScreenContent() {
               hidePreview={hidePreview}
               muted={mutePreview}
               onToggleMute={() => setMutePreview(!mutePreview)}
-              previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
+              previewId={safePreviewMode === "off" || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
               previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
@@ -1141,7 +1189,7 @@ function PurpleGuideScreenContent() {
                 channels={filtered}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
-                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}
+                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused && !assignFocused}
                 restoreChannelId={guideSessionChannelId}
                 restoreTimeMs={restoreTimeMs}
                 reloadGeneration={resetToken}
@@ -1155,6 +1203,7 @@ function PurpleGuideScreenContent() {
                 onNativeGuideTag={setNativeGuideFocusTag}
                 onLeftBoundary={onGuideLeftBoundary}
                 onUpBoundary={onGuideUpBoundary}
+                onRightBoundary={assignChannelId ? () => setAssignFocused(true) : undefined}
               />
             </View>
           </View>
@@ -1195,13 +1244,19 @@ function PurpleGuideScreenContent() {
           </View>
         ) : null}
       </View>
+      {assignChannelId ? <GuideAssignmentPane channelById={channelById} fallbackId={assignChannelId}
+        interactive={assignFocused} onInteractiveChange={setAssignFocused}
+        onReturnToGuide={returnFromAssignment}
+        onAssigned={reloadAssignedGuide}
+        onClose={closeAssignment} /> : null}
+      </View>
     </PurpleTvShell>
   );
 }
 
 const styles = StyleSheet.create({
   previewRailContainer: { position: "relative", flexShrink: 0 },
-  unsupportedPreview: { position: "absolute", left: 7, top: 7, bottom: 7, width: 278, justifyContent: "center", alignItems: "center", gap: 7, padding: 12, backgroundColor: "#05050B" },
+  unsupportedPreview: { position: "absolute", left: 0, top: 0, justifyContent: "center", alignItems: "center", gap: 7, padding: 12, backgroundColor: "#05050B" },
   unsupportedPreviewTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
   unsupportedPreviewText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, textAlign: "center" },
   page: { flex: 1, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 3 },

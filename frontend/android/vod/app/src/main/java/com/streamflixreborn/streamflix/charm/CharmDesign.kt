@@ -26,10 +26,10 @@ import com.streamflixreborn.streamflix.R
 
 /** Shared app-owned chrome. Playback surfaces and focus listeners remain owned by their screens. */
 object CharmDesign {
-    private const val PANEL = 0xFF10101E.toInt()
-    private const val RAISED = 0xFF151427.toInt()
-    private const val PURPLE = 0xFF7C3AED.toInt()
-    private const val BORDER = 0xFF3B3560.toInt()
+    private const val PANEL = 0xFF191321.toInt()
+    private const val RAISED = 0xFF15101E.toInt()
+    private const val PURPLE = 0xFF963BE0.toInt()
+    private const val BORDER = 0xFF493550.toInt()
     private var regular: Typeface? = null
     private var semibold: Typeface? = null
     private fun dp(view: View, value: Int) = (value * view.resources.displayMetrics.density).toInt()
@@ -86,7 +86,7 @@ object CharmDesign {
             if (view is TextView) {
                 view.typeface = if (view.typeface?.isBold == true || view is Button || name.contains("title") || name.contains("header")) semibold else regular
                 if (view.currentTextColor == Color.BLACK) view.setTextColor(Color.WHITE)
-                if (name.contains("title") || name.contains("header")) view.setTextColor(0xFFECEBF2.toInt())
+                if (name.contains("title") || name.contains("header")) view.setTextColor(0xFFF2EEF7.toInt())
                 if (view is EditText) {
                     view.backgroundTintList = ColorStateList.valueOf(PURPLE)
                     view.setTextColor(Color.WHITE)

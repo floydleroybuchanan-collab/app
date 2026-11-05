@@ -15,6 +15,7 @@ import {
 } from "@/src/utils/guidePreviewFocus";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { fmtTime, progressPct } from "@/src/utils/time";
+import { guidePreviewLayout } from "@/src/core/guidePreviewLayout";
 
 type Props = {
   width: number;
@@ -88,8 +89,11 @@ export function GuidePreviewRail({
   const hideFocus = usePreviewFocusNode("hide");
   const showFocus = usePreviewFocusNode("show-preview");
   const [preferPlayFocus, setPreferPlayFocus] = useState(false);
+  const [actionsVisible, setActionsVisible] = useState(false);
+  const layout = guidePreviewLayout(width);
   useEffect(() => {
     if (focusRequestToken <= 0) return;
+    setActionsVisible(true);
     setPreferPlayFocus(true);
     return () => setPreferPlayFocus(false);
   }, [focusRequestToken]);
@@ -106,10 +110,10 @@ export function GuidePreviewRail({
   const about = current?.desc || "Focus a channel to preview it and read the current program.";
 
   return (
-    <View style={[styles.panel, { width }]} testID="guide-preview-rail">
-      <View style={styles.previewColumn}>
+    <View style={[styles.panel, { width, height: layout.previewHeight }]} testID="guide-preview-rail">
+      <View style={[styles.previewColumn, { width: layout.previewWidth }]}>
         {!hidePreview ? (
-          <View style={styles.preview}>
+          <View style={[styles.preview, { height: layout.previewHeight }]}>
             {previewVisible && channel?.url ? (
               <ErrorBoundary
                 key={`preview-boundary-${channel.id}-${previewEpoch}`}
@@ -166,9 +170,7 @@ export function GuidePreviewRail({
             <Text style={styles.hiddenPreviewText}>Show preview</Text>
           </Pressable>
         )}
-      </View>
-
-      <FocusGuide style={styles.actionGrid} onFocusCapture={() => setPreferPlayFocus(false)} onFocusLost={() => onActionsFocusChange(false)}>
+      <FocusGuide style={[styles.actionGrid, !actionsVisible && styles.actionsHidden]} onFocusCapture={() => { setActionsVisible(true); setPreferPlayFocus(false); }} onFocusLost={() => { setActionsVisible(false); onActionsFocusChange(false); }}>
         <View style={styles.actionColumn}>
           <Pressable
             ref={playFocus.setRef}
@@ -204,6 +206,7 @@ export function GuidePreviewRail({
           </Pressable>
         </View>
       </FocusGuide>
+      </View>
 
       <View style={styles.copy}>
         <Text numberOfLines={1} style={styles.channelName}>{channel ? `${showChannelNumbers && channelNumber ? `${channelNumber}  ` : ""}${channel.name}` : "Select a channel"}</Text>
@@ -214,17 +217,16 @@ export function GuidePreviewRail({
         </View>
         <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
         {next?.title ? <Text numberOfLines={1} style={styles.nextTitle}>Next · {next.title}</Text> : null}
-        <Text style={styles.descLabel}>ABOUT</Text>
-        <Text accessibilityRole="text" accessibilityLabel={about} style={styles.description} numberOfLines={5}>{about}</Text>
+        <Text accessibilityRole="text" accessibilityLabel={about} style={styles.description} numberOfLines={4}>{about}</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: { height: 174, flexShrink: 0, flexDirection: "row", alignItems: "stretch", backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, overflow: "visible" },
-  previewColumn: { width: 292, flexShrink: 0, padding: 7, justifyContent: "center", borderRightWidth: 1, borderRightColor: tvColors.line },
-  preview: { width: "100%", aspectRatio: 16 / 9, maxHeight: 158, flexShrink: 0, backgroundColor: "#05050B", overflow: "visible" },
+  panel: { flexShrink: 0, flexDirection: "row", alignItems: "stretch", overflow: "hidden" },
+  previewColumn: { flexShrink: 0, position: "relative" },
+  preview: { width: "100%", aspectRatio: 16 / 9, flexShrink: 0, backgroundColor: "#05050B", overflow: "hidden" },
   fallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep, gap: 6, paddingHorizontal: 8 },
   fallbackHint: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, textAlign: "center" },
   liveTag: { position: "absolute", left: 6, bottom: 6, backgroundColor: "rgba(124,58,237,0.92)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
@@ -233,9 +235,12 @@ const styles = StyleSheet.create({
   codecText: { color: "#fff", fontFamily: fonts.medium, fontSize: 7 },
   hiddenPreview: { flex: 1, minHeight: 80, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 2, borderColor: "transparent", borderRadius: 5 },
   hiddenPreviewText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
-  actionGrid: { width: 138, flexShrink: 0, padding: 7, borderRightWidth: 1, borderRightColor: tvColors.line },
-  actionColumn: { flex: 1, minWidth: 0, gap: 3 },
-  copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 9 },
+  actionGrid: { position: "absolute", left: 4, right: 4, bottom: 4, height: 66, padding: 4, backgroundColor: "rgba(12,10,18,0.94)", borderRadius: radius.sm, zIndex: 5 },
+  // Keep native action nodes mounted for the Guide's Up-boundary focus handoff.
+  // They occupy no extra layout row/column and become visible on actual focus.
+  actionsHidden: { opacity: 0 },
+  actionColumn: { flex: 1, minWidth: 0, flexDirection: "row", flexWrap: "wrap", gap: 3 },
+  copy: { flex: 1, minWidth: 0, paddingLeft: 12, paddingRight: 4, paddingVertical: 2 },
   channelName: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 10 },
   programTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 17, lineHeight: 21, marginTop: 3 },
   nowNextRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
@@ -245,10 +250,10 @@ const styles = StyleSheet.create({
   progressFill: { height: 4, backgroundColor: tvColors.purpleBright },
   nextTitle: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9, marginTop: 5 },
   descLabel: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 0.7, marginTop: 7, marginBottom: 3 },
-  description: { color: "rgba(255,255,255,0.86)", fontFamily: fonts.regular, fontSize: 9.5, lineHeight: 13 },
-  watchButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 4 },
+  description: { color: "rgba(255,255,255,0.86)", fontFamily: fonts.regular, fontSize: 9.5, lineHeight: 13, marginTop: 7 },
+  watchButton: { width: "31%", flexGrow: 1, minWidth: 0, minHeight: 26, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 4 },
   watchText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 7.5 },
-  secondaryButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 3 },
+  secondaryButton: { width: "31%", flexGrow: 1, minWidth: 0, minHeight: 26, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 3 },
   secondaryText: { color: "#fff", fontFamily: fonts.medium, fontSize: 7.2 },
   disabledButton: { opacity: 0.45 },
   focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },

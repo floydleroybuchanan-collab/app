@@ -1,8 +1,7 @@
 import { useStore } from "@/src/store";
 import { mediaLibraryPreferences } from "@/src/core/mediaLibrary";
-import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { useCallback, useRef, useState } from "react";
-import { NativeModules, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, NativeModules, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
@@ -11,7 +10,6 @@ import { useDonation } from "@/src/components/DonationDialog";
 
 /** The host route blurs Live TV before launching the internal native VOD screen. */
 export default function VideoOnDemandScreen() {
-  const { width, height } = useWindowDimensions();
   const { deviceLayoutMode } = useStore();
   const router = useRouter();
   const { section } = useLocalSearchParams<{ section?: string }>();
@@ -31,14 +29,15 @@ export default function VideoOnDemandScreen() {
       closeDrawer({ force: true });
       // Acknowledge decoder release instead of racing a second player against Live TV.
       await stopAllPlaybackSessions("superseded");
-      if (Platform.OS !== "android" || !NativeModules.CharmVod?.open) {
-        throw new Error("Video OnDemand is available in the experimental Android APK.");
+      if (Platform.OS !== "android" || !NativeModules.CharmVod?.openAdaptive) {
+        throw new Error("Video OnDemand is available in the Android app.");
       }
       const preferences = await mediaLibraryPreferences();
       const route = await NativeModules.CharmVod.openAdaptive(deviceLayoutMode, section || "home", JSON.stringify(preferences));
-      if (route === "medialab:drawer") openDrawer({ focusTop: true });
+      if (route === "medialab:drawer") { router.replace("/"); openDrawer({ focusTop: true }); }
       else if (route === "medialab:donate") showDonation(() => void openVod());
       else if (route === "/settings" || route === "/guide" || route === "/favorites" || route === "/") router.replace(route);
+      else router.replace("/");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
     } finally {
@@ -57,25 +56,23 @@ export default function VideoOnDemandScreen() {
 
   return (
     <PurpleTvShell active="/vod">
-      <View style={styles.content}><MediaLabBackdrop />
-        <MediaLabArt width={Math.min(width - 56, height * .75, 600)} />
-        <Text style={styles.title}>Video OnDemand</Text>
-        <Text style={styles.subtitle}>{opening ? "Opening your VOD library…" : "Movies, series, search, favorites and continue watching."}</Text>
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        <View style={{ flexDirection: width > 800 ? "row" : "column", gap: 12 }}>
-        <Pressable disabled={opening} hasTVPreferredFocus={!opening} onPress={() => void openVod()} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
-          <Text style={styles.label}>{opening ? "Opening…" : "Open Video OnDemand"}</Text>
-        </Pressable>
-        <Pressable onPress={() => openDrawer({ focusTop: true })} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
-          <Text style={styles.label}>Charming MediaLab TV</Text>
-        </Pressable></View>
+      <View style={styles.content} testID="vod-handoff">
+        {!error ? <ActivityIndicator color={tvColors.focus} accessibilityLabel="Opening Video OnDemand" /> : <>
+          <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+          <Pressable disabled={opening} hasTVPreferredFocus={!opening} onPress={() => void openVod()} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
+            <Text style={styles.label}>Try again</Text>
+          </Pressable>
+          <Pressable onPress={() => { router.replace("/"); openDrawer({ focusTop: true }); }} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
+            <Text style={styles.label}>Back to MediaLab</Text>
+          </Pressable>
+        </>}
       </View>
     </PurpleTvShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, justifyContent: "center", alignItems: "center", padding: 28, gap: 12 },
+  content: { flex: 1, justifyContent: "center", alignItems: "center", padding: 28, gap: 12, backgroundColor: tvColors.canvas },
   eyebrow: { color: tvColors.purpleSoft, fontSize: 14, letterSpacing: 3 },
   title: { color: tvColors.text, fontSize: 36, fontWeight: "700" },
   subtitle: { color: tvColors.textMuted, fontSize: 17 },

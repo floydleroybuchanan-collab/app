@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { DonationButton } from "./DonationDialog";
 
 import { useAuth } from "@/src/auth/AuthContext";
+import { forgetRememberedLogin, readRememberedLogin } from "@/src/auth/rememberedLogin";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { setGuideNavigationActive, setRemoteContext, setPointerActive } from "@/src/utils/tvRemote";
 
@@ -32,6 +33,8 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberLogin, setRememberLogin] = useState(false);
+  const [loginReady, setLoginReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -39,6 +42,31 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [securityScreen,setSecurityScreen]=useState<SecurityScreen|null>(null);
+
+  useEffect(() => {
+    if (status !== "signed_out" || mode !== "login") return;
+    let active = true;
+    setLoginReady(false);
+    void readRememberedLogin().then(saved => {
+      if (!active) return;
+      setUsername(saved?.username || "");
+      setPassword(saved?.password || "");
+      setShowPassword(false);
+      setRememberLogin(!!saved);
+      setLoginReady(true);
+    });
+    return () => { active = false; };
+  }, [status, mode]);
+
+  const forgetLogin = useCallback(async () => {
+    if (busy) return;
+    if (!rememberLogin) { setRememberLogin(true); return; }
+    setBusy(true);
+    try {
+      if (await forgetRememberedLogin()) { setRememberLogin(false); setError(null); }
+      else setError("Could not remove the saved login. Please try again.");
+    } finally { setBusy(false); }
+  }, [busy, rememberLogin]);
 
   const entryFocus = useTVFocusEntry(status !== "signed_in" && status !== "restoring" && !busy && !securityScreen, status + ":" + mode);
 
@@ -51,20 +79,20 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 
   const submit = useCallback(async () => {
     const cleanUsername = username.trim();
-    if (!cleanUsername || !password || busy) {
+    if (!loginReady || !cleanUsername || !password || busy) {
       if (!cleanUsername || !password) setError("Enter your username and password.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const message = await signIn(cleanUsername, password);
+      const message = await signIn(cleanUsername, password, rememberLogin);
       if (message) setError(message);
       else setPassword("");
     } finally {
       setBusy(false);
     }
-  }, [busy, password, signIn, username]);
+  }, [busy, loginReady, password, rememberLogin, signIn, username]);
 
   const submitRegistration = useCallback(async () => {
     if (busy) return;
@@ -205,7 +233,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
         <TextInput
           value={username}
           onChangeText={setUsername}
-          editable={!busy}
+          editable={!busy && (mode !== "login" || loginReady)}
           autoCapitalize="none"
           autoCorrect={false}
           textContentType="username"
@@ -245,7 +273,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
         <TextInput
           value={password}
           onChangeText={setPassword}
-          editable={!busy}
+          editable={!busy && (mode !== "login" || loginReady)}
           secureTextEntry={!showPassword}
           textContentType="password"
           autoComplete="password"
@@ -288,12 +316,22 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           </>
         ) : null}
 
+        {mode === "login" && <Pressable
+          accessibilityRole="checkbox" accessibilityLabel="Remember login on this device"
+          accessibilityState={{ checked: rememberLogin, disabled: busy || !loginReady }}
+          disabled={busy || !loginReady} onPress={() => void forgetLogin()}
+          testID="account-remember-login"
+          style={({ focused }) => [styles.secondaryButton, focused && styles.focused]}
+        >
+          <Ionicons name={rememberLogin ? "checkbox-outline" : "square-outline"} size={20} color="#fff" />
+          <Text style={styles.secondaryButtonText}>Remember login on this device</Text>
+        </Pressable>}
         {error || notice ? <Text style={styles.error}>{error || notice}</Text> : null}
 
         <Pressable
           ref={entryFocus.entryRef}
           focusable={!busy}
-          disabled={busy}
+          disabled={busy || (mode === "login" && !loginReady)}
           onPress={() => void (mode === "login" ? submit() : submitRegistration())}
           style={({ focused }: any) => [styles.primaryButton, busy && styles.disabled, focused && styles.focused]}
           testID="account-sign-in"
@@ -313,7 +351,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
             testID="account-request-access" style={({focused})=>[styles.secondaryButton,styles.optionButton,focused&&styles.focused]}>
             <Text style={styles.secondaryButtonText}>Request app access</Text>
           </Pressable>}
-          <Pressable disabled={busy} onPress={() => { setError(null); setShowPassword(false); setMode(current => current === "login" ? "register" : "login"); }}
+          <Pressable disabled={busy} onPress={() => { setError(null); setPassword(""); setConfirmPassword(""); setShowPassword(false); setMode(current => current === "login" ? "register" : "login"); }}
             testID="account-switch-mode" style={({focused})=>[styles.secondaryButton,styles.optionButton,focused&&styles.focused]}>
             <Text style={styles.secondaryButtonText}>{mode === "login" ? "I have an invitation" : "Return to sign in"}</Text>
           </Pressable>

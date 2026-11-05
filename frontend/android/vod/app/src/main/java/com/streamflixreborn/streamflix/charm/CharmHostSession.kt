@@ -26,6 +26,8 @@ object CharmHostSession {
     fun leave(activity: Activity, route: String) {
         activity.setResult(Activity.RESULT_OK, Intent().putExtra("medialab.route", route))
         activity.finish()
+        @Suppress("DEPRECATION")
+        activity.overridePendingTransition(0, 0)
     }
     fun configure(activity: FragmentActivity, nav: NavController, restored: Boolean) {
         if (!embedded(activity)) return

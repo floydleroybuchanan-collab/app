@@ -25,7 +25,8 @@ test("long OK is owned by contextual quick actions, not the legacy Favorite shor
 
 test("quick actions expose Favorite and per-channel custom EPG assignment", async () => {
   const overlay = await text("src/components/TvQuickActionsOverlay.tsx");
-  assert.match(overlay, /Assign custom EPG/);
+  assert.match(overlay, /label="Assign EPG"/);
+  assert.match(overlay, /CharmGuideAssignEpg/);
   assert.match(overlay, /Use automatic EPG/);
   assert.match(overlay, /Add Favorite/);
   assert.match(overlay, /setNativeGuideChannelBinding/);

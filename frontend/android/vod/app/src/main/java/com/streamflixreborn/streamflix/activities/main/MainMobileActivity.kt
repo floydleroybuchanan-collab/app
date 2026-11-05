@@ -104,6 +104,10 @@ class MainMobileActivity : FragmentActivity() {
             CharmHostSession.save(this, state)
         }
         super.finish()
+        if (CharmHostSession.embedded(this)) {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
     }
 
     override fun attachBaseContext(newBase: android.content.Context) {
@@ -112,7 +116,8 @@ class MainMobileActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val restoredState = savedInstanceState ?: CharmHostSession.take(this)
-        setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
+        setTheme(if (CharmHostSession.embedded(this) && UserPreferences.selectedTheme == ThemeManager.DEFAULT)
+            R.style.AppTheme_CharmVodMobile else ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
         super.onCreate(restoredState)
         supportFragmentManager.registerFragmentLifecycleCallbacks(VodFocusMemory(false), true)

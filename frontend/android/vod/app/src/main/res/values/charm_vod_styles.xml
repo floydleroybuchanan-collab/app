@@ -1,5 +1,12 @@
 <resources>
     <style name="AppTheme.CharmVodEntrance" parent="AppTheme.Tv">
         <item name="android:windowBackground">@color/charm_vod_canvas</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+    <style name="AppTheme.CharmVodMobile" parent="AppTheme.Mobile">
+        <item name="android:windowBackground">@color/charm_vod_canvas</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
     </style>
 </resources>

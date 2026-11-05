@@ -86,6 +86,9 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
                     .putExtra("medialab.settings", settings)
                     .putExtra("medialab.token", usageToken)
                     .putExtra("medialab.build", BuildConfig.VERSION_CODE), REQUEST_VOD)
+                // Native VOD is another screen of MediaLab, not a second app launch.
+                @Suppress("DEPRECATION")
+                activity.overridePendingTransition(0, 0)
             } catch (error: Exception) {
                 pending = null
                 promise.reject("E_VOD_LAUNCH", "Could not open Video OnDemand.", error)
