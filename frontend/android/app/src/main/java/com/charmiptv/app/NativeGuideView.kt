@@ -133,11 +133,11 @@ class NativeGuideView(context: Context) : View(context) {
   private val rowSurface = Paint().apply { color = Color.rgb(12, 14, 18) }
   private val cell = Paint().apply { color = Color.rgb(37, 41, 51) }
   private val selected = Paint().apply { color = Color.rgb(168, 44, 255) }
-  private val divider = Paint().apply { color = Color.rgb(55, 61, 74); strokeWidth = density }
+  private val divider = Paint().apply { color = Color.argb(152, 157, 169, 190); strokeWidth = density }
   private val nowPaint = Paint().apply { color = Color.rgb(210, 156, 255); strokeWidth = 2f * density }
   private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(240, 242, 247); textSize = 13f * density }
   private val numberPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(185, 191, 205); textSize = 8f * density }
-  private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(185, 191, 205); textSize = 11f * density }
+  private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(212, 218, 231); textSize = 11f * density }
   private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
   private val tickDate = Date()
   private var use24HourClock = false

@@ -820,8 +820,8 @@ export function PurpleTvShell({
       >
         {children}
       </FocusGuide>
-      {mobile && !immersive && <View style={{ flexDirection: "row", backgroundColor: "#10101E", borderTopWidth: 1, borderColor: "#25233A" }}>
-        {([{ route: "/", label: "Home", icon: "home-outline" }, { route: "/guide", label: "Live", icon: "tv-outline" }, { route: "/vod", label: "Browse", icon: "film-outline" }, { route: "/favorites", label: "Library", icon: "heart-outline" }, { route: null, label: "More", icon: "menu" }] as const).map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityState={{ selected: item.route === active }} onPress={() => item.route ? navigate(item.route) : openDrawer({ focusTop: true })} style={({ focused }: any) => ({ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 3, backgroundColor: focused || item.route === active ? "#3B1768" : "transparent" })}><Ionicons name={item.icon} size={20} color={item.route === active ? "#B76CFF" : "#AAA7BB"} /><Text style={{ fontSize: 12, color: item.route === active ? "#fff" : "#AAA7BB" }}>{item.label}</Text></Pressable>)}
+      {mobile && !immersive && <View style={{ flexDirection: "row", backgroundColor: tvColors.drawerGlass, borderTopWidth: 1, borderColor: tvColors.silverEdge }}>
+        {([{ route: "/", label: "Home", icon: "home-outline" }, { route: "/guide", label: "Live", icon: "tv-outline" }, { route: "/vod", label: "Browse", icon: "film-outline" }, { route: "/favorites", label: "Library", icon: "heart-outline" }, { route: null, label: "More", icon: "menu" }] as const).map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityState={{ selected: item.route === active }} onPress={() => item.route ? navigate(item.route) : openDrawer({ focusTop: true })} style={({ focused }: any) => ({ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 3, backgroundColor: focused || item.route === active ? tvColors.violetGlass : "transparent" })}><Ionicons name={item.icon} size={20} color={item.route === active ? tvColors.purpleBright : tvColors.silver} /><Text style={{ fontSize: 12, color: item.route === active ? tvColors.text : tvColors.textMuted }}>{item.label}</Text></Pressable>)}
       </View>}
       {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
     </View>
@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: tvColors.drawerGlass,
     borderRightWidth: 1,
-    borderRightColor: tvColors.line,
+    borderRightColor: tvColors.silverEdge,
     paddingTop: 10,
     paddingBottom: 8,
   },
@@ -864,8 +864,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: "transparent",
   },
-  iconRailItemSelected: { backgroundColor: tvColors.purple, borderLeftColor: tvColors.purpleBright },
-  iconRailItemFocused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  iconRailItemSelected: { backgroundColor: tvColors.violetGlass, borderColor: tvColors.silverEdge, borderLeftColor: tvColors.purpleBright },
+  iconRailItemFocused: { borderColor: tvColors.silver, backgroundColor: tvColors.purpleDeep },
   iconRailPower: {
     width: 36,
     minHeight: 31,
@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: tvColors.drawerGlass,
     borderRightWidth: 1,
-    borderRightColor: tvColors.line,
+    borderRightColor: tvColors.silverEdge,
     paddingHorizontal: 10,
     paddingTop: 12,
     paddingBottom: 8,
@@ -961,9 +961,9 @@ const styles = StyleSheet.create({
     gap: 9,
     paddingHorizontal: 9,
   },
-  navRowSelected: { backgroundColor: tvColors.purple },
+  navRowSelected: { backgroundColor: tvColors.violetGlass, borderColor: tvColors.silverEdge },
   navRowActiveMark: { borderLeftWidth: 3, borderLeftColor: tvColors.purpleBright, paddingLeft: 6 },
-  navRowFocused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  navRowFocused: { borderColor: tvColors.silver, backgroundColor: tvColors.purpleDeep },
   navIconWrap: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
   watchingDot: {
     position: "absolute",

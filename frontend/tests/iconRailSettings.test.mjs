@@ -61,9 +61,12 @@ test("all Settings tiles resolve to a focus-owned section or a reviewed independ
   const settings = read("app/(tabs)/settings.tsx");
   const tiles = settings.match(/const TILES: Tile\[\] = \[([\s\S]*?)\n\];/)?.[1] || "";
   const sections = Array.from(tiles.matchAll(/id: "([^"]+)"/g), match => match[1]);
-  assert.equal(sections.length, 13);
+  assert.equal(sections.length, 14);
+  assert.ok(sections.includes("vod"));
+  assert.match(settings, /if \(id === "vod"\) \{ router\.push\("\/vod-settings"\); return; \}/);
+  assert.match(read("app/(tabs)/vod-settings.tsx"), /choosingProvider \? "sources" : settingsSection/);
   for (const section of sections) {
-    if (section === "epg" || section === "playlists") continue;
+    if (section === "epg" || section === "playlists" || section === "vod") continue;
     assert.ok(settings.includes(`section === "${section}"`), `${section} must have an in-page destination`);
   }
   assert.match(settings, /tileEntryFocus.preferredFocus && index === 0/);

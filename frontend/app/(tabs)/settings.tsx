@@ -91,6 +91,7 @@ const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
 type Section =
   | "general"
   | "player"
+  | "vod"
   | "remote"
   | "playlists"
   | "epg"
@@ -112,6 +113,7 @@ type Tile = {
 const TILES: Tile[] = [
   { id: "general", label: "General", icon: "settings-outline" },
   { id: "player", label: "Player", icon: "play-circle-outline" },
+  { id: "vod", label: "Video on Demand", icon: "film-outline" },
   { id: "remote", label: "Remote Control", icon: "game-controller-outline" },
   { id: "playlists", label: "Playlists", icon: "list-outline" },
   { id: "epg", label: "EPG", icon: "calendar-outline" },
@@ -380,6 +382,7 @@ function SettingsScreenContent() {
     setBackupStatus(null);
     setClearFavoritesArmed(false);
     if (id === "playlists") { router.push("/playlists" as any); return; }
+    if (id === "vod") { router.push("/vod-settings"); return; }
     if (id === "epg") {
       router.push("/epg-sources" as any);
       return;
@@ -1309,11 +1312,11 @@ const baseStyles = StyleSheet.create({
   tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden" },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 9, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
   detailsWrap: { flex: 1 },
-  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  tileIcon: { width: 48, height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
+  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, borderRadius: radius.sm, borderWidth: 2, borderColor: tvColors.silverEdge, backgroundColor: tvColors.graphiteGlass },
+  tileIcon: { width: 48, height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.violetGlass, borderWidth: 1, borderColor: tvColors.silverEdge },
   tileText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5, textAlign: "center" },
   details: { paddingTop: 10, paddingHorizontal: 24, paddingBottom: 24 },
-  card: { backgroundColor: tvColors.panel, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.md, padding: 14, gap: 9 },
+  card: { backgroundColor: tvColors.graphiteGlass, borderWidth: 1, borderColor: tvColors.silverEdge, borderRadius: radius.md, padding: 14, gap: 9 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 9, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: tvColors.line },
   cardIcon: { width: 32, height: 32, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
   cardTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12 },
@@ -1325,8 +1328,8 @@ const baseStyles = StyleSheet.create({
   knobOn: { alignSelf: "flex-end", backgroundColor: "#fff" },
   choiceBlock: { gap: 7, paddingVertical: 4 },
   choices: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  choice: { minHeight: 29, justifyContent: "center", paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  choiceActive: { backgroundColor: tvColors.purple },
+  choice: { minHeight: 29, justifyContent: "center", paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: tvColors.silverEdge, backgroundColor: tvColors.graphiteGlass },
+  choiceActive: { backgroundColor: tvColors.violetGlass, borderColor: tvColors.purpleBright },
   choiceText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
   choiceTextActive: { color: "#fff" },
   action: { alignSelf: "flex-start", minHeight: 32, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.purple },
@@ -1382,7 +1385,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
   },
   miniActionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: { borderColor: tvColors.silver, backgroundColor: tvColors.purpleDeep },
 });
 
 export default function SettingsScreen() {

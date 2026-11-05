@@ -15,7 +15,7 @@ test('RC16 sideload update keeps the public baseline and recognizes both new tes
  assert.equal(r.users.find(u=>u.username==='unified').updated,true);
  assert.match(releaseName(35),/RC14-Sideload-218/);
  assert.match(releaseName(36),/RC15-Sideload-220/);
- assert.match(releaseName(37),/RC16-Sideload-221/);
+ assert.match(releaseName(37),/RC16-Sideload-222/);
  assert.equal(r.users.find(u=>u.username==='previous').updated,true);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(2\)/);
 });

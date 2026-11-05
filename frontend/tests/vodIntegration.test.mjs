@@ -13,7 +13,7 @@ test('VOD enters through the host after Live TV releases its decoders',()=>{
   const route=read('src/components/MediaLabVodContent.tsx');
   assert.ok(route.indexOf('await stopAllPlaybackSessions(')<route.indexOf('setReady(true)'));
   assert.match(route,/focused && ready/);
-  assert.doesNotMatch(route,/openAdaptive|ActivityIndicator/);
+  assert.doesNotMatch(route,/openAdaptive/);
   const manifest=read('android/vod/app/src/main/embedded/AndroidManifest.xml');
   assert.match(manifest,/MainTvActivity" android:exported="false" android:process=":vod"/);
   assert.doesNotMatch(manifest,/category.LAUNCHER|category.LEANBACK_LAUNCHER/);

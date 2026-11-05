@@ -7,11 +7,11 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function harness(release=async()=>{}) {
  const effects=[],states=[],calls=[];
  const React={createElement:(...args)=>args,useCallback:fn=>fn,useEffect:fn=>effects.push(fn),useState:initial=>{
-  const i=states.length;states.push(initial);return [initial,value=>{states[i]=value;}];
+  const i=states.length;const value=typeof initial==='function'?initial():initial;states.push(value);return [value,next=>{states[i]=next;}];
  }};
  const modules={
   react:{...React,default:React},
-  'react-native':{Platform:{OS:'android'},View:'View',Text:'Text',Pressable:'Pressable',requireNativeComponent:()=> 'NativeSurface',
+  'react-native':{Platform:{OS:'android'},View:'View',Text:'Text',Pressable:'Pressable',ActivityIndicator:'ActivityIndicator',StyleSheet:{create:value=>value},requireNativeComponent:()=> 'NativeSurface',
    BackHandler:{addEventListener:()=>({remove(){}})},NativeModules:{CharmVod:{configureSurface:async value=>calls.push(['configure',value])}}},
   '@react-navigation/native':{useIsFocused:()=>true},'expo-router':{useRouter:()=>({replace(){}})},
   '@/src/store':{useStore:()=>({deviceLayoutMode:'tv'})},'@/src/utils/tvLayout':{shouldUseTvLayout:()=>true},
@@ -30,8 +30,10 @@ test('shared VOD surface waits for Live TV decoder release and keeps all catalog
  let resolve;const h=harness(()=>new Promise(done=>{resolve=done;}));h.enter();await tick();
  assert.equal(h.states[1],false);assert.equal(h.calls.length,1);
  resolve();await tick();assert.equal(h.states[1],true);assert.equal(h.calls[1][0],'configure');
- for(const label of ['Browse','Movies','Series','My list','Search','Sources']) assert.ok(JSON.stringify(h.tree).includes(label));
- assert.doesNotMatch(JSON.stringify(h.tree),/ActivityIndicator|Open Video OnDemand/);
+ for(const label of ['Browse','Movies','Series','My list','Search','Playlist VOD']) assert.ok(JSON.stringify(h.tree).includes(label));
+ assert.equal(h.states[0],'home');
+ assert.doesNotMatch(JSON.stringify(h.tree),/"Sources"|Open Video OnDemand/);
+ assert.match(JSON.stringify(h.tree),/Opening Video On Demand/);
 });
 test('failed decoder handoff keeps the native VOD surface unmounted',async()=>{
  const h=harness(async()=>{throw Error('busy');});h.enter();await tick();
@@ -40,4 +42,5 @@ test('failed decoder handoff keeps the native VOD surface unmounted',async()=>{
 test('leaving during decoder release cannot mount a stale VOD surface',async()=>{
  let resolve;const h=harness(()=>new Promise(done=>{resolve=done;}));const leave=h.enter();leave();resolve();await tick();
  assert.equal(h.states[1],false);
+ assert.equal(h.calls.length,1);
 });

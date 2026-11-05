@@ -34,12 +34,14 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         isFocusable = true; setOnClickListener { CharmHostSession.leave(activity, "medialab:donate") }; glass(this)
     }
     init {
+        if (!CharmHostSession.hasSurface(activity)) {
         root.addView(donate, ConstraintLayout.LayoutParams(-2, -2).apply {
             endToStart = menu.id; topToTop = 0; marginEnd = dp(8); topMargin = dp(10)
         })
         root.addView(menu, ConstraintLayout.LayoutParams(-2, -2).apply {
             endToEnd = 0; topToTop = 0; marginEnd = dp(16); topMargin = dp(10)
         })
+        }
         menu.elevation = dp(9).toFloat()
         nav?.navController?.addOnDestinationChangedListener { _, destination, _ ->
             dialog?.dismiss()
@@ -132,7 +134,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             dialog = null
             playbackControls?.showController()
             val prior = origin
-            root.post { if (dialog == null) { if (prior?.isAttachedToWindow == true && prior.isShown && prior.isFocusable) prior.requestFocus() else menu.requestFocus() } }
+            root.post { if (dialog == null) { if (prior?.isAttachedToWindow == true && prior.isShown && prior.isFocusable) prior.requestFocus() else if (CharmHostSession.hasSurface(activity)) activeView()?.requestFocus() else menu.requestFocus() } }
         }
         d.setOnKeyListener { _, key, event ->
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN && d.currentFocus !is EditText) { d.dismiss(); true }
@@ -230,7 +232,13 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
                 drawer.root.removeView(drawer.donate)
             }
         }
+        fun open(activity: FragmentActivity): Boolean {
+            val drawer = instances[activity] ?: return false
+            drawer.open()
+            return true
+        }
         fun install(activity: FragmentActivity, root: ConstraintLayout) {
+            uninstall(activity)
             val drawer = CharmPageDrawer(activity, root)
             instances[activity] = drawer
             // Restored player fragments can exist before the activity installs its chrome.
@@ -248,9 +256,9 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         fun dispatch(activity: FragmentActivity, event: KeyEvent) = instances[activity]?.dispatch(event) ?: false
         fun glass(view: TextView) {
             val density = view.resources.displayMetrics.density
-            fun shape(focused: Boolean) = GradientDrawable(GradientDrawable.Orientation.TL_BR, if (focused) intArrayOf(0xAAAD57D8.toInt(),0xBB4C236F.toInt()) else intArrayOf(0x444C305E,0x77231332)).apply {
+            fun shape(focused: Boolean) = GradientDrawable(GradientDrawable.Orientation.TL_BR, if (focused) intArrayOf(0xD9D29CFF.toInt(),0xD96A1DB2.toInt()) else intArrayOf(0x99646C7D.toInt(),0xCC1B1E25.toInt())).apply {
                 cornerRadii = floatArrayOf(5f,5f,14f,14f,5f,5f,14f,14f).map { it*density }.toFloatArray()
-                setStroke((if(focused) 2*density else density).toInt().coerceAtLeast(1),if(focused) 0xFFF0D6FF.toInt() else 0x889D72B6.toInt())
+                setStroke((if(focused) 2*density else density).toInt().coerceAtLeast(1),if(focused) 0xFFF0F2F7.toInt() else 0x99B9BFCD.toInt())
             }
             view.backgroundTintList = null
             view.background = android.graphics.drawable.StateListDrawable().apply { addState(intArrayOf(android.R.attr.state_focused),shape(true));addState(intArrayOf(android.R.attr.state_selected),shape(true));addState(intArrayOf(),shape(false)) }

@@ -74,14 +74,14 @@ object CharmVodPageLayout {
             "ProvidersTvFragment" -> "Choose your VOD source"
             else -> null
         }
-        title?.let { label ->
+        title?.takeUnless { CharmHostSession.hasSurface(fragment.requireActivity()) && page != "ProvidersTvFragment" }?.let { label ->
             header.addView(TextView(root.context).apply {
                 text = label; textSize = 20f; setTextColor(0xFFECEBF2.toInt())
                 typeface = ResourcesCompat.getFont(context, R.font.charm_geist_semibold)
                 setPadding(0, 0, 0, dp(6))
             })
         }
-        if (page in setOf("HomeTvFragment", "MoviesTvFragment", "TvShowsTvFragment")) {
+        if (!CharmHostSession.hasSurface(fragment.requireActivity()) && page in setOf("HomeTvFragment", "MoviesTvFragment", "TvShowsTvFragment")) {
             header.addView(TextView(root.context).apply {
                 text="At the last poster, press Right for Menu";textSize=12f;setTextColor(0xFFD9C8EC.toInt())
                 postDelayed({ visibility=View.INVISIBLE }, 8000)
@@ -123,7 +123,7 @@ object CharmVodPageLayout {
         val fitPage = {
             val unified = CharmHostSession.hasSurface(fragment.requireActivity())
             val left = if (unified) root.dp(16) else (root.width * .135f).toInt()
-            val top = if (unified) root.dp(48) else (root.height * (if (page in setOf("SearchTvFragment","HomeTvFragment","MoviesTvFragment","TvShowsTvFragment")) .29f else .247f)).toInt()
+            val top = if (unified) root.dp(8) else (root.height * (if (page in setOf("SearchTvFragment","HomeTvFragment","MoviesTvFragment","TvShowsTvFragment")) .29f else .247f)).toInt()
             val right = (root.width * .024f).toInt()
             (grid.layoutParams as? ConstraintLayout.LayoutParams)?.apply {
                 startToEnd = ConstraintLayout.LayoutParams.UNSET

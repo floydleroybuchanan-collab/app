@@ -63,16 +63,20 @@ object CharmDesign {
         setStroke(dp(view, width), stroke)
     }
 
+    private fun glassButton(view: View, violet: Boolean, focused: Boolean = false): GradientDrawable =
+        GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            if (violet) intArrayOf(0xD9D29CFF.toInt(), 0xD96A1DB2.toInt())
+            else intArrayOf(0x99646C7D.toInt(), 0xCC1B1E25.toInt())).apply {
+            cornerRadius = dp(view, 16).toFloat()
+            setStroke(dp(view, if (focused) 2 else 1), if (focused) 0xFFF0F2F7.toInt() else 0x99B9BFCD.toInt())
+        }
+
     private fun buttonBackground(view: View, primary: Boolean): StateListDrawable = StateListDrawable().apply {
         addState(intArrayOf(-android.R.attr.state_enabled), shape(view, PANEL, BORDER))
-        addState(intArrayOf(android.R.attr.state_focused), shape(view, PURPLE, Color.WHITE, 2))
-        addState(intArrayOf(android.R.attr.state_pressed), shape(view, PURPLE, Color.WHITE, 2))
-        addState(intArrayOf(android.R.attr.state_selected), shape(view, 0xFF25143F.toInt(), PURPLE))
-        addState(intArrayOf(), if (primary) GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xFF9E42E8.toInt(), 0xFF6320AF.toInt())).apply {
-                cornerRadius = dp(view, 22).toFloat()
-                setStroke(dp(view, 1), 0xFFE1CEF4.toInt())
-            } else shape(view, RAISED, BORDER))
+        addState(intArrayOf(android.R.attr.state_focused), glassButton(view, true, true))
+        addState(intArrayOf(android.R.attr.state_pressed), glassButton(view, true, true))
+        addState(intArrayOf(android.R.attr.state_selected), glassButton(view, true))
+        addState(intArrayOf(), glassButton(view, primary))
     }
 
     fun styleTree(root: View) {

@@ -21,6 +21,7 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     private var owner: FragmentActivity? = null
     private var section = "home"
     private var television = true
+    private var settingsSurface = false
     private var disposed = false
     private val root = ConstraintLayout(react)
     private val container = FrameLayout(react).apply { id = VodR.id.nav_main_fragment }
@@ -34,9 +35,12 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
             // pass. Measure only this native subtree using the latest bounds.
             layingOutChildren = true
             try {
-                root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                // Clear this host's layout-request flag too. Measuring only
+                // root leaves the host marked dirty; subsequent child requests
+                // then stop at parent.isLayoutRequested and never reach us.
+                measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
-                root.layout(0, 0, width, height)
+                layout(left, top, right, bottom)
             } finally { layingOutChildren = false }
         }
     }
@@ -71,6 +75,8 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
 
     fun section(value: String?) {
         val next = value ?: "home"
+        if (next == "settings" || next == "accounts") settingsSurface = true
+        if (next == "sources" && !settingsSurface) { event("error", "Open Settings to change your VOD provider."); return }
         if (section == next) return
         section = next
         host?.let { navigate(it, next) }
@@ -111,10 +117,16 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
         com.streamflixreborn.streamflix.providers.FilmyOnlineCcProvider.init(activity)
         com.streamflixreborn.streamflix.providers.ZaluknijProvider.init(activity)
         com.streamflixreborn.streamflix.providers.GuardaSerieProvider.init(activity)
-        val fragment = NavHostFragment.create(if (television) VodR.navigation.nav_main_graph_tv else VodR.navigation.nav_main_graph_mobile)
+        // Set defaults before constructing any catalog ViewModel. The upstream
+        // graph starts at Providers; inflate it without that transient chooser.
+        CharmVodDefaults.apply()
+        val fragment = NavHostFragment()
         host = fragment
             activity.supportFragmentManager.beginTransaction().add(container.id, fragment, HOST_TAG).commitNow()
-            if (television && section !in setOf("settings", "accounts")) CharmPageDrawer.install(activity, root)
+            if (television) CharmPageDrawer.install(activity, root)
+            val graph = fragment.navController.navInflater.inflate(if (television) VodR.navigation.nav_main_graph_tv else VodR.navigation.nav_main_graph_mobile)
+            graph.setStartDestination(if (section in setOf("settings", "accounts")) VodR.id.settings else VodR.id.home)
+            fragment.navController.graph = graph
             fragment.navController.addOnDestinationChangedListener { _, destination, _ ->
                 scheduleNativeLayout()
                 event("player", if (destination.id == VodR.id.player) "true" else "false")
@@ -140,7 +152,7 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
             value == "favorites" -> VodR.id.favorites
             value == "sources" -> VodR.id.providers
             value == "settings" || value == "accounts" -> VodR.id.settings
-            else -> if (UserPreferences.currentProvider == null) VodR.id.providers else VodR.id.home
+            else -> VodR.id.home
         }
         if (nav.currentDestination?.id != destination || !args.isEmpty) nav.navigate(destination, args)
     }

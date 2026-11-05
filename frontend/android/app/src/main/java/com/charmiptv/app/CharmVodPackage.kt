@@ -36,6 +36,13 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
         promise.resolve(true)
     }
 
+    @ReactMethod fun surfaceMenu(promise: Promise) {
+        context.runOnUiQueueThread {
+            val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
+            promise.resolve(activity != null && com.streamflixreborn.streamflix.charm.CharmPageDrawer.open(activity))
+        }
+    }
+
     @ReactMethod fun surfaceBack(promise: Promise) {
         context.runOnUiQueueThread {
             val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity

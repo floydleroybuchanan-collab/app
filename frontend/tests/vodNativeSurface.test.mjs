@@ -7,8 +7,8 @@ test('VOD native child layout is coalesced, size-bound and cancelled on detach/d
  assert.match(s,/override fun requestLayout\(\)[\s\S]*?super.requestLayout\(\)[\s\S]*?scheduleNativeLayout\(\)/);
  assert.match(s,/layoutPosted \|\| layingOutChildren/);
  assert.match(s,/!disposed && isAttachedToWindow && width > 0 && height > 0/);
- assert.match(s,/root.measure\(View.MeasureSpec.makeMeasureSpec\(width, View.MeasureSpec.EXACTLY\)/);
- assert.match(s,/root.layout\(0, 0, width, height\)/);
+ assert.match(s,/measure\(View.MeasureSpec.makeMeasureSpec\(width, View.MeasureSpec.EXACTLY\)/);
+ assert.match(s,/layout\(left, top, right, bottom\)/);
  assert.match(s,/override fun onDetachedFromWindow\(\)[\s\S]*?removeCallbacks\(layoutNativeChildren\)/);
  assert.match(s,/fun dispose\(\)[\s\S]*?removeCallbacks\(layoutNativeChildren\)/);
  assert.doesNotMatch(s,/postDelayed\(layoutNativeChildren/);
@@ -35,4 +35,24 @@ test('VOD initialization failures share cleanup and never remove an unadded frag
  assert.ok(mount.indexOf('try {') < mount.indexOf('AnimeOnlineNinjaProvider.init(activity)'));
  assert.match(mount,/catch \(error: Exception\)[\s\S]*dispose\(\)/);
  assert.match(s,/host\?\.takeIf \{ it.isAdded && !activity.supportFragmentManager.isDestroyed \}/);
+});
+
+test('embedded VOD initializes catalog defaults before graph creation and starts home without a provider chooser',()=>{
+ const s=source('android/app/src/main/java/com/charmiptv/app/CharmVodSurface.kt');
+ assert.ok(s.indexOf('CharmVodDefaults.apply()') < s.indexOf('val fragment = NavHostFragment()'));
+ assert.match(s,/graph.setStartDestination\(if \(section in setOf\("settings", "accounts"\)\) VodR.id.settings else VodR.id.home\)/);
+ assert.doesNotMatch(s,/NavHostFragment.create/);
+ assert.match(s,/next == "sources" && !settingsSurface/);
+ const defaults=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodDefaults.kt');
+ assert.match(defaults,/TmdbProvider\("en"\)/);
+});
+test('shared VOD options remain reachable without duplicate native menu and donate chrome',()=>{
+ const drawer=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmPageDrawer.kt');
+ assert.match(drawer,/if \(!CharmHostSession.hasSurface\(activity\)\) \{\s*root.addView\(donate/);
+ assert.match(drawer,/fun open\(activity: FragmentActivity\): Boolean/);
+ const bridge=source('android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt');
+ assert.match(bridge,/@ReactMethod fun surfaceMenu\(promise: Promise\)/);
+ assert.match(bridge,/CharmPageDrawer.open\(activity\)/);
+ const page=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodPageLayout.kt');
+ assert.match(page,/val top = if \(unified\) root.dp\(8\)/);
 });

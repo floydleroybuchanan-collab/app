@@ -12,9 +12,9 @@ export const colors = {
   success: "#34D399",
   warning: "#C084FC",
   error: "#FB7185",
-  border: "#25233A",
-  borderStrong: "#3B3560",
-  divider: "#1B192A",
+  border: "#414653",
+  borderStrong: "#666D7C",
+  divider: "#323642",
 };
 
 export const tvColors = {
@@ -29,10 +29,15 @@ export const tvColors = {
   purpleDeep: "#42205F",
   focus: "#D29CFF",
   text: "#F0F2F7",
-  textMuted: "#B9BFCD",
-  line: "rgba(255,255,255,0.10)",
-  lineStrong: "rgba(192,132,252,0.42)",
-  drawerGlass: "rgba(21,24,32,0.92)",
+  textMuted: "#C4CAD7",
+  silver: "#D8DDE8",
+  silverEdge: "rgba(210,218,235,0.36)",
+  silverHighlight: "rgba(239,243,255,0.62)",
+  graphiteGlass: "rgba(91,98,116,0.24)",
+  violetGlass: "rgba(146,83,220,0.31)",
+  line: "rgba(210,218,235,0.20)",
+  lineStrong: "rgba(210,218,235,0.39)",
+  drawerGlass: "rgba(30,34,44,0.94)",
   scrim: "rgba(4,3,10,0.78)",
 };
 
