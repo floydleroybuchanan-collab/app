@@ -11,7 +11,7 @@ test('RC14 sideload update keeps the public baseline and identifies version code
  const r=await accountUpdateReport(f.env,auth);
  assert.equal(r.target,27);
  assert.equal(r.users.find(u=>u.username==='unified').updated,true);
- assert.match(releaseName(35),/RC14-Sideload-216/);
+ assert.match(releaseName(35),/RC14-Sideload-217/);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(1\)/);
 });
 test('report distinguishes current, old, mixed and unknown with verified links',async()=>{
