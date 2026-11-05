@@ -9,9 +9,13 @@ import com.streamflixreborn.streamflix.R
 
 /** Intent-based handoff works across the protected VOD process boundary. */
 object CharmHostSession {
+    private val surfaces = java.util.WeakHashMap<Activity, (String) -> Unit>()
+    fun attachSurface(activity: Activity, navigate: (String) -> Unit) { surfaces[activity] = navigate }
+    fun detachSurface(activity: Activity) { surfaces.remove(activity) }
+    fun hasSurface(activity: Activity) = surfaces.containsKey(activity)
     private val states = mutableMapOf<String, Bundle>()
     private var sessionToken: String? = null
-    fun embedded(activity: Activity) = activity.intent.getBooleanExtra("medialab.embedded", false)
+    fun embedded(activity: Activity) = hasSurface(activity) || activity.intent.getBooleanExtra("medialab.embedded", false)
     fun take(activity: Activity): Bundle? {
         if (!embedded(activity)) return null
         val token = activity.intent.getStringExtra("medialab.token")
@@ -24,6 +28,7 @@ object CharmHostSession {
         if (embedded(activity) && section != "settings" && section != "accounts") states[activity.javaClass.name] = state
     }
     fun leave(activity: Activity, route: String) {
+        surfaces[activity]?.let { it(route); return }
         activity.setResult(Activity.RESULT_OK, Intent().putExtra("medialab.route", route))
         activity.finish()
         @Suppress("DEPRECATION")

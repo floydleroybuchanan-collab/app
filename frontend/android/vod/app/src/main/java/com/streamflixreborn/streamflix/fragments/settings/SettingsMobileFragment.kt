@@ -691,6 +691,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
                     preference.value = newTheme
                 }
                 requireActivity().apply {
+                    if (com.streamflixreborn.streamflix.charm.CharmHostSession.hasSurface(this)) { recreate(); return@apply }
                     finish()
                     startActivity(Intent(this, MainMobileActivity::class.java))
                 }
@@ -713,6 +714,7 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
                     preference.value = newLanguage
                 }
                 requireActivity().apply {
+                    if (com.streamflixreborn.streamflix.charm.CharmHostSession.hasSurface(this)) { recreate(); return@apply }
                     finish()
                     startActivity(
                         Intent(this, MainMobileActivity::class.java).apply {

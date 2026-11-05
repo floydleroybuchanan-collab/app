@@ -32,9 +32,11 @@ object CharmDesign {
     private const val BORDER = 0xFF493550.toInt()
     private var regular: Typeface? = null
     private var semibold: Typeface? = null
+    private val installed = java.util.WeakHashMap<FragmentActivity, Boolean>()
     private fun dp(view: View, value: Int) = (value * view.resources.displayMetrics.density).toInt()
 
     fun install(activity: FragmentActivity) {
+        if (installed.put(activity, true) == true) return
         activity.supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
             override fun onFragmentStarted(manager: FragmentManager, fragment: Fragment) {
                 if (fragment is androidx.fragment.app.DialogFragment && fragment !is com.streamflixreborn.streamflix.vod.NovaPlayback)

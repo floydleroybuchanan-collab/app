@@ -20,6 +20,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="reminders" options={{ title: "Reminders" }} />
       <Tabs.Screen name="search" options={{ title: "Search" }} />
       <Tabs.Screen name="settings" options={{ title: "Settings" }} />
+      <Tabs.Screen name="vod-settings" options={{ title: "Video OnDemand Settings", href: null }} />
       <Tabs.Screen name="epg-sources" options={{ title: "EPG Sources" }} />
     </Tabs>
   );

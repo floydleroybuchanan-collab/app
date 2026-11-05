@@ -99,7 +99,7 @@ fun FragmentActivity.getCurrentFragment(): Fragment? = when (this) {
         navHostFragment.childFragmentManager.fragments.firstOrNull()
     }
 
-    else -> null
+    else -> (supportFragmentManager.findFragmentById(R.id.nav_main_fragment) as? NavHostFragment)?.childFragmentManager?.primaryNavigationFragment
 }
 
 suspend fun <T> retry(retries: Int, predicate: suspend (attempt: Int) -> T): T {

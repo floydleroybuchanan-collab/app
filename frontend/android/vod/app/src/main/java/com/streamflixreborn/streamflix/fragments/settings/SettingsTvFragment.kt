@@ -851,6 +851,7 @@ class SettingsTvFragment : PreferenceFragmentCompat() {
 
                 // Apply the theme and restart the activity
                 requireActivity().apply {
+                    if (com.streamflixreborn.streamflix.charm.CharmHostSession.hasSurface(this)) { recreate(); return@apply }
                     finish()
                     startActivity(Intent(this, MainTvActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -872,6 +873,7 @@ class SettingsTvFragment : PreferenceFragmentCompat() {
                 val newLanguage = newValue as String
                 AppLanguageManager.setSelectedLanguage(newLanguage)
                 requireActivity().apply {
+                    if (com.streamflixreborn.streamflix.charm.CharmHostSession.hasSurface(this)) { recreate(); return@apply }
                     finish()
                     startActivity(Intent(this, MainTvActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)

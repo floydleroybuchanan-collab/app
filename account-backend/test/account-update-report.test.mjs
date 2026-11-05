@@ -5,13 +5,14 @@ import {accountUpdateReport,formatAccountUpdateReport,releaseName} from '../acco
 import {handleUpdate} from '../bot-telegram.js';
 import {exactCommand} from '../bot-commands.js';
 const auth={isOwner:true,user:{id:OWNER},profile:{}};
-test('RC14 sideload update keeps the public baseline and identifies version code 35',async()=>{
+test('RC15 sideload update keeps the public baseline and identifies version code 36',async()=>{
  const f=fixture();f.user('unified');
  await f.request('/me/activity',{method:'POST',token:f.token('unified'),body:{sequence:1,mode:'idle',playing:false,build:35}});
  const r=await accountUpdateReport(f.env,auth);
  assert.equal(r.target,27);
  assert.equal(r.users.find(u=>u.username==='unified').updated,true);
  assert.match(releaseName(35),/RC14-Sideload-218/);
+ assert.match(releaseName(36),/RC15-Sideload-219/);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(1\)/);
 });
 test('report distinguishes current, old, mixed and unknown with verified links',async()=>{

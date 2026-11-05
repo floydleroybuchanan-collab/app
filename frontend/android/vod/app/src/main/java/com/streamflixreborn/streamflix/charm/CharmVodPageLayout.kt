@@ -121,8 +121,9 @@ object CharmVodPageLayout {
         CharmPageDrawer.register(fragment, title ?: page.removeSuffix("TvFragment"), drawerControls)
         if (header.childCount > 0) root.addView(header)
         val fitPage = {
-            val left = (root.width * .135f).toInt()
-            val top = (root.height * (if (page in setOf("SearchTvFragment","HomeTvFragment","MoviesTvFragment","TvShowsTvFragment")) .29f else .247f)).toInt()
+            val unified = CharmHostSession.hasSurface(fragment.requireActivity())
+            val left = if (unified) root.dp(16) else (root.width * .135f).toInt()
+            val top = if (unified) root.dp(48) else (root.height * (if (page in setOf("SearchTvFragment","HomeTvFragment","MoviesTvFragment","TvShowsTvFragment")) .29f else .247f)).toInt()
             val right = (root.width * .024f).toInt()
             (grid.layoutParams as? ConstraintLayout.LayoutParams)?.apply {
                 startToEnd = ConstraintLayout.LayoutParams.UNSET
