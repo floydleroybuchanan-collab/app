@@ -87,7 +87,8 @@ export function scopePlaylistChannels(source: PlaylistRecord, rows: Channel[]): 
 export function validatePlaylistImport(result: { channels: Channel[]; rejected: number; truncated: boolean }): void {
   if (!result.channels.length) throw new Error("No playable channels found; previous channels kept.");
   if (result.truncated) throw new Error("Playlist exceeds the import limit; previous channels kept.");
-  if (result.rejected > 0) throw new Error("Playlist contains invalid entries; previous channels kept. Correct the playlist before importing.");
+  // The native parser has already excluded malformed entries. A completed,
+  // nonempty import remains usable when providers leave empty channel slots.
 }
 
 export function combinePlaylistCatalogs(sources: PlaylistRecord[], catalogs: ReadonlyMap<string, Channel[]>): Channel[] {
