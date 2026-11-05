@@ -500,6 +500,19 @@ object NativePlaybackManager {
     main.removeCallbacks(delayedRecovery)
     player?.pause()
   }
+  fun timeline(channelKey: String): Map<String, Any>? {
+    val instance = player ?: return null
+    if (owner != Owner.FULLSCREEN || activeSource?.channelKey != channelKey) return null
+    return mapOf("positionMs" to instance.currentPosition.coerceAtLeast(0L),
+      "durationMs" to (if (instance.duration == C.TIME_UNSET) 0L else instance.duration.coerceAtLeast(0L)),
+      "seekable" to instance.isCurrentMediaItemSeekable, "ended" to (instance.playbackState == Player.STATE_ENDED))
+  }
+  fun seekTimeline(channelKey: String, positionMs: Long) = runOnMain {
+    val instance = player ?: return@runOnMain
+    if (owner != Owner.FULLSCREEN || activeSource?.channelKey != channelKey || !instance.isCurrentMediaItemSeekable) return@runOnMain
+    val maximum = if (instance.duration == C.TIME_UNSET) Long.MAX_VALUE else instance.duration.coerceAtLeast(0L)
+    instance.seekTo(positionMs.coerceIn(0L, maximum))
+  }
   fun resume() = runOnMain {
     if (owner == Owner.NONE) return@runOnMain
     val instance = player ?: return@runOnMain

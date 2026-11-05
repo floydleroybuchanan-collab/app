@@ -40,6 +40,7 @@ test("refreshing a shared EPG from one playlist keeps candidate IDs for all asso
   const api = load("src/core/playlistEpg.ts", {
     "./playlistEpgDiscovery": { discoverPlaylistEpg: async () => {} },
     "./additionalEpgOwnership": { replaceAutomaticEpgOwners() {} },
+    "./stalkerGuide": { stalkerGuideId: id => `portal-${id}`, stalkerGuideSources: () => [], prepareStalkerGuide: async () => { throw Error("Unexpected portal download"); } },
     "./playlistRegistry": { listPlaylists: async () => playlists },
     "./playlistCatalog": catalog,
     "./multiEpgSources": { getMultiEpgSources: async () => sources, updateMultiEpgRefreshStatus() {} },
@@ -81,6 +82,7 @@ test("a completed additional guide is published before a later slow source finis
   const api = load("src/core/playlistEpg.ts", {
     "./playlistEpgDiscovery": { discoverPlaylistEpg: async () => {} },
     "./additionalEpgOwnership": { replaceAutomaticEpgOwners() {} },
+    "./stalkerGuide": { stalkerGuideId: id => `portal-${id}`, stalkerGuideSources: () => [], prepareStalkerGuide: async () => { throw Error("Unexpected portal download"); } },
     "./playlistRegistry": { listPlaylists: async () => [{ id: "one", enabled: true, epgSourceIds: ["first", "slow"] }] },
     "./playlistCatalog": catalog,
     "./multiEpgSources": { getMultiEpgSources: async () => sources, updateMultiEpgRefreshStatus() {} },

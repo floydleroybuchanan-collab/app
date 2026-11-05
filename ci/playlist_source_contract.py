@@ -12,6 +12,8 @@ match-write failures honestly, and leases native imports through metadata
 publication. URLs, parsers, request headers and payload delivery are unchanged.
 Regression coverage: stability166Regression.test.mjs and EpgImportCoordinatorTest.
 RC9 changes display/log brand strings only; transport is unchanged.
+RC16 merges portal guide ownership from the current secure source registry;
+see docs/rc16-integration-validation.md for the reviewed scope.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
@@ -19,7 +21,7 @@ import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
     'frontend/src/source.native.ts': '46cda3e8fde5ad80158c6c9accf8ca45620415d45168b9eaa0754c8a912fa7f4',
-    'frontend/src/nativeEpg.ts': 'dd9bae6d41e03939a979c86b8bcc8594b56216e8309a3dcfb5ce60422d9c4456',
+    'frontend/src/nativeEpg.ts': '2679305589ac6e4c64c0ec44b676b9c257f7939adbcee912cb26296f80018873',
     'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }
 

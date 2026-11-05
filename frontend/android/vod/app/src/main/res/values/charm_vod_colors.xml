@@ -1,8 +1,8 @@
 <resources>
-    <color name="charm_vod_canvas">#100E17</color>
-    <color name="charm_vod_panel">#191321</color>
-    <color name="charm_vod_panel_raised">#15101E</color>
-    <color name="charm_vod_purple">#963BE0</color>
-    <color name="charm_vod_focus">#B76CFF</color>
-    <color name="charm_vod_text_muted">#B9AFC7</color>
+    <color name="charm_vod_canvas">#0C0E12</color>
+    <color name="charm_vod_panel">#1B1E25</color>
+    <color name="charm_vod_panel_raised">#13161C</color>
+    <color name="charm_vod_purple">#A82CFF</color>
+    <color name="charm_vod_focus">#D29CFF</color>
+    <color name="charm_vod_text_muted">#B9BFCD</color>
 </resources>

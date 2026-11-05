@@ -24,9 +24,45 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     private var disposed = false
     private val root = ConstraintLayout(react)
     private val container = FrameLayout(react).apply { id = VodR.id.nav_main_fragment }
+    private var layoutPosted = false
+    private var layingOutChildren = false
+    private val layoutNativeChildren = Runnable {
+        layoutPosted = false
+        if (!disposed && isAttachedToWindow && width > 0 && height > 0) {
+            // React lays out this surface, but fragment/RecyclerView children
+            // use Android requestLayout, which does not schedule another Yoga
+            // pass. Measure only this native subtree using the latest bounds.
+            layingOutChildren = true
+            try {
+                root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+                root.layout(0, 0, width, height)
+            } finally { layingOutChildren = false }
+        }
+    }
+    private val mountSurface = Runnable { mount() }
+    private fun scheduleNativeLayout() {
+        if (disposed || !isAttachedToWindow || layoutPosted || layingOutChildren) return
+        layoutPosted = true
+        postOnAnimation(layoutNativeChildren)
+    }
+    override fun requestLayout() {
+        super.requestLayout()
+        scheduleNativeLayout()
+    }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        scheduleNativeLayout()
+    }
+    override fun onDetachedFromWindow() {
+        removeCallbacks(mountSurface)
+        removeCallbacks(layoutNativeChildren)
+        layoutPosted = false
+        super.onDetachedFromWindow()
+    }
 
     init {
-        setBackgroundColor(0xFF100E17.toInt())
+        setBackgroundColor(0xFF0C0E12.toInt())
         addView(root, LayoutParams(-1, -1))
         root.addView(container, ConstraintLayout.LayoutParams(0, 0).apply {
             startToStart = 0; endToEnd = 0; topToTop = 0; bottomToBottom = 0
@@ -44,7 +80,7 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
         owner?.let { if (CharmPageDrawer.dispatch(it, event)) return true }
         return super.dispatchKeyEvent(event)
     }
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); post { mount() } }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); post(mountSurface); scheduleNativeLayout() }
     private fun event(name: String, value: String) {
         if (disposed) return
         @Suppress("DEPRECATION")
@@ -56,6 +92,14 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
         if (disposed || host != null || !isAttachedToWindow) return
         val activity = react.currentActivity as? FragmentActivity ?: return
         if (activity.supportFragmentManager.isStateSaved) { event("error", "Return to this screen to open the library."); return }
+        try {
+        // RN route transitions may overlap old/new surfaces in one activity.
+        // Release the old fixed-ID host before Android searches for our container.
+        activeSurfaces[activity]?.get()?.takeIf { it !== this }?.dispose()
+        activity.supportFragmentManager.findFragmentByTag(HOST_TAG)?.let { stale ->
+            activity.supportFragmentManager.beginTransaction().remove(stale).commitNowAllowingStateLoss()
+        }
+        activeSurfaces[activity] = java.lang.ref.WeakReference(this)
         owner = activity
         activity.setTheme(if (television)
             com.streamflixreborn.streamflix.utils.ThemeManager.tvThemeRes(UserPreferences.selectedTheme)
@@ -69,13 +113,14 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
         com.streamflixreborn.streamflix.providers.GuardaSerieProvider.init(activity)
         val fragment = NavHostFragment.create(if (television) VodR.navigation.nav_main_graph_tv else VodR.navigation.nav_main_graph_mobile)
         host = fragment
-        try {
-            activity.supportFragmentManager.beginTransaction().add(container.id, fragment, "medialab-vod-surface").commitNow()
+            activity.supportFragmentManager.beginTransaction().add(container.id, fragment, HOST_TAG).commitNow()
             if (television && section !in setOf("settings", "accounts")) CharmPageDrawer.install(activity, root)
             fragment.navController.addOnDestinationChangedListener { _, destination, _ ->
+                scheduleNativeLayout()
                 event("player", if (destination.id == VodR.id.player) "true" else "false")
             }
             navigate(fragment, section)
+            scheduleNativeLayout()
             event("ready", "true")
         } catch (error: Exception) {
             event("error", "Unable to open this library screen. Return and try again.")
@@ -102,13 +147,26 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     fun dispose() {
         if (disposed) return
         disposed = true
+        removeCallbacks(mountSurface)
+        removeCallbacks(layoutNativeChildren)
+        layoutPosted = false
         val activity = owner
         if (activity != null) {
-            host?.let { activity.supportFragmentManager.beginTransaction().remove(it).commitNowAllowingStateLoss() }
-            CharmPageDrawer.uninstall(activity)
-            CharmHostSession.detachSurface(activity)
+            host?.takeIf { it.isAdded && !activity.supportFragmentManager.isDestroyed }?.let { activity.supportFragmentManager.beginTransaction().remove(it).commitNowAllowingStateLoss() }
+            if (activeSurfaces[activity]?.get() === this) {
+                activeSurfaces.remove(activity)
+                CharmPageDrawer.uninstall(activity)
+                CharmHostSession.detachSurface(activity)
+            }
         }
+        // A detached React route can remain in its parent until the transition
+        // completes. It must no longer win findViewById for the next VOD host.
+        container.id = View.NO_ID
         host = null; owner = null
+    }
+    companion object {
+        private const val HOST_TAG = "medialab-vod-surface"
+        private val activeSurfaces = java.util.WeakHashMap<FragmentActivity, java.lang.ref.WeakReference<CharmVodSurface>>()
     }
 }
 

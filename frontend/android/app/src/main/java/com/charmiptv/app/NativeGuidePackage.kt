@@ -18,6 +18,7 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   @ReactProp(name = "active", defaultBoolean = true) fun active(view: NativeGuideView, value: Boolean) = view.setActive(value)
   @ReactProp(name = "overlayMode", defaultBoolean = false) fun overlayMode(view: NativeGuideView, value: Boolean) = view.setOverlayMode(value)
   @ReactProp(name = "rightBoundaryEnabled", defaultBoolean = false) fun rightBoundaryEnabled(view: NativeGuideView, value: Boolean) { view.rightBoundaryEnabled = value }
+  @ReactProp(name = "showLogos", defaultBoolean = true) fun showLogos(view: NativeGuideView, value: Boolean) = view.setShowLogos(value)
   @ReactProp(name = "clock24h", defaultBoolean = false) fun clock24h(view: NativeGuideView, value: Boolean) = view.setClock24h(value)
   @ReactProp(name = "restoreChannelId") fun restore(view: NativeGuideView, value: String?) = view.restoreChannel(value)
   @ReactProp(name = "restoreTimeMs", defaultDouble = 0.0) fun restoreTime(view: NativeGuideView, value: Double) = view.restoreTime(value)
@@ -28,6 +29,7 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   }
   override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> = MapBuilder.builder<String, Any>()
     .put("selectionChange", MapBuilder.of("registrationName", "onSelectionChange"))
+    .put("logoViewport", MapBuilder.of("registrationName", "onLogoViewport"))
     .put("runwayChange", MapBuilder.of("registrationName", "onRunwayChange"))
     .put("topLeftBoundary", MapBuilder.of("registrationName", "onLeftBoundary"))
     .put("upBoundary", MapBuilder.of("registrationName", "onUpBoundary"))

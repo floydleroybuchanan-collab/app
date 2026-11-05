@@ -1,3 +1,4 @@
+import { resolveStalkerPlaybackUri } from "@/src/core/stalkerPlayback";
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AppState, Platform, requireNativeComponent, StyleProp, View, ViewProps, ViewStyle } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
@@ -253,17 +254,25 @@ export function StreamPlayer({
       !isSessionCurrent(role, generation)
     ) return; // A mounted preview must never reject fullscreen's refresh request.
     const current = currentSourceRef.current;
+    let portalRefresh = uri.startsWith("stalker://");
     void refreshPlaybackChannel(event.channelKey)
-      .then((channel) => {
+      .then(async (channel) => {
         if (generationRef.current !== generation || !isSessionCurrent(role, generation)) {
           resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
           return;
         }
         if (!channel?.url) {
-          resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, "fresh-channel-unavailable-reused-current");
+          if (portalRefresh) resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "portal-channel-unavailable");
+          else resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, "fresh-channel-unavailable-reused-current");
           return;
         }
-        const fresh = parsePipeHeaders(channel.url);
+        portalRefresh ||= channel.url.startsWith("stalker://");
+        const portal = await resolveStalkerPlaybackUri(channel.url, event.channelKey);
+        if (generationRef.current !== generation || !isSessionCurrent(role, generation)) {
+          resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
+          return;
+        }
+        const fresh = portal ?? parsePipeHeaders(channel.url);
         const freshKind = detectStreamKind(fresh.uri, channel.stream_type);
         if (!isNativeMedia3SupportedStreamKind(freshKind)) {
           resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "unsupported-protocol");
@@ -278,10 +287,13 @@ export function StreamPlayer({
           resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "stale-playback-session");
           return;
         }
-        const message = error instanceof Error ? error.name : "source-refresh-failed";
-        resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, `${message}-reused-current`);
+        if (portalRefresh) resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "portal-source-refresh-failed");
+        else {
+          const message = error instanceof Error ? error.name : "source-refresh-failed";
+          resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, `${message}-reused-current`);
+        }
       });
-  }), [currentChannelKey, owner, engine, playbackKey, role]);
+  }), [currentChannelKey, owner, engine, playbackKey, role, uri]);
 
   useEffect(() => addNativePlaybackTracksListener((event) => {
     const generation = generationRef.current;
@@ -322,7 +334,8 @@ export function StreamPlayer({
   useEffect(() => {
     const media3Available = Platform.OS === "android" && nativePlaybackAvailable();
     const engineAvailable = media3Available;
-    const kindSupported = isNativeMedia3SupportedStreamKind(kind);
+    const portalSource = uri.startsWith("stalker://channel/");
+    const kindSupported = portalSource || isNativeMedia3SupportedStreamKind(kind);
 
     if (!playbackFocused || !uri || !engineAvailable) {
       generationRef.current = 0;
@@ -354,14 +367,25 @@ export function StreamPlayer({
     onStatusRef.current("loading", null);
 
     const isCurrent = () => !cancelled && isSessionCurrent(role, generation);
-    void activateNativePlaybackEngine(role, engine, isCurrent, () => {
+    void (async () => {
+      if (portalSource) {
+        const resolved = await resolveStalkerPlaybackUri(uri, currentChannelKey);
+        if (!isCurrent()) return;
+        if (!resolved) throw new Error("Portal stream is unavailable");
+        const resolvedKind = detectStreamKind(resolved.uri, null);
+        if (!isNativeMedia3SupportedStreamKind(resolvedKind)) throw new Error("Unsupported portal transport");
+        currentSourceRef.current = { key: playbackKey, ...resolved, contentType: media3ContentType(resolvedKind) };
+      }
+      if (!isCurrent()) return;
+      await activateNativePlaybackEngine(role, engine, isCurrent, () => {
       const source = currentSourceRef.current;
       if (role === "preview") prepareNativePreview(generation, currentChannelKey, source.uri, source.headers, source.contentType, bufferProfile);
       else prepareNativeFullscreen(generation, currentChannelKey, source.uri, source.headers, source.contentType, bufferProfile);
       setNativePlaybackMuted(role === "preview" && controlRef.current.muted);
       setNativePlaybackResizeMode(role === "fullscreen" ? controlRef.current.scaleMode : "fit");
       if (controlRef.current.paused) pauseNativePlayback();
-    }).catch(() => {
+      });
+    })().catch(() => {
       if (!isCurrent()) return;
       setSessionPhase(role, generation, "failed", "stream-error");
       if (role === "fullscreen") setNativePlaybackStarting(false);

@@ -12,6 +12,9 @@ import { invalidateGuideOwnershipCaches } from "@/src/source";
 import { addTvKeyListener, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { fonts, radius, tvColors } from "@/src/theme";
+import { usePlaylists } from "@/src/core/playlistRegistry";
+import { playlistOwner } from "@/src/core/playlistCatalog";
+import { stalkerGuideId, stalkerGuideSources } from "@/src/core/stalkerGuide";
 
 export const GUIDE_EPG_DRAWER_WIDTH = 320;
 const PAGE = 40;
@@ -29,12 +32,14 @@ type Props = {
 export function GuideEpgAssignDrawer({ channel, interactive, onInteractiveChange, onReturnToGuide, onAssigned, onClose }: Props) {
   const prefs = useEpgSourcePreferences();
   const multi = useMultiEpgSources();
+  const playlists = usePlaylists();
   const { epgManualRemaps, setEpgManualRemaps } = useStore();
   const sources = useMemo<Source[]>(() => [
     ...(prefs.primaryEnabled ? [{ id: "primary", name: "Playlist 1 EPG" }] : []),
     ...(prefs.userEnabled && prefs.userUrl ? [{ id: "user", name: prefs.userName }] : []),
     ...multi.sources.filter(s => s.enabled && !!s.url).map(s => ({ id: s.id, name: s.name })),
-  ], [prefs.primaryEnabled, prefs.userEnabled, prefs.userUrl, prefs.userName, multi.sources]);
+    ...stalkerGuideSources(playlists).filter(source => source.enabled).map(source => ({ id: source.id, name: source.name })),
+  ], [prefs.primaryEnabled, prefs.userEnabled, prefs.userUrl, prefs.userName, multi.sources, playlists]);
   const [sourceId, setSourceId] = useState("primary");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -60,7 +65,7 @@ export function GuideEpgAssignDrawer({ channel, interactive, onInteractiveChange
       owner.invalidate(); setRows([]); setTotal(0); setPage(0); setMessage(null);
       setQuery(guideEpgSearchTerm(channel.name));
       const extra = multi.sources.find(s => s.enabled && s.overrides[channel.id]);
-      const preferred = extra?.id || (prefs.userEnabled && prefs.userOverrides[channel.id] ? "user" : sourceId);
+      const preferred = extra?.id || (prefs.userEnabled && prefs.userOverrides[channel.id] ? "user" : channel.stalker_id ? stalkerGuideId(playlistOwner(channel)) : sourceId);
       setSourceId(sources.some(s => s.id === preferred) ? preferred : sources[0]?.id || "");
     } else if (!sources.some(s => s.id === sourceId)) setSourceId(sources[0]?.id || "");
   }, [channel, multi.sources, owner, prefs.userEnabled, prefs.userOverrides, sourceId, sources]);
@@ -118,7 +123,9 @@ export function GuideEpgAssignDrawer({ channel, interactive, onInteractiveChange
         if (source === "user") {
           await setNativeGuideChannelBinding(target, xmltvId); clearMultiEpgChannelAssignments(target); prefs.setUserOverride(target, xmltvId);
         } else {
-          await setNativeSourceGuideBinding(source, target, xmltvId); prefs.setUserOverride(target, null); assignMultiEpgChannel(source, target, xmltvId);
+          await setNativeSourceGuideBinding(source, target, xmltvId); prefs.setUserOverride(target, null);
+          if (source.startsWith("portal-user-")) clearMultiEpgChannelAssignments(target);
+          else assignMultiEpgChannel(source, target, xmltvId);
         }
         if (epgManualRemaps[target]) { const next = { ...epgManualRemaps }; delete next[target]; setEpgManualRemaps(next); }
       }

@@ -47,7 +47,9 @@ export type PlaylistRecord = {
   autoEpgSourceIds?: string[];
   epgDiscoveryStatus?: string;
   tombstoneCount?: number;
-  kind?: "m3u" | "xtream";
+  kind?: "m3u" | "xtream" | "stalker";
+  portalGuideRefreshedAt?: number;
+  portalGuideAttemptedAt?: number;
   account?: import("./xtream").XtreamAccount;
 };
 

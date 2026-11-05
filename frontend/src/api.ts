@@ -9,10 +9,15 @@ export type Program = {
 };
 
 export type Channel = {
+  xtream_stream_id?: string;
+  archive_days?: number;
   id: string;
   playlist_id?: string;
   playlist_name?: string;
   source_channel_id?: string;
+  /** Portal commands are resolved only when playback starts; session tokens are never catalog rows. */
+  stalker_id?: string;
+  stalker_cmd?: string;
   source_group?: string;
   /** Provider playlist id before XMLTV matching rewrites `tvg_id`. */
   raw_tvg_id?: string;

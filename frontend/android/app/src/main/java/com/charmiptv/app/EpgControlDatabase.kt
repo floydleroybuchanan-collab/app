@@ -120,6 +120,19 @@ internal interface EpgControlDao {
   @Query("SELECT * FROM epg_channel_bindings WHERE playlistId = :playlistId")
   fun allChannelBindings(playlistId: String): List<EpgChannelBindingEntity>
 
+  @Query("SELECT * FROM epg_channel_bindings WHERE playlistId LIKE 'portal-user-%' ORDER BY playlistId, channelId LIMIT 10001")
+  fun portalBackupBindings(): List<EpgChannelBindingEntity>
+
+  @Query("DELETE FROM epg_channel_bindings WHERE playlistId LIKE 'portal-user-%'")
+  fun clearPortalBackupBindings()
+
+  @Transaction
+  fun replacePortalBackupBindings(bindings: List<EpgChannelBindingEntity>) {
+    clearPortalBackupBindings()
+    bindings.forEach { clearUserChannelBindings(it.channelId) }
+    if (bindings.isNotEmpty()) putChannelBindings(bindings)
+  }
+
   @Query("SELECT playlistId, channelId, xmltvId FROM epg_channel_bindings WHERE playlistId = :playlistId UNION ALL SELECT playlistId, channelId, xmltvId FROM epg_automatic_bindings a WHERE a.playlistId = :playlistId AND NOT EXISTS (SELECT 1 FROM epg_channel_bindings m WHERE m.channelId = a.channelId)")
   fun effectiveBindings(playlistId: String): List<EpgChannelBindingEntity>
 

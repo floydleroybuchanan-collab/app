@@ -115,7 +115,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             action("Stop and exit player") { if (nav?.navController?.popBackStack() != true) CharmNavigation.home(activity) }
         }
         val window = d.window!!
-        window.setBackgroundDrawable(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xF0191321.toInt(), 0xF0100E17.toInt())).apply { setStroke(dp(1), 0xFFB76CFF.toInt()) })
+        window.setBackgroundDrawable(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xF01B1E25.toInt(), 0xF00C0E12.toInt())).apply { setStroke(dp(1), 0xFFD29CFF.toInt()) })
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.setDimAmount(.16f)
         window.setGravity(Gravity.END)

@@ -722,7 +722,7 @@ export default function PlayerScreen() {
             <Text style={{ flex: 1, color: "#fff", fontFamily: fonts.semibold }}>TV Guide · {channel?.name || "Live TV"}</Text>
             <Pressable onPress={() => setGuideOverlayOpen(false)} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Text style={styles.controlLabel}>Close guide</Text></Pressable>
           </View>
-          <NativeGuideCanvas channels={overlayGuideChannels} windowStart={guideWindowStart} windowEnd={guideWindowEnd} active overlayMode restoreChannelId={channelId} channelNumberById={numberById}
+          <NativeGuideCanvas channels={overlayGuideChannels} windowStart={guideWindowStart} windowEnd={guideWindowEnd} active overlayMode showLogos={channelLogos} restoreChannelId={channelId} channelNumberById={numberById}
             onChannelFocus={() => undefined} onProgramFocus={() => undefined}
             onChannelPress={(next) => { changeChannel(next.id, true); setGuideOverlayOpen(false); }}
             onProgramPress={(_program, next) => { changeChannel(next.id, true); setGuideOverlayOpen(false); }}

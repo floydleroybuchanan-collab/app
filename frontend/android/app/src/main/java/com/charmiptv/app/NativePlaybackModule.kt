@@ -68,6 +68,20 @@ class NativePlaybackModule(private val ctx: ReactApplicationContext) :
   @ReactMethod fun resolveFreshSource(requestId: Double, uri: String?, headers: ReadableMap?, contentType: String?, failureReason: String?) { NativePlaybackManager.provideFreshSource(requestId.toLong(), uri, readableMapToStringMap(headers), contentType, failureReason) }
   @ReactMethod fun setResizeMode(mode: String?) { NativePlaybackManager.setResizeMode(mode) }
   @ReactMethod fun pause() { NativePlaybackManager.pause() }
+  @ReactMethod fun getTimeline(channelKey: String, promise: Promise) { onMain {
+    val timeline = NativePlaybackManager.timeline(channelKey)
+    if (activeChannelKey != channelKey || timeline == null) { promise.resolve(null); return@onMain }
+    promise.resolve(Arguments.createMap().apply {
+      putDouble("generation", activeGeneration.toDouble())
+      putDouble("positionMs", (timeline["positionMs"] as Long).toDouble())
+      putDouble("durationMs", (timeline["durationMs"] as Long).toDouble())
+      putBoolean("seekable", timeline["seekable"] as Boolean)
+      putBoolean("ended", timeline["ended"] as Boolean)
+    })
+  } }
+  @ReactMethod fun seekTimeline(channelKey: String, generation: Double, positionMs: Double) { onMain {
+    if (positionMs.isFinite() && activeChannelKey == channelKey && activeGeneration == generation.toLong()) NativePlaybackManager.seekTimeline(channelKey, positionMs.toLong())
+  } }
   @ReactMethod fun resume() { NativePlaybackManager.resume() }
   @ReactMethod fun setMuted(muted: Boolean) { NativePlaybackManager.setMuted(muted) }
   @ReactMethod fun selectAudio(groupIndex: Double, trackIndex: Double) { NativePlaybackManager.selectAudio(groupIndex.toInt(), trackIndex.toInt(), null) }

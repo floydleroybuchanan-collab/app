@@ -92,6 +92,17 @@ export function SourceRefreshScheduler() {
         const usedSources = new Set(playlists.filter(playlist => playlist.enabled).flatMap(playlist => playlist.epgSourceIds));
         const activeChannelIds = new Set(activeChannels.map(channel => channel.id));
         let customGuideChanged = false;
+        for (const playlist of playlists) {
+          if (!screenIsSafe()) break;
+          if (playlist.kind !== "stalker" || !playlist.enabled || playlist.autoEpg === false || !playlist.refreshHours || !playlist.count) continue;
+          const now = Date.now();
+          if (now - (playlist.portalGuideRefreshedAt || 0) < playlist.refreshHours * 3_600_000 ||
+              now - (playlist.portalGuideAttemptedAt || 0) < 5 * 60_000) continue;
+          await syncPlaylistEpg(activeChannels, true, playlist.id, () => {
+            pendingCatalogRefresh = true;
+            customGuideChanged = true;
+          }, screenIsSafe, true);
+        }
         for (const source of customSources) {
           if (!screenIsSafe()) break;
           if (!source.enabled || !source.url || source.refreshHours === 0) continue;

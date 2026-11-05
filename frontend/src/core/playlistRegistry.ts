@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import { decodeXtream, previewXtream, type XtreamAccount } from "./xtream";
+import { decodeStalker, previewStalker } from "./stalker";
 import { useEffect, useState } from "react";
 import type { Channel } from "@/src/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -122,6 +123,7 @@ export async function getPlaylistUrl(row: PlaylistRecord): Promise<string> {
   return row.managed ? managedUrl(row.id) : await SecureStore.getItemAsync(`playlist-${row.id}`) || "";
 }
 export function validatePlaylistUrl(url: string) {
+  if (decodeStalker(url)) return;
   if (decodeXtream(url)) return;
   if (/^content:\/\/\S+$/.test(url)) return;
   if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2048) throw new Error("Enter a complete http:// or https:// M3U URL (up to 2,048 characters).");
@@ -129,6 +131,8 @@ export function validatePlaylistUrl(url: string) {
 }
 export async function previewPlaylist(url: string) {
   validatePlaylistUrl(url.trim());
+  const stalker = decodeStalker(url);
+  if (stalker) return previewStalker(stalker);
   const xtream = decodeXtream(url);
   if (xtream) return previewXtream(xtream);
   try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return Object.assign(parsed.channels, { epgUrls: parsed.epgUrls || [], skippedEntries: parsed.rejected }); }
@@ -211,11 +215,11 @@ export function savePersonalPlaylist(name: string, url: string, preview: Channel
     const old = existingId ? rows.find((row) => row.id === existingId) : undefined;
     if (existingId && (!old || old.managed)) throw new Error("This supplied playlist cannot be replaced.");
     validatePlaylistUrl(url); validatePlaylistImport({ channels: preview, rejected: 0, truncated: false });
-    const row = { kind: (decodeXtream(url) ? "xtream" : "m3u") as "xtream" | "m3u", ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist" };
+    const row = { kind: (decodeStalker(url) ? "stalker" : decodeXtream(url) ? "xtream" : "m3u") as "xtream" | "m3u" | "stalker", ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist" };
     const catalogs = await allCatalogs(rows); catalogs.set(row.id, scopePlaylistChannels(row, preview));
     const proposed = old ? rows.map((item) => item.id === row.id ? row : item) : [...rows, row];
     combinePlaylistCatalogs(proposed, catalogs);
-    row.kind = decodeXtream(url) ? "xtream" : "m3u";
+    row.kind = decodeStalker(url) ? "stalker" : decodeXtream(url) ? "xtream" : "m3u";
     const next = await writeCatalog(row, preview);
     const previousUrl = old ? await getPlaylistUrl(old) : null;
     await SecureStore.setItemAsync(`playlist-${row.id}`, url);
@@ -240,8 +244,26 @@ export function removePlaylist(id: string): Promise<void> {
     if (!row || row.managed) throw new Error("Supplied playlists can be disabled, but cannot be removed.");
     const next = rows.filter((item) => item.id !== id);
     await commit(next); await SecureStore.deleteItemAsync(`playlist-${id}`);
+    if (row.kind === "stalker" && /^user-[a-z0-9-]+$/.test(id)) {
+      await FileSystem.deleteAsync(`${FileSystem.documentDirectory}provider-guides/stalker-${id}.xml`, { idempotent: true }).catch(() => undefined);
+      const { removeStalkerGuide } = await import("./stalkerGuide");
+      await removeStalkerGuide(id);
+    }
     const files = await FileSystem.readDirectoryAsync(ROOT);
     for (const file of files.filter((name) => name.startsWith(`${id}-`))) await FileSystem.deleteAsync(`${ROOT}${file}`, { idempotent: true });
+  });
+}
+
+export function notePortalGuideAttempt(expected: PlaylistRecord, status: string, swapped: boolean): Promise<void> {
+  return exclusive(async () => {
+    const rows = await load();
+    const current = rows.find(row => row.id === expected.id && row.kind === "stalker" && row.enabled && row.autoEpg !== false && row.revision === expected.revision);
+    if (!current) return;
+    const now = Date.now();
+    await commit(rows.map(row => row === current ? {
+      ...row, epgDiscoveryStatus: status, portalGuideAttemptedAt: now,
+      ...(swapped ? { portalGuideRefreshedAt: now } : {}),
+    } : row));
   });
 }
 

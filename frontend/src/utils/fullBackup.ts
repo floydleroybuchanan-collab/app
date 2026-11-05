@@ -3,6 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import { listPlaylists } from "@/src/core/playlistRegistry";
+import { decodeStalker } from "@/src/core/stalker";
+import { scopePlaylistChannels, type PlaylistRecord } from "@/src/core/playlistCatalog";
 import { readNativeCustomization, nativeSetChannelHidden, nativeSetCustomNumber, nativeSetChannelOrder, nativeCreateCustomGroup, nativeDeleteCustomGroup, nativeSetCustomGroupMembership, type NativeCustomizationSnapshot } from "@/src/nativeCustomization";
 import { clearNativeEpgBindings, readNativeEpgBindings, setNativeEpgBinding, type NativeEpgBindingMap } from "@/src/nativeEpgBindings";
 
@@ -24,8 +26,36 @@ type FullBackupPayload = {
   playlistFiles: Record<string, string>;
   customization: NativeCustomizationSnapshot;
   manualEpgBindings: NativeEpgBindingMap;
+  portalGuideBindings?: PortalGuideBinding[];
   checksum: string;
 };
+type PortalGuideBinding = { sourceId: string; channelId: string; xmltvId: string };
+
+function validatePortalGuideBindings(value: unknown, settings: Record<string, string>, files: Record<string, string>): PortalGuideBinding[] {
+  if (!Array.isArray(value) || value.length > 10_000) throw new Error("Invalid portal guide assignments.");
+  if (!value.length) return [];
+  const rows: PlaylistRecord[] = JSON.parse(settings.charm_playlist_registry_v1 || "[]");
+  if (!Array.isArray(rows)) throw new Error("Invalid portal playlist registry.");
+  const portals = new Set(rows.filter(row => row.kind === "stalker" && !row.managed && /^user-[a-z0-9-]{1,35}$/.test(row.id)).map(row => `portal-${row.id}`));
+  const channelIds = new Set<string>();
+  for (const row of rows) {
+    if (!/^[a-z0-9-]+$/.test(row.id)) continue;
+    const revision = [row.revision, row.previousRevision].find(rev => rev && /^[a-z0-9-]+$/.test(rev) && Object.hasOwn(files, `${row.id}-${rev}.json`));
+    if (!revision) continue;
+    const raw = JSON.parse(files[`${row.id}-${revision}.json`]);
+    if (!Array.isArray(raw)) throw new Error("Invalid playlist catalog for portal guide assignments.");
+    for (const channel of scopePlaylistChannels(row, raw)) channelIds.add(channel.id);
+  }
+  const seen = new Set<string>();
+  return value.map(binding => {
+    if (!binding || !portals.has(binding.sourceId) || !channelIds.has(binding.channelId) ||
+        typeof binding.xmltvId !== "string" || !/^\d{1,30}$/.test(binding.xmltvId) || seen.has(binding.channelId)) {
+      throw new Error("A portal guide assignment refers to a missing source or channel.");
+    }
+    seen.add(binding.channelId);
+    return { sourceId: binding.sourceId, channelId: binding.channelId, xmltvId: binding.xmltvId };
+  });
+}
 
 function checksum(value: string): string {
   // Two independent 32-bit accumulators detect truncation/corruption without
@@ -67,7 +97,13 @@ async function capture(): Promise<Omit<FullBackupPayload, "checksum">> {
   } catch (error) {
     if (error instanceof Error && error.message.includes("too large")) throw error;
   }
-  return { format: FORMAT, version: VERSION, createdAt: new Date().toISOString(), settings, personalPlaylistUrls, playlistFiles, customization: await readNativeCustomization(), manualEpgBindings: await readNativeEpgBindings() };
+  let portalGuideBindings: PortalGuideBinding[] | undefined;
+  if (playlists.some(row => row.kind === "stalker")) {
+    const module = NativeModules.CharmCustomEpg;
+    if (typeof module?.readPortalBackupBindings !== "function") throw new Error("This app build cannot export portal guide assignments.");
+    portalGuideBindings = validatePortalGuideBindings(await module.readPortalBackupBindings(), settings, playlistFiles);
+  }
+  return { format: FORMAT, version: VERSION, createdAt: new Date().toISOString(), settings, personalPlaylistUrls, playlistFiles, customization: await readNativeCustomization(), manualEpgBindings: await readNativeEpgBindings(), ...(portalGuideBindings ? { portalGuideBindings } : {}) };
 }
 function parse(raw: string): FullBackupPayload {
   const value = JSON.parse(raw) as FullBackupPayload;
@@ -77,6 +113,7 @@ function parse(raw: string): FullBackupPayload {
   if (Object.entries(value.personalPlaylistUrls).some(([id,url]) => !/^user-[a-z0-9-]+$/.test(id) || typeof url !== "string")) throw new Error("Invalid personal playlist backup.");
   const { checksum: supplied, ...body } = value;
   if (!supplied || checksum(withoutChecksum(body)) !== supplied) throw new Error("Backup integrity check failed. The file may be incomplete or changed.");
+  if (value.portalGuideBindings !== undefined) validatePortalGuideBindings(value.portalGuideBindings, value.settings, value.playlistFiles);
   return value;
 }
 async function writePortable(raw: string, fileName: string) {
@@ -123,6 +160,9 @@ async function apply(value: FullBackupPayload) {
   const currentCustomization = await readNativeCustomization();
   const currentBindings = await readNativeEpgBindings();
   const currentPlaylists = await listPlaylists();
+  const restorePortalBindings = value.portalGuideBindings !== undefined || currentPlaylists.some(row => row.kind === "stalker");
+  const portalModule = NativeModules.CharmCustomEpg;
+  if (restorePortalBindings && typeof portalModule?.restorePortalBackupBindings !== "function") throw new Error("This app build cannot restore portal guide assignments.");
   const urlIds = new Set([...currentPlaylists.filter((item) => !item.managed).map((item) => item.id), ...Object.keys(value.personalPlaylistUrls)]);
   const currentUrls: Record<string, string> = {};
   for (const id of urlIds) currentUrls[id] = await SecureStore.getItemAsync(`playlist-${id}`) || "";
@@ -151,6 +191,8 @@ async function apply(value: FullBackupPayload) {
     for (const [id, url] of Object.entries(value.personalPlaylistUrls)) await SecureStore.setItemAsync(`playlist-${id}`, url);
     await applyCustomization(value.customization);
     await applyBindings(value.manualEpgBindings);
+    // Last operation: Room replaces the entire portal scope atomically.
+    if (restorePortalBindings) await portalModule.restorePortalBackupBindings(value.portalGuideBindings || []);
   } catch (error) {
     try {
       for (const name of await FileSystem.readDirectoryAsync(PLAYLIST_ROOT)) {
@@ -207,13 +249,17 @@ export async function restoreFullBackup(password: string) {
   if (info.exists && info.size && info.size > 23 * 1024 * 1024) throw new Error("Backup exceeds the safety limit.");
   let raw = await FileSystem.readAsStringAsync(selected.uri);
   if (raw.length > 23 * 1024 * 1024) throw new Error("Backup exceeds the safety limit.");
-  if (raw.startsWith("CMLBACKUP1.")) {
+  const encrypted = raw.startsWith("CMLBACKUP1.");
+  if (encrypted) {
     if (!NativeModules.CharmBackupCrypto) throw new Error("Install the updated app to restore this encrypted backup.");
     raw = await NativeModules.CharmBackupCrypto.decrypt(raw,password);
   }
   const parsed = parse(raw);
+  for (const credential of Object.values(parsed.personalPlaylistUrls)) {
+    if (decodeStalker(credential) && !encrypted) throw new Error("Portal credentials require an encrypted backup.");
+  }
   const accepted = await new Promise<boolean>(resolve => Alert.alert("Restore backup?",
-    `${selected.name}\nCreated: ${parsed.createdAt}\n${parsed.scope === "settings" ? "Replaces the included basic Live TV settings and favorites. Playlists and provider credentials stay unchanged." : "Replaces saved Live TV settings, playlists, provider addresses, channel customizations and guide assignments."}\nVOD data and account logins are not restored. Restart the app afterwards.`,
+    `${selected.name}\nCreated: ${parsed.createdAt}\n${parsed.scope === "settings" ? "Replaces the included basic Live TV settings and favorites. Playlists and provider credentials stay unchanged." : "Replaces saved Live TV settings, playlists, provider addresses, channel customizations and guide assignments. Playlist VOD favorites and resume points are restored when included in the backup."}\nThe built-in VOD library's local data and app account logins are excluded. Restart the app afterwards.`,
     [{text:"Cancel",style:"cancel",onPress:()=>resolve(false)},{text:"Restore",onPress:()=>resolve(true)}],{cancelable:true,onDismiss:()=>resolve(false)}));
   if (!accepted) throw new Error("Restore cancelled. No settings changed.");
   await apply(parsed);

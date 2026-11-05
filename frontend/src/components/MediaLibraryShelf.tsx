@@ -5,11 +5,14 @@ import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { usePurpleTvDrawer } from "./PurpleTvShell";
 import { openMediaLibrary } from "@/src/core/mediaLibrary";
+import { useProviderLibrary } from "@/src/core/providerLibrary";
+import { usePlaylists } from "@/src/core/playlistRegistry";
 
 type Item = { id: string; title: string; poster?: string; section: string };
 /** Uses the same native catalog, account, and watch database as the VOD screens. */
 export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "continue" | "favorites"; query?: string }) {
   const focused = useIsFocused(), router = useRouter();
+  const providerLibrary = useProviderLibrary(), playlists = usePlaylists();
   const { openDrawer } = usePurpleTvDrawer();
   const [items, setItems] = useState<Item[]>([]), [error, setError] = useState("");
   const [revision, setRevision] = useState(0), [opening, setOpening] = useState(false);
@@ -36,10 +39,14 @@ export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "contin
     finally { busy.current = false; setOpening(false); }
   };
   const title = query !== undefined ? "Movies & series" : kind === "favorites" ? "Your movies & series" : "Continue watching";
+  const enabledOwners = new Set(playlists.filter(row => row.enabled && (row.kind === "xtream" || row.kind === "stalker")).map(row => row.id));
+  const visibleItems: Item[] = [...items, ...providerLibrary.filter(row => enabledOwners.has(row.owner) &&
+    (query !== undefined ? row.title.toLowerCase().includes(query.toLowerCase()) : kind === "favorites" ? row.favorite : row.positionMs > 0 && (!row.durationMs || row.positionMs < row.durationMs - 1000)))
+    .map(row => ({ id: `${row.owner}:${row.kind}:${row.catalogId}`, title: row.title, section: `provider:${row.owner}:${row.kind}:${row.catalogId}` }))];
   return <View style={styles.section}>
     <View style={styles.header}><Text style={styles.heading}>{title}</Text><Pressable disabled={opening} onPress={() => void open(query !== undefined ? `search:${query}` : kind === "favorites" ? "favorites" : "home")} style={({ focused }: any) => [styles.button, focused && styles.focus]}><Text style={styles.text}>{query !== undefined ? "Search catalog" : "Open library"}</Text></Pressable></View>
     {error ? <Text style={styles.muted}>{error}</Text> : null}
-    {items.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>{items.map(item => <Pressable key={item.section + item.id} disabled={opening} onPress={() => void open(item.section)} style={({ focused }: any) => [styles.card, focused && styles.focus]}>
+    {visibleItems.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>{visibleItems.map(item => <Pressable key={item.section + item.id} disabled={opening} onPress={() => void open(item.section)} style={({ focused }: any) => [styles.card, focused && styles.focus]}>
       {item.poster ? <Image source={{ uri: item.poster }} contentFit="cover" style={styles.poster} /> : <View style={styles.poster} />}
       <Text numberOfLines={2} style={styles.text}>{item.title}</Text>
     </Pressable>)}</ScrollView> : <Text style={styles.muted}>{query !== undefined ? "Search your current catalog alongside live TV." : "Your saved titles and viewing progress appear here."}</Text>}

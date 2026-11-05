@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { findNodeHandle, Platform, requireNativeComponent, type NativeSyntheticEvent, View } from "react-native";
+import { ChannelLogo } from "./ChannelLogo";
 import type { Channel, Program } from "@/src/api";
 import { setGuideFocusedChannel, setGuideFocusedProgram } from "@/src/core/guideSelectionStore";
 
@@ -9,6 +10,8 @@ type Props = {
   channels: Channel[]; windowStart: string; windowEnd: string; active: boolean; restoreChannelId?: string | null; restoreTimeMs?: number | null; reloadGeneration?: number;
   clock24h?: boolean;
   overlayMode?: boolean;
+  showLogos?: boolean;
+  pauseLogos?: boolean;
   channelNumberById: Record<string, number>;
   onChannelFocus: (channel: Channel, settled: boolean) => void;
   onProgramFocus: (program: Program, channel: Channel, settled: boolean) => void;
@@ -32,6 +35,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   reloadGeneration = 0,
   clock24h = false,
   overlayMode = false,
+  showLogos = true,
+  pauseLogos = false,
   channelNumberById,
   onChannelFocus,
   onProgramFocus,
@@ -116,6 +121,14 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
     }
   }, [channelById, onChannelFocus, onChannelPress, onProgramFocus, onProgramPress]);
 
+  // The native canvas owns scrolling/focus. Only its visible rows get image
+  // views; ChannelLogo supplies shared bounded loads, downsampling and fallback.
+  const [logoViewport, setLogoViewport] = useState<{ ids: string[]; rowHeight: number; headerHeight: number }>({ ids: [], rowHeight: 40, headerHeight: 29 });
+  const handleLogoViewport = useCallback((event: NativeSyntheticEvent<{ ids: string[]; rowHeight: number; headerHeight: number }>) => {
+    const value = event.nativeEvent;
+    setLogoViewport({ ids: (value.ids || []).slice(0, 32), rowHeight: value.rowHeight, headerHeight: value.headerHeight });
+  }, []);
+
   const handleRunwayChange = useCallback((event: NativeSyntheticEvent<RunwayEvent>) => {
     const value = event.nativeEvent;
     onViewportChannelIds(value.ids || [], value.priorityIds || [], value.pageSize || 8, Math.max(0, value.velocity || 0));
@@ -128,11 +141,14 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
 
   if (!Native) return <View style={{ flex: 1 }} />;
   return (
+    <View style={{ flex: 1, overflow: "hidden" }}>
     <Native
       ref={bindNativeGuideRef}
       style={{ flex: 1 }}
       channels={nativeChannels}
       overlayMode={overlayMode}
+      showLogos={showLogos}
+      onLogoViewport={handleLogoViewport}
       rightBoundaryEnabled={!!onRightBoundary}
       onRightBoundary={onRightBoundary}
       windowStartMs={windowStartMs}
@@ -147,6 +163,13 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       onLeftBoundary={onLeftBoundary}
       onUpBoundary={onUpBoundary}
     />
+    {showLogos && !pauseLogos && logoViewport.ids.map((id, slot) => {
+      const channel = channelById.get(id);
+      return channel ? <View key={id} pointerEvents="none" accessible={false} style={{ position: "absolute", left: 36, top: logoViewport.headerHeight + slot * logoViewport.rowHeight + 5, width: 30, height: 30 }}>
+        <ChannelLogo name={channel.name} logo={channel.logo} size={30} />
+      </View> : null;
+    })}
+    </View>
   );
 });
 

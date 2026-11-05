@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
     height: "100%",
     flexShrink: 0,
     alignItems: "center",
-    backgroundColor: "#150B21",
+    backgroundColor: tvColors.drawerGlass,
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
     paddingTop: 10,
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
   sidebar: {
     width: PURPLE_SIDEBAR_WIDTH,
     height: "100%",
-    backgroundColor: "#150B21",
+    backgroundColor: tvColors.drawerGlass,
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
     paddingHorizontal: 10,
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: tvColors.line,
     paddingTop: 6,
-    backgroundColor: "#150B21",
+    backgroundColor: tvColors.drawerGlass,
   },
   sidebarFooterRow: { flexDirection: "row", gap: 4 },
   power: {

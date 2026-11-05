@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     width: GUIDE_GROUP_DRAWER_WIDTH,
     height: "100%",
     flexShrink: 0,
-    backgroundColor: "rgba(12,7,26,0.98)",
+    backgroundColor: tvColors.drawerGlass,
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
   },

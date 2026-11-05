@@ -11,6 +11,8 @@ import { reminderKey } from "@/src/utils/time";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
+import { canReplayProviderProgramme, resolveProviderCatchup } from "@/src/core/providerCatchup";
+import { stageProviderMedia } from "@/src/core/providerMediaSession";
 
 export function ProgramModal() {
   const styles = useAdaptiveStyles(baseStyles, {});
@@ -24,6 +26,9 @@ export function ProgramModal() {
   const [focusClaim, setFocusClaim] = React.useState(false);
   // Ref-only busy guard — never disable the focused TV button (that crashes Fire TV).
   const mountedRef = React.useRef(true);
+  const activeProgramRef = React.useRef(activeProgram);
+  const replayRequest = React.useRef<typeof activeProgram>(null);
+  activeProgramRef.current = activeProgram;
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -148,6 +153,19 @@ export function ProgramModal() {
             {msg && <Text style={styles.msg}>{msg}</Text>}
 
             <View style={styles.actions}>
+              {canReplayProviderProgramme(channel, program) ? <Pressable testID="program-replay-btn" style={({ focused }: any) => [styles.btn, styles.watchBtn, focused && styles.btnFocused]} onPress={() => {
+                if (replayRequest.current === activeProgram) return;
+                replayRequest.current = activeProgram;
+                void resolveProviderCatchup(channel, program).then(media => {
+                  if (!mountedRef.current || activeProgramRef.current !== activeProgram) return;
+                  const token = stageProviderMedia(media); closeProgram();
+                  router.push({ pathname: "/provider-player", params: { token } } as any);
+                }).catch(() => {
+                  if (mountedRef.current && activeProgramRef.current === activeProgram) setMsg("This programme could not be replayed. Check the provider's archive availability.");
+                }).finally(() => {
+                  if (replayRequest.current === activeProgram) replayRequest.current = null;
+                });
+              }}><Ionicons name="play-back" size={16} color="#fff"/><Text style={styles.watchText}>Replay programme</Text></Pressable> : null}
               <Pressable
                 style={({ focused }: any) => [styles.btn, styles.watchBtn, focused && styles.btnFocused]}
                 hasTVPreferredFocus={focusClaim}

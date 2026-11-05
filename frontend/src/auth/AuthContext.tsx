@@ -17,6 +17,7 @@ import {
 import { clearManagedContentAccess, configureManagedContentAccess } from "@/src/auth/managedContentAccess";
 import { storage } from "@/src/utils/storage";
 import { forgetRememberedLogin, saveRememberedLogin } from "./rememberedLogin";
+import { clearProviderMedia } from "@/src/core/providerMediaSession";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
 const SESSION_RECHECK_MS = 5 * 60_000;
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const lastValidatedAtRef = useRef(0);
 
   const clearLocalSession = useCallback(async (message?: string) => {
+    clearProviderMedia();
     tokenRef.current = null;
     NativeModules.CharmVod?.setUsageSession?.(null);
     clearManagedContentAccess();

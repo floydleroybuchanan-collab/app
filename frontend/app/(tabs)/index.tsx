@@ -307,8 +307,8 @@ function LiveTvHomeScreenContent() {
               onPlay={play}
             />
           ))}
-          <MediaLibraryShelf />
-      </ScrollView>
+        </ScrollView>
+        <MediaLibraryShelf />
       </ScrollView>
     </PurpleTvShell>
   );

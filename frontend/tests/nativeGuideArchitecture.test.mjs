@@ -141,7 +141,7 @@ test("Settings claims destination focus before swapping tile/detail trees", asyn
 
 test("native Guide precomputes row labels outside the repaint loop", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
-  assert.match(view, /ChannelRow\(val id: String, val name: String, val number: String, val label: String\)/);
+  assert.match(view, /ChannelRow\(val id: String, val name: String, val number: String, val label: String, val displayNumber: String\)/);
   assert.match(view, /drawClippedText\(canvas, row\.label/);
   assert.doesNotMatch(view, /val rowLabel = if \(row\.number\.isBlank\(\)/);
 });
@@ -181,4 +181,49 @@ test("native Guide resolves short versus held Select before opening a programme"
   assert.match(activity, /if \(owner == null \|\| TvRemoteModule\.remoteContext != owner\) return true/);
   assert.match(activity, /super\.dispatchKeyEvent\(down\)[\s\S]{0,100}super\.dispatchKeyEvent\(up\)/);
   assert.doesNotMatch(activity, /consumedLongSelect/);
+});
+
+test("Guide logos are limited to native visible rows and never take input ownership", async () => {
+  const [bridge, view, manager, logos, guide] = await Promise.all([
+    source("src/components/NativeGuideCanvas.tsx"),
+    source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"),
+    source("src/components/ChannelLogo.tsx"), source("app/(tabs)/guide.tsx"),
+  ]);
+  assert.match(view, /logoCount = .*coerceIn\(0, 32\)/);
+  assert.match(view, /lastLogoFirst != firstVisibleRow \|\| ids != lastLogoIds/);
+  assert.match(manager, /onLogoViewport/);
+  assert.match(bridge, /ids: \(value.ids \|\| \[\]\)\.slice\(0, 32\)/);
+  assert.match(bridge, /pointerEvents="none" accessible=\{false\}/);
+  assert.match(bridge, /showLogos && !pauseLogos && logoViewport.ids.map/);
+  assert.match(guide, /showLogos=\{channelLogos\}\s+pauseLogos=\{!isFocused \|\| surfLogosSuppressed\}/);
+  assert.match(logos, /allowDownscaling/);
+  assert.match(logos, /cancelQueuedRequest\(\)/);
+  assert.match(logos, /maxConcurrentImageLoads = 4/);
+  assert.doesNotMatch(view, /BitmapFactory|Glide|ImageDecoder/);
+});
+
+test("home continue-watching shelf is outside the horizontal recent-channel scroller", async () => {
+  const home = await source("app/(tabs)/index.tsx");
+  const ts = await import("typescript");
+  const ast = ts.default.createSourceFile("home.tsx", home, ts.default.ScriptTarget.Latest, true, ts.default.ScriptKind.TSX);
+  let checked = false;
+  function visit(node, horizontalAncestor = false) {
+    const isHorizontal = ts.default.isJsxElement(node) && node.openingElement.tagName.getText(ast) === "ScrollView" && node.openingElement.attributes.properties.some(p => p.name?.getText(ast) === "horizontal");
+    if (ts.default.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === "MediaLibraryShelf") {
+      checked = true;
+      assert.equal(horizontalAncestor, false);
+    }
+    ts.default.forEachChild(node, child => visit(child, horizontalAncestor || isHorizontal));
+  }
+  visit(ast);
+  assert.ok(checked);
+});
+
+test("guide fit retains readable bounded labels and full accessibility text", async () => {
+  const [view, rail] = await Promise.all([source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"), source("src/components/GuidePreviewRail.tsx")]);
+  assert.match(view, /TextUtils.ellipsize\(number, numberPaint, 25f \* density/);
+  assert.match(view, /contentDescription = if \(program == null\) row.label/);
+  assert.match(rail, /maxFontSizeMultiplier=\{1.15\}/);
+  assert.match(rail, /accessibilityLabel=\{about\}[^\n]+numberOfLines=\{3\}/);
 });

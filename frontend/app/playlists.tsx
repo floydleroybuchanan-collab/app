@@ -1,3 +1,4 @@
+import { encodeStalker, decodeStalker } from "@/src/core/stalker";
 import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import { encodeXtream, decodeXtream } from "@/src/core/xtream";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -42,11 +43,15 @@ export default function PlaylistsScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [sourceKind, setSourceKind] = useState<"m3u" | "xtream">("m3u");
+  const [sourceKind, setSourceKind] = useState<"m3u" | "xtream" | "stalker">("m3u");
+  const [portalMac, setPortalMac] = useState("");
+  const [portalSerial, setPortalSerial] = useState("");
+  const [portalDeviceId, setPortalDeviceId] = useState("");
+  const [portalDeviceId2, setPortalDeviceId2] = useState("");
   const [xcUser, setXcUser] = useState("");
   const [xcPassword, setXcPassword] = useState("");
   const [xcOutput, setXcOutput] = useState<"ts" | "m3u8">("ts");
-  const sourceValue = () => sourceKind === "xtream" ? encodeXtream({ server: url, username: xcUser, password: xcPassword, output: xcOutput }) : url.trim();
+  const sourceValue = () => sourceKind === "stalker" ? encodeStalker({ server: url, mac: portalMac, serial: portalSerial, deviceId: portalDeviceId, deviceId2: portalDeviceId2, username: xcUser, password: xcPassword }) : sourceKind === "xtream" ? encodeXtream({ server: url, username: xcUser, password: xcPassword, output: xcOutput }) : url.trim();
   const [preview, setPreview] = useState<PlaylistPreview | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -82,7 +87,7 @@ export default function PlaylistsScreen() {
     </View>
     {/* The shell boundary includes the fixed header; a nested upward trap blocks it. */}
     <View style={styles.scrollWrap}><ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never">
-      <Text style={styles.help}>Use Charming MediaLab’s supplied playlists, your own M3U or Xtream Codes playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
+      <Text style={styles.help}>Use Charming MediaLab’s supplied playlists, your own M3U, Xtream Codes or Stalker portal playlists, or both. You can disable either supplied playlist or both; disabled playlists keep their saved setup and channels. Each playlist has independent guide choices and an update schedule. HTTP and HTTPS addresses are supported.</Text>
       {!!notice && <Text accessibilityLiveRegion="polite" style={styles.message}>{notice}</Text>}
       {!parental.ready ? <Text style={styles.text}>Loading settings…</Text> : parental.hasPin && !unlocked ? <View style={styles.card}>
         <Text style={styles.text}>Enter your parental PIN to manage playlists.</Text>
@@ -91,11 +96,18 @@ export default function PlaylistsScreen() {
       </View> : editing !== null ? <View style={styles.card}>
         <Text style={styles.heading}>{editing ? "Edit personal playlist" : "Add personal playlist"}</Text>
         <TextInput accessibilityLabel="Playlist name" placeholder="Playlist name" placeholderTextColor="#a99cbc" value={name} onChangeText={setName} maxLength={60} style={styles.input} editable={!busy} />
-        <TextInput accessibilityLabel={sourceKind === "xtream" ? "Provider server address" : "M3U URL"} placeholder={sourceKind === "xtream" ? "http://provider.example:8080" : "https://provider.example/playlist.m3u"} placeholderTextColor="#a99cbc" value={url} onChangeText={(value) => { setUrl(value); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry={sourceKind === "m3u"} style={styles.input} editable={!busy} />
-        {sourceKind === "xtream" && <>
+        <TextInput accessibilityLabel={sourceKind !== "m3u" ? "Provider server address" : "M3U URL"} placeholder={sourceKind !== "m3u" ? "http://provider.example:8080/c/" : "https://provider.example/playlist.m3u"} placeholderTextColor="#a99cbc" value={url} onChangeText={(value) => { setUrl(value); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry={sourceKind === "m3u"} style={styles.input} editable={!busy} />
+        {sourceKind === "stalker" && <>
+          <TextInput accessibilityLabel="Provider authorized MAC address" placeholder="MAC: 00:00:00:00:00:00" placeholderTextColor="#a99cbc" value={portalMac} onChangeText={(v) => { setPortalMac(v); setPreview(null); }} autoCapitalize="characters" autoCorrect={false} style={styles.input} editable={!busy} />
+          <TextInput accessibilityLabel="Portal serial number" placeholder="Serial number (if supplied)" placeholderTextColor="#a99cbc" value={portalSerial} onChangeText={(v) => { setPortalSerial(v); setPreview(null); }} autoCorrect={false} style={styles.input} editable={!busy} />
+          <TextInput accessibilityLabel="Portal device ID" placeholder="Device ID (if supplied)" placeholderTextColor="#a99cbc" value={portalDeviceId} onChangeText={(v) => { setPortalDeviceId(v); setPreview(null); }} autoCorrect={false} style={styles.input} editable={!busy} />
+          <TextInput accessibilityLabel="Portal second device ID" placeholder="Second device ID (if supplied)" placeholderTextColor="#a99cbc" value={portalDeviceId2} onChangeText={(v) => { setPortalDeviceId2(v); setPreview(null); }} autoCorrect={false} style={styles.input} editable={!busy} />
+          <Text style={styles.help}>Use the device identity authorized by your provider. Portal details are saved in secure device storage. Portal guide data updates with this source; failed downloads retain the previous guide.</Text>
+        </>}
+        {sourceKind !== "m3u" && <>
           <TextInput accessibilityLabel="Provider username" placeholder="Username" placeholderTextColor="#a99cbc" value={xcUser} onChangeText={(v) => { setXcUser(v); setPreview(null); }} autoCapitalize="none" autoCorrect={false} style={styles.input} editable={!busy} />
           <TextInput accessibilityLabel="Provider password" placeholder="Password" placeholderTextColor="#a99cbc" value={xcPassword} onChangeText={(v) => { setXcPassword(v); setPreview(null); }} autoCapitalize="none" autoCorrect={false} secureTextEntry style={styles.input} editable={!busy} />
-          <Action label={"Stream format: " + (xcOutput === "ts" ? "MPEG-TS" : "HLS")} disabled={busy} onPress={() => { setXcOutput(xcOutput === "ts" ? "m3u8" : "ts"); setPreview(null); }} />
+          {sourceKind === "xtream" && <Action label={"Stream format: " + (xcOutput === "ts" ? "MPEG-TS" : "HLS")} disabled={busy} onPress={() => { setXcOutput(xcOutput === "ts" ? "m3u8" : "ts"); setPreview(null); }} />}
           <Text style={styles.help}>Use the login supplied by your IPTV provider. Credentials are saved in secure device storage. A provider using HTTP sends its login without transport encryption.</Text>
         </>}
         {!!editing && <Action label="Save name only (no download)" disabled={busy} onPress={() => void run(async () => {
@@ -115,6 +127,7 @@ export default function PlaylistsScreen() {
       </View> : <>
         <Action label="Add M3U playlist" disabled={busy} onPress={() => { setSourceKind("m3u"); setEditing(""); setName("My playlist"); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); }} />
         <Action label="Add Xtream Codes account" disabled={busy} onPress={() => { setSourceKind("xtream"); setEditing(""); setName("My Xtream account"); setUrl(""); setXcUser(""); setXcPassword(""); setXcOutput("ts"); setPreview(null); }} />
+        <Action label="Add Stalker portal" disabled={busy} onPress={() => { setSourceKind("stalker"); setEditing(""); setName("My Stalker portal"); setUrl(""); setPortalMac(""); setPortalSerial(""); setPortalDeviceId(""); setPortalDeviceId2(""); setXcUser(""); setXcPassword(""); setPreview(null); }} />
         <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => router.push("/epg-sources" as any)} />
         {playlists.map((source) => <View key={source.id} style={styles.card}>
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
@@ -124,6 +137,7 @@ export default function PlaylistsScreen() {
           {source.kind === "xtream" && source.account && <Text style={styles.help}>Xtream · Last validation: {source.account.status} · {source.account.expires ? "Expires " + new Date(source.account.expires).toLocaleDateString() : "No expiry supplied"} · Last reported connections {source.account.activeConnections}/{source.account.maxConnections || "unspecified"}</Text>}
           {!!source.tombstoneCount && <Text style={styles.help}>{source.tombstoneCount.toLocaleString()} temporarily missing channel record(s) retained so favorites, ordering, groups, and EPG assignments can return if the provider restores them.</Text>}
           {!!source.discoveredEpgUrls?.length && <Text style={styles.help}>{source.discoveredEpgUrls.length} EPG URL(s) found in playlist. {source.epgDiscoveryStatus || "Waiting for EPG discovery."}</Text>}
+          {source.kind === "stalker" && <Text style={styles.help}>{source.epgDiscoveryStatus || "Portal guide has not been downloaded."}</Text>}
           <Text style={styles.health}>{!source.enabled ? "Disabled — saved catalog retained; not included in the active guide." : health[source.id] ? `${health[source.id].matched.toLocaleString()} matched · ${health[source.id].unmatched.toLocaleString()} unmatched · ${health[source.id].channels.toLocaleString()} total · ${health[source.id].sourceIds.length} active guide source(s)` : "Checking this playlist’s Guide health…"}</Text>
           <Action label={advanced === source.id ? "Hide Advanced" : "Advanced: guide, schedule and ordering"} disabled={busy} onPress={() => setAdvanced(advanced === source.id ? null : source.id)} />
           <Action label={source.enabled ? "Disable" : "Enable"} disabled={busy} onPress={() => void run(async () => { await updatePlaylist(source.id,{enabled:!source.enabled}); await reloadPlaylistCatalog(); })} />
@@ -140,8 +154,8 @@ export default function PlaylistsScreen() {
           </View>
           </>}
           {!source.managed && <View style={styles.row}>
-            <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { const saved = await getPlaylistUrl(source); const xc = decodeXtream(saved);
-              setSourceKind(xc ? "xtream" : "m3u"); setUrl(xc?.server || saved); setXcUser(xc?.username || ""); setXcPassword(xc?.password || ""); setXcOutput(xc?.output || "ts"); setName(source.name); setPreview(null); setEditing(source.id); })} />
+            <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { const saved = await getPlaylistUrl(source); const xc = decodeXtream(saved); const portal = decodeStalker(saved);
+              setSourceKind(portal ? "stalker" : xc ? "xtream" : "m3u"); setUrl(portal?.server || xc?.server || saved); setPortalMac(portal?.mac || ""); setPortalSerial(portal?.serial || ""); setPortalDeviceId(portal?.deviceId || ""); setPortalDeviceId2(portal?.deviceId2 || ""); setXcUser(portal?.username || xc?.username || ""); setXcPassword(portal?.password || xc?.password || ""); setXcOutput(xc?.output || "ts"); setName(source.name); setPreview(null); setEditing(source.id); })} />
             <Action label={removeArmed === source.id ? "Confirm remove playlist" : "Remove playlist"} disabled={busy} onPress={() => { if (removeArmed !== source.id) { setRemoveArmed(source.id); return; } void run(async () => { await removePlaylist(source.id); await reloadPlaylistCatalog(); setRemoveArmed(""); }); }} />
           </View>}
           {advanced === source.id && <>

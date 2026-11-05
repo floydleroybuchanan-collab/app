@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from media3_source_contract import normalize_audited_playback_refresh
 from playlist_source_contract import is_reviewed_playlist_transport
+from provider_replay_contract import is_reviewed_provider_replay
 from pathlib import Path
 import re
 import subprocess
@@ -137,9 +138,9 @@ for path in current_files:
     metrics["current_listeners"] += data.count("addListener(") + data.count("addEventListener(")
     metrics["current_fetch_sites"] += data.count("fetch(") + data.count("HttpURLConnection")
 
-    # Tests are allowed to mention Catch-Up only as a negative regression guard.
-    # Shipped app/native/plugin source must contain no Catch-Up route, label,
-    # screen, feature, or implementation remnant at all.
+    # Reject retired Catch-Up remnants. RC16 explicitly adds clone-derived
+    # provider replay through the shared player; only its exact reviewed bytes
+    # are accepted, so this does not exempt whole files from future review.
     if shipped_source(rel):
         lower_rel = rel.lower()
         lower_data = data.lower()
@@ -150,7 +151,8 @@ for path in current_files:
             or "catch-up" in lower_data
             or "catchup" in lower_data
         ):
-            critical.append(f"Catch-Up shipped source remnant: {rel}")
+            if not is_reviewed_provider_replay(rel, data):
+                critical.append(f"Unreviewed Catch-Up shipped source: {rel}")
 
     if path.suffix in {".ts", ".tsx"} and rel != "frontend/src/components/StreamPlayer.tsx":
         decoder_tokens = [

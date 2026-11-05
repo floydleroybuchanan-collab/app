@@ -26,9 +26,9 @@ import com.streamflixreborn.streamflix.R
 
 /** Shared app-owned chrome. Playback surfaces and focus listeners remain owned by their screens. */
 object CharmDesign {
-    private const val PANEL = 0xFF191321.toInt()
-    private const val RAISED = 0xFF15101E.toInt()
-    private const val PURPLE = 0xFF963BE0.toInt()
+    private const val PANEL = 0xFF1B1E25.toInt()
+    private const val RAISED = 0xFF13161C.toInt()
+    private const val PURPLE = 0xFFA82CFF.toInt()
     private const val BORDER = 0xFF493550.toInt()
     private var regular: Typeface? = null
     private var semibold: Typeface? = null
@@ -39,10 +39,14 @@ object CharmDesign {
         if (installed.put(activity, true) == true) return
         activity.supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
             override fun onFragmentStarted(manager: FragmentManager, fragment: Fragment) {
+                // The host also owns React Navigation fragments. Their text and
+                // dimensions belong to Yoga, never to the native VOD decorator.
+                if (!fragment.javaClass.name.startsWith("com.streamflixreborn.streamflix.")) return
                 if (fragment is androidx.fragment.app.DialogFragment && fragment !is com.streamflixreborn.streamflix.vod.NovaPlayback)
                     fragment.dialog?.let(CharmNavigation::decorateDialog)
             }
             override fun onFragmentViewCreated(manager: FragmentManager, fragment: Fragment, view: View, state: Bundle?) {
+                if (!fragment.javaClass.name.startsWith("com.streamflixreborn.streamflix.")) return
                 if (fragment.javaClass.simpleName.endsWith("TvFragment") &&
                     !fragment.javaClass.simpleName.startsWith("Player")) {
                     view.setBackgroundColor(Color.TRANSPARENT)

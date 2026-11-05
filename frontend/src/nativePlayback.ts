@@ -62,6 +62,8 @@ export type NativePlaybackDiagnostic = NativePlaybackIdentity & {
 };
 
 type NativePlaybackModuleShape = {
+  getTimeline?(channelKey: string): Promise<NativeTimeline | null>;
+  seekTimeline?(channelKey: string, generation: number, positionMs: number): void;
   prepareFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void;
   preparePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void;
   resolveFreshSource(requestId: number, uri?: string | null, headers?: Record<string, string>, contentType?: string | null, failureReason?: string | null): void;
@@ -84,6 +86,9 @@ type NativePlaybackModuleShape = {
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 };
+export type NativeTimeline = { generation: number; positionMs: number; durationMs: number; seekable: boolean; ended: boolean };
+export async function getNativeTimeline(channelKey: string): Promise<NativeTimeline | null> { return await native?.getTimeline?.(channelKey) ?? null; }
+export function seekNativeTimeline(channelKey: string, generation: number, positionMs: number): void { native?.seekTimeline?.(channelKey, generation, positionMs); }
 
 const native: NativePlaybackModuleShape | null =
   Platform.OS === "android" ? (NativeModules.NativePlayback as NativePlaybackModuleShape | undefined) ?? null : null;

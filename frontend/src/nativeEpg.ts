@@ -238,8 +238,13 @@ export async function configureNativeGuideOwnership(primaryEnabled: boolean, use
 export type NativeUserGuideSource = { id: string; url: string; enabled: boolean; refreshHours: number };
 export async function configureNativeUserGuideSources(primaryEnabled: boolean, sources: NativeUserGuideSource[], options?: { clearRam?: boolean }): Promise<void> {
   primaryEnabled = await effectivePrimaryGuideEnabled(primaryEnabled);
-  if (nativeModule?.configureUserGuideSources) await nativeModule.configureUserGuideSources(primaryEnabled, sources);
-  primaryGuideEnabled = primaryEnabled; ownershipRequiresSqlite = !primaryEnabled || sources.some((source) => source.enabled && !!source.url);
+  const [{ listPlaylists }, { stalkerGuideSources }] = await Promise.all([
+    import("./core/playlistRegistry"), import("./core/stalkerGuide"),
+  ]);
+  // Portal rows are derived only from the current registry, never from a caller snapshot.
+  const configured = [...sources.filter(source => !source.id.startsWith("portal-user-")), ...stalkerGuideSources(await listPlaylists())];
+  if (nativeModule?.configureUserGuideSources) await nativeModule.configureUserGuideSources(primaryEnabled, configured);
+  primaryGuideEnabled = primaryEnabled; ownershipRequiresSqlite = !primaryEnabled || configured.some((source) => source.enabled && !!source.url);
   if (options?.clearRam !== false && ramModule) await ramModule.clearMemory().catch(() => undefined);
 }
 export async function setNativeSourceGuideBinding(sourceId: string, channelId: string, xmltvId: string | null): Promise<number> { if (!customEpgModule?.setSourceChannelBinding) throw new Error("Multi-source EPG assignments are unavailable on this build"); const count = await customEpgModule.setSourceChannelBinding(sourceId, channelId, xmltvId?.trim() || ""); if (ramModule) await ramModule.clearMemory().catch(() => undefined); return Math.max(0, Math.round(count)); }

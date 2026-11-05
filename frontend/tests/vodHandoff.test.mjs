@@ -17,7 +17,7 @@ function harness(release=async()=>{}) {
   '@/src/store':{useStore:()=>({deviceLayoutMode:'tv'})},'@/src/utils/tvLayout':{shouldUseTvLayout:()=>true},
   '@/src/core/playbackSession':{stopAllPlaybackSessions:async()=>{calls.push(['release']);await release();}},
   '@/src/core/mediaLibrary':{mediaLibraryPreferences:async()=>({audio:'en'})},'@/src/theme':{tvColors:{}},
-  './PurpleTvShell':{usePurpleTvDrawer:()=>({openDrawer(){},closeDrawer(){}})},'./DonationDialog':{useDonation:()=>()=>{}},
+  './PurpleTvShell':{usePurpleTvDrawer:()=>({openDrawer(){},closeDrawer(){}})},'./DonationDialog':{useDonation:()=>()=>{}},'./MediaLabBrand':{MediaLabArt:'Brand'},'./XtreamProviderBrowser':{XtreamProviderBrowser:'ProviderBrowser'},
  };
  const exports={};
  const code=ts.transpileModule(readFileSync(new URL('../src/components/MediaLabVodContent.tsx',import.meta.url),'utf8'),

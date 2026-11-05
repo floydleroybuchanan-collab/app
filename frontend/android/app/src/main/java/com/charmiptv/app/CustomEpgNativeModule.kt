@@ -161,6 +161,44 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     refreshSourceGuideInternal(sourceId, url, promise, candidates)
   }}
 
+  @ReactMethod fun readPortalBackupBindings(promise: Promise) { executor.execute {
+    try {
+      val rows = controlDao.portalBackupBindings()
+      require(rows.size <= 10000)
+      promise.resolve(Arguments.createArray().apply {
+        for (row in rows) pushMap(Arguments.createMap().apply {
+          putString("sourceId", row.playlistId); putString("channelId", row.channelId); putString("xmltvId", row.xmltvId)
+        })
+      })
+    } catch (_: Exception) { promise.reject("PORTAL_BINDING_EXPORT_FAILED", "Could not export portal guide assignments") }
+  }}
+
+  @ReactMethod fun removePortalGuide(sourceId: String, promise: Promise) { executor.execute {
+    try {
+      require(sourceId.matches(Regex("portal-user-[a-z0-9-]{1,35}")))
+      controlDao.removeUserSource(sourceId)
+      CustomEpgStoreRegistry.database(reactContext, sourceId).clear()
+      promise.resolve(true)
+    } catch (_: Exception) { promise.reject("PORTAL_GUIDE_REMOVE_FAILED", "Could not clear removed portal guide data") }
+  }}
+
+  @ReactMethod fun restorePortalBackupBindings(values: ReadableArray, promise: Promise) { executor.execute {
+    try {
+      require(values.size() <= 10000)
+      val rows = (0 until values.size()).map { index ->
+        val value = requireNotNull(values.getMap(index))
+        val source = value.getString("sourceId").orEmpty()
+        val channel = value.getString("channelId").orEmpty()
+        val xmltv = value.getString("xmltvId").orEmpty()
+        require(source.matches(Regex("portal-user-[a-z0-9-]{1,35}")) && channel.isNotBlank() && channel.length <= 180 && xmltv.matches(Regex("[0-9]{1,30}")))
+        EpgChannelBindingEntity(source, channel, xmltv)
+      }
+      require(rows.map { it.channelId }.toSet().size == rows.size)
+      controlDao.replacePortalBackupBindings(rows)
+      promise.resolve(true)
+    } catch (_: Exception) { promise.reject("PORTAL_BINDING_RESTORE_FAILED", "Could not restore portal guide assignments") }
+  }}
+
   @ReactMethod fun refreshUserGuide(url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(USER_SOURCE_ID, url, promise) } }
   @ReactMethod fun refreshSourceGuide(sourceId: String, url: String, promise: Promise) { executor.execute { refreshSourceGuideInternal(sourceId, url, promise) } }
 
@@ -330,7 +368,18 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
       val activePlaylistNames = EpgDatabase.shared(reactContext).uniquePlaylistNames(effectiveBindings.map { it.channelId })
       val now = System.currentTimeMillis(); val minStop = now - retentionDays().toLong() * DAY_MS; val maxStart = now + GUIDE_WINDOW_MS
       val channelNames = LinkedHashMap<String, String>(); val channelIcons = LinkedHashMap<String, String>(); var acceptedProgrammeCount = 0L; var programmeSwapSucceeded = false
-      val batches = streamFilteredXmltv(sourceUrl, activeXmltvIds, activePlaylistNames, minStop, maxStart, baseOffsetMs, channelOffsetMs, channelNames, channelIcons, targetDatabase) { acceptedProgrammeCount += 1L }
+      val generatedPortalGuide = sourceUrl.startsWith("file:")
+      if (generatedPortalGuide) {
+        val fileName = java.io.File(java.net.URI(sourceUrl)).name
+        val playlistId = sourceId.removePrefix("portal-")
+        require(sourceId.startsWith("portal-user-") && fileName.startsWith("stalker-$playlistId.")) { "Generated Guide does not belong to this source" }
+        check(sourceConfig?.enabled == true) { "Portal Guide source is disabled" }
+      }
+      val parsedBatches = streamFilteredXmltv(sourceUrl, activeXmltvIds, activePlaylistNames, minStop, maxStart, baseOffsetMs, channelOffsetMs, channelNames, channelIcons, targetDatabase) { acceptedProgrammeCount += 1L }
+      val batches = if (generatedPortalGuide) sequence {
+        yieldAll(parsedBatches)
+        check(controlDao.source(sourceId)?.enabled == true) { "Portal Guide source was disabled during import" }
+      } else parsedBatches
       if (activeXmltvIds.isEmpty()) { for (ignored in batches) Unit } else {
         try { targetDatabase.replaceBatches(batches); programmeSwapSucceeded = true }
         catch (t: IllegalStateException) {
@@ -394,6 +443,18 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   private fun openPossiblyGzipped(urlString: String, targetDatabase: EpgDatabase): InputStream {
+    // Only generated portal XMLTV in this app's private directory may bypass HTTP.
+    // canonicalFile rejects traversal and symlinks outside that exact directory.
+    if (urlString.startsWith("file:")) {
+      val uri = java.net.URI(urlString)
+      if (!uri.authority.isNullOrEmpty() || uri.query != null || uri.fragment != null) throw IllegalArgumentException("Invalid generated Guide file")
+      val file = java.io.File(uri).canonicalFile
+      val root = java.io.File(reactContext.filesDir, "provider-guides").canonicalFile
+      if (file.parentFile != root || !file.name.matches(Regex("stalker-user-[a-z0-9-]+\\.[a-z0-9-]+\\.xml")) || !file.isFile) throw IllegalArgumentException("Generated Guide file is outside the private provider directory")
+      if (file.length() > MAX_COMPRESSED_EPG_BYTES) throw IllegalStateException("Generated Guide exceeds size safety limit")
+      targetDatabase.assertRefreshStorageAvailable(file.length())
+      return BoundedInputStream(BufferedInputStream(java.io.FileInputStream(file), NETWORK_BUFFER_SIZE), MAX_DECOMPRESSED_EPG_BYTES)
+    }
     var currentUrl = URL(urlString); var redirects = 0
     while (true) {
       val scheme = currentUrl.protocol.lowercase(Locale.US); if (scheme != "http" && scheme != "https") throw IllegalStateException("Custom EPG redirect used unsupported scheme: $scheme")

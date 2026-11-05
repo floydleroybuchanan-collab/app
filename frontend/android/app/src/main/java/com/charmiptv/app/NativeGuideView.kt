@@ -29,7 +29,7 @@ import kotlin.math.min
  * outrun the queried EPG window and expose false empty columns.
  */
 class NativeGuideView(context: Context) : View(context) {
-  private data class ChannelRow(val id: String, val name: String, val number: String, val label: String)
+  private data class ChannelRow(val id: String, val name: String, val number: String, val label: String, val displayNumber: String)
   private data class GuideQuery(val token: Int, val startMs: Long, val endMs: Long, val ids: List<String>)
 
   // Reads every enabled guide store through the same binding-aware repository
@@ -111,9 +111,13 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   private val density = resources.displayMetrics.density
-  private val channelWidth = 184f * density
-  private val headerHeight = 38f * density
-  private val rowHeight = 54f * density
+  // Supplied recording at 20s: 420px column / 1.667 density ~=252dp.
+  // This matches clone dimens 0x7f070058; the recording overrides the 190dp default.
+  private val channelWidth = 252f * density
+  // Clone guide clock/header is 29dp (0058.xml).
+  private val headerHeight = 29f * density
+  // Recorded cells advance ~65px at 1.667 density; retain 40dp logical rows.
+  private val rowHeight = 40f * density
   private val pad = 8f * density
 
   /** Three visible hours gives six equal 30-minute header columns on every TV size. */
@@ -123,16 +127,17 @@ class NativeGuideView(context: Context) : View(context) {
   private val liveWindowHistoryMs = 60L * 60_000L
   private val liveWindowAdvanceThresholdMs = 60_000L
 
-  private val background = Paint().apply { color = Color.rgb(8, 7, 13) }
-  private val header = Paint().apply { color = Color.rgb(22, 18, 33) }
-  private val channel = Paint().apply { color = Color.rgb(26, 22, 38) }
-  private val rowSurface = Paint().apply { color = Color.rgb(18, 16, 28) }
-  private val cell = Paint().apply { color = Color.rgb(31, 27, 45) }
-  private val selected = Paint().apply { color = Color.rgb(119, 74, 219) }
-  private val divider = Paint().apply { color = Color.rgb(53, 45, 72); strokeWidth = density }
-  private val nowPaint = Paint().apply { color = Color.rgb(197, 158, 255); strokeWidth = 2f * density }
-  private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f * density }
-  private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(183, 174, 204); textSize = 11f * density }
+  private val background = Paint().apply { color = Color.rgb(12, 14, 18) }
+  private val header = Paint().apply { color = Color.rgb(27, 30, 37) }
+  private val channel = Paint().apply { color = Color.rgb(27, 30, 37) }
+  private val rowSurface = Paint().apply { color = Color.rgb(12, 14, 18) }
+  private val cell = Paint().apply { color = Color.rgb(37, 41, 51) }
+  private val selected = Paint().apply { color = Color.rgb(168, 44, 255) }
+  private val divider = Paint().apply { color = Color.rgb(55, 61, 74); strokeWidth = density }
+  private val nowPaint = Paint().apply { color = Color.rgb(210, 156, 255); strokeWidth = 2f * density }
+  private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(240, 242, 247); textSize = 13f * density }
+  private val numberPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(185, 191, 205); textSize = 8f * density }
+  private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(185, 191, 205); textSize = 11f * density }
   private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
   private val tickDate = Date()
   private var use24HourClock = false
@@ -162,7 +167,10 @@ class NativeGuideView(context: Context) : View(context) {
       val id = item.getString("id") ?: continue
       val name = item.getString("name") ?: "Channel"
       val number = item.getString("number") ?: ""
-      nextRows.add(ChannelRow(id, name, number, if (number.isBlank()) name else "$number  $name"))
+      // Keep the full number for accessibility; unusually long identifiers get
+      // a bounded, precomputed display label rather than bleeding into logos.
+      val displayNumber = if (number.length <= 4) number else android.text.TextUtils.ellipsize(number, numberPaint, 25f * density, android.text.TextUtils.TruncateAt.END).toString()
+      nextRows.add(ChannelRow(id, name, number, if (number.isBlank()) name else "$number  $name", displayNumber))
     }
     if (rows == nextRows) {
       applyPendingRestoreChannel()
@@ -218,6 +226,14 @@ class NativeGuideView(context: Context) : View(context) {
   fun setWindowStart(start: Double) = setWindow(start, windowEndMs.toDouble())
   fun setWindowEnd(end: Double) = setWindow(windowStartMs.toDouble(), end)
 
+  private var showLogos = true
+  fun setShowLogos(value: Boolean) { showLogos = value; invalidate() }
+  private var lastLogoFirst = -1
+  private var lastLogoIds: List<String> = emptyList()
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    ensureVisible()
+  }
   private var overlayMode = false
   var rightBoundaryEnabled = false
   fun setOverlayMode(value: Boolean) {
@@ -571,6 +587,17 @@ class NativeGuideView(context: Context) : View(context) {
     if (selectedRow < firstVisibleRow) firstVisibleRow = selectedRow
     if (selectedRow >= firstVisibleRow + visible) firstVisibleRow = selectedRow - visible + 1
     firstVisibleRow = firstVisibleRow.coerceIn(0, max(0, rows.size - visible))
+    val logoCount = ceil((height - headerHeight).coerceAtLeast(0f) / rowHeight).toInt().coerceIn(0, 32)
+    val ids = rows.subList(firstVisibleRow, min(rows.size, firstVisibleRow + logoCount)).map { it.id }
+    if (lastLogoFirst != firstVisibleRow || ids != lastLogoIds) {
+      lastLogoFirst = firstVisibleRow
+      lastLogoIds = ids
+      emit("logoViewport", Arguments.createMap().apply {
+        putArray("ids", Arguments.fromList(ids))
+        putDouble("rowHeight", (rowHeight / density).toDouble())
+        putDouble("headerHeight", (headerHeight / density).toDouble())
+      })
+    }
   }
 
   private fun selectedProgram(): NativeEpgProgram? {
@@ -586,6 +613,7 @@ class NativeGuideView(context: Context) : View(context) {
   private fun emitSelection(immediate: Boolean, pressed: Boolean = false) {
     val row = rows.getOrNull(selectedRow) ?: return
     val program = selectedProgram()
+    contentDescription = if (program == null) row.label else "${row.label}, ${program.title}"
     val payload = Arguments.createMap().apply {
       putString("channelId", row.id)
       putInt("row", selectedRow)
@@ -667,11 +695,16 @@ class NativeGuideView(context: Context) : View(context) {
       val rowIndex = firstVisibleRow + slot
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
-      channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(119, 74, 219) else Color.rgb(26, 22, 38)
+      channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(168, 44, 255) else Color.rgb(27, 30, 37)
       channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected)) 205 else 255
       canvas.drawRect(0f, top, channelWidth, top + rowHeight - density, channel)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
-      drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)
+      if (showLogos) {
+        drawClippedText(canvas, row.displayNumber, pad, top + rowHeight * .62f, 33f * density, if (row.number.length <= 4) muted else numberPaint)
+        drawClippedText(canvas, row.name, 90f * density, top + rowHeight * .62f, channelWidth - pad, title)
+      } else {
+        drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)
+      }
 
       val list = programs[row.id].orEmpty()
       var paintedProgramme = false
