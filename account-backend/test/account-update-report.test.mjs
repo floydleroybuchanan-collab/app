@@ -12,7 +12,7 @@ test('RC15 sideload update keeps the public baseline and identifies version code
  assert.equal(r.target,27);
  assert.equal(r.users.find(u=>u.username==='unified').updated,true);
  assert.match(releaseName(35),/RC14-Sideload-218/);
- assert.match(releaseName(36),/RC15-Sideload-219/);
+ assert.match(releaseName(36),/RC15-Sideload-220/);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(1\)/);
 });
 test('report distinguishes current, old, mixed and unknown with verified links',async()=>{
