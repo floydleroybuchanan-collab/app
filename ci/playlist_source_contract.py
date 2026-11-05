@@ -15,16 +15,18 @@ RC9 changes display/log brand strings only; transport is unchanged.
 RC16 merges portal guide ownership from the current secure source registry;
 see docs/rc16-integration-validation.md for the reviewed scope.
 RC17 publishes cold-start channels before cache/index/guide work and rejects
-late publication after a protected-access change. See docs/rc17-startup-focus-repair.md.
+late publication after a protected-access change. It records bounded timing
+for catalog and native import stages without changing transport.
+See docs/rc17-startup-focus-repair.md.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': 'e111ae67a5bb9c00d3e4b168ee2b5e9757c948b6e26a0d3ecc5089ddc875355d',
+    'frontend/src/source.native.ts': '21ce82306c04745a97e27064d49ab10978ec72bf28a872f5f3f4fefca2ff3efa',
     'frontend/src/nativeEpg.ts': '2679305589ac6e4c64c0ec44b676b9c257f7939adbcee912cb26296f80018873',
-    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
+    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'a242dd8b03850f9956d089b3022890d09f9a04b34f955ad39f238285576ce43b',
 }
 
 

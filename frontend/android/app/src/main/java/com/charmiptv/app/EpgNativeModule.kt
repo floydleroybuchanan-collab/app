@@ -372,6 +372,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
     }
     refreshExecutor.execute {
       val startedMs = System.currentTimeMillis()
+      emitImportProgress("waiting-for-import-lease", 0.2)
       database.acquireImport().use {
       val previousState = runCatching { controlDao.importState(DEFAULT_PLAYLIST_ID) }.getOrNull()
       val attempt = (previousState?.attemptCount ?: 0) + 1
@@ -389,7 +390,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         if (blackoutUntil > System.currentTimeMillis()) {
           throw IllegalStateException("Guide database recovery pause is active")
         }
-        emitImportProgress("downloading", 0.2)
+        emitImportProgress("checking-guide-database", 0.2)
         if (!database.ensureHealthy()) {
           throw SQLiteException("Guide database integrity check failed")
         }
@@ -408,6 +409,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         val channelIdsWithPrograms = LinkedHashSet<String>()
         val httpValidators = EpgHttpValidators()
         try {
+          emitImportProgress("downloading", 0.2)
           val batches = streamProgramBatches(
             url,
             minStop,

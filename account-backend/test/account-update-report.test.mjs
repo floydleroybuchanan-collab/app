@@ -16,7 +16,7 @@ test('RC17 sideload update keeps the public baseline and recognizes both new tes
  assert.match(releaseName(35),/RC14-Sideload-218/);
  assert.match(releaseName(36),/RC15-Sideload-220/);
  assert.match(releaseName(37),/RC16-Sideload-222/);
- assert.match(releaseName(38),/RC17-Sideload-223.*TEST BUILD/);
+ assert.match(releaseName(38),/RC17-Sideload-224.*TEST BUILD/);
  assert.match(releaseName(39),/not mapped/);
  assert.equal(r.users.find(u=>u.username==='previous').updated,true);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(2\)/);

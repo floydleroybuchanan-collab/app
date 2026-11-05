@@ -1,4 +1,5 @@
 import type { SourceDiagnostics } from "@/src/source";
+import { sourceRefreshTrace } from "./sourceRefreshTrace";
 
 /** Build a portable plain-text diagnostics dump (no stream URLs). */
 export function formatDiagnosticsExport(input: {
@@ -10,6 +11,7 @@ export function formatDiagnosticsExport(input: {
   extras?: Record<string, string | number | boolean | null | undefined>;
 }): string {
   const d = input.diagnostics;
+  const trace = sourceRefreshTrace.read();
   const lines: string[] = [
     "Charming MediaLab diagnostics",
     `exportedAt=${new Date().toISOString()}`,
@@ -27,6 +29,9 @@ export function formatDiagnosticsExport(input: {
     `playlistEpoch=${d?.playlistEpoch ?? "null"}`,
     `guideEpoch=${d?.guideEpoch ?? "null"}`,
     `epgError=${d?.epgError ?? "null"}`,
+    `refreshStage=${trace.active?.stage ?? "idle"}`,
+    `refreshStageMs=${trace.active?.elapsedMs ?? 0}`,
+    `recentRefreshStages=${trace.completed.map(row => `${row.stage}:${row.elapsedMs}`).join(",")}`,
     "",
     "[matchQuality]",
     `matched=${d?.matchQuality?.matched ?? 0}`,

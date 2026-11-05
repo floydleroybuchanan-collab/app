@@ -70,3 +70,10 @@ test('catalog Up handoff respects nested first rows, native headers and player o
  assert.match(handoff,/target.requestFocus\(View.FOCUS_UP\)/);
  assert.match(s,/@ReactProp\(name = "toolbarFocusTag"/);
 });
+
+test('host declares its RecyclerView focus API dependency explicitly',()=>{
+ const gradle=source('android/app/build.gradle');
+ assert.match(gradle,/implementation ['"]androidx.recyclerview:recyclerview:1\.3\.2['"]/);
+ const vod=source('android/vod/app/build.gradle');
+ assert.match(vod,/androidx.leanback:leanback:1\.2\.0/);
+});

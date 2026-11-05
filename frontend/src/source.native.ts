@@ -1,5 +1,6 @@
 import { readCombinedPlaylists, refreshPlaylists, seedLegacyPlaylist, fetchPlaybackPlaylist, listPlaylists } from "@/src/core/playlistRegistry";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
+import { recordNativeImportStage, sourceRefreshTrace } from "@/src/core/sourceRefreshTrace";
 import dayjs from "dayjs";
 import * as FileSystem from "expo-file-system/legacy";
 import type { Channel, GuideResponse, Program, SourceStatus } from "@/src/api";
@@ -561,7 +562,9 @@ function onProgressStalled(): void {
   if (progress.phase === "ready" || progress.phase === "error") return;
   // A long provider response or SQLite index operation is not a failed job.
   // Only an actual rejected import may publish/persist an EPG error.
-  setProgress({ message: "Guide update is taking longer; still working. Saved guide remains available." }, true);
+  const stage = sourceRefreshTrace.read().active;
+  const location = stage ? ` (${stage.stage}, ${Math.floor(stage.elapsedMs / 1000)}s)` : "";
+  setProgress({ message: `Guide update is taking longer${location}. Saved guide remains available.` }, true);
 }
 
 function setProgress(next: Partial<EpgProgress>, force = false): void {
@@ -858,6 +861,8 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
     emit();
     let channels = cached?.channels || [];
     try {
+      sourceRefreshTrace.reset();
+      sourceRefreshTrace.enter("playlist-import");
       setProgress({ phase: "channels", ratio: 0.05, etaSeconds: null }, true);
       channels = await fetchPlaylist();
       assertCurrentAccess();
@@ -883,15 +888,20 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       emit();
       setProgress({ phase: "channels", ratio: 0.17, etaSeconds: null, message: "Channels loaded. Preparing the guide index." }, true);
       // Sync raw playlist rows into SQLite before match rewrites tvg_id.
+      sourceRefreshTrace.enter("catalog-index");
       await syncPlaylistToNative(channels, playlistEpoch);
+      sourceRefreshTrace.enter("catalog-clock");
       await touchNativePlaylistRefresh(playlistEpoch);
       // This combined metadata cache is a fallback, not the catalog authority.
+      sourceRefreshTrace.enter("fallback-cache");
       await persistMeta(MEM).catch(() => undefined);
 
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
+      sourceRefreshTrace.enter("associated-guides");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: "Updating associated programme guides." }, true);
       await syncPlaylistEpg(channels, true, undefined, invalidateGuideOwnershipCaches);
       assertCurrentAccess();
+      sourceRefreshTrace.enter("guide-ownership");
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
       // The custom source manager performs a deliberate full XMLTV index when
@@ -899,6 +909,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       // need to spend network/CPU/disk when at least one playlist channel is
       // actually owned by the custom source.
       if (ownership.userEnabled && ownership.userUrl && ownership.legacyUserOverrideIds.size > 0) {
+        sourceRefreshTrace.enter("legacy-custom-guide");
         await refreshNativeUserGuide(ownership.userUrl);
       }
       if (!ownership.primaryEnabled) {
@@ -926,15 +937,22 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       if (!primaryEpgUrl) throw new Error("The protected Charming MediaLab EPG source is not available.");
       setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: null }, true);
       const activeBindings = activeEpgBindings(channels, ownership.customOwnedChannelIds);
+      sourceRefreshTrace.enter("primary-config");
       await configureNativeEpgSource(sourceUrl(primaryEpgUrl), refreshPreferences.epgHours, 0, 0, {}, refreshPreferences.epgPastDays);
+      sourceRefreshTrace.enter("primary-queued");
       const epg = await refreshNativeEpg(
         sourceUrl(primaryEpgUrl),
         false,
         activeBindings.ids,
         activeBindings.names,
-        (phase, ratio) => { if (access === managedContentSources()) applyNativeImportProgress(phase, ratio); },
+        (phase, ratio) => {
+          if (access !== managedContentSources()) return;
+          recordNativeImportStage(phase);
+          if (phase !== "waiting-for-import-lease" && phase !== "checking-guide-database") applyNativeImportProgress(phase, ratio);
+        },
       );
       assertCurrentAccess();
+      sourceRefreshTrace.enter("guide-match");
       setProgress({ phase: "indexing", ratio: 0.91, etaSeconds: null }, true);
 
       const epgLogos = epg.channelLogos || {};
@@ -1017,6 +1035,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
         playlistIdentityFingerprint: playlistFp,
       };
       setProgress({ phase: "caching", ratio: 0.975, etaSeconds: null }, true);
+      sourceRefreshTrace.enter("match-publish");
       await persistMeta(MEM);
       setProgress({ phase: "finalizing", ratio: 0.99, etaSeconds: null }, true);
       await syncMatchesToNative(matchedChannelsWithLogos, guideEpoch);
@@ -1051,6 +1070,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
   try {
     return await refreshPromise;
   } finally {
+    sourceRefreshTrace.finish();
     refreshPromise = null;
     emit();
   }
