@@ -9,7 +9,7 @@ import { managedContentSources, managedPlaylistUrl } from "@/src/auth/managedCon
 import { combinePlaylistCatalogs, MANAGED_PLAYLISTS, PRIMARY_PLAYLIST,
   managedPlaylistDefinition, scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
-export type PlaylistPreview = Channel[] & { epgUrls?: string[]; account?: XtreamAccount };
+export type PlaylistPreview = Channel[] & { epgUrls?: string[]; account?: XtreamAccount; skippedEntries?: number };
 
 const KEY = "charm_playlist_registry_v1";
 const ROOT = `${FileSystem.documentDirectory}playlists/`;
@@ -112,7 +112,7 @@ async function writeCatalog(row: PlaylistRecord, channels: PlaylistPreview): Pro
   const tombstones = Array.from(byId.values()).sort((a, b) => b.deletedAt - a.deletedAt).slice(0, 25_000);
   await FileSystem.writeAsStringAsync(tombstonePath, JSON.stringify(tombstones));
   const next = { ...row, account: channels.account || row.account, discoveredEpgUrls: channels.epgUrls || row.discoveredEpgUrls || [], previousRevision: row.revision, revision: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    count: channels.length, tombstoneCount: tombstones.length, refreshedAt: Date.now(), status: `${channels.length.toLocaleString()} channels ready` };
+    count: channels.length, tombstoneCount: tombstones.length, refreshedAt: Date.now(), status: `${channels.length.toLocaleString()} channels ready${channels.skippedEntries ? ` · ${channels.skippedEntries.toLocaleString()} invalid entries skipped` : ""}` };
   await FileSystem.writeAsStringAsync(pathFor(next), JSON.stringify(channels));
   const check = await FileSystem.getInfoAsync(pathFor(next));
   if (!check.exists || !check.size) throw new Error("Could not save playlist. Previous catalog kept.");
@@ -131,7 +131,7 @@ export async function previewPlaylist(url: string) {
   validatePlaylistUrl(url.trim());
   const xtream = decodeXtream(url);
   if (xtream) return previewXtream(xtream);
-  try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return Object.assign(parsed.channels, { epgUrls: parsed.epgUrls || [] }); }
+  try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return Object.assign(parsed.channels, { epgUrls: parsed.epgUrls || [], skippedEntries: parsed.rejected }); }
   catch (error) {
     // Never surface provider URLs/credentials from fetch/transport exceptions.
     const message = error instanceof Error ? error.message : "";
