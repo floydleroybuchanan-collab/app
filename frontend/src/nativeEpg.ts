@@ -37,6 +37,7 @@ type CharmEpgModule = {
   configureUserGuideSources?(primaryEnabled: boolean, sources: { id: string; url: string; enabled: boolean; refreshHours: number }[]): Promise<boolean>;
   setGuideChannelBinding?(channelId: string, xmltvId: string): Promise<number>;
   listUserGuideChannels?(query: string, offset: number, limit: number): Promise<{ total: number; rows: { id: string; name: string }[] }>;
+  listPrimaryGuideChannels?(query: string, offset: number, limit: number): Promise<{ total: number; rows: { id: string; name: string }[] }>;
   refreshUserGuide?(url: string): Promise<{ count: number; channelNames?: Record<string, string>; channelIdsWithPrograms?: string[] }>;
   clear(): Promise<boolean>;
 };
@@ -252,6 +253,7 @@ export async function setNativeGuideChannelBinding(channelId: string, xmltvId: s
   if (ramModule) await ramModule.clearMemory().catch(() => undefined); return count;
 }
 export async function listNativeUserGuideChannels(query = "", offset = 0, limit = 50): Promise<{ total: number; rows: { id: string; name: string }[] }> { const directoryModule = customEpgModule?.listUserGuideChannels ? customEpgModule : nativeModule; if (!directoryModule?.listUserGuideChannels) return { total: 0, rows: [] }; return directoryModule.listUserGuideChannels(query, Math.max(0, offset), Math.max(1, Math.min(100, limit))); }
+export async function listNativePrimaryGuideChannels(query = "", offset = 0, limit = 50): Promise<{ total: number; rows: { id: string; name: string }[] }> { if (!nativeModule?.listPrimaryGuideChannels) return { total: 0, rows: [] }; return nativeModule.listPrimaryGuideChannels(query, Math.max(0, offset), Math.max(1, Math.min(100, limit))); }
 export async function refreshNativeUserGuide(url: string): Promise<{ count: number; channelNames?: Record<string, string>; channelIdsWithPrograms?: string[]; directoryCount?: number; bindingCount?: number; guideEpoch?: number; guideRefreshedAt?: number; programmeSwapSucceeded?: boolean }> { const refreshModule = customEpgModule?.refreshUserGuide ? customEpgModule : nativeModule; if (!refreshModule?.refreshUserGuide) throw new Error("Custom native EPG engine is unavailable"); return refreshModule.refreshUserGuide(url); }
 export async function clearNativeEpg(): Promise<void> { if (ramModule) await ramModule.clearMemory(); if (nativeModule) await nativeModule.clear(); }
 

@@ -104,7 +104,7 @@ test("Guide action strip walks all six actions before returning to the native Gu
   assert.doesNotMatch(actionStripBeforeHide, /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
   assert.match(rail.slice(rail.lastIndexOf("ref={hideFocus.setRef}")), /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
   assert.match(rail, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(rail, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
+  assert.match(rail, /onFocusCapture=\{\(\) => \{ setActionsVisible\(true\); setPreferPlayFocus\(false\); \}\}/);
 });
 
 test("active native Guide claims initial focus when its first channel rows arrive", async () => {
@@ -121,7 +121,7 @@ test("main drawer cleanup cannot steal the Guide Groups drawer owner", async () 
   assert.match(shell, /resetRemoteContextIfOwned\("main_drawer", "guide"\)/);
   assert.doesNotMatch(shell, /if \(active === "\/guide"\) \{\s*setRemoteContext\("guide"\)/);
   assert.match(groups, /setRemoteContext\("guide_groups"\)/);
-  assert.match(groups, /hasTVPreferredFocus=\{preferActiveFocus && item\.name === activeNameRef\.current\}/);
+  assert.match(groups, /hasTVPreferredFocus=\{interactive && preferActiveFocus && item\.name === activeNameRef\.current\}/);
 });
 
 test("fullscreen remote mappings use one native semantic router and remain player-scoped", async () => {

@@ -24,7 +24,7 @@ type Snapshot = {
 let cached: Snapshot = {
   pinnedGroups: DEFAULT_PINNED,
   hidePreview: false,
-  mutePreview: true,
+  mutePreview: false,
   startGroup: GUIDE_START_LAST_USED,
   showProviderGroups: false,
   hiddenGroups: [],
@@ -72,7 +72,7 @@ async function load(): Promise<Snapshot> {
     const [pinned, hidePreview, mutePreview, startGroup, showProviderGroups, hiddenGroups] = await Promise.all([
       storage.getItem<string[]>(PINNED_KEY, DEFAULT_PINNED),
       storage.getItem<boolean>(HIDE_PREVIEW_KEY, false),
-      storage.getItem<boolean>(MUTE_PREVIEW_KEY, true),
+      storage.getItem<boolean>(MUTE_PREVIEW_KEY, false),
       storage.getItem<string>(START_GROUP_KEY, GUIDE_START_LAST_USED),
       storage.getItem<boolean>(PROVIDER_GROUPS_KEY, false),
       storage.getItem<string[]>(HIDDEN_GROUPS_KEY, []),
@@ -80,7 +80,7 @@ async function load(): Promise<Snapshot> {
     const next: Snapshot = {
       pinnedGroups: sanitizeGroupList(pinned, 24).length ? sanitizeGroupList(pinned, 24) : DEFAULT_PINNED,
       hidePreview: !!hidePreview,
-      mutePreview: mutePreview !== false,
+      mutePreview: mutePreview === true,
       startGroup: sanitizeStartGroup(startGroup),
       showProviderGroups: showProviderGroups === true,
       hiddenGroups: sanitizeHiddenGroups(hiddenGroups),

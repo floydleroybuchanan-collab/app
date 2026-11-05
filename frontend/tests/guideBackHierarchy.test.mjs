@@ -19,7 +19,7 @@ test("Guide BACK moves from groups to the icon rail, then expands the main drawe
   assert.match(hook, /lastGuideBackAtRef\.current = now;\s*return true/);
   assert.match(hook, /lastGuideBackAtRef\.current = 0;\s*}\s*return onBack\(\)/);
   assert.match(guide, /onFocusIconRail=\{focusIconRail\}/);
-  assert.match(guide, /onIconRailOpenMainDrawer=\{\(\) => setGroupDrawerOpen\(false\)\}/);
+  assert.match(guide, /onIconRailOpenMainDrawer=\{\(\) => setGroupDrawerOpen\(true\)\}/);
   assert.match(guide, /setGroupDrawerOpen\(true\);\s*return true/);
   assert.match(groups, /if \(key === "BACK"\) \{\s*focusIconRailRef\.current\(\)/);
   assert.match(groups, /if \(key === "LEFT"\)/);

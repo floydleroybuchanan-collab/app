@@ -398,7 +398,7 @@ export function TvQuickActionsOverlay() {
                 {context === "guide" ? <Action icon={favoriteSet.has(channel.id) ? "heart" : "heart-outline"} label={favoriteSet.has(channel.id) ? "Remove Favorite" : "Add Favorite"} onPress={favorite} /> : null}
               </>
             )}
-            {context === "guide" ? <Action icon="git-compare-outline" label="Assign custom EPG" value={ownerLabel} onPress={() => { setStatus(null); setMode("epg-source"); }} /> : null}
+            {context === "guide" ? <Action icon="git-compare-outline" label="Assign EPG" value={ownerLabel} onPress={() => { const target = channel.id; close(); requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideAssignEpg", { channelId: target })); }} /> : null}
             {context === "guide" && (legacyOwnerId || extraOwner) ? <Action icon="refresh-outline" label="Use automatic EPG" onPress={() => void clearEpgAssignment()} disabled={busy} /> : null}
 
             {context === "guide" ? (

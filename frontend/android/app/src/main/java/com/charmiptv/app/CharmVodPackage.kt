@@ -31,6 +31,18 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
 
     @ReactMethod fun libraryItems(kind: String, promise: Promise) = readLibrary(if (kind == "favorites") "favorites" else "continue", null, promise)
     @ReactMethod fun searchLibrary(query: String, promise: Promise) = readLibrary("search", query.take(200), promise)
+    @ReactMethod fun configureSurface(settings: String, promise: Promise) {
+        com.streamflixreborn.streamflix.charm.CharmSharedPlayback.configure(settings)
+        promise.resolve(true)
+    }
+
+    @ReactMethod fun surfaceBack(promise: Promise) {
+        context.runOnUiQueueThread {
+            val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
+            val host = activity?.supportFragmentManager?.findFragmentById(com.streamflixreborn.streamflix.R.id.nav_main_fragment) as? androidx.navigation.fragment.NavHostFragment
+            promise.resolve(host?.navController?.popBackStack() == true)
+        }
+    }
 
     @ReactMethod
     fun copyDonationInvoice(invoice: String, promise: Promise) {
@@ -86,6 +98,9 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
                     .putExtra("medialab.settings", settings)
                     .putExtra("medialab.token", usageToken)
                     .putExtra("medialab.build", BuildConfig.VERSION_CODE), REQUEST_VOD)
+                // Native VOD is another screen of MediaLab, not a second app launch.
+                @Suppress("DEPRECATION")
+                activity.overridePendingTransition(0, 0)
             } catch (error: Exception) {
                 pending = null
                 promise.reject("E_VOD_LAUNCH", "Could not open Video OnDemand.", error)
@@ -105,5 +120,5 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
 
 class CharmVodPackage : ReactPackage {
     override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = listOf(CharmVodModule(context))
-    override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()
+    override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> = listOf(CharmVodSurfaceManager())
 }

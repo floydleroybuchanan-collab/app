@@ -10,6 +10,12 @@ object CacheUtils {
     private const val TAG = "CacheUtils"
 
     fun clearAppCache(context: Context) {
+        // The unified host shares its process with Live TV. Never clear its guide,
+        // logo or bridge caches when a VOD provider requests cache recovery.
+        if (!com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) {
+            File(context.applicationContext.cacheDir, "vod").deleteRecursively()
+            return
+        }
         Log.d(TAG, "Inizio pulizia cache completa...")
         try {
             context.applicationContext.cacheDir?.deleteRecursively()

@@ -8,6 +8,7 @@ type RunwayEvent = { ids: string[]; priorityIds: string[]; pageSize: number; vel
 type Props = {
   channels: Channel[]; windowStart: string; windowEnd: string; active: boolean; restoreChannelId?: string | null; restoreTimeMs?: number | null; reloadGeneration?: number;
   clock24h?: boolean;
+  overlayMode?: boolean;
   channelNumberById: Record<string, number>;
   onChannelFocus: (channel: Channel, settled: boolean) => void;
   onProgramFocus: (program: Program, channel: Channel, settled: boolean) => void;
@@ -17,6 +18,7 @@ type Props = {
   onNativeGuideTag?: (tag: number | null) => void;
   onLeftBoundary: () => void;
   onUpBoundary: () => void;
+  onRightBoundary?: () => void;
 };
 const Native = Platform.OS === "android" ? requireNativeComponent<any>("CharmNativeGuide") : null;
 
@@ -29,6 +31,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   restoreTimeMs,
   reloadGeneration = 0,
   clock24h = false,
+  overlayMode = false,
   channelNumberById,
   onChannelFocus,
   onProgramFocus,
@@ -38,6 +41,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   onNativeGuideTag,
   onLeftBoundary,
   onUpBoundary,
+  onRightBoundary,
 }: Props) {
   // Build the lookup directly. `new Map(channels.map(...))` materialized a
   // second 6k-entry tuple array before Map construction on large playlists.
@@ -128,6 +132,9 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       ref={bindNativeGuideRef}
       style={{ flex: 1 }}
       channels={nativeChannels}
+      overlayMode={overlayMode}
+      rightBoundaryEnabled={!!onRightBoundary}
+      onRightBoundary={onRightBoundary}
       windowStartMs={windowStartMs}
       windowEndMs={windowEndMs}
       active={active}

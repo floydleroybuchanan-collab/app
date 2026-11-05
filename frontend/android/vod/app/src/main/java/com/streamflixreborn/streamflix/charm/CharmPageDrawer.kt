@@ -24,6 +24,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     private var rightHeld = false
     private var consumeRightUp = false
     private var playbackControls: PlayerView? = null
+    private lateinit var lifecycleObserver: DefaultLifecycleObserver
     private val menu = Button(activity).apply {
         id = View.generateViewId(); text = "☰ Menu"; isAllCaps = false; textSize = 12f
         isFocusable = true; setOnClickListener { open() }; glass(this)
@@ -47,10 +48,11 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             menu.bringToFront()
             donate.bringToFront()
         }
-        activity.lifecycle.addObserver(object : DefaultLifecycleObserver {
+        lifecycleObserver = object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) { dialog?.dismiss(); rightHeld = false }
             override fun onDestroy(owner: LifecycleOwner) { instances.remove(activity) }
-        })
+        }
+        activity.lifecycle.addObserver(lifecycleObserver)
     }
     private fun dp(n: Int) = (n * root.resources.displayMetrics.density).toInt()
     fun bindPlayerControls(playerView: PlayerView) {
@@ -113,7 +115,7 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             action("Stop and exit player") { if (nav?.navController?.popBackStack() != true) CharmNavigation.home(activity) }
         }
         val window = d.window!!
-        window.setBackgroundDrawable(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xE0201030.toInt(), 0xE80D0B19.toInt())).apply { setStroke(dp(1), 0xFFC784F4.toInt()) })
+        window.setBackgroundDrawable(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xF0191321.toInt(), 0xF0100E17.toInt())).apply { setStroke(dp(1), 0xFFB76CFF.toInt()) })
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.setDimAmount(.16f)
         window.setGravity(Gravity.END)
@@ -219,6 +221,15 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
     }
     companion object {
         private val instances = java.util.WeakHashMap<FragmentActivity, CharmPageDrawer>()
+        fun uninstall(activity: FragmentActivity) {
+            instances.remove(activity)?.let { drawer ->
+                activity.lifecycle.removeObserver(drawer.lifecycleObserver)
+                drawer.dialog?.dismiss()
+                drawer.playbackControls = null
+                drawer.root.removeView(drawer.menu)
+                drawer.root.removeView(drawer.donate)
+            }
+        }
         fun install(activity: FragmentActivity, root: ConstraintLayout) {
             val drawer = CharmPageDrawer(activity, root)
             instances[activity] = drawer

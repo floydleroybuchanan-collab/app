@@ -31,7 +31,7 @@ object CharmMobileChrome {
         val header = LinearLayout(activity).apply {
             id = View.generateViewId(); orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setBackgroundColor(0x6610101E)
+            setBackgroundColor(0xE6191321.toInt())
         }
         val logo = ImageView(activity).apply { setImageResource(R.drawable.medialab_launcher); contentDescription = "Charming MediaLab" }
         header.addView(logo, LinearLayout.LayoutParams((44*dp).toInt(), (44*dp).toInt()))

@@ -161,7 +161,7 @@ function formatTimeRemaining(value: number | string | null | undefined): string 
 function SettingsScreenContent() {
   const styles = useAdaptiveStyles(baseStyles, { tile: { width: "46%", minHeight: 96 }, page: { paddingHorizontal: 12 } });
   const router = useRouter();
-  const openVodSettings = (section: string) => router.push({ pathname: "/vod", params: { section } } as any);
+  const openVodSettings = (section: string) => router.push({ pathname: "/vod-settings", params: { section } } as any);
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
   const [securityScreen,setSecurityScreen]=useState<SecurityScreen|null>(null);

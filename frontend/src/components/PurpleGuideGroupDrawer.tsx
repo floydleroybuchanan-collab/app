@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { DeviceEventEmitter, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, DeviceEventEmitter, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import type { PurpleGuideGroup } from "@/src/components/PurpleTvShell";
@@ -11,12 +11,14 @@ export const GUIDE_GROUP_DRAWER_WIDTH = 232;
 
 export function PurpleGuideGroupDrawer({
   open,
+  interactive = true,
   groups,
   onCloseToGuide,
   onFocusIconRail,
   onOpenMainDrawer,
 }: {
   open: boolean;
+  interactive?: boolean;
   groups: PurpleGuideGroup[];
   onCloseToGuide: () => void;
   onFocusIconRail: () => void;
@@ -44,7 +46,7 @@ export function PurpleGuideGroupDrawer({
   openMainDrawerRef.current = onOpenMainDrawer;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !interactive) return;
     // The groups drawer owns its boundary actions. BACK hands focus to the
     // permanent icon rail; a second BACK from that rail expands the full menu.
     // Up/Down and OK stay with Android native focus.
@@ -89,7 +91,7 @@ export function PurpleGuideGroupDrawer({
         setGuideNavigationActive(true);
       }
     };
-  }, [open]);
+  }, [interactive, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,13 +99,18 @@ export function PurpleGuideGroupDrawer({
     return () => sub.remove();
   }, [open]);
 
-  if (!open) return null;
+  const drawerWidth = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.timing(drawerWidth, { toValue: open ? GUIDE_GROUP_DRAWER_WIDTH : 0, duration: 350, easing: Easing.bezier(0.2, 0, 0, 1), useNativeDriver: false });
+    animation.start();
+    return () => animation.stop();
+  }, [drawerWidth, open]);
 
   return (
-    <View style={styles.overlay} testID="phase9-guide-groups-drawer">
+    <Animated.View style={[styles.overlay, { width: drawerWidth, overflow: "hidden" }]} pointerEvents={open && interactive ? "auto" : "none"} importantForAccessibility={open && interactive ? "auto" : "no-hide-descendants"} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
         <ScrollView focusable={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-          {!groups.length && <Pressable ref={emptyRef as any} hasTVPreferredFocus={preferActiveFocus}
+          {!groups.length && <Pressable ref={emptyRef as any} focusable={interactive} hasTVPreferredFocus={interactive && preferActiveFocus}
             onFocus={() => { focusConfirmedRef.current = true; setPreferActiveFocus(false); setRemoteContext("guide_groups"); }}
             onPress={onOpenMainDrawer} style={({ focused }: any) => [styles.row, focused && styles.focused]}>
             <Text style={styles.name}>No enabled playlists · Open main menu</Text>
@@ -115,8 +122,8 @@ export function PurpleGuideGroupDrawer({
                 if (node) refs.current.set(item.name, node);
                 else refs.current.delete(item.name);
               }}
-              focusable
-              hasTVPreferredFocus={preferActiveFocus && item.name === activeNameRef.current}
+              focusable={interactive}
+              hasTVPreferredFocus={interactive && preferActiveFocus && item.name === activeNameRef.current}
               onFocus={() => {
                 focusConfirmedRef.current = true;
                 setPreferActiveFocus(false);
@@ -152,7 +159,7 @@ export function PurpleGuideGroupDrawer({
           ))}
         </ScrollView>
       </FocusGuide>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -165,7 +172,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: tvColors.line,
   },
-  drawer: { flex: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  drawer: { flex: 1, width: GUIDE_GROUP_DRAWER_WIDTH, paddingHorizontal: 12, paddingVertical: 10 },
   list: { gap: 3, paddingBottom: 18 },
   row: {
     minHeight: 34,

@@ -20,10 +20,10 @@ test("Guide serializes Quick Actions PIN and Program Details modal ownership", a
   assert.doesNotMatch(boundary, /setPreviewActionsFocused\(true\)/);
   assert.match(rail, /const \[preferPlayFocus, setPreferPlayFocus\] = useState\(false\)/);
   assert.match(rail, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(rail, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
+  assert.match(rail, /onFocusCapture=\{\(\) => \{ setActionsVisible\(true\); setPreferPlayFocus\(false\); \}\}/);
   assert.match(rail, /onActionsFocusChange\(true\)/);
-  assert.match(guide, /active=\{isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused\}/);
-  assert.match(guide, /previewId=\{safePreviewMode === "off" \|\| drawerOpen \|\| groupDrawerOpen \|\| !!activeProgram \|\| !!pinPromptGroup \|\| quickActionsOpen \|\| !isFocused \? null : previewId\}/);
+  assert.match(guide, /active=\{isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused && !assignFocused\}/);
+  assert.match(guide, /previewId=\{safePreviewMode === "off" \|\| !!activeProgram \|\| !!pinPromptGroup \|\| quickActionsOpen \|\| !isFocused \? null : previewId\}/);
   assert.match(guide, /const pinModalOwnedRef = useRef\(false\)/);
   assert.match(guide, /const pinReturnToGroupsRef = useRef\(false\)/);
   assert.match(guide, /const openPinPrompt = useCallback/);

@@ -791,6 +791,20 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun listPrimaryGuideChannels(query: String, offset: Double, limit: Double, promise: Promise) {
+    queryExecutor.execute {
+      try {
+        val page = database.listDisplayNameAliases(query, offset.toInt().coerceAtLeast(0), limit.toInt().coerceIn(1, 100))
+        val rows = Arguments.createArray()
+        for (row in page.rows) rows.pushMap(Arguments.createMap().apply {
+          putString("id", row.channelId); putString("name", row.displayName)
+        })
+        promise.resolve(Arguments.createMap().apply { putInt("total", page.total); putArray("rows", rows) })
+      } catch (t: Throwable) { promise.reject("EPG_PRIMARY_DIRECTORY_FAILED", "Could not read the primary Guide directory", t) }
+    }
+  }
+
+  @ReactMethod
   fun listUserGuideChannels(query: String, offset: Double, limit: Double, promise: Promise) {
     queryExecutor.execute {
       try {

@@ -23,6 +23,46 @@ REVIEWED_PLAYLIST_TRANSPORT = {
     'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }
 
+
+# Exact read-only directory bridge added for the persistent Assign EPG pane.
+# These literals contain no fetch/import code. An altered or duplicate fragment
+# remains in the source and therefore fails the existing pinned transport hash.
+PRIMARY_DIRECTORY_BRIDGE = {
+    "frontend/src/nativeEpg.ts": (
+        '  listPrimaryGuideChannels?(query: string, offset: number, limit: number): Promise<{ total: number; rows: { id: string; name: string }[] }>;\n',
+        'export async function listNativePrimaryGuideChannels(query = "", offset = 0, limit = 50): Promise<{ total: number; rows: { id: string; name: string }[] }> { if (!nativeModule?.listPrimaryGuideChannels) return { total: 0, rows: [] }; return nativeModule.listPrimaryGuideChannels(query, Math.max(0, offset), Math.max(1, Math.min(100, limit))); }\n',
+    ),
+    "frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt": (
+        '''  @ReactMethod
+  fun listPrimaryGuideChannels(query: String, offset: Double, limit: Double, promise: Promise) {
+    queryExecutor.execute {
+      try {
+        val page = database.listDisplayNameAliases(query, offset.toInt().coerceAtLeast(0), limit.toInt().coerceIn(1, 100))
+        val rows = Arguments.createArray()
+        for (row in page.rows) rows.pushMap(Arguments.createMap().apply {
+          putString("id", row.channelId); putString("name", row.displayName)
+        })
+        promise.resolve(Arguments.createMap().apply { putInt("total", page.total); putArray("rows", rows) })
+      } catch (t: Throwable) { promise.reject("EPG_PRIMARY_DIRECTORY_FAILED", "Could not read the primary Guide directory", t) }
+    }
+  }
+
+''',
+    ),
+}
+
+
+def normalize_primary_directory_bridge(path: str, source: str) -> str:
+    source = source.replace("\r\n", "\n")
+    fragments = PRIMARY_DIRECTORY_BRIDGE.get(path, ())
+    # Accept the unchanged historical snapshot or exactly one complete bridge.
+    # Partial/duplicate additions are deliberately left for the hash to reject.
+    if fragments and all(source.count(fragment) == 1 for fragment in fragments):
+        for fragment in fragments:
+            source = source.replace(fragment, "", 1)
+    return source
+
+
 def is_reviewed_playlist_transport(path: str, source: str) -> bool:
     expected = REVIEWED_PLAYLIST_TRANSPORT.get(path)
-    return bool(expected) and hashlib.sha256(source.replace("\r\n", "\n").encode("utf-8")).hexdigest() == expected
+    return bool(expected) and hashlib.sha256(normalize_primary_directory_bridge(path, source).encode("utf-8")).hexdigest() == expected

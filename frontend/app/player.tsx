@@ -29,7 +29,7 @@ import {
 } from "@/src/components/StreamPlayer";
 import { useStore } from "@/src/store";
 import { fonts, radius, tvColors } from "@/src/theme";
-import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
+import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext, setGuideNavigationActive } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets, shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -51,6 +51,11 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { Channel } from "@/src/api";
 import { multiview } from "@/src/multiview";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
+import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
+import { setGuideScreenActive } from "@/src/utils/guideSurfGate";
+import { setViewportGuideChannelIds, setPriorityMatchChannelIds } from "@/src/source";
+import { useParentalPin } from "@/src/core/parentalPin";
+import { providerGroupIdentity } from "@/src/core/playlistGuideMenu";
 
 const SWITCH_NOTICE_MS = 1800;
 const STABLE_HISTORY_DELAY_MS = 5000;
@@ -84,6 +89,24 @@ export default function PlayerScreen() {
   const styles = useAdaptiveStyles(baseStyles, { bottomOverlay: { maxHeight: "75%" }, bottomContent: { paddingTop: 12 }, programCopy: { maxWidth: "100%" }, channelIdentity: { flex: 1, minWidth: 0 }, channelTitle: { flexShrink: 1 }, iconControl: { width: 48, height: 48 }, pauseControl: { width: 48, height: 48 }, tracksPanel: { maxHeight: 220 }, edgeTime: { width: 62 }, controlsSpacer: { flex: 0 } });
   const appPolicy=useAppPolicy();
   const router = useRouter();
+  const [guideOverlayOpen, setGuideOverlayOpen] = useState(false);
+  const guideOverlayOpenRef = useRef(false);
+  guideOverlayOpenRef.current = guideOverlayOpen;
+  const { windowStart: guideWindowStart, windowEnd: guideWindowEnd, patchProgramsForChannelIds } = useStore();
+  const { ready: parentalReady, hasPin, isGroupLocked } = useParentalPin();
+  useEffect(() => {
+    if (!guideOverlayOpen) return;
+    setGuideScreenActive(true);
+    setGuideNavigationActive(true);
+    setRemoteContext("guide");
+    return () => {
+      setGuideNavigationActive(false);
+      setGuideScreenActive(false);
+      setViewportGuideChannelIds(null);
+      setPriorityMatchChannelIds([]);
+      resetRemoteContextIfOwned("guide", "player");
+    };
+  }, [guideOverlayOpen]);
   const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -194,6 +217,8 @@ export default function PlayerScreen() {
     for (let index = 0; index < channels.length; index += 1) result[channels[index].id] = index + 1;
     return result;
   }, [channelNumbers, channels]);
+  const overlayGuideChannels = useMemo(() => parentalReady ? channels.filter((item) =>
+    !hasPin || !isGroupLocked(providerGroupIdentity(item.group))) : [], [channels, hasPin, isGroupLocked, parentalReady]);
 
   useEffect(() => {
     const timer = setInterval(() => setPlayerNow(new Date()), 30_000);
@@ -342,6 +367,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!isTV) return;
     return addPlayerQuickCommandListener((command) => {
+      if (guideOverlayOpenRef.current) return;
       if (command === "CYCLE_ASPECT") return cycleScaleMode();
       if (command === "OPEN_TRACKS") {
         controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
@@ -413,7 +439,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!isTV) return;
     return addTvKeyListener((key) => {
-      if (key === "BACK" || exitInFlightRef.current) return;
+      if (key === "BACK" || exitInFlightRef.current || guideOverlayOpenRef.current) return;
       if (!controlsRef.current || !controlsFocusedRef.current) revealControls({ claimChannelsFocus: true });
       else scheduleHide();
     });
@@ -471,17 +497,18 @@ export default function PlayerScreen() {
 
   const goGuide = useCallback(() => {
     if (exitInFlightRef.current) return;
-    exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
-    const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
-    const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
-    if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
-    generationRef.current += 1;
-    void stopFullscreenSession().then(() => router.replace("/guide" as any));
-  }, [params.returnGuideGroup, router]);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    controlsRef.current = false;
+    setControls(false);
+    setChannelsOpen(false);
+    setTracksOpen(false);
+    setGuideOverlayOpen(true);
+  }, [setChannelsOpen, setTracksOpen]);
 
   const runRemoteAction = useCallback((action: PlayerRemoteAction) => {
     if (exitInFlightRef.current) return;
+    if (guideOverlayOpenRef.current) return;
     if (action === "channel_up") return stepChannel(-1);
     if (action === "channel_down") return stepChannel(1);
     if (action === "channels") { controlsRef.current = true; setControls(true); setTracksOpen(false); setChannelsOpen(true); scheduleHide(); return; }
@@ -520,6 +547,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (exitInFlightRef.current) return true;
+      if (guideOverlayOpenRef.current) { setGuideOverlayOpen(false); return true; }
       if (!controlsRef.current) { revealControls(); return true; }
       if (tracksOpen || channelsOpen) { closeOverlayAndRestoreFocus(); scheduleHide(); return true; }
       stopAndExit(); return true;
@@ -617,7 +645,7 @@ export default function PlayerScreen() {
 
       {notice ? <View style={styles.notice} pointerEvents="none"><ActivityIndicator size="small" color="#fff" /><Text numberOfLines={1} style={styles.noticeText}>{notice}</Text></View> : null}
 
-      {controls ? (
+      {controls && !guideOverlayOpen ? (
         <>
           <LinearGradient colors={["rgba(5,4,13,0.92)", "rgba(5,4,13,0.42)", "transparent"]} style={[styles.topOverlay, { paddingTop: insets.top + safe.top + 8, paddingLeft: safe.left + 14, paddingRight: safe.right + 14 }]}>
             <View style={styles.channelIdentity}>
@@ -687,6 +715,20 @@ export default function PlayerScreen() {
           </LinearGradient></AdaptivePlayerScroll>
           </FocusGuide>
         </>
+      ) : null}
+      {guideOverlayOpen ? (
+        <View style={{ position: "absolute", left: safe.left + 14, right: safe.right + 14, bottom: safe.bottom + 12, height: "62%", zIndex: 40 }} testID="player-transparent-guide">
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(12,7,26,0.8)", padding: 8 }}>
+            <Text style={{ flex: 1, color: "#fff", fontFamily: fonts.semibold }}>TV Guide · {channel?.name || "Live TV"}</Text>
+            <Pressable onPress={() => setGuideOverlayOpen(false)} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Text style={styles.controlLabel}>Close guide</Text></Pressable>
+          </View>
+          <NativeGuideCanvas channels={overlayGuideChannels} windowStart={guideWindowStart} windowEnd={guideWindowEnd} active overlayMode restoreChannelId={channelId} channelNumberById={numberById}
+            onChannelFocus={() => undefined} onProgramFocus={() => undefined}
+            onChannelPress={(next) => { changeChannel(next.id, true); setGuideOverlayOpen(false); }}
+            onProgramPress={(_program, next) => { changeChannel(next.id, true); setGuideOverlayOpen(false); }}
+            onViewportChannelIds={(ids, priorityIds) => { setViewportGuideChannelIds(ids); setPriorityMatchChannelIds(priorityIds); void patchProgramsForChannelIds(ids, priorityIds); }}
+            onLeftBoundary={() => undefined} onUpBoundary={() => setGuideOverlayOpen(false)} />
+        </View>
       ) : null}
     </View>
   );

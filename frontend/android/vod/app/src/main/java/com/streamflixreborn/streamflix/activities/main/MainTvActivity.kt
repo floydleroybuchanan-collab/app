@@ -53,6 +53,10 @@ class MainTvActivity : FragmentActivity() {
             CharmHostSession.save(this, state)
         }
         super.finish()
+        if (CharmHostSession.embedded(this)) {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
     }
 
     override fun attachBaseContext(newBase: android.content.Context) {
@@ -62,7 +66,8 @@ class MainTvActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val restoredState = savedInstanceState ?: CharmHostSession.take(this)
         // Il setup delle preferenze è già avvenuto in StreamFlixApp
-        setTheme(ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
+        setTheme(if (CharmHostSession.embedded(this) && UserPreferences.selectedTheme == ThemeManager.DEFAULT)
+            com.streamflixreborn.streamflix.R.style.AppTheme_CharmVodEntrance else ThemeManager.tvThemeRes(UserPreferences.selectedTheme))
 
         super.onCreate(restoredState)
         supportFragmentManager.registerFragmentLifecycleCallbacks(VodFocusMemory(true), true)
@@ -222,7 +227,7 @@ class MainTvActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.checkUpdate()
+        if (!CharmHostSession.embedded(this)) viewModel.checkUpdate()
     }
 
     private fun applyThemeNavigationChrome() {

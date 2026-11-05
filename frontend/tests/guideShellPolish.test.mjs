@@ -293,11 +293,11 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   assert.doesNotMatch(guide, /const onGuideUpBoundary = useCallback\([\s\S]{0,520}setPreviewActionsFocused\(true\)/);
   assert.match(guide, /!previewActionsFocused/);
   assert.match(preview, /onActionsFocusChange\(true\)/);
-  assert.match(preview, /onFocusLost=\{\(\) => onActionsFocusChange\(false\)\}/);
+  assert.match(preview, /onFocusLost=\{\(\) => \{ setActionsVisible\(false\); onActionsFocusChange\(false\); \}\}/);
   assert.match(guide, /setPreviewFocusRequestToken\(\(value\) => value \+ 1\)/);
   assert.match(guide, /focusRequestToken=\{previewFocusRequestToken\}/);
   assert.match(preview, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(preview, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
+  assert.match(preview, /onFocusCapture=\{\(\) => \{ setActionsVisible\(true\); setPreferPlayFocus\(false\); \}\}/);
   assert.match(guide, /requestAnimationFrame\(\(\) => \{[\s\S]{0,160}focusGuidePreviewSurface\(\)/);
   assert.match(focus, /typeof focus === "function"/);
   assert.match(focus, /dispatchViewManagerCommand/);
@@ -314,8 +314,9 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   assert.doesNotMatch(guide, /focusPurpleIconRail/);
   assert.match(guide, /buildPlaylistMenu/);
   assert.doesNotMatch(guide, /NowPlayingBar/);
-  assert.match(preview, /width: 138/);
-  assert.match(preview, /actionColumn: \{ flex: 1, minWidth: 0, gap: 3 \}/);
+  assert.match(preview, /guidePreviewLayout\(width\)/);
+  assert.match(preview, /actionGrid: \{ position: "absolute"/);
+  assert.match(preview, /!actionsVisible && styles.actionsHidden/);
   assert.doesNotMatch(preview, /actionPlaceholder/);
 });
 

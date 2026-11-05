@@ -5,6 +5,7 @@ import {
   Animated,
   BackHandler,
   DeviceEventEmitter,
+  Easing,
   findNodeHandle,
   Platform,
   Pressable,
@@ -91,7 +92,7 @@ const NAV: NavItem[] = [
 
 export const PURPLE_SIDEBAR_WIDTH = 192;
 export const PURPLE_ICON_RAIL_WIDTH = 52;
-export const PURPLE_DRAWER_ANIMATION_MS = 180;
+export const PURPLE_DRAWER_ANIMATION_MS = 350;
 
 export type OpenDrawerOptions = {
   focusTop?: boolean;
@@ -173,6 +174,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
     const animation = Animated.timing(drawerProgress, {
       toValue: drawerOpen ? 1 : 0,
       duration: PURPLE_DRAWER_ANIMATION_MS,
+      easing: Easing.bezier(0.2, 0, 0, 1),
       useNativeDriver: true,
     });
     animation.start();
@@ -213,6 +215,7 @@ function WatchingDot({ testID }: { testID?: string }) {
 }
 
 export function PurpleTvShell({
+  immersive = false,
   active,
   children,
   headerRight,
@@ -226,6 +229,7 @@ export function PurpleTvShell({
   onNavigate,
   onIconRailOpenMainDrawer,
 }: {
+  immersive?: boolean;
   active: Route;
   children: React.ReactNode;
   headerRight?: React.ReactNode;
@@ -263,7 +267,18 @@ export function PurpleTvShell({
   const safeArea = useSafeAreaInsets();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = !mobile && railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = !immersive && !mobile && railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const navigationWidth = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.timing(navigationWidth, {
+      toValue: immersive || mobile ? 0 : drawerOpen ? PURPLE_SIDEBAR_WIDTH : showIconRail ? 52 : 0,
+      duration: PURPLE_DRAWER_ANIMATION_MS,
+      easing: Easing.bezier(0.2, 0, 0, 1),
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [drawerOpen, immersive, mobile, navigationWidth, showIconRail]);
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -613,7 +628,7 @@ export function PurpleTvShell({
         },
       ]}
     >
-      {mobile && <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 12 }}>
+      {mobile && !immersive && <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 12 }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Open main menu" style={{ minWidth: 48, minHeight: 48, justifyContent: "center" }} onPress={() => openDrawer({ focusTop: true })}><Ionicons name="menu" size={26} color="#fff" /></Pressable>
         <Text style={{ color: "#fff", fontSize: 17 }}>{NAV.find(item => item.route === active)?.label}</Text>
       </View>}
@@ -734,7 +749,7 @@ export function PurpleTvShell({
         </FocusGuide>
       </Animated.View>
 
-      {drawerOpen && !mobile ? <View style={styles.sidebarSpacer} /> : null}
+      {!mobile ? <Animated.View style={{ width: navigationWidth, height: "100%", flexShrink: 0 }}>
       {showIconRail ? (
         <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
           <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>
@@ -789,7 +804,8 @@ export function PurpleTvShell({
           </Pressable>
         </FocusGuide>
       ) : null}
-      {!drawerOpen && secondaryDrawer ? secondaryDrawer : null}
+      </Animated.View> : null}
+      {secondaryDrawer || null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
@@ -804,7 +820,7 @@ export function PurpleTvShell({
       >
         {children}
       </FocusGuide>
-      {mobile && <View style={{ flexDirection: "row", backgroundColor: "#10101E", borderTopWidth: 1, borderColor: "#25233A" }}>
+      {mobile && !immersive && <View style={{ flexDirection: "row", backgroundColor: "#10101E", borderTopWidth: 1, borderColor: "#25233A" }}>
         {([{ route: "/", label: "Home", icon: "home-outline" }, { route: "/guide", label: "Live", icon: "tv-outline" }, { route: "/vod", label: "Browse", icon: "film-outline" }, { route: "/favorites", label: "Library", icon: "heart-outline" }, { route: null, label: "More", icon: "menu" }] as const).map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityState={{ selected: item.route === active }} onPress={() => item.route ? navigate(item.route) : openDrawer({ focusTop: true })} style={({ focused }: any) => ({ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 3, backgroundColor: focused || item.route === active ? "#3B1768" : "transparent" })}><Ionicons name={item.icon} size={20} color={item.route === active ? "#B76CFF" : "#AAA7BB"} /><Text style={{ fontSize: 12, color: item.route === active ? "#fff" : "#AAA7BB" }}>{item.label}</Text></Pressable>)}
       </View>}
       {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
