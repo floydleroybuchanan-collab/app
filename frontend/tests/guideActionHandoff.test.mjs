@@ -7,6 +7,15 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
+test("transient grid selection retains the existing preview tune until a settled channel changes it", async () => {
+  const [guide, rail] = await Promise.all([source("app/(tabs)/guide.tsx"), source("src/components/GuidePreviewRail.tsx")]);
+  assert.match(guide, /const tunedChannel = previewId \? channelById\.get\(previewId\)/);
+  assert.doesNotMatch(guide, /previewId === channel\.id/);
+  assert.match(rail, /key=\{`guide-preview-\$\{tunedChannel\.id\}-\$\{previewEpoch\}`\}/);
+  assert.match(guide, /if \(!settled && guideSessionChannelId !== channel\.id && previewTimer\.current\) \{\s*clearTimeout\(previewTimer\.current\)/);
+  assert.match(guide, /if \(settled\) \{\s*rememberGuideGroupChannel\(group, channel\.id\);\s*armPreviewForChannel\(channel\)/);
+});
+
 test("Guide serializes Quick Actions PIN and Program Details modal ownership", async () => {
   const [guide, rail, programModal, quick] = await Promise.all([
     source("app/(tabs)/guide.tsx"),
@@ -14,15 +23,8 @@ test("Guide serializes Quick Actions PIN and Program Details modal ownership", a
     source("src/components/ProgramModal.tsx"),
     source("src/components/TvQuickActionsOverlay.tsx"),
   ]);
-  const boundary = guide.match(/const onGuideUpBoundary = useCallback\([\s\S]*?\n  \}, \[\]\);/)?.[0] || "";
-  assert.match(boundary, /setPreviewFocusRequestToken\(\(value\) => value \+ 1\)/);
-  assert.match(boundary, /focusGuidePreviewSurface\(\)/);
-  assert.doesNotMatch(boundary, /setPreviewActionsFocused\(true\)/);
-  assert.match(rail, /const \[preferPlayFocus, setPreferPlayFocus\] = useState\(false\)/);
-  assert.match(rail, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(rail, /onFocusCapture=\{\(\) => \{ setActionsVisible\(true\); setPreferPlayFocus\(false\); \}\}/);
-  assert.match(rail, /onActionsFocusChange\(true\)/);
-  assert.match(guide, /active=\{isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused && !assignFocused\}/);
+  assert.doesNotMatch(rail, /Pressable|onActionsFocusChange|hasTVPreferredFocus/);
+  assert.match(guide, /active=\{isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !assignFocused\}/);
   assert.match(guide, /previewId=\{safePreviewMode === "off" \|\| !!activeProgram \|\| !!pinPromptGroup \|\| quickActionsOpen \|\| !isFocused \? null : previewId\}/);
   assert.match(guide, /const pinModalOwnedRef = useRef\(false\)/);
   assert.match(guide, /const pinReturnToGroupsRef = useRef\(false\)/);

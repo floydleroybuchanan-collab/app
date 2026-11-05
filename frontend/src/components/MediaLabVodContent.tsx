@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, BackHandler, NativeModules, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, findNodeHandle, BackHandler, NativeModules, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useStore } from "@/src/store";
@@ -35,6 +35,10 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const [ready, setReady] = useState(false);
   const [player, setPlayer] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toolbarFocusTag, setToolbarFocusTag] = useState<number | null>(null);
+  const bindToolbarEntry = useCallback((node: View | null) => {
+    if (node) setToolbarFocusTag(findNodeHandle(node));
+  }, []);
   useEffect(() => { setSection(entrySection(initialSection, settings)); }, [initialSection, settings]);
   useEffect(() => {
     let current = true;
@@ -66,6 +70,8 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     {!player && !settings && <View pointerEvents="none" style={styles.banner}><MediaLabArt kind="banner" width={240} height={72} /></View>}
     {!player && <View style={styles.toolbar}>
       {(settings ? [["back", "Back to Settings"]] : [["back", "Back"], ...sections]).map(([value, label]) => <Pressable key={value}
+        ref={value === section || (settings && value === "back") ? bindToolbarEntry : undefined}
+        onFocus={event => setToolbarFocusTag(event.nativeEvent.target)}
         accessibilityRole="button" accessibilityState={{ selected: value === section || (value === "provider" && providerMode) }}
         onPress={() => {
           if (value === "back") { if (settings) router.replace("/settings"); else back(); return; }
@@ -79,6 +85,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
       </Pressable>)}
       {!settings && !providerMode && ready && NativeModules.CharmVod?.surfaceMenu ? <Pressable
         accessibilityRole="button"
+        onFocus={event => setToolbarFocusTag(event.nativeEvent.target)}
         onPress={() => { void Promise.resolve(NativeModules.CharmVod.surfaceMenu()).catch(() => setError("Could not open VOD options. Try again.")); }}
         style={({ focused: hasFocus, pressed }: any) => [styles.button, hasFocus && styles.focused, pressed && styles.pressed]}>
         <Text style={styles.label}>Options</Text>
@@ -88,7 +95,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     {focused && !providerMode && !ready && !error && Platform.OS === "android" ? <View style={styles.status}><ActivityIndicator color={tvColors.focus} /><Text style={styles.label}>Opening Video On Demand…</Text></View> : null}
     {focused && !providerMode && Platform.OS !== "android" ? <Text style={styles.status}>The built-in video catalog is available on Android.</Text> : null}
     {providerMode ? <XtreamProviderBrowser initialTitle={providerParts ? { owner: providerParts[1], kind: providerParts[2] as "movie" | "series", catalogId: providerParts[3] } : undefined} onClose={() => setSection("home")} /> : null}
-    {focused && ready && !providerMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
+    {focused && ready && !providerMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} toolbarFocusTag={toolbarFocusTag || 0} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
       onVodEvent={({ nativeEvent }: any) => {
         if (nativeEvent.kind === "error") setError(nativeEvent.value);
         if (nativeEvent.kind === "player") { const value = nativeEvent.value === "true"; setPlayer(value); onPlayerChange?.(value); if (value) closeDrawer({ force: true }); }

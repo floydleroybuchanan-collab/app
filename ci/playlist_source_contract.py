@@ -14,13 +14,15 @@ Regression coverage: stability166Regression.test.mjs and EpgImportCoordinatorTes
 RC9 changes display/log brand strings only; transport is unchanged.
 RC16 merges portal guide ownership from the current secure source registry;
 see docs/rc16-integration-validation.md for the reviewed scope.
+RC17 publishes cold-start channels before cache/index/guide work and rejects
+late publication after a protected-access change. See docs/rc17-startup-focus-repair.md.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': '46cda3e8fde5ad80158c6c9accf8ca45620415d45168b9eaa0754c8a912fa7f4',
+    'frontend/src/source.native.ts': 'e111ae67a5bb9c00d3e4b168ee2b5e9757c948b6e26a0d3ecc5089ddc875355d',
     'frontend/src/nativeEpg.ts': '2679305589ac6e4c64c0ec44b676b9c257f7939adbcee912cb26296f80018873',
     'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }

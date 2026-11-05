@@ -71,7 +71,7 @@ test("unsupported protocol errors explain the Media3 limitation without offering
 test("Guide rejects unsupported transports before mounting a native preview or scheduling a retry", async () => {
   const guide = await source("app/(tabs)/guide.tsx");
   assert.match(guide, /isNativeMedia3SupportedStreamKind\(detectStreamKind\(parsePipeHeaders\(channel\.url\)\.uri, channel\.stream_type\)\)/);
-  assert.match(guide, /const previewVisible =[\s\S]*?!unsupportedPreviewProtocol/);
+  assert.match(guide, /const previewVisible =[\s\S]*?isPreviewProtocolSupported\(tunedChannel\)/);
   assert.match(guide, /testID="guide-preview-unsupported-protocol"/);
   assert.match(guide, /pointerEvents="none" style=\{\[styles\.unsupportedPreview, \{ width: previewLayout\.previewWidth, height: previewLayout\.previewHeight \}\]\}/);
   const schedule = guide.slice(guide.indexOf("const schedulePreview ="), guide.indexOf("const guideTopPanelWidth ="));

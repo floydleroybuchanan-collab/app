@@ -707,21 +707,18 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
           prev.every((channel, index) => {
             const next = nextChannels[index];
             return channel.playlist_name === next.playlist_name && channel.raw_tvg_id === next.raw_tvg_id && channel.id === next.id && channel.tvg_id === next.tvg_id && channel.name === next.name &&
-              channel.logo === next.logo && channel.group === next.group && channel.url === next.url;
+              channel.logo === next.logo && channel.group === next.group && channel.url === next.url &&
+              channel.stream_type === next.stream_type && channel.archive_days === next.archive_days &&
+              channel.xtream_stream_id === next.xtream_stream_id && channel.stalker_id === next.stalker_id;
           })
         ) return prev;
-        return nextChannels.map((channel) => ({
-          id: channel.id,
-          playlist_id: channel.playlist_id, playlist_name: channel.playlist_name,
-          source_group: channel.source_group, source_channel_id: channel.source_channel_id,
-          raw_tvg_id: channel.raw_tvg_id,
-          tvg_id: channel.tvg_id,
-          name: channel.name,
-          logo: channel.logo,
-          group: channel.group,
-          url: channel.url,
-          stream_type: channel.stream_type,
-        }));
+        return nextChannels.map((channel) => {
+          const metadata = { ...channel };
+          delete metadata.programs;
+          // Commands stay with the source catalog and are resolved on demand.
+          delete metadata.stalker_cmd;
+          return metadata;
+        });
       });
       setWindowStart(data.start);
       setWindowEnd(data.end);
@@ -748,7 +745,9 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
       if (requestId !== refreshRequestRef.current) return;
       setError(formatNativeEpgError(e));
     } finally {
-      if (!silent && requestId === refreshRequestRef.current) setLoading(false);
+      // A source publication can replace the first foreground read with a
+      // silent read. The newest request owns completion of the same spinner.
+      if (requestId === refreshRequestRef.current) setLoading(false);
     }
   }, [persistRecent]);
   refreshSilentRef.current = refresh;

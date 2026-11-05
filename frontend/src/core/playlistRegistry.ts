@@ -186,16 +186,34 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
       const previous = catalogs.get(row.id) || [];
       const previousRows = rows;
       const jobId = await startNativeUpdateJob(row.id, "playlist", dueOnly ? "schedule" : "manual").catch(() => 0);
+      const access = managedContentSources();
+      let url: string | undefined;
+      const accessChanged = () => row.managed && (access !== managedContentSources() || (url !== undefined && managedUrl(row.id) !== url));
+      const cancel = () => finishNativeUpdateJob(jobId, "cancelled", 0, "Supplied source access changed.").catch(() => undefined);
       try {
-        const fresh = await previewPlaylist(await getPlaylistUrl(row));
+        url = await getPlaylistUrl(row);
+        const fresh = await previewPlaylist(url);
+        if (accessChanged()) {
+          await cancel();
+          break;
+        }
         catalogs.set(row.id, scopePlaylistChannels(row, fresh));
         try { combinePlaylistCatalogs(rows, catalogs); } catch (error) { catalogs.set(row.id, previous); throw error; }
         const next = await writeCatalog(row, fresh);
+        if (accessChanged()) {
+          catalogs.set(row.id, previous);
+          await cancel();
+          break;
+        }
         rows = rows.map((item) => item.id === row.id ? next : item);
         await commit(rows);
         await finishNativeUpdateJob(jobId, "succeeded", fresh.length).catch(() => undefined);
       } catch (error) {
         catalogs.set(row.id, previous);
+        if (accessChanged()) {
+          await cancel();
+          break;
+        }
         const safeReason = error instanceof Error && /^(Enabled playlists exceed|Playlist contains|Playlist exceeds|No playable|Your provider account|The provider rejected|Could not contact the Xtream provider)/.test(error.message)
           ? error.message : "Refresh failed — previous channels kept. Check source and connection.";
         rows = previousRows.map((item) => item.id === row.id ? { ...item, status: safeReason } : item);

@@ -22,6 +22,7 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     private var section = "home"
     private var television = true
     private var settingsSurface = false
+    var toolbarFocusTag = 0
     private var disposed = false
     private val root = ConstraintLayout(react)
     private val container = FrameLayout(react).apply { id = VodR.id.nav_main_fragment }
@@ -82,7 +83,44 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
         host?.let { navigate(it, next) }
     }
     fun television(value: Boolean) { television = value }
+    private fun handoffUpToToolbar(): Boolean {
+        if (host?.navController?.currentDestination?.id == VodR.id.player) return false
+        val focused = findFocus() ?: return false
+        val target = owner?.findViewById<View>(toolbarFocusTag) ?: return false
+        if (!target.isShown || !target.isFocusable) return false
+        // Preserve upper rows in every nested catalog (Home contains horizontal
+        // poster lists inside a vertical list). Only the actual first row exits.
+        var child: View = focused
+        var parent = child.parent
+        while (parent is View && parent !== this) {
+            if (parent is androidx.recyclerview.widget.RecyclerView) {
+                val recycler = parent
+                val manager = recycler.layoutManager
+                if (manager?.canScrollVertically() == true) {
+                    val item = recycler.findContainingItemView(child) ?: return false
+                    val position = recycler.getChildAdapterPosition(item)
+                    if (position == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return false
+                    // Leanback's GridLayoutManager is not RecyclerView's grid
+                    // manager. Compare actual first-row bounds so every column
+                    // in VerticalGridView can leave upward, not just item zero.
+                    val first = manager.findViewByPosition(0) ?: return false
+                    if (item.top > first.top + resources.displayMetrics.density * 2f || recycler.canScrollVertically(-1)) return false
+                }
+            }
+            child = parent
+            parent = child.parent
+        }
+        // A real header/search field above the poster remains the next stop.
+        val candidate = android.view.FocusFinder.getInstance().findNextFocus(root, focused, View.FOCUS_UP)
+        if (candidate != null && candidate !== focused) {
+            val from = android.graphics.Rect(); val to = android.graphics.Rect()
+            if (focused.getGlobalVisibleRect(from) && candidate.getGlobalVisibleRect(to) && to.centerY() < from.centerY()) return false
+        }
+        return target.requestFocus(View.FOCUS_UP)
+    }
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
+            event.action == android.view.KeyEvent.ACTION_DOWN && handoffUpToToolbar()) return true
         owner?.let { if (CharmPageDrawer.dispatch(it, event)) return true }
         return super.dispatchKeyEvent(event)
     }
@@ -185,6 +223,7 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
 class CharmVodSurfaceManager : SimpleViewManager<CharmVodSurface>() {
     override fun getName() = "CharmVodSurface"
     override fun createViewInstance(context: ThemedReactContext) = CharmVodSurface(context)
+    @ReactProp(name = "toolbarFocusTag", defaultInt = 0) fun toolbarFocusTag(view: CharmVodSurface, value: Int) { view.toolbarFocusTag = value }
     @ReactProp(name = "section") fun section(view: CharmVodSurface, value: String?) = view.section(value)
     @ReactProp(name = "television", defaultBoolean = true) fun television(view: CharmVodSurface, value: Boolean) = view.television(value)
     override fun onDropViewInstance(view: CharmVodSurface) { view.dispose(); super.onDropViewInstance(view) }

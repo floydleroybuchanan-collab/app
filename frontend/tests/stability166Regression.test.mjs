@@ -13,6 +13,46 @@ function load(p, mocks, globals = {}) {
 }
 async function settle() { for (let i = 0; i < 100; i++) await Promise.resolve(); }
 
+test('cold guide readers share startup and receive channels before guide I/O completes', async () => {
+  const source = read('src/source.native.ts');
+  const start = source.indexOf('let initialLoadPromise:');
+  const end = source.indexOf('async function loadColdSources()', start);
+  assert.ok(start >= 0 && end > start);
+  const code = ts.transpileModule(source.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  let refreshCount = 0, finishGuide, listener;
+  let access = [];
+  const context = {
+    MEM: null,
+    managedContentSources: () => access,
+    loadColdSources: () => vm.runInContext('refreshUntilChannelsAvailable()', context),
+    refreshInternal: () => { refreshCount++; return new Promise(resolve => { finishGuide = resolve; }); },
+    subscribeSource: callback => { listener = callback; return () => { listener = undefined; }; },
+  };
+  vm.createContext(context);
+  vm.runInContext(code, context);
+  const first = vm.runInContext('ensureLoaded()', context);
+  const second = vm.runInContext('ensureLoaded()', context);
+  assert.equal(first, second);
+  assert.equal(refreshCount, 1);
+  context.MEM = { channels: [{ id: 'ready' }], epgProgramCount: 0 };
+  listener();
+  assert.equal(await first, context.MEM);
+  assert.equal(listener, undefined);
+  finishGuide({ channels: context.MEM.channels, epgProgramCount: 3 });
+  context.MEM = null;
+  const previousSession = vm.runInContext('ensureLoaded()', context);
+  access = [];
+  context.MEM = { channels: [{ id: 'previous session' }] };
+  listener();
+  await assert.rejects(previousSession, /access changed/);
+  assert.equal(listener, undefined);
+  finishGuide(context.MEM);
+  const publish = source.indexOf('The individual catalogs are already durable.');
+  const index = source.indexOf('await syncPlaylistToNative(channels, playlistEpoch)', publish);
+  const additional = source.indexOf('await syncPlaylistEpg(channels, true', index);
+  assert.ok(publish > 0 && source.indexOf('emit()', publish) < index && index < additional);
+});
+
 test('actual progress subscriber delivers rapid completion/error and trailing intermediate updates', () => {
   let now = 1000, callback, nextTimer = 0;
   const timers = new Map(), seen = [], cleanups = [];

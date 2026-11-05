@@ -48,7 +48,6 @@ import {
 } from "@/src/core/guideSlidingCache";
 import {
   resetGuideSelection,
-  setGuideFocusedProgram,
   useGuideSelection,
 } from "@/src/core/guideSelectionStore";
 import { stopPreviewSession } from "@/src/core/playbackSession";
@@ -78,7 +77,6 @@ import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import type { StreamStatus } from "@/src/components/StreamPlayer";
 import { subscribeAndroidMemoryPressure } from "@/src/utils/androidMemoryPressure";
 import { emitTvQuickActions, resetRemoteContextIfOwned, setGuideNavigationActive, setGuideRepeatInterval, setRemoteContext } from "@/src/utils/tvRemote";
-import { focusGuidePreviewSurface } from "@/src/utils/guidePreviewFocus";
 
 // Session-only guide position survives the root player route unmounting tabs.
 // Do not persist to disk: this is navigation state, not a user preference.
@@ -123,22 +121,11 @@ function GuideSelectionPreview({
   channelNumberById,
   showChannelNumbers,
   showLogos,
-  favoriteSet,
   hidePreview,
   muted,
-  onToggleMute,
   previewId,
-  previewStatus,
   previewEpoch,
   onPreviewStatus,
-  onPlay,
-  onFavorite,
-  onOpenReminders,
-  onHideToggle,
-  onOpenDrawer,
-  onActionsFocusChange,
-  focusRequestToken,
-  guideFocusTag,
 }: {
   width: number;
   channelById: ReadonlyMap<string, Channel>;
@@ -147,22 +134,11 @@ function GuideSelectionPreview({
   channelNumberById: Record<string, number>;
   showChannelNumbers: boolean;
   showLogos: boolean;
-  favoriteSet: ReadonlySet<string>;
   hidePreview: boolean;
   muted: boolean;
-  onToggleMute: () => void;
   previewId: string | null;
-  previewStatus: StreamStatus;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
-  onPlay: (channel: Channel) => void;
-  onFavorite: (channelId: string) => void;
-  onOpenReminders: () => void;
-  onHideToggle: () => void;
-  onOpenDrawer: () => void;
-  onActionsFocusChange: (focused: boolean) => void;
-  focusRequestToken: number;
-  guideFocusTag?: number | null;
 }) {
   const selection = useGuideSelection();
   const channel = (selection.channelId ? channelById.get(selection.channelId) : null) || fallbackChannel;
@@ -186,40 +162,31 @@ function GuideSelectionPreview({
   }, [channel, liveCurrent, liveNext, programs, selection]);
   const unsupportedPreviewProtocol = !isPreviewProtocolSupported(channel);
   const previewLayout = guidePreviewLayout(width);
+  const tunedChannel = previewId ? channelById.get(previewId) : undefined;
   const previewVisible =
     !hidePreview &&
-    !unsupportedPreviewProtocol &&
-    !!channel?.url &&
-    previewId === channel.id;
+    !!tunedChannel?.url &&
+    isPreviewProtocolSupported(tunedChannel);
 
   return (
     <View style={styles.previewRailContainer}>
       <GuidePreviewRail
         width={width}
         channel={channel}
+        tunedChannel={previewVisible ? tunedChannel : undefined}
         current={displayedProgram}
         next={nextProgram}
         now={now}
         channelNumber={channel ? channelNumberById[channel.id] : undefined}
         showChannelNumbers={showChannelNumbers}
         showLogos={showLogos}
-        isFavorite={!!channel && favoriteSet.has(channel.id)}
         hidePreview={hidePreview}
         muted={muted}
-        onToggleMute={onToggleMute}
         previewVisible={previewVisible}
         previewEpoch={previewEpoch}
         onPreviewStatus={onPreviewStatus}
-        onPlay={() => channel && onPlay(channel)}
-        onFavorite={() => channel && onFavorite(channel.id)}
-        onOpenReminders={onOpenReminders}
-        onHideToggle={onHideToggle}
-        onOpenDrawer={onOpenDrawer}
-        onActionsFocusChange={onActionsFocusChange}
-        focusRequestToken={focusRequestToken}
-        guideFocusTag={guideFocusTag}
       />
-      {!hidePreview && unsupportedPreviewProtocol ? (
+      {!hidePreview && !previewVisible && unsupportedPreviewProtocol ? (
         <View pointerEvents="none" style={[styles.unsupportedPreview, { width: previewLayout.previewWidth, height: previewLayout.previewHeight }]} testID="guide-preview-unsupported-protocol">
           <Ionicons name="warning-outline" size={22} color={tvColors.purpleSoft} />
           <Text style={styles.unsupportedPreviewTitle}>Unsupported stream protocol</Text>
@@ -255,7 +222,6 @@ function PurpleGuideScreenContent() {
       if (!value?.channelId) return;
       closeDrawer({ force: true });
       setGroupDrawerOpen(false);
-      setPreviewActionsFocused(false);
       resetGuideSelection(value.channelId);
       setAssignChannelId(value.channelId);
       setAssignFocused(true);
@@ -291,7 +257,6 @@ function PurpleGuideScreenContent() {
     recentIds,
     lastChannelId,
     channelById,
-    toggleFavorite,
     guideDensity,
     safePreviewMode,
     channelNumbers,
@@ -310,8 +275,6 @@ function PurpleGuideScreenContent() {
     mutePreview,
     startGroup,
     setPinnedGroups,
-    setHidePreview,
-    setMutePreview,
     hiddenGroups,
   } = useGuideUiPreferences();
   const customGuideGroups = useCustomGuideGroups();
@@ -343,8 +306,6 @@ function PurpleGuideScreenContent() {
   const [group, setGroup] = useState(() => guideSessionGroup);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<StreamStatus>("loading");
-  const [previewActionsFocused, setPreviewActionsFocused] = useState(false);
-  const [previewFocusRequestToken, setPreviewFocusRequestToken] = useState(0);
   const [nativeGuideFocusTag, setNativeGuideFocusTag] = useState<number | null>(null);
   const [resetToken, setResetToken] = useState(0);
   const assignmentFocusRetry = useRef<(() => void) | null>(null);
@@ -399,7 +360,6 @@ function PurpleGuideScreenContent() {
     cancelGuideTransientTimers();
     setPreviewId(null);
     setPreviewStatus("loading");
-    setPreviewActionsFocused(false);
     setViewportGuideChannelIds(null);
     setPriorityMatchChannelIds([]);
     lastRunwayRef.current = { ids: [], priority: [], pageSize: 8 };
@@ -427,11 +387,6 @@ function PurpleGuideScreenContent() {
   useEffect(() => {
     if (activeProgram) hadProgramModalRef.current = true;
   }, [activeProgram]);
-
-  const openDrawerFromPreview = useCallback(() => {
-    void Haptics.selectionAsync().catch(() => undefined);
-    openDrawer({ focusTop: true });
-  }, [openDrawer]);
 
   const openGuideSources = useCallback(() => {
     closeDrawer();
@@ -870,20 +825,21 @@ function PurpleGuideScreenContent() {
   );
 
   const onFocusChannel = useCallback((channel: Channel, settled = true) => {
+    if (!settled && guideSessionChannelId !== channel.id && previewTimer.current) {
+      clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+    }
     guideSessionChannelId = channel.id;
     if (jumpFilterBypassId && channel.id !== jumpFilterBypassId) setJumpFilterBypassId(null);
-    rememberGuideGroupChannel(group, channel.id);
-    resetGuideSelection(channel.id);
-    if (settled) armPreviewForChannel(channel);
+    if (settled) {
+      rememberGuideGroupChannel(group, channel.id);
+      armPreviewForChannel(channel);
+    }
   }, [armPreviewForChannel, group, jumpFilterBypassId]);
 
-  const onFocusProgram = useCallback((program: Program, channel: Channel, settled = true) => {
-    guideSessionChannelId = channel.id;
-    if (jumpFilterBypassId && channel.id !== jumpFilterBypassId) setJumpFilterBypassId(null);
-    rememberGuideGroupChannel(group, channel.id);
-    setGuideFocusedProgram(channel.id, program);
-    if (settled) armPreviewForChannel(channel);
-  }, [armPreviewForChannel, group, jumpFilterBypassId]);
+  const onFocusProgram = useCallback((_program: Program, channel: Channel, settled = true) => {
+    onFocusChannel(channel, settled);
+  }, [onFocusChannel]);
 
   const openGuideProgram = useCallback((_program: Program, _channel: Channel) => {
     emitTvQuickActions("guide");
@@ -936,7 +892,6 @@ function PurpleGuideScreenContent() {
     cancelGuideTransientTimers();
     setPreviewId(null);
     void stopPreviewSession("superseded");
-    setPreviewActionsFocused(false);
     if (returnToGroups) setGroupDrawerOpen(false);
     setPinPromptGroup(next);
     setPinDigits("");
@@ -1010,13 +965,6 @@ function PurpleGuideScreenContent() {
     if (!drawerOpen && !groupDrawerOpen && !activeProgram) setGroupDrawerOpen(true);
   }, [activeProgram, drawerOpen, groupDrawerOpen]);
 
-  const onGuideUpBoundary = useCallback(() => {
-    setPreviewFocusRequestToken((value) => value + 1);
-    requestAnimationFrame(() => {
-      focusGuidePreviewSurface();
-    });
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       const jump = consumeGuideJump();
@@ -1025,7 +973,6 @@ function PurpleGuideScreenContent() {
       // Clear every stale focus blocker before NativeGuideCanvas becomes active.
       closeDrawer({ force: true });
       setGroupDrawerOpen(false);
-      setPreviewActionsFocused(false);
       setQuickActionsOpen(false);
       consumeGuideGroupsOnEntry();
       selectPlaylist(playlistOwner({ id: jump.channelId }));
@@ -1094,7 +1041,7 @@ function PurpleGuideScreenContent() {
     <PurpleTvShell
       active="/guide"
       watchingChannelId={lastChannelId}
-      secondaryDrawer={groupDrawerMounted ? (
+      secondaryDrawer={groupDrawerOpen || groupDrawerMounted ? (
         <PurpleGuideGroupDrawer
           open={groupDrawerOpen}
           interactive={groupDrawerOpen && !drawerOpen}
@@ -1153,7 +1100,9 @@ function PurpleGuideScreenContent() {
         ) : (
           <View style={styles.body} onLayout={(event) => {
             const width = Math.max(0, event.nativeEvent.layout.width);
-            setGuideSurfaceWidth((previous) => previous != null && Math.abs(previous - width) < 1 ? previous : width);
+            setGuideSurfaceWidth((previous) => previous != null &&
+              Math.abs(guidePreviewLayout(previous).previewWidth - guidePreviewLayout(width).previewWidth) < 1
+              ? previous : width);
           }}>
             <GuideSelectionPreview
               width={guideTopPanelWidth}
@@ -1163,25 +1112,11 @@ function PurpleGuideScreenContent() {
               channelNumberById={channelNumberById}
               showChannelNumbers={channelNumbers}
               showLogos={isFocused && channelLogos && !surfLogosSuppressed}
-              favoriteSet={favoriteSet}
               hidePreview={hidePreview}
               muted={mutePreview}
-              onToggleMute={() => setMutePreview(!mutePreview)}
               previewId={safePreviewMode === "off" || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
-              previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
-              onPlay={play}
-              onFavorite={toggleFavorite}
-              onOpenReminders={() => {
-                quiesceGuideForTransition(true);
-                router.replace("/reminders" as any);
-              }}
-              onHideToggle={() => setHidePreview(!hidePreview)}
-              onOpenDrawer={openDrawerFromPreview}
-              onActionsFocusChange={setPreviewActionsFocused}
-              focusRequestToken={previewFocusRequestToken}
-              guideFocusTag={nativeGuideFocusTag}
             />
 
             <View style={styles.gridPanel}>
@@ -1191,7 +1126,7 @@ function PurpleGuideScreenContent() {
                 channels={filtered}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
-                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused && !assignFocused}
+                active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !assignFocused}
                 restoreChannelId={guideSessionChannelId}
                 restoreTimeMs={restoreTimeMs}
                 reloadGeneration={resetToken}
@@ -1204,7 +1139,6 @@ function PurpleGuideScreenContent() {
                 onViewportChannelIds={onViewportChannelIds}
                 onNativeGuideTag={setNativeGuideFocusTag}
                 onLeftBoundary={onGuideLeftBoundary}
-                onUpBoundary={onGuideUpBoundary}
                 onRightBoundary={assignChannelId ? () => setAssignFocused(true) : undefined}
               />
             </View>

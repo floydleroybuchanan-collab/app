@@ -41,7 +41,7 @@ import { getEpgSourcePreferences, type EpgSourcePreferences } from "@/src/core/e
 import { getMultiEpgSources } from "@/src/core/multiEpgSources";
 import { indexDeclaredStreamTypes } from "@/src/core/playbackProfileIndex";
 import { createPlaylistPlaybackRefresher } from "@/src/core/playlistPlaybackRefresh";
-import { managedEpgUrl, managedPlaylistUrl } from "@/src/auth/managedContentAccess";
+import { managedContentSources, managedEpgUrl, managedPlaylistUrl } from "@/src/auth/managedContentAccess";
 
 export const API_BASE = "";
 
@@ -755,7 +755,32 @@ async function fetchPlaylist(): Promise<Channel[]> {
   return channels;
 }
 
-async function ensureLoaded(): Promise<NativeMeta> {
+let initialLoadPromise: Promise<NativeMeta> | null = null;
+
+function ensureLoaded(): Promise<NativeMeta> {
+  if (MEM) return Promise.resolve(MEM);
+  if (!initialLoadPromise) {
+    initialLoadPromise = loadColdSources().finally(() => { initialLoadPromise = null; });
+  }
+  return initialLoadPromise;
+}
+
+function refreshUntilChannelsAvailable(): Promise<NativeMeta> {
+  const access = managedContentSources();
+  let unsubscribe: () => void = () => undefined;
+  const published = new Promise<NativeMeta>((resolve, reject) => {
+    unsubscribe = subscribeSource(() => {
+      if (access !== managedContentSources()) {
+        reject(new Error("Supplied source access changed. Retry the guide update."));
+        return;
+      }
+      if (MEM) resolve(MEM);
+    });
+  });
+  return Promise.race([published, refreshInternal(true)]).finally(() => unsubscribe());
+}
+
+async function loadColdSources(): Promise<NativeMeta> {
   // Best-effort once per install: drop superseded JS/expo EPG files (never v3 native DB).
   void cleanupLegacyEpgArtifactsOnce();
 
@@ -764,7 +789,7 @@ async function ensureLoaded(): Promise<NativeMeta> {
   const cached = nativeCached || (await readChannelCache());
   if (cached) {
     if (cached.channels.length === 0 && (await listPlaylists()).some((source) => source.enabled)) {
-      return refreshInternal(true);
+      return refreshUntilChannelsAvailable();
     }
     await seedLegacyPlaylist(cached.channels);
     const combined = await readCombinedPlaylists();
@@ -779,13 +804,7 @@ async function ensureLoaded(): Promise<NativeMeta> {
       lastSourceError = cached.epgError;
       setProgress({ phase: "error", ratio: 0, etaSeconds: null, message: cached.epgError }, true);
     }
-    // A native snapshot came from these exact SQL tables; keep cold start read-only.
-    // JSON fallback/legacy caches still rebuild native indexes after upgrade.
-    if (!nativeCached) {
-      void syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0)
-        .then(() => syncMatchesToNative(cached.channels, cached.guideEpoch || 0))
-        .catch(() => undefined);
-    }
+    // The awaited publication above already covers native and legacy snapshots.
     // Existing guide paints from cache while newly supplied slots bootstrap independently.
     void listPlaylists().then(async (sources) => {
       for (const source of sources) if (source.enabled && !source.revision) await reloadPlaylistCatalog(source.id);
@@ -796,7 +815,7 @@ async function ensureLoaded(): Promise<NativeMeta> {
   const legacy = await readMetaFile(LEGACY_CHANNEL_CACHE);
   if (legacy) {
     if (legacy.channels.length === 0) {
-      return refreshInternal(true);
+      return refreshUntilChannelsAvailable();
     }
     MEM = { ...legacy, ts: 0 };
     await persistMeta(MEM).catch(() => undefined);
@@ -804,7 +823,7 @@ async function ensureLoaded(): Promise<NativeMeta> {
     return MEM;
   }
 
-  return refreshInternal(true);
+  return refreshUntilChannelsAvailable();
 }
 
 async function refreshInternal(force: boolean): Promise<NativeMeta> {
@@ -816,11 +835,16 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
   if (playlistOnlyRefreshPromise) await playlistOnlyRefreshPromise;
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
+    const access = managedContentSources();
+    const assertCurrentAccess = () => {
+      if (access !== managedContentSources()) throw new Error("Supplied source access changed. Retry the guide update.");
+    };
     const cached = MEM || (await readChannelCache());
     if (!force && cached?.channels?.length) {
       const refreshPrefs = await getSourceRefreshPreferences();
       const playlistLast = cached.playlistRefreshedAt != null ? cached.playlistRefreshedAt : cached.ts;
       if (!isRefreshDue(playlistLast, refreshPrefs.playlistHours)) {
+        assertCurrentAccess();
         MEM = cached;
         void syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0)
           .then(() => syncMatchesToNative(cached.channels, cached.guideEpoch || 0))
@@ -836,6 +860,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
     try {
       setProgress({ phase: "channels", ratio: 0.05, etaSeconds: null }, true);
       channels = await fetchPlaylist();
+      assertCurrentAccess();
       const playlistRefreshedAt = Date.now();
       const playlistEpoch = (cached?.playlistEpoch || 0) + 1;
       const playlistFp = playlistIdentityFingerprint(channels);
@@ -853,15 +878,20 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
         matchPolicy: cached?.matchPolicy,
         playlistIdentityFingerprint: playlistFp,
       };
-      // Channels-first paint — EPG continues async below.
-      await persistMeta(MEM);
+      // The individual catalogs are already durable. Publish channels before
+      // building the combined cache and let live browsing proceed during EPG I/O.
+      emit();
+      setProgress({ phase: "channels", ratio: 0.17, etaSeconds: null, message: "Channels loaded. Preparing the guide index." }, true);
       // Sync raw playlist rows into SQLite before match rewrites tvg_id.
       await syncPlaylistToNative(channels, playlistEpoch);
       await touchNativePlaylistRefresh(playlistEpoch);
-      emit();
+      // This combined metadata cache is a fallback, not the catalog authority.
+      await persistMeta(MEM).catch(() => undefined);
 
       if (!nativeEpgAvailable) throw new Error("Native EPG engine is unavailable in this Android build");
+      setProgress({ phase: "downloading", ratio: 0.2, etaSeconds: null, message: "Updating associated programme guides." }, true);
       await syncPlaylistEpg(channels, true, undefined, invalidateGuideOwnershipCaches);
+      assertCurrentAccess();
       const ownership = await applyPersistedGuideOwnership();
       const refreshPreferences = await getSourceRefreshPreferences();
       // The custom source manager performs a deliberate full XMLTV index when
@@ -877,6 +907,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
         // custom DB's last successful swap clock (or zero when none exists).
         const checkedAt = Date.now();
         const effectiveGuide = await readNativeStoredPlaylist();
+        assertCurrentAccess();
         clearProgrammeWindowCache();
         MEM = {
           ...MEM,
@@ -901,8 +932,9 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
         false,
         activeBindings.ids,
         activeBindings.names,
-        applyNativeImportProgress,
+        (phase, ratio) => { if (access === managedContentSources()) applyNativeImportProgress(phase, ratio); },
       );
+      assertCurrentAccess();
       setProgress({ phase: "indexing", ratio: 0.91, etaSeconds: null }, true);
 
       const epgLogos = epg.channelLogos || {};
@@ -946,6 +978,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
           epgLogos,
           logoPriority,
           async (partialChannels, partialQuality) => {
+            assertCurrentAccess();
             // Two-phase: paint priority/viewport matches without waiting for the full list.
             // Keep the same channel array length/order to avoid Guide data churn.
             MEM = {
@@ -962,6 +995,7 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       }
 
       const guideRefreshedAt = Date.now();
+      assertCurrentAccess();
       const guideEpoch =
         typeof epg.guideEpoch === "number" && Number.isFinite(epg.guideEpoch)
           ? Math.round(epg.guideEpoch)
@@ -993,6 +1027,10 @@ async function refreshInternal(force: boolean): Promise<NativeMeta> {
       setProgress({ phase: "ready", ratio: 1, etaSeconds: 0, message: null }, true);
       return MEM;
     } catch (error) {
+      if (access !== managedContentSources()) {
+        setProgress({ phase: "idle", ratio: 0, etaSeconds: null, message: null }, true);
+        throw error;
+      }
       const message = formatNativeEpgError(error);
       lastSourceError = message;
       setProgress({ phase: "error", ratio: 0, etaSeconds: null, message }, true);
@@ -1152,7 +1190,11 @@ export async function loadGuide(startISO?: string, hours = 6, force = false): Pr
   }
   playlistIds = Array.from(new Set(playlistIds));
 
-  await loadProgrammeCacheMisses(remapped, playlistIds, startMs, endMs);
+  // A cold catalog with no guide generation is already usable for live TV.
+  // Do not put its first paint behind an empty query during the initial import.
+  if (parsed.guideEpoch != null || parsed.epgProgramCount > 0) {
+    await loadProgrammeCacheMisses(remapped, playlistIds, startMs, endMs);
+  }
   // Soft trim only — strict viewport trim would wipe the conveyor hysteresis band
   // that retainProgrammeWindowCache(expandRunwayKeepSet(...)) intentionally keeps.
   trimProgrammeWindowCache(playlistIds, "soft");

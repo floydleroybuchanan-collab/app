@@ -92,20 +92,6 @@ test("closed main drawer consumes first Back and opens only on a bounded second 
   assert.match(shell, /decision === "open-drawer"[\s\S]*?openDrawer\(\{ focusTop: true \}\)[\s\S]*?return true/);
 });
 
-test("Guide action strip walks all six actions before returning to the native Guide", async () => {
-  const rail = await source("src/components/GuidePreviewRail.tsx");
-  const actionStripBeforeHide = rail.slice(rail.indexOf("ref={playFocus.setRef}"), rail.indexOf("ref={hideFocus.setRef}"));
-  assert.match(rail, /testID="guide-preview-play"/);
-  assert.match(rail, /testID="guide-preview-favorite"/);
-  assert.match(rail, /testID="guide-preview-remind"/);
-  assert.match(rail, /testID="guide-preview-drawer"/);
-  assert.match(rail, /testID="guide-preview-mute"/);
-  assert.match(rail, /testID="guide-preview-hide"/);
-  assert.doesNotMatch(actionStripBeforeHide, /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
-  assert.match(rail.slice(rail.lastIndexOf("ref={hideFocus.setRef}")), /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
-  assert.match(rail, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(rail, /onFocusCapture=\{\(\) => \{ setActionsVisible\(true\); setPreferPlayFocus\(false\); \}\}/);
-});
 
 test("active native Guide claims initial focus when its first channel rows arrive", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");

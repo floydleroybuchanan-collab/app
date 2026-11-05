@@ -76,8 +76,8 @@ export function PurpleGuideGroupDrawer({
     // movement until the drawer closes; active-group/count updates cannot yank it.
     const activeName = activeNameRef.current;
     focusedNameRef.current = activeName;
-    const node = activeName ? refs.current.get(activeName) : emptyRef.current;
-    const cancelFocus = requestNativeFocusWithRetry(node, [0, 80, 160, 260, 560], () => focusConfirmedRef.current);
+    const node = () => (activeName ? refs.current.get(activeName) : null) || refs.current.values().next().value || emptyRef.current;
+    const cancelFocus = requestNativeFocusWithRetry(node, [0, 32, 80, 160, 350], () => focusConfirmedRef.current);
     return () => {
       offKey();
       offLongPress();

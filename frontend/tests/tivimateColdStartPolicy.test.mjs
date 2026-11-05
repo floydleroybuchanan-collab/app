@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = async (path) => (await readFile(join(root, path), "utf8")).replace(/\r\n/g, "\n");
 
-test("TiviMate-style native cold start is read-only while successful provider refresh advances its own clock", async () => {
+test("cold start coalesces native projection sync without advancing the provider clock", async () => {
   const [appSource, bridge, nativeModule, database] = await Promise.all([
     source("src/source.native.ts"),
     source("src/nativeEpg.ts"),
@@ -15,10 +15,10 @@ test("TiviMate-style native cold start is read-only while successful provider re
     source("android/app/src/main/java/com/charmiptv/app/EpgDatabase.kt"),
   ]);
 
-  const coldStart = appSource.match(/async function ensureLoaded\(\)[\s\S]*?\n}\n\nasync function refreshInternal/)?.[0] || "";
+  const coldStart = appSource.match(/async function loadColdSources\(\)[\s\S]*?\n}\n\nasync function refreshInternal/)?.[0] || "";
   assert.match(coldStart, /const nativeCached = await readNativeChannelCache\(\)/);
-  assert.match(coldStart, /if \(!nativeCached\) \{[\s\S]*?syncPlaylistToNative\(cached\.channels/);
-  assert.doesNotMatch(coldStart, /if \(nativeCached\)[\s\S]*?syncPlaylistToNative/);
+  assert.equal(Array.from(coldStart.matchAll(/syncPlaylistToNative\(cached\.channels/g)).length, 1);
+  assert.match(appSource, /if \(await nativePlaylistIsCurrent\(contentFingerprint\)\) return;/);
   assert.doesNotMatch(coldStart, /touchNativePlaylistRefresh/);
 
   const fullRefresh = appSource.match(/async function refreshInternal\(force: boolean\)[\s\S]*?export async function refreshSource/)?.[0] || "";
@@ -144,7 +144,7 @@ test("legacy cleanup preserves the channel cache until native migration can prom
   ]);
   assert.match(cleanup, /LEGACY_CHANNEL_CACHE = "charm_native_channels_v1\.json"/);
   assert.match(cleanup, /if \(name === LEGACY_CHANNEL_CACHE\) continue/);
-  const coldStart = nativeSource.match(/async function ensureLoaded\(\)[\s\S]*?\n}\n\nasync function refreshInternal/)?.[0] || "";
+  const coldStart = nativeSource.match(/async function loadColdSources\(\)[\s\S]*?\n}\n\nasync function refreshInternal/)?.[0] || "";
   assert.match(coldStart, /const legacy = await readMetaFile\(LEGACY_CHANNEL_CACHE\)/);
   assert.match(coldStart, /await persistMeta\(MEM\)/);
 });

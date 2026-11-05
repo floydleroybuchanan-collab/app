@@ -1,0 +1,12 @@
+# RC17 guide startup and focus repair
+
+The 17% mark was emitted after playlist imports had finished. A cold Guide read still waited for combined-cache serialization, native catalog synchronization, associated EPG downloads, and primary guide processing. Separately, a silent refresh could replace the initial request without ever clearing its loading indicator.
+
+- Cold reads share one startup operation. A first usable catalog is published from memory before native index and fallback-cache work, which releases the initial Guide read while guide import continues. The initial catalog skips an empty programme query until it has a guide generation. Legacy fallback uses one native catalog synchronization instead of repeating it.
+- The progress label distinguishes catalog indexing from associated guide download. A fallback-cache write failure does not prevent the import from continuing. A newer read completes the shared loading indicator even when that read is silent.
+- Pending cold readers check the protected source access snapshot. A managed playlist response is discarded if its source address changed during the request. The full refresh checks access before publishing channels or matching results. Existing durable catalogs remain available. These checks do not cancel an already dispatched native import or change parser, HTTP headers, retries, or credentials.
+- The guide store retains archive eligibility and provider channel identity. Portal commands stay in the source catalog and programme rows stay in the programme cache.
+
+The earlier NT reconstruction separates source-scoped workers, streaming XMLTV and bounded query reads from its designed portable staged importer. MediaLab retains its native SQLite staging, per-source import leases and bounded viewport queries. The startup change removes UI dependency on those jobs completing.
+
+Focused coverage includes shared cold reads, early catalog publication during a blocked guide import, stale access rejection, preserved legacy-cache migration and the exact transport snapshot with a negative mutation check.

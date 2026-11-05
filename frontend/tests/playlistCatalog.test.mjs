@@ -77,7 +77,7 @@ function registryHarness() {
       finishNativeUpdateJob: async () => {},
     },
     "./playlistCatalog": catalog,
-    "@/src/auth/managedContentAccess": { managedContentSources: () => configured, managedPlaylistUrl: id => id === "primary" ? "https://primary.invalid/list" : "https://second.invalid/list" },
+    "@/src/auth/managedContentAccess": { managedContentSources: () => configured, managedPlaylistUrl: id => configured.some(row => row.id === id) ? (id === "primary" ? "https://primary.invalid/list" : "https://second.invalid/list") : "" },
   };
   const exports = {};
   const source = readFileSync(new URL("../src/core/playlistRegistry.ts", import.meta.url), "utf8");
@@ -85,6 +85,20 @@ function registryHarness() {
   vm.runInNewContext(code, { exports, require: name => { assert.ok(mocks[name], name); return mocks[name]; }, process: { env: { EXPO_PUBLIC_M3U_URL: "https://primary.invalid/list", EXPO_PUBLIC_M3U_URL_2: "https://second.invalid/list" } }, URL, console });
   return { api: exports, files, prefs, secrets, configure: rows => { configured = rows; }, fetch: fn => { fetcher = fn; }, failCommit: value => { failCommit = value; } };
 }
+
+test("a managed playlist response arriving after access is cleared cannot replace its catalog", async () => {
+  const h = registryHarness();
+  await h.api.refreshPlaylists("charm-primary");
+  const previous = await h.api.readCombinedPlaylists();
+  let response;
+  h.fetch(() => new Promise(resolve => { response = resolve; }));
+  const late = h.api.refreshPlaylists("charm-primary");
+  while (!response) await new Promise(resolve => setImmediate(resolve));
+  h.configure([]);
+  response({ channels: [channel("stale-result")], rejected: 0, truncated: false });
+  await late;
+  assert.deepEqual(await h.api.readCombinedPlaylists(), previous);
+});
 
 test("mixed-validity refresh publishes valid channels and reports skipped entries", async () => {
   const h = registryHarness();

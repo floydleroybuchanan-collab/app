@@ -20,7 +20,7 @@ type Props = {
   onViewportChannelIds: (ids: string[], priorityIds: string[], pageSize: number, velocity: number) => void;
   onNativeGuideTag?: (tag: number | null) => void;
   onLeftBoundary: () => void;
-  onUpBoundary: () => void;
+  onUpBoundary?: () => void;
   onRightBoundary?: () => void;
 };
 const Native = Platform.OS === "android" ? requireNativeComponent<any>("CharmNativeGuide") : null;
@@ -96,6 +96,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   }, [validRestoreChannelId, validRestoreTimeMs]);
 
   const handleSelectionChange = useCallback((event: NativeSyntheticEvent<SelectionEvent>) => {
+    if (!active) return;
     const value = event.nativeEvent;
     const channel = channelById.get(value.channelId);
     if (!channel) return;
@@ -119,7 +120,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       if (value.surface !== "channel" && program) onProgramPress(program, channel);
       else if (value.surface !== "channel") onChannelPress(channel);
     }
-  }, [channelById, onChannelFocus, onChannelPress, onProgramFocus, onProgramPress]);
+  }, [active, channelById, onChannelFocus, onChannelPress, onProgramFocus, onProgramPress]);
 
   // The native canvas owns scrolling/focus. Only its visible rows get image
   // views; ChannelLogo supplies shared bounded loads, downsampling and fallback.

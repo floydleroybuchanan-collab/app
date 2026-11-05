@@ -5,17 +5,19 @@ import {accountUpdateReport,formatAccountUpdateReport,releaseName} from '../acco
 import {handleUpdate} from '../bot-telegram.js';
 import {exactCommand} from '../bot-commands.js';
 const auth={isOwner:true,user:{id:OWNER},profile:{}};
-test('RC16 sideload update keeps the public baseline and recognizes both new test builds',async()=>{
+test('RC17 sideload update keeps the public baseline and recognizes both new test builds',async()=>{
  const f=fixture();f.user('unified');
- await f.request('/me/activity',{method:'POST',token:f.token('unified'),body:{sequence:1,mode:'idle',playing:false,build:37}});
+ await f.request('/me/activity',{method:'POST',token:f.token('unified'),body:{sequence:1,mode:'idle',playing:false,build:38}});
  f.user('previous');
- await f.request('/me/activity',{method:'POST',token:f.token('previous'),body:{sequence:1,mode:'idle',playing:false,build:36}});
+ await f.request('/me/activity',{method:'POST',token:f.token('previous'),body:{sequence:1,mode:'idle',playing:false,build:37}});
  const r=await accountUpdateReport(f.env,auth);
  assert.equal(r.target,27);
  assert.equal(r.users.find(u=>u.username==='unified').updated,true);
  assert.match(releaseName(35),/RC14-Sideload-218/);
  assert.match(releaseName(36),/RC15-Sideload-220/);
  assert.match(releaseName(37),/RC16-Sideload-222/);
+ assert.match(releaseName(38),/RC17-Sideload-223.*TEST BUILD/);
+ assert.match(releaseName(39),/not mapped/);
  assert.equal(r.users.find(u=>u.username==='previous').updated,true);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(2\)/);
 });

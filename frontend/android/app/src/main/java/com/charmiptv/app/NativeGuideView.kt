@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
@@ -255,6 +254,8 @@ class NativeGuideView(context: Context) : View(context) {
   fun setActive(value: Boolean) {
     val wasEnabled = enabled
     enabled = value
+    isFocusableInTouchMode = value
+    isFocusable = value
     if (!value) {
       focusEntryPending = false
       removeCallbacks(focusEntryRunnable)
@@ -268,7 +269,7 @@ class NativeGuideView(context: Context) : View(context) {
     }
     scheduleLiveClock()
     applyPendingRestoreChannel()
-    // React may re-apply an unchanged active=true prop while Preview owns focus.
+    // React may re-apply an unchanged active=true prop.
     // Only a real inactive -> active ownership transition may take Android focus
     // back into the Guide; otherwise keep the user's current focused surface.
     if (!wasEnabled && rows.isNotEmpty()) {
@@ -476,7 +477,10 @@ class NativeGuideView(context: Context) : View(context) {
       return true
     }
     if (rows.isEmpty()) {
-      if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { emit("topLeftBoundary", null); return true }
+      if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+        if (event.repeatCount == 0) emit("topLeftBoundary", null)
+        return true
+      }
       return super.onKeyDown(keyCode, event)
     }
     if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
@@ -485,14 +489,17 @@ class NativeGuideView(context: Context) : View(context) {
       removeCallbacks(settleSelectionRunnable)
     }
     when (keyCode) {
-      KeyEvent.KEYCODE_DPAD_UP -> if (selectedRow == 0) emit("upBoundary", null) else moveVertical(-1)
+      KeyEvent.KEYCODE_DPAD_UP -> {
+        if (selectedRow > 0) moveVertical(-1)
+        else if (overlayMode && event.repeatCount == 0) emit("upBoundary", null)
+      }
       KeyEvent.KEYCODE_DPAD_DOWN -> moveVertical(1)
       KeyEvent.KEYCODE_DPAD_LEFT -> {
         liveFollowEnabled = false
         if (event.repeatCount > 0 && event.eventTime - lastHorizontalMoveAt < 55L) return true
         lastHorizontalMoveAt = event.eventTime
         if (channelRailSelected) {
-          emit("topLeftBoundary", null)
+          if (event.repeatCount == 0) emit("topLeftBoundary", null)
           return true
         }
         val current = selectedProgram()
@@ -707,35 +714,26 @@ class NativeGuideView(context: Context) : View(context) {
       }
 
       val list = programs[row.id].orEmpty()
-      var paintedProgramme = false
+      var gapStart = visibleStartMs
+      val programmeRowSelected = !channelRailSelected && rowIndex == selectedRow
       for (program in list) {
         if (program.endMs <= visibleStartMs || program.startMs >= visibleEndMs) continue
+        if (program.startMs > gapStart) {
+          drawProgrammeGap(canvas, gapStart, program.startMs, visibleStartMs, visibleEndMs, top, programmeRowSelected)
+        }
+        gapStart = max(gapStart, min(program.endMs, visibleEndMs))
         val left = timeToX(program.startMs, visibleStartMs, visibleEndMs)
         val right = timeToX(program.endMs, visibleStartMs, visibleEndMs)
         val clippedLeft = max(channelWidth, left)
         val clippedRight = min(width.toFloat(), right)
         if (clippedRight <= clippedLeft) continue
-        paintedProgramme = true
-        val chosen = !channelRailSelected && rowIndex == selectedRow && program.startMs <= selectedTimeMs && program.endMs > selectedTimeMs
-        canvas.drawRect(
-          RectF(clippedLeft + density, top + density, clippedRight - density, top + rowHeight - 2f * density),
-          if (chosen) selected else cell,
-        )
+        val chosen = programmeRowSelected && program.startMs <= selectedTimeMs && program.endMs > selectedTimeMs
+        canvas.drawRect(clippedLeft + density, top + density, clippedRight - density,
+          top + rowHeight - 2f * density, if (chosen) selected else cell)
         drawClippedText(canvas, program.title, clippedLeft + pad, top + rowHeight * .60f, clippedRight - pad, title)
       }
-      if (!paintedProgramme) {
-        // A legitimate unmatched/empty EPG row must never look like a broken
-        // black canvas. Keep the row selectable/playable and show a neutral
-        // TiviMate-style placeholder without inventing persisted programme data.
-        val left = channelWidth + density
-        val right = width.toFloat() - density
-        if (right > left) {
-          canvas.drawRect(
-            RectF(left, top + density, right, top + rowHeight - 2f * density),
-            if (!channelRailSelected && rowIndex == selectedRow) selected else cell,
-          )
-          drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
-        }
+      if (gapStart < visibleEndMs) {
+        drawProgrammeGap(canvas, gapStart, visibleEndMs, visibleStartMs, visibleEndMs, top, programmeRowSelected)
       }
       canvas.drawLine(0f, top + rowHeight, width.toFloat(), top + rowHeight, divider)
     }
@@ -743,6 +741,33 @@ class NativeGuideView(context: Context) : View(context) {
     if (wallClockNow in visibleStartMs..visibleEndMs) {
       val x = timeToX(wallClockNow, visibleStartMs, visibleEndMs)
       canvas.drawLine(x, headerHeight, x, height.toFloat(), nowPaint)
+    }
+  }
+
+  /** Draw uncovered time slots without allocating or persisting placeholder programmes. */
+  private fun drawProgrammeGap(
+    canvas: Canvas, gapStart: Long, gapEnd: Long, visibleStart: Long, visibleEnd: Long,
+    top: Float, rowSelected: Boolean,
+  ) {
+    val halfHourMs = 30L * 60_000L
+    var start = gapStart
+    var labelDrawn = false
+    while (start < gapEnd) {
+      val end = min(gapEnd, ((start / halfHourMs) + 1L) * halfHourMs)
+      if (end <= start) break
+      val left = timeToX(start, visibleStart, visibleEnd)
+      val right = timeToX(end, visibleStart, visibleEnd)
+      if (right - left > 2f * density) {
+        val chosen = rowSelected && selectedTimeMs >= start && selectedTimeMs < end
+        canvas.drawRect(left + density, top + density, right - density,
+          top + rowHeight - 2f * density, if (chosen) selected else cell)
+        canvas.drawLine(right, top, right, top + rowHeight, divider)
+        if (!labelDrawn && right - left >= 72f * density) {
+          drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
+          labelDrawn = true
+        }
+      }
+      start = end
     }
   }
 

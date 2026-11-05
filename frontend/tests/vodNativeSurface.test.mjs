@@ -56,3 +56,17 @@ test('shared VOD options remain reachable without duplicate native menu and dona
  const page=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodPageLayout.kt');
  assert.match(page,/val top = if \(unified\) root.dp\(8\)/);
 });
+
+
+test('catalog Up handoff respects nested first rows, native headers and player ownership',()=>{
+ const s=source('android/app/src/main/java/com/charmiptv/app/CharmVodSurface.kt');
+ const handoff=s.slice(s.indexOf('private fun handoffUpToToolbar'),s.indexOf('override fun dispatchKeyEvent'));
+ assert.match(handoff,/currentDestination\?\.id == VodR.id.player/);
+ assert.match(handoff,/!target.isShown \|\| !target.isFocusable/);
+ assert.match(handoff,/while \(parent is View && parent !== this\)/);
+ assert.match(handoff,/manager.findViewByPosition\(0\)/);
+ assert.match(handoff,/recycler.canScrollVertically\(-1\)/);
+ assert.match(handoff,/to.centerY\(\) < from.centerY\(\)/);
+ assert.match(handoff,/target.requestFocus\(View.FOCUS_UP\)/);
+ assert.match(s,/@ReactProp\(name = "toolbarFocusTag"/);
+});

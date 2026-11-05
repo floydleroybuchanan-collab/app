@@ -11,7 +11,7 @@ function harness(release=async()=>{}) {
  }};
  const modules={
   react:{...React,default:React},
-  'react-native':{Platform:{OS:'android'},View:'View',Text:'Text',Pressable:'Pressable',ActivityIndicator:'ActivityIndicator',StyleSheet:{create:value=>value},requireNativeComponent:()=> 'NativeSurface',
+  'react-native':{findNodeHandle:node=>node.tag,Platform:{OS:'android'},View:'View',Text:'Text',Pressable:'Pressable',ActivityIndicator:'ActivityIndicator',StyleSheet:{create:value=>value},requireNativeComponent:()=> 'NativeSurface',
    BackHandler:{addEventListener:()=>({remove(){}})},NativeModules:{CharmVod:{configureSurface:async value=>calls.push(['configure',value])}}},
   '@react-navigation/native':{useIsFocused:()=>true},'expo-router':{useRouter:()=>({replace(){}})},
   '@/src/store':{useStore:()=>({deviceLayoutMode:'tv'})},'@/src/utils/tvLayout':{shouldUseTvLayout:()=>true},
@@ -43,4 +43,26 @@ test('leaving during decoder release cannot mount a stale VOD surface',async()=>
  let resolve;const h=harness(()=>new Promise(done=>{resolve=done;}));const leave=h.enter();leave();resolve();await tick();
  assert.equal(h.states[1],false);
  assert.equal(h.calls.length,1);
+});
+
+
+test('VOD toolbar tracks its real native focus target for the catalog Up boundary',()=>{
+ const h=harness();
+ const buttons=[];
+ function walk(node) {
+   if(!Array.isArray(node)) return;
+   if(node[0]==='Pressable') buttons.push(node[1]);
+   for(const child of node) walk(child);
+ }
+ walk(h.tree);
+ const selected=buttons.find(button=>button.accessibilityState?.selected);
+ assert.ok(selected?.ref);
+ selected.ref({tag:301});
+ assert.equal(h.states[4],301);
+ const other=buttons.find(button=>button!==selected && button.onFocus);
+ other.onFocus({nativeEvent:{target:405}});
+ assert.equal(h.states[4],405);
+ // Native view recreation supplies a new tag, replacing the stale destination.
+ selected.ref({tag:502});
+ assert.equal(h.states[4],502);
 });

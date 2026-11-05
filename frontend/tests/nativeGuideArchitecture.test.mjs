@@ -95,7 +95,7 @@ test("native Guide clock24h preference reaches the native time-of-day header", a
 
 test("preview tuning only follows settled native selection", async () => {
   const guide = await source("app/(tabs)/guide.tsx");
-  assert.match(guide, /if \(settled\) armPreviewForChannel\(channel\)/);
+  assert.match(guide, /if \(settled\) \{[\s\S]{0,130}armPreviewForChannel\(channel\)/);
 });
 
 test("Startup V4 uses ordered milestones and exits at eight seconds", async () => {
@@ -114,7 +114,7 @@ test("Startup V4 uses ordered milestones and exits at eight seconds", async () =
   assert.match(startup, /if \(completedForSession \|\| mayEnter\) return null/);
 });
 
-test("settings recovery and drawer transition guard are wired", async () => {
+test("settings recovery stays wired and drawer close does not wait for its animation", async () => {
   const [settings, epg, shell] = await Promise.all([
     source("app/(tabs)/settings.tsx"), source("app/(tabs)/epg-sources.tsx"), source("src/components/PurpleTvShell.tsx"),
   ]);
@@ -123,8 +123,8 @@ test("settings recovery and drawer transition guard are wired", async () => {
   assert.doesNotMatch(settings, /<FocusGuide style=\{styles\.detailsWrap\}>\s*<Pressable[\s\S]*?testID="settings-all-settings"/);
   assert.match(settings, /CharmShowAllSettings/);
   assert.match(epg, />All Settings</);
-  assert.match(shell, /openedAtRef/);
-  assert.match(shell, /PURPLE_DRAWER_ANIMATION_MS \+ 70/);
+  assert.doesNotMatch(shell, /openedAtRef|PURPLE_DRAWER_ANIMATION_MS \+ 70/);
+  assert.match(shell, /const closeDrawer = useCallback\(\(\) => \{\s*if \(!drawerOpenRef.current\) return;\s*drawerOpenRef.current = false/);
 });
 
 test("Settings claims destination focus before swapping tile/detail trees", async () => {
@@ -159,10 +159,21 @@ test("native Guide treats horizontal cache misses as loading, not false boundari
 
 test("native Guide renders selectable no-information cells instead of black rows", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
-  assert.match(view, /var paintedProgramme = false/);
-  assert.match(view, /if \(!paintedProgramme\)/);
+  assert.match(view, /var gapStart = visibleStartMs/);
+  assert.match(view, /if \(program.startMs > gapStart\) \{\s*drawProgrammeGap\(canvas, gapStart, program.startMs/);
+  assert.match(view, /gapStart = max\(gapStart, min\(program.endMs, visibleEndMs\)\)/);
+  assert.match(view, /if \(gapStart < visibleEndMs\) \{\s*drawProgrammeGap\(canvas, gapStart, visibleEndMs/);
   assert.match(view, /drawClippedText\(canvas, "No information"/);
-  assert.match(view, /if \(!channelRailSelected && rowIndex == selectedRow\) selected else cell/);
+  assert.match(view, /val chosen = rowSelected && selectedTimeMs >= start && selectedTimeMs < end/);
+  assert.match(view, /while \(start < gapEnd\)[\s\S]*?canvas\.drawLine\(right, top, right, top \+ rowHeight, divider\)[\s\S]*?start = end/);
+});
+
+test("held directions cannot repeatedly transfer Guide ownership at a boundary", async () => {
+  const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  const keys = view.match(/override fun onKeyDown[\s\S]*?override fun onKeyUp/)?.[0] || "";
+  assert.match(keys, /if \(selectedRow > 0\) moveVertical\(-1\)\s*else if \(overlayMode && event\.repeatCount == 0\) emit\("upBoundary", null\)/);
+  assert.match(keys, /if \(channelRailSelected\) \{\s*if \(event\.repeatCount == 0\) emit\("topLeftBoundary", null\)/);
+  assert.match(view, /fun setActive\(value: Boolean\)[\s\S]{0,180}isFocusableInTouchMode = value\s*isFocusable = value/);
 });
 
 test("native Guide resolves short versus held Select before opening a programme", async () => {

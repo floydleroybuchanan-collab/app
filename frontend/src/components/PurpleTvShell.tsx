@@ -26,7 +26,6 @@ import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { useStore } from "@/src/store";
 import { evaluateDrawerBack } from "@/src/core/drawerNavigationPolicy";
 import { requestGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
-import { isGuideScreenActive, isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { useTvCalibration } from "@/src/tvCalibration";
 import { addTvKeyListener, prepareIconRailHide, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 import { useIconRailPreferences } from "@/src/core/iconRailPreferences";
@@ -108,7 +107,6 @@ type DrawerContextValue = {
   publishIconRailEntryTag: (owner: object, tag?: number) => void;
   iconRailFocusRequest: number;
   focusDrawerTop: boolean;
-  consumeFocusDrawerTop: () => void;
 };
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
@@ -136,26 +134,21 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   const iconRailPublisherRef = useRef<object | null>(null);
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const drawerOpenRef = useRef(false);
-  const openedAtRef = useRef(0);
 
   const openDrawer = useCallback((options?: OpenDrawerOptions) => {
-    if (isGuideScreenActive() && isGuideSurfing()) return;
     if (drawerOpenRef.current) return;
     drawerOpenRef.current = true;
-    openedAtRef.current = Date.now();
     setFocusDrawerTop(!!options?.focusTop);
     setDrawerOpen(true);
   }, []);
 
-  const closeDrawer = useCallback((options?: { force?: boolean }) => {
+  const closeDrawer = useCallback(() => {
     if (!drawerOpenRef.current) return;
-    if (!options?.force && Date.now() - openedAtRef.current < PURPLE_DRAWER_ANIMATION_MS + 70) return;
     drawerOpenRef.current = false;
     setFocusDrawerTop(false);
     setDrawerOpen(false);
   }, []);
 
-  const consumeFocusDrawerTop = useCallback(() => setFocusDrawerTop(false), []);
   const focusIconRail = useCallback(() => setIconRailFocusRequest((value) => value + 1), []);
   const publishIconRailEntryTag = useCallback((owner: object, tag?: number) => {
     if (tag) {
@@ -192,9 +185,8 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       publishIconRailEntryTag,
       iconRailFocusRequest,
       focusDrawerTop,
-      consumeFocusDrawerTop,
     }),
-    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag],
+    [closeDrawer, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
@@ -259,7 +251,6 @@ export function PurpleTvShell({
     publishIconRailEntryTag,
     iconRailFocusRequest,
     focusDrawerTop,
-    consumeFocusDrawerTop,
   } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
@@ -295,7 +286,6 @@ export function PurpleTvShell({
   const onIconRailNavigateRef = useRef(onIconRailNavigate);
   const onIconRailOpenMainDrawerRef = useRef(onIconRailOpenMainDrawer);
   const guideGroupRefs = useRef(new Map<string, unknown>());
-  const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
   const drawerFocusConfirmedRef = useRef(false);
@@ -422,7 +412,7 @@ export function PurpleTvShell({
           // accidental close during animation. Main must be gone before Groups
           // becomes remote owner or both focus trees can be live at once.
           closeDrawer({ force: true });
-          requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+          DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen");
         })
       : () => undefined;
     return () => {
@@ -451,20 +441,19 @@ export function PurpleTvShell({
     const preferredGuideGroupName =
       !focusDrawerTop && active === "/guide" ? activeGuideGroupName : null;
     const preferredRoute: Route | null = preferredGuideGroupName ? null : focusDrawerTop ? NAV[0].route : active;
-    if (focusDrawerTop) consumeFocusDrawerTop();
     setDrawerPreferredRoute(preferredRoute);
     setDrawerAutoFocus(true);
     drawerFocusConfirmedRef.current = false;
-    const preferredNode = preferredGuideGroupName
-      ? guideGroupRefs.current.get(preferredGuideGroupName)
-      : preferredRoute
-        ? navRefs.current.get(preferredRoute)
-        : null;
-    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 70, PURPLE_DRAWER_ANIMATION_MS + 20, 380, 560], () => drawerFocusConfirmedRef.current);
+    const preferredNode = () => (
+      (preferredGuideGroupName ? guideGroupRefs.current.get(preferredGuideGroupName) : null) ||
+      (preferredRoute ? navRefs.current.get(preferredRoute) : null) ||
+      navRefs.current.get(active)
+    );
+    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 32, 80, 160, 350], () => drawerFocusConfirmedRef.current);
     return () => {
       cancelFocus?.();
     };
-  }, [active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
+  }, [active, isFocused, activeGuideGroupName, drawerOpen, focusDrawerTop]);
 
   const reopenArmedAtRef = useRef(0);
   useFocusEffect(
@@ -509,21 +498,15 @@ export function PurpleTvShell({
   const navigate = useCallback(
     (route: Route, source: "drawer" | "rail" = "drawer") => {
       void Haptics.selectionAsync().catch(() => undefined);
-      if (deferredDrawerCloseTimer.current) {
-        clearTimeout(deferredDrawerCloseTimer.current);
-        deferredDrawerCloseTimer.current = null;
-      }
 
       // TiviMate-style focus ownership: the drawer must fully relinquish the
       // remote/focus tree before a different route mounts and claims focus.
-      // A normal close can be rejected by the anti-bounce opening guard, which
-      // previously allowed two live focus owners during rapid drawer selection.
       onNavigate?.(route);
       closeDrawer({ force: true });
       if (source === "rail") onIconRailNavigateRef.current?.();
       if (route === active && pathname === route) {
         if (route === "/guide" && source === "drawer") {
-          requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+          DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen");
         }
         return;
       }
@@ -536,10 +519,6 @@ export function PurpleTvShell({
     },
     [active, closeDrawer, onNavigate, pathname, router],
   );
-
-  useEffect(() => () => {
-    if (deferredDrawerCloseTimer.current) clearTimeout(deferredDrawerCloseTimer.current);
-  }, []);
 
   const exit = useCallback(() => {
     void Haptics.selectionAsync().catch(() => undefined);

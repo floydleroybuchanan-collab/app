@@ -129,7 +129,7 @@ test("drawer shell boots closed with an icon rail outside the Guide grid", async
   assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(shell, /onPress=\{\(\) => navigate\(item\.route, "rail"\)\}/);
   assert.match(shell, /setRemoteContext\("icon_rail"\)/);
-  assert.match(shell, /isGuideSurfing/);
+  assert.doesNotMatch(shell, /isGuideSurfing/);
   assert.match(shell, /focusable=\{drawerOpen\}/);
   assert.match(shell, /outputRange: \[-PURPLE_SIDEBAR_WIDTH, 0\]/);
   assert.doesNotMatch(shell, /Catch Up|\/catchup/);
@@ -153,7 +153,7 @@ test("drawer route changes release drawer focus ownership before mounting the ne
 test("main drawer focus retries ignore EPG group-count and programme churn", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   assert.match(shell, /const activeGuideGroupName = useMemo/);
-  assert.match(shell, /\[active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop\]/);
+  assert.match(shell, /\[active, isFocused, activeGuideGroupName, drawerOpen, focusDrawerTop\]/);
   assert.doesNotMatch(shell, /\[active, activeProgram, consumeFocusDrawerTop, drawerOpen, focusDrawerTop, guideGroups\]/);
 });
 
@@ -170,7 +170,7 @@ test("shared page focus has a deterministic Left-edge icon-rail handoff", async 
   assert.match(shell, /focusIconRail/);
   assert.match(shell, /trapFocusLeft/);
   assert.doesNotMatch(shell, /purple-left-edge-drawer-target/);
-  assert.match(shell, /isGuideScreenActive\(\) && isGuideSurfing\(\)/);
+  assert.doesNotMatch(shell, /isGuideScreenActive\(\) && isGuideSurfing\(\)/);
   for (const page of [collection, favorites, channels]) {
     assert.match(page, /preferInitialFocus/);
     assert.match(page, /setPreferInitialFocus\(false\)/);
@@ -280,34 +280,16 @@ test("pointer BACK exits pointer mode and tap coordinates honor Android density"
   assert.match(remote, /y \* density/);
 });
 
-test("guide top strip is focusable while Left remains drawer-owned with conveyor retain", async () => {
+test("guide preview is display-only while Left remains drawer-owned with conveyor retain", async () => {
   const [guide, preview, focus] = await Promise.all([
     source("app/(tabs)/guide.tsx"),
     source("src/components/GuidePreviewRail.tsx"),
     source("src/utils/tvFocus.ts"),
   ]);
   assert.match(guide, /GuidePreviewRail/);
-  assert.match(preview, /onOpenDrawer/);
-  assert.match(guide, /openDrawer\(\)/);
-  assert.match(guide, /focusGuidePreviewSurface\(\)/);
-  assert.doesNotMatch(guide, /const onGuideUpBoundary = useCallback\([\s\S]{0,520}setPreviewActionsFocused\(true\)/);
-  assert.match(guide, /!previewActionsFocused/);
-  assert.match(preview, /onActionsFocusChange\(true\)/);
-  assert.match(preview, /onFocusLost=\{\(\) => \{ setActionsVisible\(false\); onActionsFocusChange\(false\); \}\}/);
-  assert.match(guide, /setPreviewFocusRequestToken\(\(value\) => value \+ 1\)/);
-  assert.match(guide, /focusRequestToken=\{previewFocusRequestToken\}/);
-  assert.match(preview, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(preview, /onFocusCapture=\{\(\) => \{ setActionsVisible\(true\); setPreferPlayFocus\(false\); \}\}/);
-  assert.match(guide, /requestAnimationFrame\(\(\) => \{[\s\S]{0,160}focusGuidePreviewSurface\(\)/);
-  assert.match(focus, /typeof focus === "function"/);
+  assert.doesNotMatch(preview, /Pressable|actionsHidden|onActionsFocusChange/);
+  assert.doesNotMatch(guide, /focusGuidePreviewSurface|previewActionsFocused/);
   assert.match(focus, /dispatchViewManagerCommand/);
-  assert.match(guide, /onOpenReminders=/);
-  for (const action of ["play", "favorite", "remind", "drawer", "mute", "hide"]) {
-    assert.match(preview, new RegExp(`testID="guide-preview-${action}"`));
-  }
-  for (const handler of ["onPlay", "onFavorite", "onOpenReminders", "onOpenDrawer", "onToggleMute", "onHideToggle"]) {
-    assert.match(preview, new RegExp(`onPress=\\{${handler}\\}`));
-  }
   assert.match(guide, /expandRunwayKeepSet/);
   assert.match(guide, /MAX_REMEMBERED_GUIDE_GROUPS = 128/);
   assert.match(guide, /retainGuideSlidingCache/);
@@ -315,8 +297,6 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   assert.match(guide, /buildPlaylistMenu/);
   assert.doesNotMatch(guide, /NowPlayingBar/);
   assert.match(preview, /guidePreviewLayout\(width\)/);
-  assert.match(preview, /actionGrid: \{ position: "absolute"/);
-  assert.match(preview, /!actionsVisible && styles.actionsHidden/);
   assert.doesNotMatch(preview, /actionPlaceholder/);
 });
 
@@ -471,7 +451,7 @@ test("fullscreen guide return clears retained focus blockers and drawer focus re
   ]);
   const jump = guide.slice(guide.indexOf('const jump = consumeGuideJump();'));
   const restore = jump.indexOf('resetGuideSelection(jump.channelId)');
-  for (const release of ['closeDrawer({ force: true })', 'setGroupDrawerOpen(false)', 'setPreviewActionsFocused(false)', 'setQuickActionsOpen(false)']) {
+  for (const release of ['closeDrawer({ force: true })', 'setGroupDrawerOpen(false)', 'setQuickActionsOpen(false)']) {
     assert.ok(jump.indexOf(release) > 0 && jump.indexOf(release) < restore, release);
   }
   const drawer = shell.slice(shell.indexOf('<FocusGuide testID="purple-main-drawer"'), shell.indexOf('<SmallBrand />'));
@@ -485,19 +465,17 @@ test("fullscreen guide return clears retained focus blockers and drawer focus re
   }
 });
 
-test("Guide preview actions have a deterministic D-pad Down return to the native Guide", async () => {
-  const [canvas, rail, guide] = await Promise.all([
+test("the EPG assignment drawer can return focus to the native Guide", async () => {
+  const [canvas, guide] = await Promise.all([
     source("src/components/NativeGuideCanvas.tsx"),
-    source("src/components/GuidePreviewRail.tsx"),
     source("app/(tabs)/guide.tsx"),
   ]);
   assert.match(canvas, /findNodeHandle/);
   assert.match(canvas, /onNativeGuideTag\?\./);
   assert.match(canvas, /ref=\{bindNativeGuideRef\}/);
-  assert.match(rail, /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
   assert.match(guide, /nativeGuideFocusTag/);
   assert.match(guide, /onNativeGuideTag=\{setNativeGuideFocusTag\}/);
-  assert.match(guide, /guideFocusTag=\{nativeGuideFocusTag\}/);
+  assert.match(guide, /requestNativeFocusWithRetry\(nativeGuideFocusTag\)/);
 });
 
 test("Android remote accepts drawer-edge and icon-rail focus ownership", async () => {
