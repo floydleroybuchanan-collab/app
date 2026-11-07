@@ -29,7 +29,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
     private val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
     private val sections = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val root = NestedScrollView(context).apply {
-        setBackgroundColor(Color.TRANSPARENT); clipToPadding = false; isFillViewport = true
+        setBackgroundColor(Color.TRANSPARENT); clipToPadding = true; isFillViewport = true
         addView(content, ViewGroup.LayoutParams(-1,-2))
     }
     private val pages = linkedMapOf(
