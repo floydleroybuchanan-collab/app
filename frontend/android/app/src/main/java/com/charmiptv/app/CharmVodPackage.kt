@@ -76,6 +76,23 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
         }
     }
 
+    @ReactMethod fun surfaceStop(promise: Promise) {
+        context.runOnUiQueueThread {
+            val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
+            val host = activity?.supportFragmentManager?.findFragmentById(com.streamflixreborn.streamflix.R.id.nav_main_fragment) as? androidx.navigation.fragment.NavHostFragment
+            val page = host?.childFragmentManager?.primaryNavigationFragment
+            val playerView = page?.view?.findViewById<androidx.media3.ui.PlayerView>(com.streamflixreborn.streamflix.R.id.pv_player)
+            if (playerView == null || host.navController.currentDestination?.id != com.streamflixreborn.streamflix.R.id.player) {
+                promise.resolve(false)
+                return@runOnUiQueueThread
+            }
+            // Pausing synchronously invokes the existing player listener, which
+            // persists progress and refreshes recent history before destruction.
+            playerView.player?.pause()
+            promise.resolve(host.navController.popBackStack())
+        }
+    }
+
     @ReactMethod
     fun copyDonationInvoice(invoice: String, promise: Promise) {
         try {

@@ -93,6 +93,31 @@ test('VOD Back preserves inner TV/mobile player and settings layers before poppi
  assert.match(s,/if \(page\?\.view == null\) false/);
  assert.match(s,/promise.resolve\(handled \|\| host\?\.navController\?\.popBackStack\(\) == true\)/);
 });
+test('embedded VOD exposes a visible Stop and Exit path that pauses before navigation',()=>{
+ const route=source('src/components/MediaLabVodContent.tsx');
+ const bridge=source('android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt');
+ assert.match(route,/testID="vod-stop-and-exit"/);
+ assert.match(route,/CharmVod\?\.surfaceStop\(\)/);
+ assert.match(bridge,/@ReactMethod fun surfaceStop\(promise: Promise\)/);
+ assert.match(bridge,/findViewById<androidx\.media3\.ui\.PlayerView>/);
+ assert.ok(bridge.indexOf('playerView.player?.pause()') < bridge.indexOf('promise.resolve(host.navController.popBackStack())'));
+});
+test('VOD settings grid measures the host width and uses fixed safe-area padding',()=>{
+ const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/CharmSettingsLayout.kt');
+ assert.match(s,/clipToPadding = false/);
+ assert.match(s,/val horizontal = dp\(24\)/);
+ assert.match(s,/root.width.takeIf \{ it > 0 \} \?: context.resources.displayMetrics.widthPixels/);
+ assert.match(s,/coerceIn\(2, 4\)/);
+ assert.doesNotMatch(s,/root\.width\*\.135f/);
+});
+test('home shelf combines resumable progress with immediate recent playback records',()=>{
+ const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmLibraryProvider.kt');
+ assert.match(s,/getWatchingShelf\(30\)/);
+ assert.match(s,/movieDao\(\)\.getRecentlyWatched\(\)\.first\(\)/);
+ assert.match(s,/tvShowDao\(\)\.getRecentlyWatched\(\)\.first\(\)/);
+ assert.match(s,/distinctBy/);
+ assert.match(s,/lastPlayedAtMillis/);
+});
 test('shared-activity VOD presence follows the attached surface instead of the activity name alone',()=>{
  const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmUsageReporter.kt');
  const report=s.slice(s.indexOf('private fun report()'));

@@ -29,7 +29,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
     private val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
     private val sections = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val root = NestedScrollView(context).apply {
-        setBackgroundColor(Color.TRANSPARENT); clipToPadding = true; isFillViewport = true
+        setBackgroundColor(Color.TRANSPARENT); clipToPadding = false; isFillViewport = true
         addView(content, ViewGroup.LayoutParams(-1,-2))
     }
     private val pages = linkedMapOf(
@@ -44,7 +44,14 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         content.addView(title); content.addView(subtitle); content.addView(row)
         row.addView(sections, LinearLayout.LayoutParams(dp(168), -2).apply { marginEnd = dp(18) })
         row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
-        root.doOnLayout { root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, 0); content.setPadding((root.width*.135f).toInt(), 0, (root.width*.024f).toInt(), dp(36)) }
+        root.doOnLayout {
+            root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, dp(24))
+            // The MediaLab shell already reserves its icon rail and toolbar.
+            // The old percentage inset was applied a second time, squeezing the
+            // four-column grid and clipping its first cards on TV overscan.
+            val horizontal = dp(24)
+            content.setPadding(horizontal, 0, horizontal, dp(36))
+        }
         list.addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) { outRect.set(dp(4),dp(4),dp(4),dp(4)) }
         })
@@ -63,7 +70,9 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
                 }, LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(7) })
             }
         }
-        val columns = if (overview) 4 else 2
+        val measuredWidth = root.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
+        val available = (measuredWidth - content.paddingLeft - content.paddingRight).coerceAtLeast(dp(320))
+        val columns = if (overview) (available / dp(250)).coerceIn(2, 4) else if (available >= dp(760)) 2 else 1
         list.layoutManager = GridLayoutManager(context, columns).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                 override fun getSpanSize(position: Int): Int = if ((list.adapter as? PreferenceGroupAdapter)?.getItem(position) is PreferenceCategory) columns else 1

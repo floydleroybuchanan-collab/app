@@ -32,8 +32,30 @@ class CharmLibraryProvider : ContentProvider() {
                         it.movieDao().getFavoriteShelf(30) + it.tvShowDao().getFavoriteShelf(30)
                     }
                     method == "continue" -> AppDatabase.getInstance(requireNotNull(context)).let {
-                        (it.movieDao().getWatchingShelf(30) + it.episodeDao().getWatchingShelf(30))
-                            .sortedByDescending { item -> (item as? WatchItem)?.watchHistory?.lastEngagementTimeUtcMillis ?: 0 }
+                        // "Recently watched" starts as soon as playback starts, while
+                        // resumable progress is written when playback pauses. Include
+                        // both so a short play, crash, or immediate return cannot make
+                        // the title disappear from MediaLab's home shelf.
+                        val candidates: List<AppAdapter.Item> =
+                            it.movieDao().getWatchingShelf(30) +
+                            it.episodeDao().getWatchingShelf(30) +
+                            it.movieDao().getRecentlyWatched().first() +
+                            it.tvShowDao().getRecentlyWatched().first()
+                        candidates.distinctBy { item ->
+                            when (item) {
+                                is Movie -> "movie:${item.id}"
+                                is Episode -> "show:${item.tvShow?.id ?: item.id}"
+                                is TvShow -> "show:${item.id}"
+                                else -> item.toString()
+                            }
+                        }.sortedByDescending { item ->
+                            when (item) {
+                                is Movie -> maxOf(item.lastPlayedAtMillis ?: 0, item.watchHistory?.lastEngagementTimeUtcMillis ?: 0)
+                                is Episode -> item.watchHistory?.lastEngagementTimeUtcMillis ?: 0
+                                is TvShow -> item.lastPlayedAtMillis ?: 0
+                                else -> 0
+                            }
+                        }
                     }
                     else -> emptyList()
                 }
