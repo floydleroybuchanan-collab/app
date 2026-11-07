@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, NativeModules, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, AppState, NativeModules, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -17,6 +17,13 @@ export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "contin
   const [items, setItems] = useState<Item[]>([]), [error, setError] = useState("");
   const [revision, setRevision] = useState(0), [opening, setOpening] = useState(false);
   const busy = useRef(false);
+  useEffect(() => {
+    if (query !== undefined || kind !== "continue") return;
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") setRevision(value => value + 1);
+    });
+    return () => subscription.remove();
+  }, [kind, query]);
   useEffect(() => {
     if (!focused || Platform.OS !== "android") return;
     let active = true;
@@ -38,7 +45,7 @@ export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "contin
     } catch (reason) { Alert.alert("Charming MediaLab", reason instanceof Error ? reason.message : "Unable to open this title."); }
     finally { busy.current = false; setOpening(false); }
   };
-  const title = query !== undefined ? "Movies & series" : kind === "favorites" ? "Your movies & series" : "Continue watching";
+  const title = query !== undefined ? "Movies & series" : kind === "favorites" ? "Your movies & series" : "Recently Watched Video On Demand";
   const enabledOwners = new Set(playlists.filter(row => row.enabled && (row.kind === "xtream" || row.kind === "stalker")).map(row => row.id));
   const visibleItems: Item[] = [...items, ...providerLibrary.filter(row => enabledOwners.has(row.owner) &&
     (query !== undefined ? row.title.toLowerCase().includes(query.toLowerCase()) : kind === "favorites" ? row.favorite : row.positionMs > 0 && (!row.durationMs || row.positionMs < row.durationMs - 1000)))
@@ -49,7 +56,7 @@ export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "contin
     {visibleItems.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>{visibleItems.map(item => <Pressable key={item.section + item.id} disabled={opening} onPress={() => void open(item.section)} style={({ focused }: any) => [styles.card, focused && styles.focus]}>
       {item.poster ? <Image source={{ uri: item.poster }} contentFit="cover" style={styles.poster} /> : <View style={styles.poster} />}
       <Text numberOfLines={2} style={styles.text}>{item.title}</Text>
-    </Pressable>)}</ScrollView> : <Text style={styles.muted}>{query !== undefined ? "Search your current catalog alongside live TV." : "Your saved titles and viewing progress appear here."}</Text>}
+    </Pressable>)}</ScrollView> : <Text style={styles.muted}>{query !== undefined ? "Search your current catalog alongside live TV." : "Your recently watched movies and shows will appear here."}</Text>}
   </View>;
 }
 const styles = StyleSheet.create({

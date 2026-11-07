@@ -61,12 +61,6 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
       if (!handled) fallback();
     }).catch(fallback);
   }, [openDrawer, providerMode, router, settings]);
-  const stopPlayer = useCallback(() => {
-    setError(null);
-    void Promise.resolve(NativeModules.CharmVod?.surfaceStop()).then((stopped) => {
-      if (!stopped) setError("Could not stop this video. Press Back and try again.");
-    }).catch(() => setError("Could not stop this video. Press Back and try again."));
-  }, []);
   useEffect(() => {
     if (!focused || providerMode) return;
     const listener = BackHandler.addEventListener("hardwareBackPress", () => { back(); return true; });
@@ -97,15 +91,6 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
         <Text style={styles.label}>Options</Text>
       </Pressable> : null}
     </View>}
-    {player ? <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Stop video and return"
-      hasTVPreferredFocus
-      onPress={stopPlayer}
-      style={({ focused: hasFocus, pressed }: any) => [styles.stopButton, hasFocus && styles.focused, pressed && styles.pressed]}
-      testID="vod-stop-and-exit">
-      <Text style={styles.label}>Stop &amp; Exit</Text>
-    </Pressable> : null}
     {error ? <Text accessibilityRole="alert" style={{ color: "#FB7185", padding: 20 }}>{error}</Text> : null}
     {focused && !providerMode && !ready && !error && Platform.OS === "android" ? <View style={styles.status}><ActivityIndicator color={tvColors.focus} /><Text style={styles.label}>Opening Video On Demand…</Text></View> : null}
     {focused && !providerMode && Platform.OS !== "android" ? <Text style={styles.status}>The built-in video catalog is available on Android.</Text> : null}
@@ -139,10 +124,4 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.76 },
   label: { color: "#F4EDF9", fontSize: 15, fontWeight: "600", textAlign: "center" },
   status: { padding: 18, flexDirection: "row", alignItems: "center", gap: 10, color: tvColors.text },
-  stopButton: {
-    position: "absolute", zIndex: 30, elevation: 30, top: 18, right: 18,
-    minHeight: 44, justifyContent: "center", paddingHorizontal: 18,
-    borderRadius: 12, borderWidth: 1, borderColor: tvColors.silverHighlight,
-    backgroundColor: "rgba(31,20,51,0.90)",
-  },
 });

@@ -822,6 +822,10 @@ class PlayerTvFragment : Fragment() {
                 binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
                 showSourcePicker()
             }
+            binding.pvPlayer.controller.binding.btnExoStop.setOnClickListener {
+                player.pause()
+                findNavController().navigateUp()
+            }
 
             binding.pvPlayer.controller.binding.btnSkipIntro.setOnClickListener {
                 player.seekTo(player.currentPosition + 85000)

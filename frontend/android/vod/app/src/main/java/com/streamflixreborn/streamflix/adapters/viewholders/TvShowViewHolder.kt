@@ -748,6 +748,8 @@ class TvShowViewHolder(
 
     private fun displayTvShowTv(binding: ContentTvShowTvBinding) {
         binding.ivTvShowPoster.visibility = View.GONE
+        binding.btnTvShowTrailer.visibility = View.GONE
+        binding.btnTvShowFavorite.visibility = View.GONE
         binding.charmDetailMyList.setOnClickListener { binding.btnTvShowFavorite.performClick() }
         binding.charmDetailMore.setOnClickListener { com.streamflixreborn.streamflix.ui.ShowOptionsTvDialog(context, tvShow).show() }
         binding.charmDetailSources.setOnClickListener {

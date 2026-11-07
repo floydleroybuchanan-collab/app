@@ -42,7 +42,6 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = false
         list.setPadding(0,0,0,0); list.itemAnimator = null
         content.addView(title); content.addView(subtitle); content.addView(row)
-        row.addView(sections, LinearLayout.LayoutParams(dp(168), -2).apply { marginEnd = dp(18) })
         row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
         root.doOnLayout {
             root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, dp(24))
@@ -60,16 +59,10 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         val overview = key == null
         title.text = if (overview) "Your VOD. Your way." else pages[key] ?: name ?: "Settings"
         subtitle.text = if (overview) "Personalize playback, manage your account and make yourself at home." else "Settings  /  ${title.text}"
-        sections.visibility = if (overview) View.GONE else View.VISIBLE
+        // Settings use the full surface. The old embedded section rail reserved
+        // a blank 168dp column and visibly cut the first card on TV screens.
+        sections.visibility = View.GONE
         sections.removeAllViews()
-        if (!overview) {
-            (linkedMapOf<String?,String>(null to "All settings") + pages).forEach { (page,label) ->
-                sections.addView(CharmVodPageLayout.chip(root,label).apply {
-                    gravity = android.view.Gravity.CENTER_VERTICAL; textSize = 12f; isSelected = page == key
-                    setOnClickListener { open(page,label) }
-                }, LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(7) })
-            }
-        }
         val measuredWidth = root.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
         val available = (measuredWidth - content.paddingLeft - content.paddingRight).coerceAtLeast(dp(320))
         val columns = if (overview) (available / dp(250)).coerceIn(2, 4) else if (available >= dp(760)) 2 else 1

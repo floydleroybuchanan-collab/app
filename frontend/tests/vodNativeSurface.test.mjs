@@ -93,14 +93,14 @@ test('VOD Back preserves inner TV/mobile player and settings layers before poppi
  assert.match(s,/if \(page\?\.view == null\) false/);
  assert.match(s,/promise.resolve\(handled \|\| host\?\.navController\?\.popBackStack\(\) == true\)/);
 });
-test('embedded VOD exposes a visible Stop and Exit path that pauses before navigation',()=>{
+test('embedded VOD integrates Stop into the auto-hiding native TV player controls',()=>{
  const route=source('src/components/MediaLabVodContent.tsx');
- const bridge=source('android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt');
- assert.match(route,/testID="vod-stop-and-exit"/);
- assert.match(route,/CharmVod\?\.surfaceStop\(\)/);
- assert.match(bridge,/@ReactMethod fun surfaceStop\(promise: Promise\)/);
- assert.match(bridge,/findViewById<androidx\.media3\.ui\.PlayerView>/);
- assert.ok(bridge.indexOf('playerView.player?.pause()') < bridge.indexOf('promise.resolve(host.navController.popBackStack())'));
+ const controller=source('android/vod/app/src/main/res/layout/content_exo_controller_tv.xml');
+ const player=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt');
+ assert.doesNotMatch(route,/vod-stop-and-exit|Stop &amp; Exit|surfaceStop\(\)/);
+ assert.match(controller,/android:id="@\+id\/btn_exo_stop"/);
+ assert.match(controller,/android:text="Stop"/);
+ assert.match(player,/btnExoStop\.setOnClickListener[\s\S]*player\.pause\(\)[\s\S]*findNavController\(\)\.navigateUp\(\)/);
 });
 test('VOD settings grid measures the host width and uses fixed safe-area padding',()=>{
  const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/CharmSettingsLayout.kt');

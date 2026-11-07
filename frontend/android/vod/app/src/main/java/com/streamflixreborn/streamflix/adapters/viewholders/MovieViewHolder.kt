@@ -871,6 +871,11 @@ class MovieViewHolder(
 
     private fun displayMovieTv(binding: ContentMovieTvBinding) {
         binding.ivMoviePoster.visibility = View.GONE
+        // The legacy trailer/favorite controls occupy the same TV row as the
+        // unified Sources/My List controls and can draw duplicate text beneath
+        // them. Keep their click handlers, but never render the legacy views.
+        binding.btnMovieTrailer.visibility = View.GONE
+        binding.btnMovieFavorite.visibility = View.GONE
 
         binding.charmDetailMyList.setOnClickListener { binding.btnMovieFavorite.performClick() }
         binding.charmDetailMore.setOnClickListener { com.streamflixreborn.streamflix.ui.ShowOptionsTvDialog(context, movie).show() }
