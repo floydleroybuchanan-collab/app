@@ -11,7 +11,8 @@ const allowed=new Set(['models/Video.kt','fragments/player/PlayerMobileFragment.
   'fragments/player/PlayerTvFragment.kt','fragments/player/PlayerViewModel.kt',
   'fragments/player/settings/PlayerSettingsMobileView.kt','fragments/player/settings/PlayerSettingsTvView.kt',
   'database/AppDatabase.kt','database/dao/MovieDao.kt','database/dao/TvShowDao.kt','database/dao/EpisodeDao.kt',
-  'extractors/Extractor.kt','extractors/GenericPackedSourceExtractor.kt','providers/TmdbProvider.kt'].map(name=>prefix+name));
+  'extractors/Extractor.kt','extractors/GenericPackedSourceExtractor.kt','providers/TmdbProvider.kt',
+  'providers/Provider.kt'].map(name=>prefix+name));
 for (const [name,entry] of Object.entries(reviewed)) {
   if (!allowed.has(name) || entry.upstream !== hashes[name] || !/^[a-f0-9]{64}$/.test(entry.sha256) || !entry.reason)
     throw new Error(`Invalid reviewed VOD change: ${name}`);

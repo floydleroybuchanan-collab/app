@@ -63,5 +63,10 @@
     "upstream": "e96ecb3eba49cf5f3931a8a466242843c19a302f97ea66fd04fcd45d93e08228",
     "sha256": "dfda006b4b06030fded6a56b5803a851b4c466ceb705f098818075cd36d79a43",
     "reason": "RC17 provider ownership audit: weak source-keyed Room wrappers with idle auto-close; ordinary selection never closes retained backstack databases; preserve separate caller-owned database and destructive restore APIs."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/providers/Provider.kt": {
+    "upstream": "c07d5f56b97c88ef09f4fd541fb557929106c2606332e78e581408aafb8a84c5",
+      "sha256": "a801a053469a2a65a6b8a121793642f83791cb92dd8a88901be7eb6fae8f42dc",
+    "reason": "RC20 reviewed provider expansion: expose English through the existing Vavoo provider implementation without changing database names, cache ownership, extractors or settings."
   }
 }

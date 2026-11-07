@@ -81,7 +81,15 @@ object SourcePicker {
             (kind == 0 || (kind == 1 && d?.isDebrid != true) || (kind == 2 && d?.isDebrid == true)) &&
                 (resolution == 0 || d?.height == resolution) &&
                 (!readyOnly || d?.kind != SourceDetails.Kind.REAL_DEBRID || SourceDiscovery.cached(d))
-        }
+        }.sortedWith(compareBy<Video.Server> { row ->
+            // Real-Debrid results are the requested playback path. Keep cached
+            // results first, then other debrid results, then direct sources.
+            when {
+                row.details?.kind == SourceDetails.Kind.REAL_DEBRID && row.details?.let(SourceDiscovery::cached) == true -> 0
+                row.details?.isDebrid == true -> 1
+                else -> 2
+            }
+        }.thenByDescending { it.details?.height ?: 0 }.thenBy { it.name.lowercase() })
         var rows = filtered()
         var selectedSourceId: String? = currentId
         var detailsDialog: AlertDialog? = null
@@ -125,11 +133,19 @@ object SourcePicker {
         }
         list.adapter = adapter
         fun updateRows() {
+            val hadDebrid = rows.any { it.details?.isDebrid == true }
             val focusedId = rows.getOrNull(list.selectedItemPosition)?.id ?: selectedSourceId
             rows = filtered()
             adapter.notifyDataSetChanged()
-            val at = rows.indexOfFirst { it.id == focusedId }
-            if (rows.isNotEmpty()) list.setSelection(if (at >= 0) at else 0)
+            val gainedDebrid = !hadDebrid && rows.any { it.details?.isDebrid == true }
+            val at = if (gainedDebrid) 0 else rows.indexOfFirst { it.id == focusedId }
+            if (rows.isNotEmpty()) list.post {
+                val target = if (at >= 0) at else 0
+                list.setSelectionFromTop(target, 0)
+                // The dialog may initially focus Details while discovery is
+                // empty. Hand focus to the first result as soon as it arrives.
+                if (gainedDebrid || !list.hasFocus()) list.requestFocus()
+            }
             footer.text = "${rows.size} of ${allRows.size} sources · Hold OK / long press for full details. Cache reports may be stale. Full release information is in Details."
         }
         val compactButtons = mutableListOf<Button>()
@@ -220,8 +236,10 @@ object SourcePicker {
         fitWindow()
         activityDecor.addOnLayoutChangeListener(layoutListener)
         if (rows.isEmpty()) detailButton.requestFocus() else list.requestFocus()
+        val firstDebrid = rows.indexOfFirst { it.details?.isDebrid == true }
         val active = rows.indexOfFirst { it.id == currentId }
-        if (active >= 0) list.setSelection(active)
+        if (firstDebrid >= 0) list.setSelectionFromTop(firstDebrid, 0)
+        else if (active >= 0) list.setSelection(active)
         discover()
         return dialog
     }

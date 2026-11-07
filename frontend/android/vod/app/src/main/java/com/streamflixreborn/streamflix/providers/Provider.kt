@@ -127,7 +127,11 @@ interface Provider {
             VavooProvider("it") to ProviderSupport(movies = false, tvShows = true),
             VavooProvider("fr") to ProviderSupport(movies = false, tvShows = true),
             VavooProvider("es") to ProviderSupport(movies = false, tvShows = true),
-            VavooProvider("pl") to ProviderSupport(movies = false, tvShows = true)
+            VavooProvider("pl") to ProviderSupport(movies = false, tvShows = true),
+            // Safe provider-library expansion from the reviewed reference:
+            // this reuses MediaLab's existing Vavoo implementation and storage
+            // contract, so no database/cache migration or new extractor exists.
+            VavooProvider("en") to ProviderSupport(movies = false, tvShows = true)
         )
 
         // Helper functions to check support
