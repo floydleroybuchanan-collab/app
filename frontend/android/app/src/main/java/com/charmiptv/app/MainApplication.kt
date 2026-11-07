@@ -1,7 +1,6 @@
 package com.charmiptv.app
 
 import android.app.Application
-import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 
 import com.facebook.react.PackageList
@@ -59,6 +58,11 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
       CharmHttpClients.bridgeReactNativeCookies(OkHttpClientProvider.createClientBuilder().build())
     }
     CharmMemoryCoordinator.initialize(this)
+    // Process-lifetime callback; no Activity or view is retained.
+    CharmMemoryCoordinator.register { _, _ ->
+      com.streamflixreborn.streamflix.utils.HomeCacheStore.clearMemory()
+      com.streamflixreborn.streamflix.utils.UserDataCache.clearMemory()
+    }
     CharmGlideConfig.initialize(this)
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
@@ -79,13 +83,7 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
   override fun onTrimMemory(level: Int) {
     super.onTrimMemory(level)
     if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
-    val trimLevel = when {
-      level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
-        level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> CharmTrimLevel.CRITICAL
-      level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> CharmTrimLevel.MODERATE
-      level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> CharmTrimLevel.BACKGROUND
-      else -> null
-    } ?: return
+    val trimLevel = charmTrimLevelForAndroid(level) ?: return
     CharmMemoryCoordinator.trim(trimLevel)
     val pressure = trimLevel.name.lowercase()
     try {

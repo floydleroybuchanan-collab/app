@@ -50,3 +50,17 @@ test("primary import reports lease and health checks before opening its parser s
     cursor = next;
   }
 });
+
+test("XMLTV consumers own their input through SQLite staging and worker cancellation", () => {
+  const native = name => readFileSync(new URL(`../android/app/src/main/java/com/charmiptv/app/${name}.kt`, import.meta.url), "utf8");
+  const primary = native("EpgNativeModule");
+  const custom = native("CustomEpgNativeModule");
+  const background = native("BackgroundEpgUpdater");
+  assert.match(primary, /openPossiblyGzipped\(url,[^\n]+\.use \{ input ->[\s\S]{0,900}database\.replaceBatches\(batches\)/);
+  assert.match(primary, /openPossiblyGzipped\(sourceUrl,[^\n]+\.use \{ input ->[\s\S]{0,500}userDatabase\.replaceBatches\(batches\)/);
+  assert.match(custom, /openPossiblyGzipped\(sourceUrl,[^\n]+\.use \{ input ->[\s\S]{0,950}targetDatabase\.replaceBatches\(batches\)/);
+  assert.match(background, /open\(source\.url, database\)\.use \{ input ->[\s\S]{0,700}database\.replaceBatches\(batches, ::checkCurrentSource\)/);
+  assert.match(background, /if \(\(events\+\+ and 255\) == 0\) checkRunning\(\)/);
+  assert.match(native("EpgUpdateScheduler"), /workerContext\.ensureActive\(\)[\s\S]{0,80}if \(isStopped\)/);
+  assert.match(native("EpgUpdateScheduler"), /updater\.refresh\(source, checkRunning\)/);
+});

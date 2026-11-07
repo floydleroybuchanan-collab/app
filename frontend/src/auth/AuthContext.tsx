@@ -47,8 +47,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const tokenRef = useRef<string | null>(null);
   const validationRef = useRef<Promise<void> | null>(null);
   const lastValidatedAtRef = useRef(0);
+  const sessionEpoch = useRef(0);
+  const sessionWrites = useRef<Promise<void>>(Promise.resolve());
 
-  const clearLocalSession = useCallback(async (message?: string) => {
+  // SecureStore writes may finish after logout or a newer login. Keep their
+  // order explicit so an older token can never overwrite the newer session.
+  const serializeSessionWrite = useCallback((operation: () => Promise<void>) => {
+    const next = sessionWrites.current.catch(() => undefined).then(operation);
+    sessionWrites.current = next.catch(() => undefined);
+    return next;
+  }, []);
+
+  const clearLocalSession = useCallback(async (message?: string, forgetLogin = false) => {
+    sessionEpoch.current += 1;
     clearProviderMedia();
     tokenRef.current = null;
     NativeModules.CharmVod?.setUsageSession?.(null);
@@ -57,13 +68,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setNotice(message || null);
     setStatus("signed_out");
-    await storage.secureRemove(ACCOUNT_SESSION_TOKEN_KEY);
-  }, []);
+    await serializeSessionWrite(async () => {
+      await storage.secureRemove(ACCOUNT_SESSION_TOKEN_KEY);
+      if (forgetLogin) await forgetRememberedLogin();
+    });
+  }, [serializeSessionWrite]);
 
   const validateToken = useCallback(async (token: string, restoring = false) => {
-    if (!restoring && tokenRef.current !== token) return;
+    const epoch = sessionEpoch.current;
+    const current = () => sessionEpoch.current === epoch && tokenRef.current === token;
+    if (!current()) return;
     const result = await getCurrentAccount(token);
-    if (!restoring && tokenRef.current !== token) return;
+    if (!current()) return;
     if (result.response?.status === 401 || result.response?.status === 403) {
       await clearLocalSession("Your session expired or was revoked. Please sign in again.");
       return;
@@ -85,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let sourceNotice: string | null = null;
     {
       const content = await getManagedContentAccess(token);
-      if (!restoring && tokenRef.current !== token) return;
+      if (!current()) return;
       if (content.response?.status === 401 || content.response?.status === 403) {
         await clearLocalSession("Your session expired or was revoked. Please sign in again.");
         return;
@@ -103,20 +119,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearLocalSession]);
 
   const restore = useCallback(async () => {
+    const epoch = ++sessionEpoch.current;
     setStatus("restoring");
     setNotice(null);
+    await sessionWrites.current;
+    if (sessionEpoch.current !== epoch) return;
     const stored = await storage.secureGet<string | null>(ACCOUNT_SESSION_TOKEN_KEY, null);
+    if (sessionEpoch.current !== epoch) return;
     if (!stored) {
       tokenRef.current = null;
       setUser(null);
       setStatus("signed_out");
       return;
     }
+    tokenRef.current = stored;
     await validateToken(stored, true);
   }, [validateToken]);
 
   useEffect(() => {
     void restore();
+    return () => { sessionEpoch.current += 1; tokenRef.current = null; };
   }, [restore]);
 
   const revalidate = useCallback(async () => {
@@ -131,7 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status !== "signed_in") return;
-    const interval = setInterval(() => void revalidate(), SESSION_RECHECK_MS);
+    const interval = setInterval(() => {
+      if (AppState.currentState === "active") void revalidate();
+    }, SESSION_RECHECK_MS);
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") return;
       if (Date.now() - lastValidatedAtRef.current < 30_000) return;
@@ -143,30 +167,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [revalidate, status]);
 
-  const signIn = useCallback(async (username: string, password: string, rememberLogin = false) => {
-    setNotice(null);
-    const result = await loginToAccount(username.trim(), password);
+  const acceptAuthenticatedResult = useCallback(async (
+    result: Awaited<ReturnType<typeof registerAccountWithInvite>>,
+    epoch: number,
+    rememberedLogin?: { username: string; password: string; remember: boolean },
+  ): Promise<string | null> => {
+    const current = () => sessionEpoch.current === epoch;
+    const superseded = () => {
+      if (result.data.token) void logoutAccount(result.data.token);
+      return "This sign-in request is no longer active. Please try again.";
+    };
+    if (!current()) return superseded();
     if (!result.response || !result.response.ok || !result.data.success || !result.data.token || !result.data.user) {
       return result.data.error || "Unable to sign in.";
     }
     const content = await getManagedContentAccess(result.data.token);
+    if (!current()) return superseded();
     if (content.response?.status === 401 || content.response?.status === 403) {
       void logoutAccount(result.data.token);
       return "Your session expired. Please sign in again.";
+    }
+    let saved = false;
+    let remembered = true;
+    await serializeSessionWrite(async () => {
+      if (!current()) return;
+      saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
+      if (!current()) {
+        if (saved) await storage.secureRemove(ACCOUNT_SESSION_TOKEN_KEY);
+        return;
+      }
+      if (saved && rememberedLogin) {
+        remembered = rememberedLogin.remember
+          ? await saveRememberedLogin(rememberedLogin.username, rememberedLogin.password)
+          : await forgetRememberedLogin();
+        if (!current()) {
+          await storage.secureRemove(ACCOUNT_SESSION_TOKEN_KEY);
+          if (rememberedLogin.remember) await forgetRememberedLogin();
+        }
+      }
+    });
+    if (!current()) return superseded();
+    if (!saved) {
+      void logoutAccount(result.data.token);
+      return "This device could not securely save the session. Please try again.";
     }
     if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
       clearManagedContentAccess();
       setNotice("Supplied sources are temporarily unavailable. You can use your personal playlists.");
     }
-    const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
-    if (!saved) {
-      clearManagedContentAccess();
-      void logoutAccount(result.data.token);
-      return "This device could not securely save the session. Please try again.";
-    }
-    const remembered = rememberLogin
-      ? await saveRememberedLogin(username, password)
-      : await forgetRememberedLogin();
     if (!remembered) setNotice("Signed in, but this device could not update the saved login. Your session is still saved.");
     tokenRef.current = result.data.token;
     NativeModules.CharmVod?.setUsageSession?.(result.data.token);
@@ -174,50 +222,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(result.data.user);
     setStatus("signed_in");
     return null;
-  }, []);
+  }, [serializeSessionWrite]);
 
-  const acceptAuthenticatedResult = useCallback(async (
-    result: Awaited<ReturnType<typeof registerAccountWithInvite>>,
-  ): Promise<string | null> => {
-    if (!result.response || !result.response.ok || !result.data.success || !result.data.token || !result.data.user) {
-      return result.data.error || "Unable to create the account.";
-    }
-    const content = await getManagedContentAccess(result.data.token);
-    if (content.response?.status === 401 || content.response?.status === 403) {
-      void logoutAccount(result.data.token);
-      return "Your session expired. Please sign in again.";
-    }
-    if (!content.response?.ok || !content.data.success || !content.data.content || !configureManagedContentAccess(content.data.content)) {
-      clearManagedContentAccess();
-      setNotice("Supplied sources are temporarily unavailable. You can use your personal playlists.");
-    }
-    const saved = await storage.secureSet(ACCOUNT_SESSION_TOKEN_KEY, result.data.token);
-    if (!saved) {
-      clearManagedContentAccess();
-      void logoutAccount(result.data.token);
-      return "This device could not securely save the session. Please try again.";
-    }
-    tokenRef.current = result.data.token;
-    NativeModules.CharmVod?.setUsageSession?.(result.data.token);
-    lastValidatedAtRef.current = Date.now();
-    setUser(result.data.user);
-    setStatus("signed_in");
-    return null;
-  }, []);
+  const signIn = useCallback(async (username: string, password: string, rememberLogin = false) => {
+    const epoch = ++sessionEpoch.current;
+    setNotice(null);
+    return acceptAuthenticatedResult(await loginToAccount(username.trim(), password), epoch,
+      { username, password, remember: rememberLogin });
+  }, [acceptAuthenticatedResult]);
 
   const register = useCallback(async (inviteCode: string, username: string, email: string, password: string, challengeToken?: string) => {
+    const epoch = ++sessionEpoch.current;
     setNotice(null);
-    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password, challengeToken));
+    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password, challengeToken), epoch);
   }, [acceptAuthenticatedResult]);
 
   const referralRequest = useCallback(async (action: "load" | "create" | "delete", invitationId?: string) => {
     const token = tokenRef.current;
+    const epoch = sessionEpoch.current;
     if (!token) return { data: null, error: "Please sign in again." };
     const result = action === "create"
       ? await generateReferralInvite(token)
       : action === "delete" && invitationId
         ? await deleteReferralInviteHistory(token, invitationId)
         : await getReferralSummary(token);
+    if (sessionEpoch.current !== epoch || tokenRef.current !== token) return { data: null, error: "Your session changed. Please try again." };
     if (result.response?.status === 401 || result.response?.status === 403) {
       await clearLocalSession("Your session expired or was revoked. Please sign in again.");
       return { data: null, error: "Your session expired or was revoked." };
@@ -230,13 +259,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const cancelAccount = useCallback(async (password: string) => {
     const token = tokenRef.current;
+    const epoch = sessionEpoch.current;
     if (!token) return "Please sign in again.";
     const result = await permanentlyCancelAccount(token, password);
+    if (sessionEpoch.current !== epoch || tokenRef.current !== token) return "Your session changed. Please check the current account.";
     if (!result.response?.ok || !result.data.success) {
       return result.data.error || "Unable to cancel the account.";
     }
-    await clearLocalSession("Your account and personal data were permanently deleted.");
-    await forgetRememberedLogin();
+    await clearLocalSession("Your account and personal data were permanently deleted.", true);
     return null;
   }, [clearLocalSession]);
 

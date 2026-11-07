@@ -1,5 +1,6 @@
 package com.streamflixreborn.streamflix.fragments.favorites
 
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import com.streamflixreborn.streamflix.adapters.AppAdapter
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -56,8 +57,8 @@ class FavoritesViewModel(
     ) { movies, tvShows, sectionOrder, mode ->
         sectionOrder.map { section ->
             when (section) {
-                Section.MOVIES -> FavoriteSection(section, sortItems(section, movies, mode))
-                Section.TV_SHOWS -> FavoriteSection(section, sortItems(section, tvShows, mode))
+                Section.MOVIES -> FavoriteSection(section, CatalogSource.stamp(sortItems(section, movies, mode), providerName))
+                Section.TV_SHOWS -> FavoriteSection(section, CatalogSource.stamp(sortItems(section, tvShows, mode), providerName))
             }
         }.also { currentSections = it }
     }.flowOn(Dispatchers.IO)

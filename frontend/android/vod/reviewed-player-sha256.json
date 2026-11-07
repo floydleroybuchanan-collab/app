@@ -43,5 +43,25 @@
     "upstream": "b325f2970b9b9832157b64279e3ca9181a1f49f47c991a0c2441ddf29a78ddf2",
     "sha256": "3f808a6826ed28dd4e1d69c6ca2ce095a402c244fac1980a96833c040b3b92cc",
     "reason": "Remove original and resolved video URL logging; preserve existing discovery and extraction behavior."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/database/dao/MovieDao.kt": {
+    "upstream": "0ed2952b29821ecfd1072ad346a46b13876138f17692f66fc34162788d3b03af",
+    "sha256": "659618145abb5f5c3c72c1c1dd73ef1d5c7ffb6fee13fc0ab8c5e77b9864732f",
+    "reason": "RC17 app-wide memory audit: add LIMIT-bound shelf-only DAO reads; existing full favorites/history APIs and saved rows unchanged."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/database/dao/TvShowDao.kt": {
+    "upstream": "dd14e0f5554b14d5a90dd5f623d3ad6b6d8b982eec794ec92c9a645517902a53",
+    "sha256": "ab047a788d0738758ec518be00245b28acf866bd508f99c23341d124a431628d",
+    "reason": "RC17 app-wide memory audit: add LIMIT-bound shelf-only DAO reads; existing full favorites/history APIs and saved rows unchanged."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/database/dao/EpisodeDao.kt": {
+    "upstream": "96ff55c5aa386944bb39da29a6b52bde11f87e5a26ba9936dd69728e384328fa",
+    "sha256": "48d82fd004b77c59b3adf524ede8fec414c5b13eea61a807e956d8f0d7f777e8",
+    "reason": "RC17 app-wide memory audit: add LIMIT-bound shelf-only DAO reads; existing full favorites/history APIs and saved rows unchanged."
+  },
+  "app/src/main/java/com/streamflixreborn/streamflix/database/AppDatabase.kt": {
+    "upstream": "e96ecb3eba49cf5f3931a8a466242843c19a302f97ea66fd04fcd45d93e08228",
+    "sha256": "dfda006b4b06030fded6a56b5803a851b4c466ceb705f098818075cd36d79a43",
+    "reason": "RC17 provider ownership audit: weak source-keyed Room wrappers with idle auto-close; ordinary selection never closes retained backstack databases; preserve separate caller-owned database and destructive restore APIs."
   }
 }

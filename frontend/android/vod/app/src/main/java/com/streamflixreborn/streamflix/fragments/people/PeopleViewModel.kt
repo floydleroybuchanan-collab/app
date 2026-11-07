@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.people
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -19,6 +20,9 @@ import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 
 class PeopleViewModel(private val id: String, database: AppDatabase) : ViewModel() {
+
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
 
     private val _state = MutableStateFlow<State>(State.Loading)
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -97,7 +101,7 @@ class PeopleViewModel(private val id: String, database: AppDatabase) : ViewModel
         _state.emit(State.Loading)
 
         try {
-            val people = UserPreferences.currentProvider!!.getPeople(id)
+            val people = sourceProvider!!.getPeople(id).also { CatalogSource.stamp(it.filmography, sourceProvider.name) }
 
             page = 1
 
@@ -114,7 +118,7 @@ class PeopleViewModel(private val id: String, database: AppDatabase) : ViewModel
             _state.emit(State.LoadingMore)
 
             try {
-                val people = UserPreferences.currentProvider!!.getPeople(id, page + 1)
+                val people = sourceProvider!!.getPeople(id, page + 1).also { CatalogSource.stamp(it.filmography, sourceProvider.name) }
 
                 page += 1
 

@@ -200,7 +200,8 @@ test("automatic refresh waits for surfing to settle and avoids starting during f
     source("src/core/sourceRefreshPreferences.ts"),
   ]);
   assert.doesNotMatch(scheduler, /pathname(?:Ref.current)?\?\.startsWith\("\/guide"\)/);
-  assert.match(scheduler, /pathnameRef.current\?\.startsWith\("\/player"\)/);
+  assert.ok(scheduler.includes("(?:player|provider-player|multiview|vod)"));
+  assert.match(scheduler, /\.test\(pathnameRef.current/);
   assert.match(scheduler, /isGuideSurfing\(\)/);
   assert.match(preferences, /playlistHours: 24/);
   assert.match(preferences, /epgHours: 6/);
@@ -251,7 +252,9 @@ test("EPG and playlist controls live only on the dedicated EPG settings page", a
 test("native guide preserves last-good paint across transient query failures", async () => {
   const nativeGuide = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(nativeGuide, /catch \(_: Throwable\) \{ null \}/);
-  assert.match(nativeGuide, /if \(loaded == null\) continue/);
+  const failure = nativeGuide.match(/if \(loaded == null\) \{[\s\S]*?continue/)?.[0] || "";
+  assert.match(failure, /latestQuery\?\.token == request.token/);
+  assert.doesNotMatch(failure, /programs\s*=/);
   assert.match(nativeGuide, /programs = programs\.filterKeys/);
 });
 
@@ -262,7 +265,7 @@ test("Search hands suggestion focus to results without opening a competing modal
     source("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"),
   ]);
   assert.match(search, /focusResultsWhenReadyRef/);
-  assert.match(search, /requestNativeFocusWithRetry\(firstResultRef\.current/);
+  assert.match(search, /requestNativeFocusWithRetry\(\(\) => firstResultRef\.current/);
   assert.doesNotMatch(search, /openProgram\(opts\.program/);
   assert.match(search, /programStart: opts\?\.programStart/);
   assert.match(canvas, /restoreTimeMs/);
@@ -345,7 +348,7 @@ test("entry preferred focus disarms as soon as real user focus exists", async ()
     source("app/(tabs)/search.tsx"),
     source("app/(tabs)/settings.tsx"),
   ]);
-  assert.match(channels, /const noteChannelFocus = useCallback\([\s\S]*?setPreferInitialFocus\(false\)[\s\S]*?setFocusedChannelId\(id\)/);
+  assert.match(channels, /const noteChannelFocus = useCallback\([\s\S]*?setPreferInitialFocus\(false\)[\s\S]*?focusedChannelId.current = id/);
   assert.match(channels, /onFocusChannel=\{noteChannelFocus\}/);
   assert.match(collection, /onFocus=\{onFocus\}/);
   assert.match(collection, /const disarmInitialFocus = useCallback\(\(\) => setPreferInitialFocus\(false\)/);

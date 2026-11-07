@@ -9,9 +9,30 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
+import com.bumptech.glide.Glide
 
 class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBaseJavaModule(ctx) {
+  private val cacheExecutor = Executors.newSingleThreadExecutor()
+  private val cacheBusy = AtomicBoolean(false)
   override fun getName(): String = "TvRemote"
+
+  private fun cacheTask(promise: Promise, task: () -> Unit) {
+    if (!cacheBusy.compareAndSet(false, true)) {
+      promise.reject("CACHE_BUSY", "Cache maintenance is already running.")
+      return
+    }
+    try {
+      cacheExecutor.execute { try { task() } finally { cacheBusy.set(false) } }
+    } catch (_: RejectedExecutionException) {
+      cacheBusy.set(false)
+      promise.reject("CACHE_CLOSED", "The app is closing.")
+    }
+  }
+
+  override fun invalidate() { cacheExecutor.shutdown(); super.invalidate() }
 
   @ReactMethod
   fun prepareIconRailHide(shellTag: Double, promise: Promise) {
@@ -196,7 +217,7 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
   }
 
   @ReactMethod
-  fun getCacheStorageReport(promise: Promise) {
+  fun getCacheStorageReport(promise: Promise) = cacheTask(promise) {
     try {
       val logo = File(ctx.cacheDir, "charm-channel-logos")
       val databases = ctx.databaseList().map(ctx::getDatabasePath)
@@ -215,20 +236,19 @@ class TvRemoteModule(private val ctx: ReactApplicationContext) : ReactContextBas
   }
 
   @ReactMethod
-  fun pruneDiskCaches(maxAgeDays: Double, promise: Promise) {
+  fun pruneDiskCaches(maxAgeDays: Double, promise: Promise) = cacheTask(promise) {
     try {
       val cutoff = System.currentTimeMillis() - maxAgeDays.toLong().coerceIn(1L, 90L) * 86_400_000L
-      val protectedCutoff = System.currentTimeMillis() - 120_000L
-      var removedFiles = 0L
-      var removedBytes = 0L
-      ctx.cacheDir.walkBottomUp().forEach { file ->
-        if (!file.isFile || file.lastModified() >= cutoff || file.lastModified() >= protectedCutoff) return@forEach
-        val bytes = file.length()
-        if (file.delete()) {
-          removedFiles += 1L
-          removedBytes += bytes
-        }
-      }
+      val logo = File(ctx.cacheDir, "charm-channel-logos")
+      val logoBytes = directoryBytes(logo)
+      val logoCount = if (logo.exists()) logo.walkTopDown().count(File::isFile).toLong() else 0L
+      // Glide owns its journal and locks. Never unlink files in an open
+      // Glide, HTTP, player, Cronet or WebView cache by walking cacheDir.
+      Glide.get(ctx).clearDiskCache()
+      val scratch = pruneLegacyScratchFiles(ctx.cacheDir, cutoff)
+      val remainingCount = if (logo.exists()) logo.walkTopDown().count(File::isFile).toLong() else 0L
+      val removedFiles = scratch.first + (logoCount - remainingCount).coerceAtLeast(0L)
+      val removedBytes = scratch.second + (logoBytes - directoryBytes(logo)).coerceAtLeast(0L)
       promise.resolve(Arguments.createMap().apply {
         putDouble("removedFiles", removedFiles.toDouble())
         putDouble("removedBytes", removedBytes.toDouble())

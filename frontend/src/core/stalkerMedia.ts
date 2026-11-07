@@ -9,23 +9,51 @@ type Episode = XtreamEpisode & { command?: string; seriesNumber?: number };
 type CatalogRow = { row: PortalRow; type: "vod" | "series"; title: XtreamTitle };
 type Details = Omit<XtreamDetails, "episodes"> & { command?: string; episodes: Episode[] };
 const catalogs = new WeakMap<StalkerLogin, Map<Kind, CatalogRow[]>>();
+const MAX_PAGES = 500;
+const MAX_EPISODES = 25_000;
+type PageBudget = { remaining: number; bytes: number };
+const mediaBudget = (): PageBudget => ({ remaining: MAX_PAGES, bytes: 16 * 1024 * 1024 });
+function checkCancelled(signal?: AbortSignal) { if (signal?.aborted) throw new Error("Portal operation cancelled."); }
 const text = (value: unknown) => typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
 const idOf = (value: unknown) => /^[A-Za-z0-9_-]{1,64}$/.test(text(value)) ? text(value) : "";
 const imageOf = (value: unknown) => /^https?:\/\/\S+$/i.test(text(value)) ? text(value) : "";
+function compactPortalRow(row: PortalRow): PortalRow {
+  const fields = ["id", "series_number", "season_number", "name", "is_series", "category_id",
+    "screenshot_uri", "rating_imdb", "rating_kinopoisk", "added", "cmd", "description",
+    "genres_str", "actors", "director", "year", "has_files"];
+  const compact: PortalRow = {};
+  for (const field of fields) {
+    const value = row[field];
+    if (typeof value === "string") compact[field] = value.slice(0, 4096);
+    else if (typeof value === "number" || typeof value === "boolean") compact[field] = value;
+  }
+  for (const field of ["series", "season_series"]) {
+    const value = row[field];
+    if (!Array.isArray(value)) continue;
+    if (value.length > MAX_EPISODES) throw new Error("Portal series exceeds the episode limit.");
+    compact[field] = value.filter(value => typeof value === "number" || (typeof value === "string" && /^\d{1,12}$/.test(value)));
+  }
+  return compact;
+}
 
 /** Clone InterfaceC5302 m2218/m10382/m10385 pagination and returned total_items. */
-async function pages(client: Client, type: string, action: string, params: Record<string, string | number>): Promise<PortalRow[]> {
+async function pages(client: Client, type: string, action: string, params: Record<string, string | number>, budget: PageBudget, signal?: AbortSignal): Promise<PortalRow[]> {
   const rows: PortalRow[] = [];
   const seen = new Set<string>();
-  for (let p = 1; p <= 500; p++) {
-    const reply = await client.call(type, action, { ...params, p });
+  for (let p = 1; budget.remaining > 0; p++) {
+    checkCancelled(signal);
+    budget.remaining--;
+    const reply = await client.call(type, action, { ...params, p }, signal);
     if (!Array.isArray(reply?.data)) throw new Error("Portal returned an invalid media page.");
     let added = 0;
     for (const row of reply.data) {
       if (!row || typeof row !== "object") continue;
       const key = JSON.stringify([row.id, row.series_number, row.season_number]);
       if (seen.has(key)) continue;
-      seen.add(key); rows.push(row); added++;
+      const compact = compactPortalRow(row);
+      budget.bytes -= JSON.stringify(compact).length * 2;
+      if (budget.bytes < 0) throw new Error("Portal media exceeds the data limit.");
+      seen.add(key); rows.push(compact); added++;
     }
     if (rows.length > 25_000) throw new Error("Portal media exceeds the catalog limit.");
     const total = Number(reply.total_items);
@@ -36,15 +64,16 @@ async function pages(client: Client, type: string, action: string, params: Recor
 }
 
 /** Clone C6936 m13368/m13357. Series-capable portals may expose titles under series or under vod. */
-async function catalog(login: StalkerLogin, kind: Kind, client: Client): Promise<CatalogRow[]> {
+async function catalog(login: StalkerLogin, kind: Kind, client: Client, budget: PageBudget, signal?: AbortSignal): Promise<CatalogRow[]> {
+  checkCancelled(signal);
   const cached = catalogs.get(login)?.get(kind);
   if (cached) return cached;
   let result: CatalogRow[] = [];
   for (const type of (kind === "series" ? ["series", "vod"] : ["vod"]) as ("series" | "vod")[]) {
     try {
-      const categories = await client.call(type, "get_categories");
+      const categories = await client.call(type, "get_categories", {}, signal);
       const labels = new Map<string, string>((Array.isArray(categories) ? categories : []).map(row => [text(row?.id), text(row?.title)]));
-      const rows = await pages(client, type, "get_ordered_list", { category: 0, genre: 0, sortby: "name" });
+      const rows = await pages(client, type, "get_ordered_list", { category: 0, genre: 0, sortby: "name" }, budget, signal);
       result = rows.flatMap(row => {
         const id = idOf(row.id), name = text(row.name).trim();
         const series = type === "series" || ["1", "true"].includes(text(row.is_series).toLowerCase()) || (Array.isArray(row.series) && row.series.length > 0);
@@ -54,38 +83,41 @@ async function catalog(login: StalkerLogin, kind: Kind, client: Client): Promise
       });
       if (result.length || type === "vod") break;
     } catch (error) {
-      if (type === "vod") throw error;
+      if (type === "vod" || signal?.aborted || !budget.remaining) throw error;
     }
   }
   let byKind = catalogs.get(login);
   if (!byKind) { byKind = new Map(); catalogs.set(login, byKind); }
+  checkCancelled(signal);
   byKind.set(kind, result);
   return result;
 }
 
-export async function listStalkerCatalog(login: StalkerLogin, kind: Kind): Promise<XtreamTitle[]> {
-  return (await catalog(login, kind, createStalkerClient(login))).map(item => item.title);
+export async function listStalkerCatalog(login: StalkerLogin, kind: Kind, signal?: AbortSignal): Promise<XtreamTitle[]> {
+  return (await catalog(login, kind, createStalkerClient(login), mediaBudget(), signal)).map(item => item.title);
 }
 
 /** Clone m13381 recovered as m12185 (ev_7d7eb79ba28559c6affc486a04b8a3e7677e126aae8f31021bfa14149c2ea58f).
  * Season payloads may carry episode numbers and a shared command, or separate paginated episode IDs.
  */
-async function episodesFor(client: Client, item: CatalogRow): Promise<Episode[]> {
+async function episodesFor(client: Client, item: CatalogRow, budget: PageBudget, signal?: AbortSignal): Promise<Episode[]> {
   const movie = item.title.id;
-  const seasons = await pages(client, item.type, "get_ordered_list", { movie_id: movie });
+  const seasons = await pages(client, item.type, "get_ordered_list", { movie_id: movie }, budget, signal);
   const episodes: Episode[] = [];
   for (const season of seasons) {
+    checkCancelled(signal);
     const seasonId = idOf(season.id);
     if (!seasonId) continue;
     const seasonNumber = text(season.season_number) || text(season.name) || seasonId;
     const numbers = Array.isArray(season.season_series) && season.season_series.length ? season.season_series : season.series;
     const rows = Array.isArray(numbers) && numbers.length
       ? numbers.map(number => ({ id: String(number), series_number: number }))
-      : await pages(client, item.type, "get_ordered_list", { movie_id: movie, season_id: seasonId });
+      : await pages(client, item.type, "get_ordered_list", { movie_id: movie, season_id: seasonId }, budget, signal);
     for (const row of rows) {
       const episode = idOf(row.id);
       const seriesNumber = Number(row.series_number);
       if (!episode || !Number.isSafeInteger(seriesNumber) || seriesNumber < 1) continue;
+      if (episodes.length >= MAX_EPISODES) throw new Error("Portal series exceeds the episode limit.");
       episodes.push({
         id: `${movie}.${seasonId}.${episode}.${seriesNumber}`, title: `Episode ${seriesNumber}`, season: seasonNumber,
         extension: "", image: item.title.image, released: "", command: text(season.cmd) || undefined, seriesNumber,
@@ -96,18 +128,20 @@ async function episodesFor(client: Client, item: CatalogRow): Promise<Episode[]>
     for (const number of item.row.series) {
       const seriesNumber = Number(number);
       if (!Number.isSafeInteger(seriesNumber) || seriesNumber < 1) continue;
+      if (episodes.length >= MAX_EPISODES) throw new Error("Portal series exceeds the episode limit.");
       episodes.push({ id: `${movie}.0.${seriesNumber}.${seriesNumber}`, title: `Episode ${seriesNumber}`, season: "1", extension: "", image: item.title.image, released: "", command: text(item.row.cmd) || undefined, seriesNumber });
     }
   }
   return [...new Map(episodes.map(episode => [episode.id, episode])).values()];
 }
 
-export async function loadStalkerDetails(login: StalkerLogin, kind: Kind, id: string): Promise<Details> {
+export async function loadStalkerDetails(login: StalkerLogin, kind: Kind, id: string, signal?: AbortSignal): Promise<Details> {
   const client = createStalkerClient(login);
-  const item = (await catalog(login, kind, client)).find(entry => entry.title.id === id);
+  const budget = mediaBudget();
+  const item = (await catalog(login, kind, client, budget, signal)).find(entry => entry.title.id === id);
   if (!item) throw new Error("This portal title is unavailable.");
   const row = item.row;
-  return { plot: text(row.description), genre: text(row.genres_str), cast: text(row.actors), director: text(row.director), released: text(row.year), durationSeconds: 0, trailer: "", extension: "", command: text(row.cmd) || undefined, episodes: kind === "series" ? await episodesFor(client, item) : [] };
+  return { plot: text(row.description), genre: text(row.genres_str), cast: text(row.actors), director: text(row.director), released: text(row.year), durationSeconds: 0, trailer: "", extension: "", command: text(row.cmd) || undefined, episodes: kind === "series" ? await episodesFor(client, item, budget, signal) : [] };
 }
 
 function playbackLink(result: PortalRow | undefined) {
@@ -117,35 +151,36 @@ function playbackLink(result: PortalRow | undefined) {
 }
 
 /** Clone C6936 m13377/m13383 create_link and m13382/m2843 file lookup. */
-export async function resolveStalkerMedia(login: StalkerLogin, kind: Kind, id: string, command?: string, seriesNumber?: number) {
+export async function resolveStalkerMedia(login: StalkerLogin, kind: Kind, id: string, command?: string, seriesNumber?: number, signal?: AbortSignal) {
   const client = createStalkerClient(login);
+  const budget = mediaBudget();
   if (kind === "series") {
     const [movie, season, episode, series] = id.split(".");
     if (id.split(".").length !== 4 || !idOf(movie) || !idOf(season) || !idOf(episode) || !/^\d{1,8}$/.test(series || "")) throw new Error("Invalid portal episode identity.");
-    const item = (await catalog(login, kind, client)).find(entry => entry.title.id === movie);
+    const item = (await catalog(login, kind, client, budget, signal)).find(entry => entry.title.id === movie);
     if (!item) throw new Error("This portal series is unavailable.");
     if (!command) {
-      const entry = (await episodesFor(client, item)).find(candidate => candidate.id === id);
+      const entry = (await episodesFor(client, item, budget, signal)).find(candidate => candidate.id === id);
       if (!entry) throw new Error("This portal episode is unavailable.");
       command = entry.command;
     }
     if (!command) {
-      const reply = await client.call(item.type, "get_ordered_list", { movie_id: movie, season_id: season, episode_id: episode });
+      const reply = await client.call(item.type, "get_ordered_list", { movie_id: movie, season_id: season, episode_id: episode }, signal);
       const file = idOf(reply?.data?.[0]?.id);
       if (!file) throw new Error("This portal episode has no playable file.");
       command = `/media/file_${file}.mpg`;
     }
-    return playbackLink(await client.call("vod", "create_link", { cmd: command, series: seriesNumber || Number(series), force_ch_link_check: 0 }));
+    return playbackLink(await client.call("vod", "create_link", { cmd: command, series: seriesNumber || Number(series), force_ch_link_check: 0 }, signal));
   }
-  const item = (await catalog(login, kind, client)).find(entry => entry.title.id === id);
+  const item = (await catalog(login, kind, client, budget, signal)).find(entry => entry.title.id === id);
   if (!item) throw new Error("This portal movie is unavailable.");
   if (Number(item.row.has_files) === 1) {
-    const reply = await client.call(item.type, "get_ordered_list", { movie_id: id });
+    const reply = await client.call(item.type, "get_ordered_list", { movie_id: id }, signal);
     const file = idOf(reply?.data?.[0]?.id);
     if (!file) throw new Error("This portal movie has no playable file.");
     command = `/media/file_${file}.mpg`;
   } else command = command || text(item.row.cmd) || `/media/${id}.mpg`;
-  return playbackLink(await client.call("vod", "create_link", { cmd: command, force_ch_link_check: 0 }));
+  return playbackLink(await client.call("vod", "create_link", { cmd: command, force_ch_link_check: 0 }, signal));
 }
 
 export function canReplayStalker(channel: Channel, program: Program, now = Date.now()): boolean {

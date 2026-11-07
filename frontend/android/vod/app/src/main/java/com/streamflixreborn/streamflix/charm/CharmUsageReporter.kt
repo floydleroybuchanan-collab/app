@@ -45,6 +45,10 @@ object CharmUsageReporter {
     fun playback(source: String, active: Boolean) { main.post { playing[source]=active;report() } }
     private fun report() {
         val credential=token ?: return
+        // Embedded VOD shares MainActivity with live TV; class name alone no
+        // longer describes the active screen. Resolve ownership each report.
+        val activity = foreground
+        mode = if (activity == null) "idle" else if (CharmHostSession.hasSurface(activity) || activity.javaClass.name.startsWith("com.streamflixreborn")) "vod" else "iptv"
         val timestamp=System.currentTimeMillis()
         if(inFlight || timestamp-lastSent<1500){main.removeCallbacks(deferred);main.postDelayed(deferred,1500);return}
         val active=mode!="idle" && playing.any { it.key.startsWith(mode) && it.value }

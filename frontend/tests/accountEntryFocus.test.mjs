@@ -100,7 +100,7 @@ test('account and notice entry is attached to visible controls, and Exit dismiss
   const notice = source('src/components/AnnouncementCenter.tsx');
   assert.match(notice, /button\('Exit',dismiss\)/);
   assert.doesNotMatch(notice, /exitApp/);
-  assert.match(notice, /a.version_code>version/);
+  assert.match(notice, /nextAnnouncement\(list,history.current,cooldown.current,version,now\)/);
   const recovery = source('src/components/AccountSecurityDialog.tsx');
   assert.match(recovery, /focusedInput===label&&styles.focused/);
 });

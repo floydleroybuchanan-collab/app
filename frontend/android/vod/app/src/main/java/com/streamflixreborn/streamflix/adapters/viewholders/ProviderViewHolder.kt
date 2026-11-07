@@ -40,6 +40,10 @@ class ProviderViewHolder(
             setOnClickListener {
                 UserPreferences.currentProvider = provider.provider
                 context.toActivity()?.apply {
+                    if (com.streamflixreborn.streamflix.charm.CharmHostSession.hasSurface(this)) {
+                        com.streamflixreborn.streamflix.charm.CharmHostSession.leave(this, "medialab:provider-changed")
+                        return@setOnClickListener
+                    }
                     startActivity(
                         Intent(this, this::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -54,7 +58,7 @@ class ProviderViewHolder(
                 true
             }
         }
-        
+
         binding.ivProviderFavorite.visibility = if (provider.isFavorite) android.view.View.VISIBLE else android.view.View.GONE
 
         loadProviderLogo(binding.ivProviderLogo)
@@ -71,6 +75,10 @@ class ProviderViewHolder(
             setOnClickListener {
                 UserPreferences.currentProvider = provider.provider
                 context.toActivity()?.apply {
+                    if (com.streamflixreborn.streamflix.charm.CharmHostSession.hasSurface(this)) {
+                        com.streamflixreborn.streamflix.charm.CharmHostSession.leave(this, "medialab:provider-changed")
+                        return@setOnClickListener
+                    }
                     startActivity(
                         Intent(this, this::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -85,7 +93,7 @@ class ProviderViewHolder(
                 true
             }
         }
-        
+
         binding.ivProviderFavorite.visibility = if (provider.isFavorite) android.view.View.VISIBLE else android.view.View.GONE
 
         loadProviderLogo(binding.ivProviderLogo)
@@ -118,7 +126,7 @@ class ProviderViewHolder(
                 .into(imageView)
         }
     }
-    
+
     private fun toggleFavorite(provider: Provider) {
         provider.isFavorite = !provider.isFavorite
         val favorites = UserPreferences.favoriteProviders.toMutableSet()

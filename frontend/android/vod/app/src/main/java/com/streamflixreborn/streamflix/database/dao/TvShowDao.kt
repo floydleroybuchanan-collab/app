@@ -15,6 +15,12 @@ import com.streamflixreborn.streamflix.utils.format
 @Dao
 interface TvShowDao {
 
+    // Bounded previews only; full saved-library APIs remain unchanged.
+    @Query("SELECT * FROM tv_shows WHERE isFavorite = 1 ORDER BY favoritedAtMillis DESC LIMIT :limit")
+    suspend fun getFavoriteShelf(limit: Int): List<TvShow>
+
+
+
     @Query("SELECT * FROM tv_shows")
     fun getAllForBackup(): List<TvShow>
 

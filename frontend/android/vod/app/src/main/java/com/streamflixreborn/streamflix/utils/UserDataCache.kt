@@ -16,12 +16,15 @@ import com.streamflixreborn.streamflix.providers.Provider
 import com.streamflixreborn.streamflix.sync.CloudSyncHooks
 import com.streamflixreborn.streamflix.ui.UserDataNotifier
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 object UserDataCache {
 
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, UserData>()
+    // Disk retains every saved item; keep only two provider mirrors in RAM.
+    private val memoryCache = java.util.Collections.synchronizedMap(object : LinkedHashMap<String, UserData>(4, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, UserData>?) = size > 2
+    })
+    fun clearMemory() { memoryCache.clear() }
 
     data class UserData(
         val favoritesMovies: List<CachedMovie> = emptyList(),
@@ -278,14 +281,14 @@ object UserDataCache {
 
     fun syncMovieToCache(context: Context, provider: Provider, movie: Movie) {
         val current = read(context, provider) ?: UserData()
-        
+
         val updatedContinueWatching = if (movie.watchHistory != null) {
             (current.continueWatchingMovies.filter { it.id != movie.id } + movie.toCached())
                 .distinctBy { it.id }
         } else {
             current.continueWatchingMovies.filter { it.id != movie.id }
         }
-        
+
         val updatedFavorites = if (movie.isFavorite) {
             (current.favoritesMovies.filter { it.id != movie.id } + movie.toCached().copy(
                 favoritedAtMillis = movie.favoritedAtMillis
@@ -296,7 +299,7 @@ object UserDataCache {
         } else {
             current.favoritesMovies.filter { it.id != movie.id }
         }
-        
+
         write(context, provider, current.copy(
             continueWatchingMovies = updatedContinueWatching,
             favoritesMovies = updatedFavorites
@@ -307,14 +310,14 @@ object UserDataCache {
 
     fun syncEpisodeToCache(context: Context, provider: Provider, episode: Episode) {
         val current = read(context, provider) ?: UserData()
-        
+
         val updatedContinueWatching = if (episode.watchHistory != null) {
             (current.continueWatchingEpisodes.filter { it.id != episode.id } + episode.toCached())
                 .distinctBy { it.id }
         } else {
             current.continueWatchingEpisodes.filter { it.id != episode.id }
         }
-        
+
         write(context, provider, current.copy(
             continueWatchingEpisodes = updatedContinueWatching
         ))

@@ -14,6 +14,12 @@ import com.streamflixreborn.streamflix.utils.UserPreferences
 @Dao
 interface EpisodeDao {
 
+    // Bounded previews only; full saved-library APIs remain unchanged.
+    @Query("SELECT * FROM episodes WHERE lastEngagementTimeUtcMillis IS NOT NULL ORDER BY lastEngagementTimeUtcMillis DESC LIMIT :limit")
+    suspend fun getWatchingShelf(limit: Int): List<Episode>
+
+
+
     @Query("SELECT * FROM episodes")
     fun getAllForBackup(): List<Episode>
 
@@ -24,8 +30,8 @@ interface EpisodeDao {
                     WHERE e.tvShow = episodes.tvShow AND e.isWatched = 1) AS watchedDate
         FROM tv_shows
         JOIN episodes ON episodes.id = (
-            SELECT e.id 
-            FROM episodes e 
+            SELECT e.id
+            FROM episodes e
             JOIN seasons s ON s.id = e.season
             JOIN (
                 SELECT e2.id, s2.number as seasonNumber, e2.number AS episodeNumber
@@ -36,7 +42,7 @@ interface EpisodeDao {
                 LIMIT 1
             ) last_watched
             WHERE e.tvShow = tv_shows.id AND (
-                (s.number = last_watched.seasonNumber AND e.number > last_watched.episodeNumber) 
+                (s.number = last_watched.seasonNumber AND e.number > last_watched.episodeNumber)
                     OR s.number > last_watched.seasonNumber
             )
             ORDER BY s.number, e.number
@@ -186,7 +192,7 @@ interface EpisodeDao {
     fun resetProgressionFromEpisode(id: String)
 
     @Query("""
-    SELECT e.* 
+    SELECT e.*
     FROM episodes e
     JOIN seasons s ON s.id = e.season
     WHERE e.tvShow = :tvShowId AND s.number = :seasonNumber

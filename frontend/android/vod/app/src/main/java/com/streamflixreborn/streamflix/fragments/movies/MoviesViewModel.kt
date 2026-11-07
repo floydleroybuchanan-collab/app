@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.movies
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -20,12 +21,16 @@ import kotlinx.coroutines.launch
 
 class MoviesViewModel(database: AppDatabase) : ViewModel() {
 
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
+
     private val _state = MutableStateFlow<State>(State.Loading)
-    
+
     init {
         // Listen for provider changes and reload data
         viewModelScope.launch {
             ProviderChangeNotifier.providerChangeFlow.collect {
+                if (UserPreferences.currentProvider?.name != sourceProvider?.name) return@collect
                 getMovies()
             }
         }
@@ -82,8 +87,8 @@ class MoviesViewModel(database: AppDatabase) : ViewModel() {
 
         try {
             val movies = ParentalControlUtils.filterItems(
-                UserPreferences.currentProvider!!.getMovies()
-            ).filterIsInstance<Movie>()
+                sourceProvider!!.getMovies()
+            ).filterIsInstance<Movie>().let { CatalogSource.stamp(it, sourceProvider?.name) }
 
             page = 1
 
@@ -101,8 +106,8 @@ class MoviesViewModel(database: AppDatabase) : ViewModel() {
 
             try {
                 val movies = ParentalControlUtils.filterItems(
-                    UserPreferences.currentProvider!!.getMovies(page + 1)
-                ).filterIsInstance<Movie>()
+                    sourceProvider!!.getMovies(page + 1)
+                ).filterIsInstance<Movie>().let { CatalogSource.stamp(it, sourceProvider?.name) }
 
                 page += 1
 

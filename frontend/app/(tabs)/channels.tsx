@@ -1,5 +1,5 @@
 import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -44,7 +44,7 @@ const ChannelListRow = memo(function ChannelListRow({
   onPlay: (channel: Channel) => void;
   onFavorite: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
-  onFocusChannel: (id: string) => void;
+  onFocusChannel: (id: string, focused: boolean) => void;
   preferredFocus?: boolean;
 }) {
   const programs = useGuidePrograms(channel.id);
@@ -55,7 +55,8 @@ const ChannelListRow = memo(function ChannelListRow({
     <View style={styles.rowShell}>
       <Pressable
         hasTVPreferredFocus={preferredFocus}
-        onFocus={() => onFocusChannel(channel.id)}
+        onFocus={() => onFocusChannel(channel.id, true)}
+        onBlur={() => onFocusChannel(channel.id, false)}
         onPress={() => { if (!editMode) onPlay(channel); }}
         onLongPress={Platform.isTV ? undefined : () => { if (!editMode) onFavorite(channel.id); }}
         delayLongPress={450}
@@ -141,7 +142,7 @@ function ChannelsScreenContent() {
   const [now, setNow] = useState(() => new Date());
   const [preferInitialFocus, setPreferInitialFocus] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [focusedChannelId, setFocusedChannelId] = useState<string | null>(null);
+  const focusedChannelId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -170,22 +171,26 @@ function ChannelsScreenContent() {
     toggleFavorite(id);
   }, [toggleFavorite]);
 
-  const noteChannelFocus = useCallback((id: string) => {
+  const noteChannelFocus = useCallback((id: string, focused: boolean) => {
+    if (!focused) {
+      if (focusedChannelId.current === id) focusedChannelId.current = null;
+      return;
+    }
     // Initial preferred focus is only an entry bootstrap. Once Android has a
     // real focused row, user D-pad movement owns focus and must never be pulled
     // back by a still-armed hasTVPreferredFocus flag.
     setPreferInitialFocus(false);
-    setFocusedChannelId(id);
+    focusedChannelId.current = id;
   }, []);
 
   useEffect(() => {
     if (!isFocused || editMode || !Platform.isTV) return;
     return addTvLongPressListener((key) => {
       if (key !== "SELECT") return;
-      const id = focusedChannelId;
+      const id = focusedChannelId.current;
       if (id) favorite(id);
     });
-  }, [editMode, favorite, focusedChannelId, isFocused]);
+  }, [editMode, favorite, isFocused]);
 
   const toggleEditMode = useCallback(() => {
     void Haptics.selectionAsync().catch(() => undefined);

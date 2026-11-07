@@ -375,15 +375,17 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
         require(sourceId.startsWith("portal-user-") && fileName.startsWith("stalker-$playlistId.")) { "Generated Guide does not belong to this source" }
         check(sourceConfig?.enabled == true) { "Portal Guide source is disabled" }
       }
-      val parsedBatches = streamFilteredXmltv(sourceUrl, activeXmltvIds, activePlaylistNames, minStop, maxStart, baseOffsetMs, channelOffsetMs, channelNames, channelIcons, targetDatabase) { acceptedProgrammeCount += 1L }
-      val batches = if (generatedPortalGuide) sequence {
-        yieldAll(parsedBatches)
-        check(controlDao.source(sourceId)?.enabled == true) { "Portal Guide source was disabled during import" }
-      } else parsedBatches
-      if (activeXmltvIds.isEmpty()) { for (ignored in batches) Unit } else {
-        try { targetDatabase.replaceBatches(batches); programmeSwapSucceeded = true }
-        catch (t: IllegalStateException) {
-          val emptyFeed = acceptedProgrammeCount == 0L && t.message.orEmpty().contains("Refusing to replace live EPG with an empty feed"); if (!emptyFeed) throw t
+      openPossiblyGzipped(sourceUrl, targetDatabase).use { input ->
+        val parsedBatches = streamFilteredXmltv(input, activeXmltvIds, activePlaylistNames, minStop, maxStart, baseOffsetMs, channelOffsetMs, channelNames, channelIcons) { acceptedProgrammeCount += 1L }
+        val batches = if (generatedPortalGuide) sequence {
+          yieldAll(parsedBatches)
+          check(controlDao.source(sourceId)?.enabled == true) { "Portal Guide source was disabled during import" }
+        } else parsedBatches
+        if (activeXmltvIds.isEmpty()) { for (ignored in batches) Unit } else {
+          try { targetDatabase.replaceBatches(batches); programmeSwapSucceeded = true }
+          catch (t: IllegalStateException) {
+            val emptyFeed = acceptedProgrammeCount == 0L && t.message.orEmpty().contains("Refusing to replace live EPG with an empty feed"); if (!emptyFeed) throw t
+          }
         }
       }
       val aliases = ArrayList<Triple<String, String, String>>(channelNames.size * 2)
@@ -411,8 +413,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  private fun streamFilteredXmltv(sourceUrl: String, activeXmltvIds: MutableSet<String>, activePlaylistNames: Set<String>, minStop: Long, maxStart: Long, baseOffsetMs: Long, channelOffsetMs: Map<String, Long>, channelNames: MutableMap<String, String>, channelIcons: MutableMap<String, String>, targetDatabase: EpgDatabase, onAcceptedProgramme: () -> Unit): Sequence<List<NativeEpgProgram>> = sequence {
-    openPossiblyGzipped(sourceUrl, targetDatabase).use { input ->
+  private fun streamFilteredXmltv(input: InputStream, activeXmltvIds: MutableSet<String>, activePlaylistNames: Set<String>, minStop: Long, maxStart: Long, baseOffsetMs: Long, channelOffsetMs: Map<String, Long>, channelNames: MutableMap<String, String>, channelIcons: MutableMap<String, String>, onAcceptedProgramme: () -> Unit): Sequence<List<NativeEpgProgram>> = sequence {
       val parser = Xml.newPullParser(); parser.setInput(input, "UTF-8"); val batch = ArrayList<NativeEpgProgram>(BATCH_SIZE)
       var event = parser.eventType; var metadataChannelId: String? = null; var channelId: String? = null; var startMs = 0L; var endMs = 0L; var keepProgram = false; var title = ""; var description: String? = null; var category: String? = null; var rawProgrammeCount = 0L
       while (event != XmlPullParser.END_DOCUMENT) {
@@ -439,7 +440,6 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
           }
         }; event = parser.next()
       }; if (batch.isNotEmpty()) yield(ArrayList(batch))
-    }
   }
 
   private fun openPossiblyGzipped(urlString: String, targetDatabase: EpgDatabase): InputStream {

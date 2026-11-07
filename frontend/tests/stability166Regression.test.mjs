@@ -13,6 +13,28 @@ function load(p, mocks, globals = {}) {
 }
 async function settle() { for (let i = 0; i < 100; i++) await Promise.resolve(); }
 
+test('an old native programme read cannot merge after the identical cache key is recreated', async () => {
+  const source = read('src/source.native.ts');
+  const start = source.indexOf('async function loadProgrammeCacheMisses(');
+  const end = source.indexOf('export async function loadGuide(', start);
+  const code = ts.transpileModule(source.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  let resolveQuery;
+  const merged = [];
+  const context = vm.createContext({
+    programmeWindowCacheKey: 'same-window', programmeWindowGeneration: 0,
+    programmeWindowCache: {}, programmeWindowEmptyKeys: new Set(), programmeWindowInFlight: new Map(),
+    nativeEpgAvailable: true, hasCachedProgrammeResult: () => false,
+    queryNativeGuideWindow: () => new Promise(resolve => { resolveQuery = resolve; }),
+    mergeProgrammeQueryResult: (...args) => merged.push(args),
+  });
+  vm.runInContext(code, context);
+  const pendingRead = vm.runInContext('loadProgrammeCacheMisses([], ["channel"], 1, 2)', context);
+  context.programmeWindowGeneration++;
+  resolveQuery({ channel: [{ title: 'stale' }] });
+  await pendingRead;
+  assert.deepEqual(merged, []);
+});
+
 test('cold guide readers share startup and receive channels before guide I/O completes', async () => {
   const source = read('src/source.native.ts');
   const start = source.indexOf('let initialLoadPromise:');
@@ -23,6 +45,7 @@ test('cold guide readers share startup and receive channels before guide I/O com
   let access = [];
   const context = {
     MEM: null,
+    guideCacheClearPromise: null,
     managedContentSources: () => access,
     loadColdSources: () => vm.runInContext('refreshUntilChannelsAvailable()', context),
     refreshInternal: () => { refreshCount++; return new Promise(resolve => { finishGuide = resolve; }); },
@@ -51,6 +74,31 @@ test('cold guide readers share startup and receive channels before guide I/O com
   const index = source.indexOf('await syncPlaylistToNative(channels, playlistEpoch)', publish);
   const additional = source.indexOf('await syncPlaylistEpg(channels, true', index);
   assert.ok(publish > 0 && source.indexOf('emit()', publish) < index && index < additional);
+});
+
+test('guide cache clear waits for active metadata publication and coalesces repeated requests', async () => {
+  const source = read('src/source.native.ts');
+  const start = source.indexOf('export function clearGuideCache()');
+  const end = source.indexOf('async function clearGuideCacheAfterRefresh()', start);
+  const code = ts.transpileModule(source.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+  let finishWriter;
+  const operations = [];
+  const context = vm.createContext({
+    exports: {}, guideCacheClearPromise: null, guideCacheMaintenanceGeneration: 0,
+    initialLoadPromise: null, refreshPromise: null, playlistOnlyRefreshPromise: null,
+    catalogPublishPromise: new Promise(resolve => { finishWriter = () => { operations.push('publish'); resolve(); }; }),
+    clearGuideCacheAfterRefresh: async () => { operations.push('clear'); },
+  });
+  vm.runInContext(code, context);
+  const first = context.exports.clearGuideCache();
+  assert.equal(context.exports.clearGuideCache(), first);
+  await settle();
+  assert.deepEqual(operations, []);
+  finishWriter();
+  await first;
+  assert.deepEqual(operations, ['publish', 'clear']);
+  assert.equal(context.guideCacheClearPromise, null);
+  assert.equal(context.guideCacheMaintenanceGeneration, 1);
 });
 
 test('actual progress subscriber delivers rapid completion/error and trailing intermediate updates', () => {

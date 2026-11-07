@@ -134,7 +134,7 @@ export function TvQuickActionsOverlay() {
 
   useEffect(() => addTvQuickActionsListener((nextContext) => {
     const guideSelection = nextContext === "guide" ? getGuideSelection() : null;
-    const id = guideSelection?.channelId || resolvePlayerChannelId();
+    const id = nextContext === "guide" ? guideSelection?.channelId : resolvePlayerChannelId();
     if (!id) return;
     const selectedChannel = channelById(id);
     if (!selectedChannel) return;
@@ -169,6 +169,12 @@ export function TvQuickActionsOverlay() {
     // leave a stale modal/focus layer running over the next screen.
     close();
   }, [close, open, pathname]);
+
+  useEffect(() => {
+    // A catalog refresh can remove the selected channel while the modal is
+    // open. Release ownership when its content disappears.
+    if (open && !channel) close();
+  }, [channel, close, open]);
 
   useEffect(() => {
     if (!open) return;

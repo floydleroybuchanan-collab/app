@@ -35,7 +35,7 @@ export function SourceRefreshScheduler() {
     const stillOwner = () => !cancelled && generation === schedulerGeneration && active;
     const screenIsSafe = () =>
       stillOwner() &&
-      !pathnameRef.current?.startsWith("/player") &&
+      !/^\/(?:player|provider-player|multiview|vod)(?:\/|$)/.test(pathnameRef.current || "") &&
       !isGuideSurfing();
 
     const check = async () => {

@@ -5,7 +5,7 @@ import {accountUpdateReport,formatAccountUpdateReport,releaseName} from '../acco
 import {handleUpdate} from '../bot-telegram.js';
 import {exactCommand} from '../bot-commands.js';
 const auth={isOwner:true,user:{id:OWNER},profile:{}};
-test('RC17 sideload update keeps the public baseline and recognizes both new test builds',async()=>{
+test('RC18 sideload update keeps the public baseline and recognizes the audited test build',async()=>{
  const f=fixture();f.user('unified');
  await f.request('/me/activity',{method:'POST',token:f.token('unified'),body:{sequence:1,mode:'idle',playing:false,build:38}});
  f.user('previous');
@@ -17,7 +17,7 @@ test('RC17 sideload update keeps the public baseline and recognizes both new tes
  assert.match(releaseName(36),/RC15-Sideload-220/);
  assert.match(releaseName(37),/RC16-Sideload-222/);
  assert.match(releaseName(38),/RC17-Sideload-224.*TEST BUILD/);
- assert.match(releaseName(39),/not mapped/);
+ assert.match(releaseName(39),/RC18-Sideload-225.*TEST BUILD/);
  assert.equal(r.users.find(u=>u.username==='previous').updated,true);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(2\)/);
 });

@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.home
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import com.streamflixreborn.streamflix.StreamFlixApp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,6 +39,9 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 class HomeViewModel(database: AppDatabase) : ViewModel() {
+
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
 
     private data class HomeHistory(
         val continueWatching: List<AppAdapter.Item>,
@@ -173,10 +177,10 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                         }
                     } as List<AppAdapter.Item>
             }.flowOn(Dispatchers.IO),
-            
+
             // FAVORITE MOVIES
             database.movieDao().getFavorites().flowOn(Dispatchers.IO),
-            
+
             // FAVORITE TV SHOWS
             database.tvShowDao().getFavorites().flowOn(Dispatchers.IO),
 
@@ -311,7 +315,7 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                         )
                     })
 
-                State.SuccessLoading(categories)
+                State.SuccessLoading(CatalogSource.stamp(categories, sourceProvider?.name))
             }
 
             else -> state
@@ -325,20 +329,21 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     init {
-        val initialProvider = UserPreferences.currentProvider
+        val initialProvider = sourceProvider
         if (initialProvider != null) {
             currentProvider = initialProvider
             loadUserDataCache(initialProvider)
         }
         viewModelScope.launch {
             ProviderChangeNotifier.providerChangeFlow.collect {
+                if (UserPreferences.currentProvider?.name != sourceProvider?.name) return@collect
                 getHome()
             }
         }
 
         viewModelScope.launch {
             UserDataNotifier.updates.collect {
-                val provider = UserPreferences.currentProvider ?: return@collect
+                val provider = sourceProvider ?: return@collect
                 loadUserDataCache(provider)
             }
         }
@@ -346,7 +351,7 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     private suspend fun enrichContinueWatchingEpisodes(episodes: List<Episode>): List<Episode> = coroutineScope {
-        val provider = UserPreferences.currentProvider ?: return@coroutineScope episodes
+        val provider = sourceProvider ?: return@coroutineScope episodes
 
         episodes.map { episode ->
             async {
@@ -400,7 +405,7 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     fun getHome() = viewModelScope.launch(Dispatchers.IO) {
-        val provider = UserPreferences.currentProvider ?: run {
+        val provider = sourceProvider ?: run {
             _state.emit(State.FailedLoading(IllegalStateException("No provider selected")))
             return@launch
         }
@@ -440,7 +445,7 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
         _userDataCache.value = cached
 
         viewModelScope.launch(Dispatchers.IO) {
-            val db = AppDatabase.getInstance(appContext)
+            val db = AppDatabase.getSharedInstanceForProvider(provider.name, appContext)
             val moviesDeferred = async { db.movieDao().getFavorites().first() }
             val tvShowsDeferred = async { db.tvShowDao().getFavorites().first() }
             val watchingMoviesDeferred = async { db.movieDao().getWatchingMovies().first() }

@@ -7,6 +7,7 @@ import {fonts,radius,tvColors} from '@/src/theme';
 import {FocusGuide} from './TVFocusGuideView';
 import {LocalQrCode} from './LocalQrCode';
 import {usePauseAnnouncements} from '@/src/core/announcementPause';
+import {challengeNeedsDeadline,startChallengeClock} from '@/src/core/accountChallengeClock';
 
 export type SecurityScreen='reset'|'access'|'link'|'password'|'community'|'registration'|'security';
 type Props={kind:SecurityScreen;initialLogin?:string;registration?:{invite_code:string;username:string;email:string};onApproved?:(token:string)=>Promise<void>;onClose:()=>void};
@@ -17,10 +18,13 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
  const [recoveryCode,setRecoveryCode]=useState(''),[showRecovery,setShowRecovery]=useState(false);
  const [challenge,setChallenge]=useState<AccountChallenge|null>(null),[status,setStatus]=useState<ChallengeStatus>('waiting');
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[done,setDone]=useState(''),[clock,setClock]=useState(Date.now());
+ const [foreground,setForeground]=useState(AppState.currentState==='active');
  const [community,setCommunity]=useState<{bot_username:string;bot_url:string;community_url:string|null}|null>(null);
  const [security,setSecurity]=useState<{telegram:{telegram_id:string;username:string;name:string}|null;activity:{action:string;created_at:number}[]}|null>(null);
- const entryFocus=useTVFocusEntry(!busy,kind+':'+(done?'done':challenge?status+':'+(challenge.expires_at*1000<=clock?'expired':'active'):showRecovery?'recovery':'start'));
+ const deadlineNeeded=challengeNeedsDeadline(kind,status);
+ const entryFocus=useTVFocusEntry(!busy,kind+':'+(done?'done':challenge?status+':'+(deadlineNeeded&&challenge.expires_at*1000<=clock?'expired':'active'):showRecovery?'recovery':'start'));
  const mounted=useRef(true);
+ const actionInFlight=useRef(false);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const title={reset:'Forgot Password',access:'Request App Access',link:'Link Telegram',password:'Change Password',community:'Telegram Community',registration:'Approve your account',security:'Account Security'}[kind];
  useEffect(()=>{
@@ -30,33 +34,44 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
   return()=>{stopped=true;};
  },[kind]);
  const remaining=challenge?Math.max(0,challenge.expires_at-Math.floor(clock/1000)):0;
- const close=()=>{if(challenge&&status==='waiting')void securityRequest('/auth/challenges/cancel',{token:challenge.token}).catch(()=>{});onClose();};
- const run=async(action:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');try{await action();}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'Unable to complete this request. Please try again.');}finally{if(mounted.current)setBusy(false);}};
+ const close=()=>{if(!mounted.current)return;mounted.current=false;if(challenge&&status==='waiting')void securityRequest('/auth/challenges/cancel',{token:challenge.token}).catch(()=>{});onClose();};
+ const run=async(action:()=>Promise<void>)=>{if(!mounted.current||actionInFlight.current)return;actionInFlight.current=true;setBusy(true);setError('');try{await action();}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'Unable to complete this request. Please try again.');}finally{actionInFlight.current=false;if(mounted.current)setBusy(false);}};
  const begin=()=>run(async()=>{
   if(kind==='reset'&&!login.trim())throw new Error('Enter your username or email.');
   if(kind==='link'&&!currentPassword)throw new Error('Enter your current app password.');
   const result=await securityRequest<AccountChallenge>('/auth/challenges',{kind,login,current_password:currentPassword,recovery_code:recoveryCode||undefined,...registration},kind==='link');
   if(mounted.current){setChallenge(result);setStatus('waiting');setCurrentPassword('');setClock(Date.now());}
+  else void securityRequest('/auth/challenges/cancel',{token:result.token}).catch(()=>{});
  });
  useEffect(()=>{
   if(kind!=='community')return;
   void securityRequest<{bot_username:string;bot_url:string;community_url:string|null}>('/auth/community').then(data=>{if(mounted.current)setCommunity(data);}).catch(e=>{if(mounted.current)setError(e.message);});
  },[kind]);
  useEffect(()=>{
-  if(!challenge)return;
+  const subscription=AppState.addEventListener('change',state=>{setForeground(state==='active');if(state==='active')setClock(Date.now());});
+  return()=>subscription.remove();
+ },[]);
+ useEffect(()=>{
+  if(!challenge||!foreground||!deadlineNeeded||done)return;
+  return startChallengeClock(challenge.expires_at*1000,now=>{if(mounted.current)setClock(now);});
+ },[challenge,deadlineNeeded,done,foreground]);
+ useEffect(()=>{
+  if(!challenge||!foreground||done||status!=='waiting')return;
   let stopped=false,timer:ReturnType<typeof setTimeout>;
-  const clockTimer=setInterval(()=>setClock(Date.now()),1000);
+  const expiry=challenge.expires_at*1000;
+  const canPoll=()=>!stopped&&mounted.current&&AppState.currentState==='active'&&Date.now()<expiry;
   const poll=async()=>{
-   if(stopped||Date.now()>=challenge.expires_at*1000)return;
-   if(AppState.currentState==='active')try{
+   if(!canPoll())return;
+   try{
     const response=await securityRequest<{status:ChallengeStatus}>('/auth/challenges/status',{token:challenge.token});
-    if(!stopped){setError('');setStatus(response.status);if(response.status!=='waiting')return;}
-   }catch(e){if(!stopped)setError(e instanceof Error?e.message:'Unable to check your request.');}
-   if(!stopped)timer=setTimeout(()=>void poll(),5000);
+    if(canPoll()){setError('');setStatus(response.status);if(response.status!=='waiting')return;}
+   }catch(e){if(canPoll())setError(e instanceof Error?e.message:'Unable to check your request.');}
+   if(canPoll())timer=setTimeout(()=>void poll(),Math.min(5000,expiry-Date.now()));
   };
-  void poll();return()=>{stopped=true;clearTimeout(timer);clearInterval(clockTimer);};
- },[challenge]);
+  void poll();return()=>{stopped=true;clearTimeout(timer);};
+ },[challenge,done,foreground,status]);
  const finish=()=>run(async()=>{
+  if((kind==='reset'||kind==='registration')&&(!challenge||Date.now()>=challenge.expires_at*1000))throw new Error('This request expired. Start again.');
   if(kind==='registration'){await onApproved?.(challenge!.token);return;}
   if(password.length<8||password.length>256)throw new Error('Use a password of 8–256 characters.');
   if(password!==confirm)throw new Error('The passwords do not match.');
@@ -68,7 +83,7 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
  const [focusedInput,setFocusedInput]=useState<string|null>(null);
  const input=(label:string,value:string,change:(s:string)=>void,secure=false)=><View><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={change} secureTextEntry={secure} autoCapitalize="none" autoCorrect={false} maxLength={256} editable={!busy} onFocus={()=>setFocusedInput(label)} onBlur={()=>setFocusedInput(null)} style={[styles.input,focusedInput===label&&styles.focused]} placeholderTextColor={tvColors.textMuted}/></View>;
  const confirmed=status==='approved'||status==='consumed';
- const inactive=!!challenge&&(remaining===0||['denied','canceled'].includes(status));
+ const inactive=!!challenge&&((deadlineNeeded&&remaining===0)||['denied','canceled'].includes(status));
  return <Modal transparent animationType="fade" onShow={entryFocus.onLayout} onRequestClose={close} statusBarTranslucent>
   <View style={styles.backdrop}><FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={[styles.card,{maxHeight:height-32,width:Math.min(width-32,wide?840:520)}]}>
    <ScrollView focusable={false} removeClippedSubviews={false} onLayout={entryFocus.onLayout} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}><View style={{gap:16}} onFocusCapture={entryFocus.onFocusCapture}>
@@ -90,7 +105,7 @@ export function AccountSecurityDialog({kind,initialLogin='',registration,onAppro
      {kind==='reset'&&input('Username or email',login,setLogin)}{kind==='link'&&input('Current app password',currentPassword,setCurrentPassword,true)}
      {kind==='reset'&&<>{button('Lost Telegram / legacy account help',()=>setShowRecovery(!showRecovery))}{showRecovery&&<><Text style={styles.copy}>An Admin must verify account ownership before issuing a one-time recovery code. This allows you to approve recovery with your replacement Telegram account. Room membership alone is not proof of ownership.</Text>{input('One-time code from your Admin',recoveryCode,setRecoveryCode)}</>}</>}
      {button(kind==='access'?'Start my access request':'Continue with Telegram',()=>void begin(),true)}
-    </>:inactive?<><Text style={styles.copy}>{remaining===0?'This request expired.':'This request was declined or canceled.'} Start again for a fresh QR and code.</Text>{button('Start again',()=>{setChallenge(null);setError('');},true)}</>:confirmed?<>
+    </>:inactive?<><Text style={styles.copy}>{deadlineNeeded&&remaining===0?'This request expired.':'This request was declined or canceled.'} Start again for a fresh QR and code.</Text>{button('Start again',()=>{setChallenge(null);setError('');},true)}</>:confirmed?<>
      <Text style={styles.success}>Telegram confirmed ✓</Text>
      {kind==='reset'?<>{input('New password',password,setPassword,true)}{input('Confirm new password',confirm,setConfirm,true)}{button('Reset password',()=>void finish(),true)}</>:kind==='registration'?button('Finish creating my account',()=>void finish(),true):<><Text style={styles.copy}>{kind==='access'?'Continue with Mr Charm on your phone. Request to join the room, wait for approval, then use your private app invitation to register.':'Your Telegram account is linked.'}</Text>{button(kind==='access'?'Return to sign in':'Done',close,true)}</>}
     </>:<View style={[styles.pairing,wide&&{flexDirection:'row'}]}>

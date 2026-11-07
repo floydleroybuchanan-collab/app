@@ -30,7 +30,7 @@ test("Guide is a single native logical canvas with predictive prefetch", async (
   assert.match(manager, /view\.dispose\(\)/);
   assert.match(view, /fun dispose\(\)/);
   assert.doesNotMatch(view, /onDetachedFromWindow\(\)[\s\S]{0,180}(shutdownNow|database\.close)/);
-  assert.match(view, /pendingQuery = GuideQuery/);
+  assert.match(view, /pendingQuery.set\(request\)/);
   assert.match(view, /queryDrainScheduled = AtomicBoolean\(false\)/);
   assert.match(view, /Keep at most one active read plus the newest requested runway/);
   assert.match(app, /add\(NativeGuidePackage\(\)\)/);
@@ -48,8 +48,29 @@ test("Guide logical resets force a bounded native reload without remounting", as
   assert.match(bridge, /reloadGeneration=\{reloadGeneration\}/);
   assert.match(manager, /@ReactProp\(name = "reloadGeneration", defaultInt = 0\)/);
   assert.match(view, /fun setReloadGeneration\(value: Int\)/);
-  assert.match(view, /pendingQuery = null[\s\S]{0,260}loadPrograms\(\)/);
+  assert.match(view, /invalidateProgramQuery\(\)[\s\S]{0,260}loadPrograms\(\)/);
   assert.doesNotMatch(guide, /key=\{resetToken\}/);
+});
+
+test("native Guide takes the pending runway atomically and preserves an identical in-flight result", async () => {
+  const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  assert.match(view, /pendingQuery = AtomicReference<GuideQuery\?>\(null\)/);
+  assert.match(view, /val request = pendingQuery.getAndSet\(null\) \?: break/);
+  assert.match(view, /current.startMs == queryStart && current.endMs == queryEnd && current.ids == ids\) return\s*val request = GuideQuery\(\+\+generation/);
+  assert.match(view, /if \(loaded == null\)[\s\S]{0,190}latestQuery\?\.token == request.token\) latestQuery = null/);
+  assert.match(view, /catch \(_:\s*RejectedExecutionException\)/);
+  assert.match(view, /guideMainHandler.post \{\s*if \(disposed \|\| request.token != generation\) return@post/);
+  assert.match(view, /if \(h != oldh\) loadPrograms\(\)/);
+});
+
+test("Guide rewarm and teardown follow route focus rather than channel count changes", async () => {
+  const guide = await source("app/(tabs)/guide.tsx");
+  const focus = guide.slice(guide.indexOf("const context = focusRunwayContext.current"), guide.indexOf("const visiblePlaylistChannels"));
+  assert.match(focus, /saved\?\.playlist === context.activePlaylist && saved.group === context.group/);
+  assert.match(focus, /saved.ids.filter\(\(id\) => filteredIdIndexRef.current.has\(id\)\)/);
+  assert.match(focus, /pickKeepIdsAroundFocus\(runway.ids, 128, guideSessionChannelId\)/);
+  assert.match(focus, /current.quiesceGuideForTransition\(true\);\s*\};\s*\}, \[\]\)/);
+  assert.match(guide, /!playlists.some\(\(source\) => source.enabled\)\) return/);
 });
 
 test("native Guide timeline uses real program duration and queries the visible runway", async () => {

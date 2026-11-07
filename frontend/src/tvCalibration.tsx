@@ -15,7 +15,7 @@ type TvCalibrationContextValue = {
   calibration: TvCalibration;
   draftCalibration: TvCalibration;
   setSide: (side: keyof TvCalibration, value: number) => void;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
   reset: () => void;
   discard: () => void;
   hasChanges: boolean;
@@ -69,13 +69,14 @@ export function TvCalibrationProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const save = useCallback(async () => {
-    if (saveInFlightRef.current) return;
+    if (saveInFlightRef.current) return false;
     saveInFlightRef.current = true;
     try {
       const next = normalize(draftCalibration);
+      if (!(await storage.setItem(STORAGE_KEY, next))) return false;
       setCalibration(next);
       setDraftCalibration(next);
-      await storage.setItem(STORAGE_KEY, next);
+      return true;
     } finally {
       saveInFlightRef.current = false;
     }
@@ -104,7 +105,7 @@ export function TvCalibrationFrame({ children, style }: { children: React.ReactN
     () => combineTvEdgeInsets({ top: 0, right: 0, bottom: 0, left: 0 }, calibration),
     [calibration],
   );
-  const fullscreenPlayer = pathname === "/player" || pathname.startsWith("/player/");
+  const fullscreenPlayer = pathname === "/player" || pathname.startsWith("/player/") || pathname === "/provider-player";
   const playerStyle = fullscreenPlayer
     ? {
         paddingTop: playerEdges.padding.top,

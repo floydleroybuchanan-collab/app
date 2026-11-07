@@ -27,6 +27,7 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   const [owner, setOwner] = useState(initialTitle?.owner || ""), [kind, setKind] = useState(initialTitle?.kind || initialKind);
   const requestedTitle = useRef(initialTitle);
   const [catalog, setCatalog] = useState<{ source: (typeof playlists)[number]; kind: typeof kind; login: ProviderLogin; rows: ProviderTitle[] } | null>(null);
+  const retainedCatalog = useRef(catalog);
   const [selected, setSelected] = useState<ProviderTitle | null>(null), [details, setDetails] = useState<ProviderDetails | null>(null);
   const [category, setCategory] = useState(""), [query, setQuery] = useState(""), [season, setSeason] = useState("");
   const library = useProviderLibrary();
@@ -39,13 +40,17 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   const activeCatalog = catalog?.source === activeSource && catalog?.kind === kind ? catalog : null;
   const login = activeCatalog?.login || null;
   const rows = useMemo(() => activeCatalog?.rows || [], [activeCatalog]);
-  const [playRequest] = useState(() => ({ current: null as symbol | null }));
+  const playRequest = useRef<AbortController | null>(null);
   useEffect(() => {
     setOpening(false);
-    return () => { playRequest.current = null; };
+    return () => { playRequest.current?.abort(); playRequest.current = null; };
   }, [playRequest, selected, activeSource, focused]);
   useEffect(() => { if (providers.length && !providers.some(row => row.id === owner)) setOwner(providers[0].id); }, [owner, providers]);
   useEffect(() => {
+    if (!focused) return;
+    if (retainedCatalog.current && retainedCatalog.current.source === activeSource && retainedCatalog.current.kind === kind) return;
+    retainedCatalog.current = null;
+    const controller = new AbortController();
     let alive = true;
     setCatalog(null); setSelected(null); setDetails(null); setCategory(""); setError(null);
     if (!activeSource) { setLoadingCatalog(false); return; }
@@ -58,9 +63,12 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
       const stalker = row.kind === "stalker" ? decodeStalker(secret) : null;
       const credentials: ProviderLogin | null = xtream ? { protocol: "xtream", value: xtream } : stalker ? { protocol: "stalker", value: stalker } : null;
       if (!credentials) throw Error();
-      const rows = credentials.protocol === "xtream" ? await loadXtreamCatalog(credentials.value, kind) : await listStalkerCatalog(credentials.value, kind);
+      if (controller.signal.aborted) return;
+      const rows = credentials.protocol === "xtream" ? await loadXtreamCatalog(credentials.value, kind, controller.signal) : await listStalkerCatalog(credentials.value, kind, controller.signal);
       if (!alive) return;
-      setCatalog({ source: activeSource, kind, login: credentials, rows });
+      const result = { source: activeSource, kind, login: credentials, rows };
+      retainedCatalog.current = result;
+      setCatalog(result);
       const target = requestedTitle.current;
       if (target?.owner === owner && target.kind === kind) {
         requestedTitle.current = undefined;
@@ -70,23 +78,24 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
       }
     })().catch(() => { if (alive) setError("Could not load this provider library. Check the account in Settings → Playlists."); })
       .finally(() => { if (alive) setLoadingCatalog(false); });
-    return () => { alive = false; };
-  }, [activeSource, kind, owner]);
+    return () => { alive = false; controller.abort(); };
+  }, [activeSource, focused, kind, owner]);
   useEffect(() => {
-    if (!selected || !login || !activeSource) {
+    if (!focused || !selected || !login || !activeSource) {
       setLoadingDetails(false);
       return;
     }
     let alive = true;
+    const controller = new AbortController();
     setDetails(null);
     setError(null);
     setLoadingDetails(true);
     setSeason("");
-    const request = login.protocol === "xtream" ? loadXtreamDetails(login.value, selected.kind, selected.id) : loadStalkerDetails(login.value, selected.kind, selected.id);
+    const request = login.protocol === "xtream" ? loadXtreamDetails(login.value, selected.kind, selected.id, controller.signal) : loadStalkerDetails(login.value, selected.kind, selected.id, controller.signal);
     void request.then(value => { if (alive) { setDetails(value); setSeason(value.episodes[0]?.season || ""); } })
       .catch(() => { if (alive) setError("Could not load this title's details. Try another title."); }).finally(() => { if (alive) setLoadingDetails(false); });
-    return () => { alive = false; };
-  }, [activeSource, login, selected]);
+    return () => { alive = false; controller.abort(); };
+  }, [activeSource, focused, login, selected]);
   useEffect(() => {
     if (!focused) return;
     const back = BackHandler.addEventListener("hardwareBackPress", () => { if (selected) setSelected(null); else onClose(); return true; });
@@ -100,12 +109,12 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   const visible = useMemo(() => rows.filter(row => (!category || row.category === category) && (!query || row.name.toLowerCase().includes(query.toLowerCase())) && (!onlyFavorites || favorites.includes(`${owner}:${row.kind}:${row.id}`))), [category, favorites, onlyFavorites, owner, query, rows]);
   const play = (id: string, title: string, format: string, image?: string, command?: string, seriesNumber?: number) => {
     if (!focused || !activeSource || !login || !selected || playRequest.current) return;
-    const request = Symbol();
+    const request = new AbortController();
     playRequest.current = request;
     setOpening(true);
     setError(null);
     void (async () => {
-      const url = login.protocol === "xtream" ? xtreamMediaUrl(login.value, kind, id, format) : await resolveStalkerMedia(login.value, kind, id, command, seriesNumber).then(link => providerStreamAddress(link.uri, link.headers));
+      const url = login.protocol === "xtream" ? xtreamMediaUrl(login.value, kind, id, format) : await resolveStalkerMedia(login.value, kind, id, command, seriesNumber, request.signal).then(link => providerStreamAddress(link.uri, link.headers));
       if (playRequest.current !== request) return;
       const providerLogin = login.protocol === "xtream" ? encodeXtream(login.value) : encodeStalker(login.value);
       const token = stageProviderMedia({ id: providerPlaybackId(kind, id, seriesNumber), owner, title, image, format, providerLogin, catalogKind: kind, catalogId: selected.id, url });

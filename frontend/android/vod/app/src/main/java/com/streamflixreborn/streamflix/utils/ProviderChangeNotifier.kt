@@ -1,20 +1,18 @@
 package com.streamflixreborn.streamflix.utils
 
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
-/**
- * Utility class to notify ViewModels when the current provider changes
- */
+/** Broadcast refresh invalidations; new models perform their own initial load. */
 object ProviderChangeNotifier {
-    private val _providerChangeChannel = Channel<Unit>(Channel.CONFLATED)
-    val providerChangeFlow: Flow<Unit> = _providerChangeChannel.receiveAsFlow()
-    
-    /**
-     * Notify all listeners that the provider has changed
-     */
+    private val changes = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val providerChangeFlow = changes.asSharedFlow()
+
     fun notifyProviderChanged() {
-        _providerChangeChannel.trySend(Unit)
+        changes.tryEmit(Unit)
     }
 }

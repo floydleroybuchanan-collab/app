@@ -69,15 +69,7 @@ class HomeTvFragment : Fragment() {
 
         initializeHome()
 
-        // Lightweight refresh when provider changes
-        viewLifecycleOwner.lifecycleScope.launch {
-            ProviderChangeNotifier.providerChangeFlow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect {
-                viewModel.getHome()
-            }
-        }
-
-        // Initial load
-        viewModel.getHome()
+        // The retained ViewModel owns initial loading and source refreshes.
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
@@ -125,7 +117,7 @@ class HomeTvFragment : Fragment() {
             }
         }
     }
-    
+
     override fun onStart() {
         super.onStart()
         // Riavvia il carosello se i dati sono già stati caricati e il fragment è visibile
@@ -196,7 +188,7 @@ class HomeTvFragment : Fragment() {
                     ?.selectedIndex
                     ?: 0
                 it.selectedIndex = index
-                
+
                 // Initialize background with first item from featured category immediately
                 val firstItem = it.list.getOrNull(index)
                 val poster = when (firstItem) {
@@ -208,7 +200,7 @@ class HomeTvFragment : Fragment() {
                 if (poster != null) {
                     updateBackground(poster, null)
                 }
-                
+
                 resetSwiperSchedule()
             }
 
@@ -274,7 +266,7 @@ class HomeTvFragment : Fragment() {
                     .find { it.name == Category.FEATURED }
                     ?.let { category ->
                         category.selectedIndex = (category.selectedIndex + 1) % category.list.size
-                        
+
                         // Update background when swiper rotates automatically
                         val currentItem = category.list.getOrNull(category.selectedIndex)
                         val poster = when (currentItem) {

@@ -15,6 +15,7 @@ export type { FavoritesRestoreResult, FavoritesRestoreUnavailable };
 
 const FILE_PREFIX = "Charming MediaLab-Favorites-";
 const FILE_SUFFIX = ".json";
+const MAX_FAVORITES_BACKUP_BYTES = 4 * 1024 * 1024;
 
 function timestampForFile(date = new Date()): string {
   const p = (value: number) => String(value).padStart(2, "0");
@@ -36,7 +37,10 @@ async function ensureLocalBackupDir(): Promise<string> {
 
 async function readValidBackupCandidate(uri: string, name: string): Promise<{ fileName: string; raw: string } | null> {
   try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || info.isDirectory || info.size > MAX_FAVORITES_BACKUP_BYTES) return null;
     const raw = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+    if (raw.length > MAX_FAVORITES_BACKUP_BYTES) return null;
     const parsed = JSON.parse(raw) as Partial<FavoritesBackupV1>;
     if (
       parsed?.format === FAVORITES_BACKUP_FORMAT &&

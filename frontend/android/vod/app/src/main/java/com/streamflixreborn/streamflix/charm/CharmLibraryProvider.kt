@@ -29,10 +29,10 @@ class CharmLibraryProvider : ContentProvider() {
                     provider == null -> emptyList()
                     method == "search" -> if (arg.isNullOrBlank()) emptyList() else provider.search(arg.take(200))
                     method == "favorites" -> AppDatabase.getInstance(requireNotNull(context)).let {
-                        it.movieDao().getFavorites().first() + it.tvShowDao().getFavorites().first()
+                        it.movieDao().getFavoriteShelf(30) + it.tvShowDao().getFavoriteShelf(30)
                     }
                     method == "continue" -> AppDatabase.getInstance(requireNotNull(context)).let {
-                        (it.movieDao().getWatchingMovies().first() + it.episodeDao().getWatchingEpisodes().first())
+                        (it.movieDao().getWatchingShelf(30) + it.episodeDao().getWatchingShelf(30))
                             .sortedByDescending { item -> (item as? WatchItem)?.watchHistory?.lastEngagementTimeUtcMillis ?: 0 }
                     }
                     else -> emptyList()

@@ -44,6 +44,7 @@ import { getGuideRailMetrics } from "@/src/core/guideLayoutPolicy";
 import { buildGuideRunwayIds } from "@/src/core/guideRunwayPolicy";
 import {
   buildChannelIndexMap,
+  pickKeepIdsAroundFocus,
   expandRunwayKeepSet,
 } from "@/src/core/guideSlidingCache";
 import {
@@ -82,6 +83,8 @@ import { emitTvQuickActions, resetRemoteContextIfOwned, setGuideNavigationActive
 // Do not persist to disk: this is navigation state, not a user preference.
 let guideSessionGroup = "All";
 let guideSessionChannelId: string | null = null;
+type GuideRunway = { ids: string[]; priority: string[]; pageSize: number };
+let retainedGuideRunway: (GuideRunway & { playlist: string; group: string }) | null = null;
 const guideSessionChannelByGroup = new Map<string, string>();
 const MAX_REMEMBERED_GUIDE_GROUPS = 128;
 function rememberGuideGroupChannel(groupName: string, channelId: string): void {
@@ -337,7 +340,7 @@ function PurpleGuideScreenContent() {
   const pinReturnToGroupsRef = useRef(false);
   const orderedFilteredIdsRef = useRef<string[]>([]);
   const filteredIdIndexRef = useRef<Map<string, number>>(new Map());
-  const lastRunwayRef = useRef<{ ids: string[]; priority: string[]; pageSize: number }>({
+  const lastRunwayRef = useRef<GuideRunway>({
     ids: [],
     priority: [],
     pageSize: 8,
@@ -366,6 +369,8 @@ function PurpleGuideScreenContent() {
     void stopPreviewSession("superseded");
     if (releaseCache) releaseGuideSlidingCache();
   }, [cancelGuideTransientTimers, releaseGuideSlidingCache]);
+  const focusRunwayContext = useRef({ activePlaylist, group, channelCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache });
+  focusRunwayContext.current = { activePlaylist, group, channelCount: channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache };
 
   useEffect(() => {
     resetGuideSelection(guideSessionChannelId);
@@ -475,12 +480,14 @@ function PurpleGuideScreenContent() {
   );
 
   useEffect(() => {
-    if (loading || refreshing || channels.length > 0) return;
+    if (!isFocused || loading || refreshing || channels.length > 0 || !playlists.some((source) => source.enabled)) return;
     if (bootRetryRef.current >= 1) return;
-    bootRetryRef.current += 1;
-    const timer = setTimeout(() => void hardRefresh(), 5000);
+    const timer = setTimeout(() => {
+      bootRetryRef.current += 1;
+      void hardRefresh();
+    }, 5000);
     return () => clearTimeout(timer);
-  }, [loading, refreshing, channels.length, hardRefresh]);
+  }, [loading, refreshing, channels.length, hardRefresh, isFocused, playlists]);
 
   useEffect(() => {
     if (!isFocused) return;
@@ -503,15 +510,21 @@ function PurpleGuideScreenContent() {
 
   useFocusEffect(
     useCallback(() => {
-      const last = lastRunwayRef.current;
+      const context = focusRunwayContext.current;
+      const saved = retainedGuideRunway;
+      const last = saved?.playlist === context.activePlaylist && saved.group === context.group
+        ? { ids: saved.ids.filter((id) => filteredIdIndexRef.current.has(id)),
+            priority: saved.priority.filter((id) => filteredIdIndexRef.current.has(id)), pageSize: saved.pageSize }
+        : lastRunwayRef.current;
       if (!peekGuideJump() && last.ids.length) {
+        lastRunwayRef.current = last;
         setViewportGuideChannelIds(last.ids);
         setPriorityMatchChannelIds(
-          channels.length >= 400
+          context.channelCount >= 400
             ? Array.from(new Set([...last.priority, ...last.ids])).slice(0, 400)
             : [],
         );
-        retainGuideSlidingCache(
+        context.retainGuideSlidingCache(
           expandRunwayKeepSet(
             orderedFilteredIdsRef.current,
             last.ids,
@@ -520,12 +533,19 @@ function PurpleGuideScreenContent() {
             filteredIdIndexRef.current,
           ),
         );
-        void patchProgramsForChannelIds(last.ids, last.priority);
+        void context.patchProgramsForChannelIds(last.ids, last.priority);
       }
       return () => {
-        quiesceGuideForTransition(true);
+        const current = focusRunwayContext.current;
+        const runway = lastRunwayRef.current;
+        retainedGuideRunway = runway.ids.length
+          ? { ids: pickKeepIdsAroundFocus(runway.ids, 128, guideSessionChannelId),
+              priority: pickKeepIdsAroundFocus(runway.priority, 128, guideSessionChannelId), pageSize: runway.pageSize,
+              playlist: current.activePlaylist, group: current.group }
+          : null;
+        current.quiesceGuideForTransition(true);
       };
-    }, [channels.length, patchProgramsForChannelIds, quiesceGuideForTransition, retainGuideSlidingCache]),
+    }, []),
   );
 
   const visiblePlaylistChannels = useMemo(() => activePlaylist === "all" ? channels : channels.filter((channel) => playlistOwner(channel) === activePlaylist), [activePlaylist, channels]);
@@ -751,7 +771,7 @@ function PurpleGuideScreenContent() {
       clearTimeout(previewTimer.current);
       previewTimer.current = null;
     }
-    if (safePreviewMode === "off" || !hasUrl) {
+    if (hidePreview || safePreviewMode === "off" || !hasUrl) {
       setPreviewId(null);
       return;
     }
@@ -769,7 +789,17 @@ function PurpleGuideScreenContent() {
       setPreviewId(requestedId);
       setSurfLogosSuppressed(false);
     }, delay);
-  }, [channelById, safePreviewMode]);
+  }, [channelById, hidePreview, safePreviewMode]);
+
+  useEffect(() => {
+    if (!hidePreview && safePreviewMode !== "off") return;
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    if (surfReleaseTimer.current) clearTimeout(surfReleaseTimer.current);
+    previewTimer.current = null;
+    surfReleaseTimer.current = null;
+    setPreviewId(null);
+    setSurfLogosSuppressed(false);
+  }, [hidePreview, safePreviewMode]);
 
   const guideTopPanelWidth = useMemo(
     () => Math.max(0, guideSurfaceWidth ?? screenWidth - 24),
@@ -780,6 +810,7 @@ function PurpleGuideScreenContent() {
       if (previewTimer.current) clearTimeout(previewTimer.current);
       const requestedId = channel.id;
       guideSessionChannelId = requestedId;
+      if (hidePreview || safePreviewMode === "off") return;
       if (!isPreviewProtocolSupported(channel)) {
         setPreviewId(null);
         setPreviewStatus("error");
@@ -821,7 +852,7 @@ function PurpleGuideScreenContent() {
         : previewDelay;
       schedulePreview(requestedId, delay, !!channel.url);
     },
-    [logosOffWhileSurfing, powerTuning, previewDelay, previewId, previewStatus, schedulePreview, surfSettleExtraMs],
+    [hidePreview, logosOffWhileSurfing, powerTuning, previewDelay, previewId, previewStatus, safePreviewMode, schedulePreview, surfSettleExtraMs],
   );
 
   const onFocusChannel = useCallback((channel: Channel, settled = true) => {

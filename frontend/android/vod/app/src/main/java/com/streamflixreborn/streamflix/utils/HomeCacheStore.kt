@@ -2,7 +2,6 @@ package com.streamflixreborn.streamflix.utils
 
 import android.content.Context
 import com.google.gson.Gson
-import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
 import com.streamflixreborn.streamflix.adapters.AppAdapter
 import com.streamflixreborn.streamflix.models.Category
@@ -13,51 +12,73 @@ import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.models.WatchItem
 import com.streamflixreborn.streamflix.providers.Provider
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 object HomeCacheStore {
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, List<CachedCategory>>()
+    private const val MAX_MEMORY_PROVIDERS = 2
+    private const val MAX_CACHE_ITEMS = 2000
+    private const val MAX_SNAPSHOT_BYTES = 8L * 1024 * 1024
+    private const val MAX_DISK_BYTES = 32L * 1024 * 1024
+    private const val MAX_DISK_FILES = 8
+    private val cacheLock = Any()
+    private val memoryLock = Any()
+    private val memoryCache = object : LinkedHashMap<String, List<CachedCategory>>(4, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<CachedCategory>>?) = size > MAX_MEMORY_PROVIDERS
+    }
 
-    fun read(context: Context, provider: Provider): List<Category>? {
-        val cacheKey = cacheKey(provider)
-        memoryCache[cacheKey]?.let { payload ->
-            return payload.toCategories()
-        }
-
-        val file = cacheFile(context, cacheKey)
-        if (!file.exists()) return null
-
-        return runCatching {
-            val type = object : TypeToken<List<CachedCategory>>() {}.type
-            val payload: List<CachedCategory> = gson.fromJson(file.readText(), type)
-            memoryCache[cacheKey] = payload
-            payload.toCategories()
-        }.recoverCatching {
-            if (it is JsonSyntaxException) {
-                memoryCache.remove(cacheKey)
-                file.delete()
+    fun read(context: Context, provider: Provider): List<Category>? = synchronized(cacheLock) {
+        val key = cacheKey(provider)
+        synchronized(memoryLock) { memoryCache[key] }?.let { return@synchronized it.toCategories() }
+        val file = cacheFile(context, key)
+        if (file.length() > MAX_SNAPSHOT_BYTES) return@synchronized null
+        runCatching {
+            val text = android.util.AtomicFile(file).openRead().use { input ->
+                if (input.channel.size() > MAX_SNAPSHOT_BYTES) return@synchronized null
+                input.bufferedReader().readText()
             }
-            null
+            val type = object : TypeToken<List<CachedCategory>>() {}.type
+            val payload: List<CachedCategory> = gson.fromJson(text, type)
+            if (payload.sumOf { it.list.size } > MAX_CACHE_ITEMS) return@synchronized null
+            synchronized(memoryLock) { memoryCache[key] = payload }
+            payload.toCategories()
         }.getOrNull()
     }
 
     fun write(context: Context, provider: Provider, categories: List<Category>) {
-        runCatching {
-            val payload = categories.map { CachedCategory.from(it) }
-            val cacheKey = cacheKey(provider)
-            memoryCache[cacheKey] = payload
-            cacheFile(context, cacheKey).apply {
-                parentFile?.mkdirs()
-                writeText(gson.toJson(payload))
-            }
+        // Skip caching oversized catalogs; never truncate the actual catalog or
+        // touch saved favorites/history. The live response remains available.
+        if (categories.sumOf { it.list.size } > MAX_CACHE_ITEMS) return
+        val payload = categories.map { CachedCategory.from(it) }
+        val bytes = gson.toJson(payload).toByteArray(Charsets.UTF_8)
+        if (bytes.size > MAX_SNAPSHOT_BYTES) return
+        synchronized(cacheLock) {
+            val key = cacheKey(provider)
+            val file = cacheFile(context, key)
+            file.parentFile?.mkdirs()
+            val atomic = android.util.AtomicFile(file)
+            var stream: java.io.FileOutputStream? = null
+            try {
+                stream = atomic.startWrite()
+                stream.write(bytes)
+                atomic.finishWrite(stream)
+                synchronized(memoryLock) { memoryCache[key] = payload }
+                // Only reloadable snapshots in our own directory are eligible.
+                var total = 0L
+                file.parentFile?.listFiles { entry -> entry.isFile && entry.extension == "json" }
+                    ?.sortedByDescending { it.lastModified() }?.forEachIndexed { index, entry ->
+                        total += entry.length()
+                        if (index >= MAX_DISK_FILES || total > MAX_DISK_BYTES) entry.delete()
+                    }
+            } catch (_: Exception) { atomic.failWrite(stream) }
         }
     }
 
-    fun clear(context: Context, provider: Provider) {
-        val cacheKey = cacheKey(provider)
-        memoryCache.remove(cacheKey)
-        cacheFile(context, cacheKey).delete()
+    fun clearMemory() = synchronized(memoryLock) { memoryCache.clear() }
+
+    fun clear(context: Context, provider: Provider) = synchronized(cacheLock) {
+        val key = cacheKey(provider)
+        synchronized(memoryLock) { memoryCache.remove(key) }
+        android.util.AtomicFile(cacheFile(context, key)).delete()
     }
 
     private fun cacheFile(context: Context, cacheKey: String): File {

@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.season
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -23,6 +24,9 @@ class SeasonViewModel(
     private val tvShowId: String,
     private val database: AppDatabase,
 ) : ViewModel() {
+
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
     var seasonNumber = 0
     var tvShowTitle = ""
     private val _state = MutableStateFlow<State>(State.LoadingEpisodes)
@@ -79,7 +83,7 @@ class SeasonViewModel(
         _state.emit(State.LoadingEpisodes)
 
         try {
-            val episodes = UserPreferences.currentProvider!!
+            val episodes = sourceProvider!!
                 .getEpisodesBySeason(seasonId)
                 .sortedBy { it.number }
             val ids = episodes.map { it.id }

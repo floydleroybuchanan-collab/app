@@ -88,6 +88,17 @@ test("late-mounted route target is resolved on each focus retry", () => {
   node = { tag: 42 }; pending[1](); assert.deepEqual(requests, [42]);
 });
 
+test("every playback surface defers automatic source work and resumes it on Guide", async () => {
+  for (const route of ["/player", "/provider-player", "/multiview", "/vod"]) {
+    const h = schedulerHarness();
+    h.navigate(route); await h.tick(30_000);
+    assert.deepEqual(h.calls, [], route);
+    h.navigate("/guide"); await h.tick(60_000, 1);
+    assert.deepEqual(h.calls, ["prefs", "due-playlist", "due-guide"], route);
+    h.cleanup();
+  }
+});
+
 test("EPG Settings upward path includes All Settings and cannot restore a clipped scroll row", () => {
   const screen = read("app/(tabs)/epg-sources.tsx"), activity = read("android/app/src/main/java/com/charmiptv/app/MainActivity.kt");
   assert.match(screen, /All Settings/);

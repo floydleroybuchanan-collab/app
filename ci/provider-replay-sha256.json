@@ -1,7 +1,7 @@
 {
   "frontend/src/components/ProgramModal.tsx": "d5c3c5e39f4089c386ed0632628377b950d04c00155665ec1f31ae270d105415",
   "frontend/src/core/providerCatchup.ts": "6fb4c3f4be20035a9fcf6edb43e49c6af163f430ecd292fc8076c5081181c0cb",
-  "frontend/src/core/stalkerMedia.ts": "e30defbedd4c9f38491778e03300a20e9eefdf635ba1840b7a529424565f3a87",
-  "frontend/src/core/xtream.ts": "5ef88f2db2fbc58f314d1ddef07523357ff4b579bf87ebb71b9263f76b876dea",
+  "frontend/src/core/stalkerMedia.ts": "f9d92becf7a566e02b56f8c5ba42247e78e0c1d87449b7a26d35ad0facea07ec",
+  "frontend/src/core/xtream.ts": "11477798d410bd329beb9439e8052e8e52348d697cbc7ea681c46aea90e92c6c",
   "frontend/src/core/xtreamCatchup.ts": "c7d43c31544e08d615799257b6576dc1b93d9023865d74577a92fe9ccb7aafcc"
 }

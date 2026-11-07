@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.genre
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -22,12 +23,16 @@ import kotlinx.coroutines.launch
 
 class GenreViewModel(private val id: String, database: AppDatabase) : ViewModel() {
 
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
+
     private val _state = MutableStateFlow<State>(State.Loading)
-    
+
     init {
         // Listen for provider changes and reload data
         viewModelScope.launch {
             ProviderChangeNotifier.providerChangeFlow.collect {
+                if (UserPreferences.currentProvider?.name != sourceProvider?.name) return@collect
                 getGenre(id)
             }
         }
@@ -108,8 +113,8 @@ class GenreViewModel(private val id: String, database: AppDatabase) : ViewModel(
         _state.emit(State.Loading)
 
         try {
-            val genre = UserPreferences.currentProvider!!.getGenre(id).let {
-                it.copy(shows = ParentalControlUtils.filterShows(it.shows))
+            val genre = sourceProvider!!.getGenre(id).let {
+                it.copy(shows = CatalogSource.stamp(ParentalControlUtils.filterShows(it.shows), sourceProvider?.name))
             }
 
             page = 1
@@ -127,8 +132,8 @@ class GenreViewModel(private val id: String, database: AppDatabase) : ViewModel(
             _state.emit(State.LoadingMore)
 
             try {
-                val genre = UserPreferences.currentProvider!!.getGenre(id, page + 1).let {
-                    it.copy(shows = ParentalControlUtils.filterShows(it.shows))
+                val genre = sourceProvider!!.getGenre(id, page + 1).let {
+                    it.copy(shows = CatalogSource.stamp(ParentalControlUtils.filterShows(it.shows), sourceProvider?.name))
                 }
 
                 page += 1

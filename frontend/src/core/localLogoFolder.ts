@@ -9,6 +9,7 @@ const MAX_FILES = 5000;
 let folderUri = "";
 let loaded = false;
 let loadPromise: Promise<string> | null = null;
+let indexGeneration = 0;
 let index = new Map<string, string>();
 let entryKeys: string[] = [];
 const resolvedCache = new Map<string, string | null>();
@@ -44,20 +45,30 @@ function distance(a: string, b: string, limit = 4): number {
 }
 
 async function rebuild(uri: string): Promise<void> {
+  const generation = ++indexGeneration;
   index = new Map();
   entryKeys = [];
   resolvedCache.clear();
   if (!uri || Platform.OS !== "android") return;
   const uris = await FileSystem.StorageAccessFramework.readDirectoryAsync(uri).catch(() => [] as string[]);
+  if (generation !== indexGeneration || uri !== folderUri) return;
+  const nextIndex = new Map<string, string>();
+  const nextKeys: string[] = [];
   for (const fileUri of uris.slice(0, MAX_FILES)) {
     let decoded = fileUri.split("/").pop() || "";
     try { decoded = decodeURIComponent(decoded); } catch {}
     if (!IMAGE_EXT.test(decoded)) continue;
     const normalized = key(decoded);
-    if (!normalized || index.has(normalized)) continue;
-    index.set(normalized, fileUri);
-    entryKeys.push(normalized);
+    if (!normalized || nextIndex.has(normalized)) continue;
+    nextIndex.set(normalized, fileUri);
+    nextKeys.push(normalized);
   }
+  index = nextIndex;
+  entryKeys = nextKeys;
+  // Invalidate misses made while the directory was loading and notify every
+  // mounted logo, including hooks that mounted after loaded became true.
+  resolvedCache.clear();
+  listeners.forEach((listener) => listener());
 }
 
 export async function loadLocalLogoFolder(): Promise<string> {
@@ -90,6 +101,7 @@ export async function chooseLocalLogoFolder(): Promise<boolean> {
 }
 
 export async function clearLocalLogoFolder(): Promise<void> {
+  indexGeneration += 1;
   folderUri = "";
   loaded = true;
   index.clear();
@@ -99,14 +111,24 @@ export async function clearLocalLogoFolder(): Promise<void> {
   listeners.forEach((listener) => listener());
 }
 
+function rememberResolved(normalized: string, uri: string | null): string | undefined {
+  resolvedCache.delete(normalized);
+  resolvedCache.set(normalized, uri);
+  while (resolvedCache.size > 512) {
+    const oldest = resolvedCache.keys().next().value;
+    if (oldest === undefined) break;
+    resolvedCache.delete(oldest);
+  }
+  return uri || undefined;
+}
+
 export function resolveLocalLogo(channelName: string): string | undefined {
   const normalized = key(channelName);
   if (!normalized) return undefined;
-  if (resolvedCache.has(normalized)) return resolvedCache.get(normalized) || undefined;
+  if (resolvedCache.has(normalized)) return rememberResolved(normalized, resolvedCache.get(normalized) || null);
   const exact = index.get(normalized);
   if (exact) {
-    resolvedCache.set(normalized, exact);
-    return exact;
+    return rememberResolved(normalized, exact);
   }
   let best: string | undefined;
   let bestDistance = Math.min(4, Math.max(1, Math.floor(normalized.length * 0.18)));
@@ -114,8 +136,7 @@ export function resolveLocalLogo(channelName: string): string | undefined {
     const uri = index.get(candidate);
     if (!uri) continue;
     if (candidate.startsWith(normalized) || normalized.startsWith(candidate)) {
-      resolvedCache.set(normalized, uri);
-      return uri;
+      return rememberResolved(normalized, uri);
     }
     const score = distance(normalized, candidate, bestDistance);
     if (score <= bestDistance) {
@@ -123,13 +144,7 @@ export function resolveLocalLogo(channelName: string): string | undefined {
       best = uri;
     }
   }
-  resolvedCache.set(normalized, best || null);
-  while (resolvedCache.size > 512) {
-    const oldest = resolvedCache.keys().next().value;
-    if (!oldest) break;
-    resolvedCache.delete(oldest);
-  }
-  return best;
+  return rememberResolved(normalized, best || null);
 }
 
 export function useLocalLogo(channelName: string): string | undefined {

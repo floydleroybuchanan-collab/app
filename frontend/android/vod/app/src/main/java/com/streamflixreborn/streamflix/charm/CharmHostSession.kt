@@ -35,6 +35,7 @@ object CharmHostSession {
         activity.overridePendingTransition(0, 0)
     }
     fun configure(activity: FragmentActivity, nav: NavController, restored: Boolean) {
+        com.streamflixreborn.streamflix.utils.CatalogSource.install(nav)
         if (!embedded(activity)) return
         CharmSharedPlayback.configure(activity.intent.getStringExtra("medialab.settings"))
         CharmUsageReporter.configure(activity.application, activity.intent.getStringExtra("medialab.token"), activity.intent.getIntExtra("medialab.build", 0), activity)

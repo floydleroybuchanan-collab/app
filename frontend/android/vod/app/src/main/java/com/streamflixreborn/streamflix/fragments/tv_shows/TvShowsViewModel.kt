@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.tv_shows
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -20,12 +21,16 @@ import kotlinx.coroutines.launch
 
 class TvShowsViewModel(database: AppDatabase) : ViewModel() {
 
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
+
     private val _state = MutableStateFlow<State>(State.Loading)
-    
+
     init {
         // Listen for provider changes and reload data
         viewModelScope.launch {
             ProviderChangeNotifier.providerChangeFlow.collect {
+                if (UserPreferences.currentProvider?.name != sourceProvider?.name) return@collect
                 getTvShows()
             }
         }
@@ -83,8 +88,8 @@ class TvShowsViewModel(database: AppDatabase) : ViewModel() {
 
         try {
             val tvShows = ParentalControlUtils.filterItems(
-                UserPreferences.currentProvider!!.getTvShows()
-            ).filterIsInstance<TvShow>()
+                sourceProvider!!.getTvShows()
+            ).filterIsInstance<TvShow>().let { CatalogSource.stamp(it, sourceProvider?.name) }
 
             page = 1
 
@@ -102,8 +107,8 @@ class TvShowsViewModel(database: AppDatabase) : ViewModel() {
 
             try {
                 val tvShows = ParentalControlUtils.filterItems(
-                    UserPreferences.currentProvider!!.getTvShows(page + 1)
-                ).filterIsInstance<TvShow>()
+                    sourceProvider!!.getTvShows(page + 1)
+                ).filterIsInstance<TvShow>().let { CatalogSource.stamp(it, sourceProvider?.name) }
 
                 page += 1
 

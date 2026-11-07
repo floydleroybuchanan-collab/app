@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.movie
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -19,6 +20,9 @@ import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 
 class MovieViewModel(id: String, private val database: AppDatabase) : ViewModel() {
+
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
 
     private val _state = MutableStateFlow<State>(State.Loading)
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -97,7 +101,10 @@ class MovieViewModel(id: String, private val database: AppDatabase) : ViewModel(
         _state.emit(State.Loading)
 
         try {
-            val movie = UserPreferences.currentProvider!!.getMovie(id)
+            val movie = sourceProvider!!.getMovie(id) .also {
+                CatalogSource.stamp(listOf(it), sourceProvider.name)
+                CatalogSource.stamp(it.recommendations, sourceProvider.name)
+            }
 
             database.movieDao().getById(id)?.let { movieDb ->
                 movie.merge(movieDb)

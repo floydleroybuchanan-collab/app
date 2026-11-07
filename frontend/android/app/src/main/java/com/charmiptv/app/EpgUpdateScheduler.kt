@@ -11,6 +11,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import kotlin.math.min
 
 internal object EpgUpdateScheduler {
@@ -53,15 +56,22 @@ internal class EpgUpdateWorker(
   params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
   override suspend fun doWork(): Result {
+    val workerContext = coroutineContext
+    val checkRunning = {
+      workerContext.ensureActive()
+      if (isStopped) throw CancellationException("Guide worker stopped")
+    }
     val nowSeconds = System.currentTimeMillis() / 1000L
     val dao = EpgControlDatabase.get(applicationContext).dao()
     val updater = BackgroundEpgUpdater(applicationContext)
     var retryNeeded = false
     var refreshed = false
     for (source in dao.enabledSources()) {
+      checkRunning()
       if (!EpgImportCoordinator.canStartBackground()) { retryNeeded = true; break }
       val importLease = updater.acquireImport(source)
       try {
+      checkRunning()
       // A foreground import may have held the lease while the app resumed.
       if (!EpgImportCoordinator.canStartBackground()) { retryNeeded = true; break }
       if (dao.source(source.playlistId) != source) continue
@@ -96,7 +106,7 @@ internal class EpgUpdateWorker(
         lastTrigger = "workmanager",
       ))
       try {
-        val result = updater.refresh(source)
+        val result = updater.refresh(source, checkRunning)
         val finishedMs = System.currentTimeMillis()
         dao.putImportState(EpgImportStateEntity(
           playlistId = source.playlistId,
@@ -110,6 +120,14 @@ internal class EpgUpdateWorker(
         ))
         dao.finishUpdateHistory(historyId, if (result.swapped) "succeeded" else "waiting_for_bindings", finishedMs / 1000L, result.programmeCount, "")
         refreshed = refreshed || result.swapped
+      } catch (stopped: CancellationException) {
+        val finishedMs = System.currentTimeMillis()
+        dao.putImportState((previous ?: EpgImportStateEntity(playlistId = source.playlistId)).copy(
+          lastAttemptSeconds = startedMs / 1000L, state = "cancelled",
+          lastDurationMs = finishedMs - startedMs, lastTrigger = "workmanager",
+        ))
+        dao.finishUpdateHistory(historyId, "cancelled", finishedMs / 1000L, previous?.lastProgrammeCount ?: 0L, "")
+        throw stopped
       } catch (t: Throwable) {
         val finishedMs = System.currentTimeMillis()
         val delayMinutes = min(12 * 60L, 15L * (1L shl min(5, attempt - 1)))

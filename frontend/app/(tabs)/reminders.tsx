@@ -137,9 +137,10 @@ function RemindersScreenContent() {
       .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   }, [channelById, reminders]);
 
-  const columns = shouldUseTvLayout(deviceLayoutMode) ? 6 : contentWidth < 600 ? 1 : contentWidth < 900 ? 2 : contentWidth < 1200 ? 4 : 6;
   const gap = contentWidth >= 1200 ? 14 : 10;
   const pagePad = 18;
+  const desiredColumns = shouldUseTvLayout(deviceLayoutMode) ? 6 : contentWidth < 600 ? 1 : contentWidth < 900 ? 2 : contentWidth < 1200 ? 4 : 6;
+  const columns = Math.max(1, Math.min(desiredColumns, Math.floor((contentWidth - pagePad * 2 - 8 + gap) / (145 + gap))));
   const cardWidth = Math.max(
     1,
     Math.floor((contentWidth - pagePad * 2 - gap * (columns - 1) - 8) / columns),
@@ -209,7 +210,7 @@ function RemindersScreenContent() {
           keyExtractor={(item) => item.key}
           key={columns}
           numColumns={columns}
-          columnWrapperStyle={[styles.row, { gap }]}
+          columnWrapperStyle={columns > 1 ? [styles.row, { gap }] : undefined}
           contentContainerStyle={[styles.list, { gap }]}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>

@@ -15,6 +15,15 @@ import com.streamflixreborn.streamflix.utils.format
 @Dao
 interface MovieDao {
 
+    // Bounded previews only; full saved-library APIs remain unchanged.
+    @Query("SELECT * FROM movies WHERE isFavorite = 1 ORDER BY favoritedAtMillis DESC LIMIT :limit")
+    suspend fun getFavoriteShelf(limit: Int): List<Movie>
+
+    @Query("SELECT * FROM movies WHERE lastEngagementTimeUtcMillis IS NOT NULL ORDER BY lastEngagementTimeUtcMillis DESC LIMIT :limit")
+    suspend fun getWatchingShelf(limit: Int): List<Movie>
+
+
+
     @Query("SELECT * FROM movies")
     fun getAll(): List<Movie>
 

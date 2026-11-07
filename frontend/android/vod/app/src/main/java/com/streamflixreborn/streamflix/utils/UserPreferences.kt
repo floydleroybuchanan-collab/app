@@ -74,7 +74,6 @@ object UserPreferences {
         set(value) {
             // CRITICO: Resetta l'istanza del database prima di cambiare provider
             // per forzare la creazione di un nuovo database file corretto.
-            AppDatabase.resetInstance()
 
             Key.CURRENT_PROVIDER.setString(value?.name)
             runCatching {

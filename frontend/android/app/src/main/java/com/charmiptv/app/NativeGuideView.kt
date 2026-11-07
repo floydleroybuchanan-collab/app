@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
@@ -15,7 +17,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
@@ -45,7 +49,9 @@ class NativeGuideView(context: Context) : View(context) {
   private var selectedTimeMs = System.currentTimeMillis().coerceIn(windowStartMs, windowEndMs - 1)
   private var firstVisibleRow = 0
   private var generation = 0
-  @Volatile private var pendingQuery: GuideQuery? = null
+  private val pendingQuery = AtomicReference<GuideQuery?>(null)
+  private val guideMainHandler = Handler(Looper.getMainLooper())
+  private var latestQuery: GuideQuery? = null
   private val queryDrainScheduled = AtomicBoolean(false)
   @Volatile private var disposed = false
   private var enabled = true
@@ -102,8 +108,7 @@ class NativeGuideView(context: Context) : View(context) {
     post {
       if (disposed) return@post
       programs = emptyMap()
-      generation += 1
-      pendingQuery = null
+      invalidateProgramQuery()
       loadPrograms()
       invalidate()
     }
@@ -232,6 +237,9 @@ class NativeGuideView(context: Context) : View(context) {
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
     super.onSizeChanged(w, h, oldw, oldh)
     ensureVisible()
+    // The first attached read can run before layout. Rewarm on height changes
+    // so a tall viewport is covered before the first navigation key.
+    if (h != oldh) loadPrograms()
   }
   private var overlayMode = false
   var rightBoundaryEnabled = false
@@ -301,8 +309,7 @@ class NativeGuideView(context: Context) : View(context) {
     if (value == reloadGeneration) return
     removeCallbacks(settleSelectionRunnable)
     reloadGeneration = value
-    generation += 1
-    pendingQuery = null
+    invalidateProgramQuery()
     // Logical Guide resets (group switch/Search/fullscreen return) keep the
     // same native view and cursor, but must always request a fresh bounded
     // visible runway even when the channel array itself is unchanged.
@@ -357,44 +364,68 @@ class NativeGuideView(context: Context) : View(context) {
     }
   }
 
+  private fun invalidateProgramQuery() {
+    generation += 1
+    latestQuery = null
+    pendingQuery.set(null)
+  }
+
   private fun loadPrograms() {
-    if (disposed || io.isShutdown) return
+    if (disposed || io.isShutdown || !isAttachedToWindow) return
     val visible = max(6, ((height - headerHeight) / rowHeight).toInt())
     val ahead = 8 + min(28, moveVelocity * 2)
     val from = max(0, firstVisibleRow - ahead)
     val to = min(rows.size, firstVisibleRow + visible + ahead)
     val ids = rows.subList(from, to).map { it.id }
     if (ids.isEmpty()) {
-      generation += 1
-      pendingQuery = null
+      invalidateProgramQuery()
       programs = emptyMap()
       return
     }
 
     val queryStart = max(windowStartMs, viewportStartMs - horizontalPrefetchBeforeMs)
     val queryEnd = min(windowEndMs, viewportEndMs() + horizontalPrefetchAfterMs)
-    pendingQuery = GuideQuery(++generation, queryStart, queryEnd, ids)
+    // Focus can move across several already covered rows without changing the
+    // query. Do not invalidate the outstanding result on each key event.
+    val current = latestQuery
+    if (current != null && current.startMs == queryStart && current.endMs == queryEnd && current.ids == ids) return
+    val request = GuideQuery(++generation, queryStart, queryEnd, ids)
+    latestQuery = request
+    pendingQuery.set(request)
     scheduleQueryDrain()
   }
 
   /** Keep at most one active read plus the newest requested runway. */
   private fun scheduleQueryDrain() {
     if (disposed || io.isShutdown || !queryDrainScheduled.compareAndSet(false, true)) return
-    io.execute {
+    try {
+      io.execute(::drainProgramQueries)
+    } catch (_: RejectedExecutionException) {
+      // Disposal can shut down the executor between the guard and execute.
+      queryDrainScheduled.set(false)
+    }
+  }
+
+  private fun drainProgramQueries() {
       try {
         while (!disposed) {
-          val request = pendingQuery ?: break
-          pendingQuery = null
+          val request = pendingQuery.getAndSet(null) ?: break
           // A table swap during EPG refresh can briefly make a read fail. Keep
           // the last-good painted rows instead of replacing the canvas with an
           // empty map (the reported black-guide failure).
           val loaded = try { combinedGuide.queryGuideWindow(request.startMs, request.endMs, request.ids) } catch (_: Throwable) { null }
-          if (loaded == null) continue
+          if (loaded == null) {
+            guideMainHandler.post {
+              if (latestQuery?.token == request.token) latestQuery = null
+            }
+            continue
+          }
           val grouped = LinkedHashMap<String, MutableList<NativeEpgProgram>>()
           for (program in loaded) grouped.getOrPut(program.channelId) { ArrayList() }.add(program)
           val frozen = grouped.mapValues { (_, list) -> list.sortedBy { it.startMs }.toTypedArray() }
-          post {
+          guideMainHandler.post {
             if (disposed || request.token != generation) return@post
+            latestQuery = null
             // Stale-while-revalidate paint cache: replace only the rows this
             // query owned, preserve recently painted neighbours for fast reverse
             // navigation, and keep the cache strictly bounded for TV RAM.
@@ -422,9 +453,8 @@ class NativeGuideView(context: Context) : View(context) {
         }
       } finally {
         queryDrainScheduled.set(false)
-        if (!disposed && pendingQuery != null) scheduleQueryDrain()
+        if (!disposed && pendingQuery.get() != null) scheduleQueryDrain()
       }
-    }
   }
 
   override fun onDetachedFromWindow() {
@@ -435,8 +465,7 @@ class NativeGuideView(context: Context) : View(context) {
     selectKeyDown = false
     selectLongPressSeen = false
     moveVelocity = 0
-    generation += 1
-    pendingQuery = null
+    invalidateProgramQuery()
     super.onDetachedFromWindow()
   }
 
@@ -450,7 +479,18 @@ class NativeGuideView(context: Context) : View(context) {
 
   override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
     super.onWindowFocusChanged(hasWindowFocus)
+    if (!hasWindowFocus) {
+      removeCallbacks(settleSelectionRunnable)
+      navigationKeyDown = false
+      selectKeyDown = false
+      selectLongPressSeen = false
+      moveVelocity = 0
+      return
+    }
     if (hasWindowFocus && focusEntryPending && enabled) requestEntryFocus()
+    if (enabled && hasFocus() && TvRemoteModule.remoteContext == "guide" && TvRemoteModule.guideNavigationActive) {
+      emitSelection(true)
+    }
   }
 
   fun dispose() {
@@ -462,8 +502,7 @@ class NativeGuideView(context: Context) : View(context) {
     navigationKeyDown = false
     moveVelocity = 0
     disposed = true
-    generation += 1
-    pendingQuery = null
+    invalidateProgramQuery()
     programs = emptyMap()
     unregisterMemoryListener()
     io.shutdownNow()

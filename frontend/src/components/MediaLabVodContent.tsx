@@ -100,6 +100,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
         if (nativeEvent.kind === "error") setError(nativeEvent.value);
         if (nativeEvent.kind === "player") { const value = nativeEvent.value === "true"; setPlayer(value); onPlayerChange?.(value); if (value) closeDrawer({ force: true }); }
         if (nativeEvent.kind === "route") {
+          if (nativeEvent.value === "medialab:provider-changed") { router.replace("/vod"); return; }
           if (nativeEvent.value === "medialab:donate") { showDonation(); return; }
           if (nativeEvent.value === "/settings") router.replace("/settings");
           else if (nativeEvent.value === "medialab:drawer") openDrawer({ focusTop: true });

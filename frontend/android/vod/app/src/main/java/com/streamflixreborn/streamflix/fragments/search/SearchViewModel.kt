@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.search
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.adapters.AppAdapter
@@ -23,6 +24,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -49,6 +52,9 @@ data class ProviderResult(
 
 
 class SearchViewModel(database: AppDatabase) : ViewModel() {
+
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
 
     private val _state = MutableStateFlow<State>(State.Searching)
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -115,6 +121,9 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
     private var searchJob: Job? = null
     private var pageJob: Job? = null
     private var searchedProvider: Provider? = null
+    // Shared across query replacements: canceled or slow provider calls cannot
+    // multiply fan-out when another global search starts.
+    private val globalSearchSlots = Semaphore(4)
 
     init { search(query) }
 
@@ -124,7 +133,7 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
         this.query = query.trim()
         page = 1
         val submittedQuery = this.query
-        val provider = UserPreferences.currentProvider
+        val provider = sourceProvider
         searchedProvider = provider
         return viewModelScope.launch {
             _state.value = State.Searching
@@ -133,7 +142,7 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
                 val results = withContext(Dispatchers.IO) {
                     ParentalControlUtils.filterItems(provider.search(submittedQuery))
                 }
-                _state.value = State.SuccessSearching(results, results.isNotEmpty())
+                _state.value = State.SuccessSearching(CatalogSource.stamp(results, provider.name), results.isNotEmpty())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -159,7 +168,7 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
                 val keys = currentState.results.map { it.searchIdentityKey() }.toHashSet()
                 val unique = results.filter { keys.add(it.searchIdentityKey()) }
                 page = nextPage
-                _state.value = State.SuccessSearching(currentState.results + unique, results.isNotEmpty())
+                _state.value = State.SuccessSearching(currentState.results + CatalogSource.stamp(unique, provider.name), results.isNotEmpty())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -184,14 +193,14 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
             targets.forEachIndexed { index, provider ->
                 launch {
                     val result = try {
-                        val items = withContext(Dispatchers.IO) {
+                        val items = globalSearchSlots.withPermit { withContext(Dispatchers.IO) {
                             ParentalControlUtils.filterItems(provider.search(submittedQuery).onEach {
                                 when (it) {
                                     is Movie -> it.providerName = provider.name
                                     is TvShow -> it.providerName = provider.name
                                 }
                             })
-                        }
+                        } }
                         ProviderResult(provider, ProviderResult.State.Success(items))
                     } catch (e: CancellationException) {
                         throw e

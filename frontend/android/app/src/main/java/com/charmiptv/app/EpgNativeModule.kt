@@ -410,21 +410,21 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         val httpValidators = EpgHttpValidators()
         try {
           emitImportProgress("downloading", 0.2)
-          val batches = streamProgramBatches(
-            url,
+          openPossiblyGzipped(url, httpValidators, allowNotModified, database).use { input ->
+            val batches = streamProgramBatches(
+            input,
             minStop,
             maxStart,
             channelLogos,
             channelNames,
             channelIdsWithPrograms,
-            httpValidators,
-            allowNotModified,
             activeIds,
             activeNames,
             baseOffsetMs,
             channelOffsetMs,
-          )
-          database.replaceBatches(batches)
+            )
+            database.replaceBatches(batches)
+          }
           emitImportProgress("indexing", 0.9)
         } catch (_: EpgNotModifiedException) {
           val guideEpoch = database.getMeta("guide_epoch")?.toLongOrNull() ?: 0L
@@ -846,11 +846,13 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
         if (!userDatabase.ensureHealthy()) throw SQLiteException("Custom Guide database integrity check failed")
         userDatabase.assertRefreshStorageAvailable()
         val validators = EpgHttpValidators()
-        val batches = streamProgramBatches(
-          sourceUrl, minStop, maxStart, channelLogos, channelNames, channelIdsWithPrograms,
-          validators, false, emptySet(), emptySet(), 0L, emptyMap(), userDatabase
-        )
-        userDatabase.replaceBatches(batches)
+        openPossiblyGzipped(sourceUrl, validators, false, userDatabase).use { input ->
+          val batches = streamProgramBatches(
+            input, minStop, maxStart, channelLogos, channelNames, channelIdsWithPrograms,
+            emptySet(), emptySet(), 0L, emptyMap(),
+          )
+          userDatabase.replaceBatches(batches)
+        }
         val aliases = ArrayList<Triple<String, String, String>>(channelNames.size * 2)
         for ((channelId, displayName) in channelNames) {
           aliases.add(Triple(channelId, "display_name", displayName))
@@ -912,21 +914,17 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   private fun streamProgramBatches(
-    url: String,
+    input: InputStream,
     minStop: Long,
     maxStart: Long,
     channelLogos: MutableMap<String, String>,
     channelNames: MutableMap<String, String>,
     channelIdsWithPrograms: MutableSet<String>,
-    httpValidators: EpgHttpValidators,
-    allowNotModified: Boolean,
     activeIds: Set<String>,
     activeNames: Set<String>,
     baseOffsetMs: Long,
     channelOffsetMs: Map<String, Long>,
-    targetDatabase: EpgDatabase = database,
   ): Sequence<List<NativeEpgProgram>> = sequence {
-    openPossiblyGzipped(url, httpValidators, allowNotModified, targetDatabase).use { input ->
       emitImportProgress("decompressing", 0.25)
       val parser = Xml.newPullParser()
       parser.setInput(input, "UTF-8")
@@ -1057,7 +1055,6 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
       }
       emitImportProgress("indexing", 0.88)
       if (batch.isNotEmpty()) yield(ArrayList(batch))
-    }
   }
 
   @ReactMethod

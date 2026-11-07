@@ -9,43 +9,28 @@ import java.io.File
 object CacheUtils {
     private const val TAG = "CacheUtils"
 
+    private val clearing = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val clearExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
     fun clearAppCache(context: Context) {
-        // The unified host shares its process with Live TV. Never clear its guide,
-        // logo or bridge caches when a VOD provider requests cache recovery.
-        if (!com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) {
-            File(context.applicationContext.cacheDir, "vod").deleteRecursively()
-            return
+        if (!clearing.compareAndSet(false, true)) return
+        val app = context.applicationContext
+        val provider = UserPreferences.currentProvider
+        val isolated = com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod
+        clearExecutor.execute {
+            try {
+                provider?.let { HomeCacheStore.clear(app, it) }
+                // Never delete cache directories behind live Glide/HTTP/Cronet
+                // owners. In the shared host, image caches also serve live TV.
+                if (isolated) Glide.get(app).clearDiskCache()
+            } catch (_: Exception) {
+                // Cache recovery must not interrupt the caller's retry action.
+            } finally { clearing.set(false) }
         }
-        Log.d(TAG, "Inizio pulizia cache completa...")
-        try {
-            context.applicationContext.cacheDir?.deleteRecursively()
-            Log.d(TAG, "Cache interna eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore eliminazione cache interna: ${e.message}")
-        }
-
-        try {
-            Glide.get(context).clearMemory()
-            Thread {
-                try {
-                    Glide.get(context).clearDiskCache()
-                    Log.d(TAG, "Cache Glide eliminata.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Errore eliminazione cache Glide: ${e.message}")
-                }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore Glide: ${e.message}")
-        }
-
-        try {
-            WebView(context).apply {
-                clearCache(true)
-                destroy()
-            }
-            Log.d(TAG, "Cache WebView eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore WebView: ${e.message}")
+        if (isolated) main.post {
+            runCatching { Glide.get(app).clearMemory() }
+            runCatching { WebView(app).apply { clearCache(true); destroy() } }
         }
     }
 
@@ -77,9 +62,9 @@ object CacheUtils {
         val currentSize = getCacheSize(context)
         val thresholdBytes = thresholdMb * 1024 * 1024
         val currentMb = currentSize / (1024 * 1024)
-        
+
         Log.d(TAG, "Controllo cache: Attuale = ${currentMb}MB, Soglia = ${thresholdMb}MB")
-        
+
         if (currentSize > thresholdBytes) {
             Log.i(TAG, "Soglia superata! Avvio pulizia automatica...")
             clearAppCache(context)

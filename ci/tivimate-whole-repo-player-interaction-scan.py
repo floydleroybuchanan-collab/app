@@ -389,7 +389,7 @@ scheduler = read_file(ROOT / "src/components/SourceRefreshScheduler.tsx")
 # every Guide visit starved refreshes; rapid surfing and fullscreen still gate
 # new work. Runtime timer/navigation coverage lives in epg163Regression.test.mjs.
 for required in (
-    '!pathnameRef.current?.startsWith("/player")',
+    r'!/^\/(?:player|provider-player|multiview|vod)(?:\/|$)/.test(pathnameRef.current || "")',
     '!isGuideSurfing()',
     'if (!screenIsSafe() || running || Date.now() < automaticRefreshEligibleAt) return;',
 ):

@@ -164,6 +164,7 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
             if (television) CharmPageDrawer.install(activity, root)
             val graph = fragment.navController.navInflater.inflate(if (television) VodR.navigation.nav_main_graph_tv else VodR.navigation.nav_main_graph_mobile)
             graph.setStartDestination(if (section in setOf("settings", "accounts")) VodR.id.settings else VodR.id.home)
+            com.streamflixreborn.streamflix.utils.CatalogSource.install(fragment.navController)
             fragment.navController.graph = graph
             fragment.navController.addOnDestinationChangedListener { _, destination, _ ->
                 scheduleNativeLayout()

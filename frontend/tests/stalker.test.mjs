@@ -7,6 +7,25 @@ import { createStalkerClient, encodeStalker, decodeStalker, normalizeStalkerGuid
 import { scopePlaylistChannels } from "../src/core/playlistCatalog.ts";
 
 const login = { server: "https://portal.invalid/c/", mac: "00:1a:79:00:11:22", serial: "provided-serial", deviceId: "provided-device", timezone: "UTC" };
+
+test("concurrent calls wait for the profile to complete before using a handshake token", async () => {
+  const actions = [];
+  let finishProfile;
+  const client = createStalkerClient(login, async uri => {
+    const action = new URL(uri).searchParams.get("action");
+    actions.push(action);
+    if (action === "get_profile") await new Promise(resolve => { finishProfile = resolve; });
+    return new Response(JSON.stringify({ js: action === "handshake" ? { token: "new" } : { status: 2 } }));
+  });
+  const first = client.call("itv", "first");
+  while (!finishProfile) await new Promise(resolve => setImmediate(resolve));
+  const second = client.call("itv", "second");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(actions, ["handshake", "get_profile"]);
+  finishProfile();
+  await Promise.all([first, second]);
+  assert.deepEqual(actions.slice(2).sort(), ["first", "second"]);
+});
 function portal(handler) {
   const calls = [];
   const fetcher = async (raw, options) => {
@@ -217,4 +236,44 @@ test("clone movie, series and archive calls resolve playback through the portal"
   await exports.resolveStalkerCatchup(login, { stalker_id: "42", archive_days: 1 }, program);
   assert.deepEqual(calls.at(-1).slice(0, 2), ["tv_archive", "create_link"]);
   assert.equal(calls.at(-1)[2].cmd, "auto /media/archive_42.mpg");
+});
+
+test("cancelling a portal catalogue stops paging and skips the series fallback", async () => {
+  const controller = new AbortController();
+  const p = portal(action => {
+    if (action === "get_categories") return [];
+    controller.abort();
+    return { total_items: 200, data: [{ id: "one", name: "Title" }] };
+  });
+  const exports = {};
+  const source = readFileSync(new URL("../src/core/stalkerMedia.ts", import.meta.url), "utf8");
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  vm.runInNewContext(code, { exports, require: () => ({ createStalkerClient: () => p.client }) });
+  await assert.rejects(exports.listStalkerCatalog(login, "series", controller.signal), /cancelled/);
+  assert.equal(p.calls.filter(row => row.action === "get_ordered_list").length, 1);
+  assert.equal(p.calls.filter(row => row.action === "get_categories").length, 1);
+});
+
+test("a stale provider-library initial read cannot overwrite a newer saved result", async () => {
+  let initial, reads = 0;
+  const shown = [];
+  const exports = {};
+  const source = readFileSync(new URL("../src/core/providerLibrary.ts", import.meta.url), "utf8");
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const mocks = {
+    react: { useState: () => [[], value => shown.push(value)], useEffect: effect => effect() },
+    "@/src/utils/storage": { storage: {
+      getItem: () => ++reads === 1 ? new Promise(resolve => { initial = resolve; }) : Promise.resolve([]),
+      setItem: async () => true,
+    } },
+    "./providerLibraryCore": { normalizeProviderLibrary: rows => rows, mergeProviderLibrary: (_rows, patch) => [patch] },
+  };
+  vm.runInNewContext(code, { exports, require: name => mocks[name] });
+  exports.useProviderLibrary();
+  const fresh = { owner: "one", kind: "movie", catalogId: "7", favorite: true };
+  await exports.updateProviderLibrary(fresh);
+  initial([]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0][0], fresh);
 });

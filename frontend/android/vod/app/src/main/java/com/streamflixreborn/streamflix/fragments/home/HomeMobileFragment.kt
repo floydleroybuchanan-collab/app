@@ -64,13 +64,7 @@ class HomeMobileFragment : Fragment() {
 
         initializeHome()
 
-        // Lightweight refresh when provider changes
-        viewLifecycleOwner.lifecycleScope.launch {
-            com.streamflixreborn.streamflix.utils.ProviderChangeNotifier.providerChangeFlow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { viewModel.getHome() }
-        }
-
-        // Initial load
-        viewModel.getHome()
+        // The retained ViewModel owns initial loading and source refreshes.
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
@@ -146,7 +140,7 @@ class HomeMobileFragment : Fragment() {
                 findNavController().navigate(R.id.providers)
             }
         }
-        
+
         // Ensure background image is hidden on mobile to show theme color
         binding.ivHomeBackground.visibility = View.GONE
     }

@@ -1,6 +1,15 @@
 import type { SourceDiagnostics } from "@/src/source";
 import { sourceRefreshTrace } from "./sourceRefreshTrace";
 
+// Errors and future extra fields are untrusted text. Keep provider addresses
+// and credentials out of the shareable export even if an upstream error leaks one.
+function safeDiagnosticText(raw: string): string {
+  return raw
+    .replace(/(?:https?|rtsp|rtmp|smb):(?:\/|\\\/){2}[^\s"<>]+/gi, "[provider address hidden]")
+    .replace(/((?:password|passwd|username|token|api[_-]?key)\s*[=:]\s*)[^&\s,;]+/gi, "$1[hidden]")
+    .replace(/(Bearer\s+)[a-z0-9._~+\/-]+/gi, "$1[hidden]");
+}
+
 /** Build a portable plain-text diagnostics dump (no stream URLs). */
 export function formatDiagnosticsExport(input: {
   diagnostics: SourceDiagnostics | null;
@@ -50,5 +59,5 @@ export function formatDiagnosticsExport(input: {
     }
   }
   lines.push("");
-  return lines.join("\n");
+  return safeDiagnosticText(lines.join("\n"));
 }

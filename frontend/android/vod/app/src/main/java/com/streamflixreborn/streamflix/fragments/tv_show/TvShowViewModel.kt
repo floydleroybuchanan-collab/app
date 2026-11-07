@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.fragments.tv_show
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.CatalogSource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -27,6 +28,9 @@ class TvShowViewModel(
     private val fallbackPoster: String? = null,
     private val fallbackBanner: String? = null,
 ) : ViewModel() {
+
+    private val sourceProvider = CatalogSource.provider(database.providerName)
+
 
     private fun episodeSeasonKey(episode: Episode): String? {
         return episode.id.substringBeforeLast("/", "")
@@ -227,7 +231,10 @@ class TvShowViewModel(
         _state.emit(State.Loading)
 
         try {
-            val tvShow = UserPreferences.currentProvider!!.getTvShow(id)
+            val tvShow = sourceProvider!!.getTvShow(id) .also {
+                CatalogSource.stamp(listOf(it), sourceProvider.name)
+                CatalogSource.stamp(it.recommendations, sourceProvider.name)
+            }
 
             if (!ArtworkRepair.isRemoteArtworkUrl(tvShow.poster) && ArtworkRepair.isRemoteArtworkUrl(fallbackPoster)) {
                 tvShow.poster = fallbackPoster
@@ -264,7 +271,7 @@ class TvShowViewModel(
         _seasonState.emit(SeasonState.Loading)
 
         try {
-            val episodes = UserPreferences.currentProvider!!.getEpisodesBySeason(season.id)
+            val episodes = sourceProvider!!.getEpisodesBySeason(season.id)
             val ids = episodes.map { it.id }
             val episodeMap = episodes.associateBy { it.id }
 

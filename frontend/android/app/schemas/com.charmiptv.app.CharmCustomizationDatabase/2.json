@@ -1,0 +1,169 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "af79fa3ea832260bc5f46b0af4607758",
+    "entities": [
+      {
+        "tableName": "user_channel_customization",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`channelId` TEXT NOT NULL, `hidden` INTEGER NOT NULL, `customPosition` INTEGER, `customNumber` INTEGER, PRIMARY KEY(`channelId`))",
+        "fields": [
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hidden",
+            "columnName": "hidden",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "customPosition",
+            "columnName": "customPosition",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "customNumber",
+            "columnName": "customNumber",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "channelId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_user_channel_customization_customPosition",
+            "unique": false,
+            "columnNames": [
+              "customPosition"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_channel_customization_customPosition` ON `${TABLE_NAME}` (`customPosition`)"
+          }
+        ]
+      },
+      {
+        "tableName": "user_custom_groups",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_user_custom_groups_name",
+            "unique": true,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_user_custom_groups_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_user_custom_groups_position",
+            "unique": false,
+            "columnNames": [
+              "position"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_custom_groups_position` ON `${TABLE_NAME}` (`position`)"
+          }
+        ]
+      },
+      {
+        "tableName": "user_group_channel_mappings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`groupId` TEXT NOT NULL, `channelId` TEXT NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`groupId`, `channelId`))",
+        "fields": [
+          {
+            "fieldPath": "groupId",
+            "columnName": "groupId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "groupId",
+            "channelId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_user_group_channel_mappings_groupId",
+            "unique": false,
+            "columnNames": [
+              "groupId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_group_channel_mappings_groupId` ON `${TABLE_NAME}` (`groupId`)"
+          },
+          {
+            "name": "index_user_group_channel_mappings_channelId",
+            "unique": false,
+            "columnNames": [
+              "channelId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_group_channel_mappings_channelId` ON `${TABLE_NAME}` (`channelId`)"
+          },
+          {
+            "name": "index_user_group_channel_mappings_groupId_position",
+            "unique": false,
+            "columnNames": [
+              "groupId",
+              "position"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_group_channel_mappings_groupId_position` ON `${TABLE_NAME}` (`groupId`, `position`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'af79fa3ea832260bc5f46b0af4607758')"
+    ]
+  }
+}

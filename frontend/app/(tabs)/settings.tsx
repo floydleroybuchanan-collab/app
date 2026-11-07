@@ -223,6 +223,7 @@ function SettingsScreenContent() {
   const [clearFavoritesArmed, setClearFavoritesArmed] = useState(false);
   const [codecCapabilities, setCodecCapabilities] = useState<DeviceCodecCapabilities | null>(null);
   const [pinDraft, setPinDraft] = useState("");
+  const parentalWritePending = useRef(false);
   const [focusedCustomizeId, setFocusedCustomizeId] = useState<string | null>(null);
   const [channelEditPage, setChannelEditPage] = useState(0);
   const clearFavoritesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -537,6 +538,19 @@ function SettingsScreenContent() {
     finally { setBusy(false); }
   }, [busy, backupPassword]);
 
+  const saveParental = async (write: () => Promise<void>, message: string, clearDraft = false) => {
+    if (parentalWritePending.current || busy) return;
+    parentalWritePending.current = true;
+    setBackupStatus("Saving parental settings…");
+    try {
+      await write();
+      if (clearDraft) setPinDraft("");
+      setBackupStatus(message);
+    } catch (error) {
+      setBackupStatus(error instanceof Error ? error.message : "Parental settings could not be saved.");
+    } finally { parentalWritePending.current = false; }
+  };
+
   return (
     <PurpleTvShell active="/settings">
       <View style={styles.page}>
@@ -814,10 +828,10 @@ function SettingsScreenContent() {
                   const mib = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MiB`;
                   setBackupStatus(`Cache ${mib(report.cacheDiskBytes)} · Logos ${mib(report.logoDiskBytes)} · Databases ${mib(report.databaseBytes)}`);
                 })()} />
-                <Action label="Prune old disk cache" icon="trash-bin-outline" onPress={() => void (async () => {
+                <Action label="Clear image cache and old temporary files" icon="trash-bin-outline" onPress={() => void (async () => {
                   const report = await pruneDiskCaches(14);
                   if (!report) return setBackupStatus("Disk cache pruning is unavailable.");
-                  setBackupStatus(`Removed ${report.removedFiles} old cache files (${(report.removedBytes / 1048576).toFixed(1)} MiB).`);
+                  setBackupStatus(`Removed ${report.removedFiles} image-cache and old temporary files (${(report.removedBytes / 1048576).toFixed(1)} MiB). Images download again when needed. Playlists, guide data and saved settings are kept.`);
                 })()} />
                 <Action label={busy ? "Working…" : "Export diagnostics"} icon="document-text-outline" onPress={exportDiagnostics} disabled={busy} />
                 <Action label="Share private support report" icon="share-outline" onPress={()=>{
@@ -976,18 +990,14 @@ function SettingsScreenContent() {
                         setBackupStatus("PIN must be at least 4 digits.");
                         return;
                       }
-                      parental.setPin(pinDraft);
-                      setPinDraft("");
-                      setBackupStatus("Parental PIN saved.");
+                      void saveParental(() => parental.setPin(pinDraft), "Parental PIN saved. Locked groups require the new PIN.", true);
                     }}
                   />
                   <Action
                     label="Clear PIN"
                     icon="trash-outline"
                     onPress={() => {
-                      parental.setPin(null);
-                      setPinDraft("");
-                      setBackupStatus("Parental PIN cleared.");
+                      void saveParental(() => parental.setPin(null), "Parental PIN cleared.", true);
                     }}
                   />
                   <Action
@@ -1012,7 +1022,7 @@ function SettingsScreenContent() {
                         const set = new Set(parental.lockedGroups);
                         if (next) set.add(group);
                         else set.delete(group);
-                        parental.setLockedGroups(Array.from(set));
+                        void saveParental(() => parental.setLockedGroups(Array.from(set)), "Locked groups saved.");
                       }}
                     />
                   );

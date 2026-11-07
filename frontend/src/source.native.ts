@@ -83,6 +83,8 @@ let MEM: NativeMeta | null = null;
 let refreshPromise: Promise<NativeMeta> | null = null;
 let playlistOnlyRefreshPromise: Promise<SourceStatus> | null = null;
 let catalogPublishPromise: Promise<void> | null = null;
+let guideCacheClearPromise: Promise<void> | null = null;
+let guideCacheMaintenanceGeneration = 0;
 let lastSourceError: string | null = null;
 const listeners = new Set<() => void>();
 let sourceEmitScheduled = false;
@@ -102,6 +104,7 @@ let programmeWindowEmptyKeys = new Set<string>();
 /** Shared LRU order for positive and negative window rows. */
 let programmeWindowAccessOrder = new Set<string>();
 let programmeWindowCacheKey = "";
+let programmeWindowGeneration = 0;
 /** Coalesce overlapping warm/viewport reads so one channel is never queried twice. */
 const programmeWindowInFlight = new Map<string, Promise<void>>();
 let lastNativeMatchWriteFingerprint = "";
@@ -336,11 +339,12 @@ function resolveGuideWindowBounds(startISO?: string, hours = 6): {
 }
 
 function clearProgrammeWindowCache(): void {
+  programmeWindowGeneration++;
   programmeWindowCache = {};
   programmeWindowEmptyKeys.clear();
   programmeWindowAccessOrder.clear();
   programmeWindowCacheKey = "";
-  // In-flight native reads cannot be cancelled, but their cache-key guard keeps
+  // In-flight native reads cannot be cancelled, but their generation guard keeps
   // them from merging stale results after this reset. Let new-window reads start.
   programmeWindowInFlight.clear();
 }
@@ -761,6 +765,7 @@ async function fetchPlaylist(): Promise<Channel[]> {
 let initialLoadPromise: Promise<NativeMeta> | null = null;
 
 function ensureLoaded(): Promise<NativeMeta> {
+  if (guideCacheClearPromise) return guideCacheClearPromise.then(() => ensureLoaded());
   if (MEM) return Promise.resolve(MEM);
   if (!initialLoadPromise) {
     initialLoadPromise = loadColdSources().finally(() => { initialLoadPromise = null; });
@@ -784,18 +789,26 @@ function refreshUntilChannelsAvailable(): Promise<NativeMeta> {
 }
 
 async function loadColdSources(): Promise<NativeMeta> {
+  const generation = guideCacheMaintenanceGeneration;
+  const assertCacheCurrent = () => {
+    if (generation !== guideCacheMaintenanceGeneration) throw new Error("Guide cache is being rebuilt.");
+  };
   // Best-effort once per install: drop superseded JS/expo EPG files (never v3 native DB).
   void cleanupLegacyEpgArtifactsOnce();
 
   if (MEM) return MEM;
   const nativeCached = await readNativeChannelCache();
   const cached = nativeCached || (await readChannelCache());
+  assertCacheCurrent();
   if (cached) {
-    if (cached.channels.length === 0 && (await listPlaylists()).some((source) => source.enabled)) {
+    const hasEnabled = !cached.channels.length && (await listPlaylists()).some((source) => source.enabled);
+    assertCacheCurrent();
+    if (hasEnabled) {
       return refreshUntilChannelsAvailable();
     }
     await seedLegacyPlaylist(cached.channels);
     const combined = await readCombinedPlaylists();
+    assertCacheCurrent();
     const old = new Map(cached.channels.map((channel) => [channel.id, channel]));
     cached.channels = combined.map((channel) => ({ ...channel, tvg_id: channel.id.startsWith("pl:") ? "" : old.get(channel.id)?.tvg_id || channel.tvg_id }));
     MEM = cached;
@@ -816,13 +829,14 @@ async function loadColdSources(): Promise<NativeMeta> {
   }
 
   const legacy = await readMetaFile(LEGACY_CHANNEL_CACHE);
+  assertCacheCurrent();
   if (legacy) {
     if (legacy.channels.length === 0) {
       return refreshUntilChannelsAvailable();
     }
     MEM = { ...legacy, ts: 0 };
     await persistMeta(MEM).catch(() => undefined);
-    void refreshInternal(false);
+    if (generation === guideCacheMaintenanceGeneration) void refreshInternal(false).catch(() => undefined);
     return MEM;
   }
 
@@ -830,6 +844,7 @@ async function loadColdSources(): Promise<NativeMeta> {
 }
 
 async function refreshInternal(force: boolean): Promise<NativeMeta> {
+  if (guideCacheClearPromise) await guideCacheClearPromise;
   if (catalogPublishPromise) await catalogPublishPromise;
   if (refreshPromise) return refreshPromise;
   // Playlist-only refresh owns the same provider/cache/SQLite resources. Join
@@ -1091,6 +1106,8 @@ async function loadProgrammeCacheMisses(
   if (!requested.length || !nativeEpgAvailable) return {};
 
   const requestCacheKey = programmeWindowCacheKey;
+  const requestGeneration = programmeWindowGeneration;
+  const isCurrentWindow = () => programmeWindowGeneration === requestGeneration && programmeWindowCacheKey === requestCacheKey;
   const owned: string[] = [];
   const waits = new Set<Promise<void>>();
   for (const id of requested) {
@@ -1104,6 +1121,7 @@ async function loadProgrammeCacheMisses(
   if (owned.length) {
     const task = (async () => {
       const joined = await queryNativeGuideWindow(owned, startMs, endMs);
+      if (!isCurrentWindow()) return;
       const merged: Record<string, Program[]> = { ...joined };
       const missingAfterJoin = owned.filter((id) => !merged[id]?.length);
 
@@ -1116,6 +1134,7 @@ async function loadProgrammeCacheMisses(
           getEpgSourcePreferences(),
           getMultiEpgSources(),
         ]);
+        if (!isCurrentWindow()) return;
         const customOwned = new Set<string>();
         if (ownership.userEnabled && ownership.userUrl) {
           for (const channelId of Object.keys(ownership.userOverrides)) customOwned.add(channelId);
@@ -1154,7 +1173,7 @@ async function loadProgrammeCacheMisses(
 
       // A date/epoch change may finish while SQLite is reading. Never merge an
       // old window into the newly cleared cache.
-      if (programmeWindowCacheKey === requestCacheKey) {
+      if (isCurrentWindow()) {
         mergeProgrammeQueryResult(owned, merged);
       }
     })();
@@ -1173,7 +1192,7 @@ async function loadProgrammeCacheMisses(
 
   if (waits.size) await Promise.all(waits);
   const result: Record<string, Program[]> = {};
-  if (programmeWindowCacheKey !== requestCacheKey) return result;
+  if (!isCurrentWindow()) return result;
   for (const id of requested) {
     const list = programmeWindowCache[id];
     if (list?.length) result[id] = list;
@@ -1209,6 +1228,7 @@ export async function loadGuide(startISO?: string, hours = 6, force = false): Pr
     playlistIds = remapped.map((channel) => channel.id).filter(Boolean);
   }
   playlistIds = Array.from(new Set(playlistIds));
+  const requestGeneration = programmeWindowGeneration;
 
   // A cold catalog with no guide generation is already usable for live TV.
   // Do not put its first paint behind an empty query during the initial import.
@@ -1217,12 +1237,12 @@ export async function loadGuide(startISO?: string, hours = 6, force = false): Pr
   }
   // Soft trim only — strict viewport trim would wipe the conveyor hysteresis band
   // that retainProgrammeWindowCache(expandRunwayKeepSet(...)) intentionally keeps.
-  trimProgrammeWindowCache(playlistIds, "soft");
+  if (programmeWindowGeneration === requestGeneration) trimProgrammeWindowCache(playlistIds, "soft");
 
   // Programme data travels separately from channel metadata. Never clone every
   // channel just to attach EMPTY_PROGRAMS; Store/Guide subscribe row-locally.
   const programsByChannelId: Record<string, Program[]> = {};
-  for (const channelId of playlistIds) {
+  for (const channelId of programmeWindowGeneration === requestGeneration ? playlistIds : []) {
     const list = programmeWindowCache[channelId];
     programsByChannelId[channelId] = list?.length ? list : EMPTY_PROGRAMS;
   }
@@ -1264,6 +1284,7 @@ export async function loadGuideProgramsForChannelIds(
   }
 
   const remapped = withManualRemaps(parsed.channels);
+  const requestGeneration = programmeWindowGeneration;
 
   // The grid supplies an exact direction-aware eight-page runway in its filtered
   // on-screen order. Querying any larger source-order ring wastes SQLite/bridge
@@ -1272,7 +1293,7 @@ export async function loadGuideProgramsForChannelIds(
   // A background EPG refresh can replace the cache while SQLite is reading.
   // Returning explicit empty rows here would erase the last-good Guide even
   // though the old query correctly refused to merge into the new epoch.
-  if (programmeWindowCacheKey !== cacheKey) return {};
+  if (programmeWindowGeneration !== requestGeneration || programmeWindowCacheKey !== cacheKey) return {};
   const delta: Record<string, Program[]> = {};
   for (const id of unique) {
     const cached = programmeWindowCache[id];
@@ -1294,6 +1315,7 @@ export async function refreshSource(force = false): Promise<SourceStatus> {
  * Existing logical EPG matches are retained for stable playlist channel ids.
  */
 export async function refreshPlaylistOnly(): Promise<SourceStatus> {
+  if (guideCacheClearPromise) await guideCacheClearPromise;
   if (catalogPublishPromise) await catalogPublishPromise;
   if (playlistOnlyRefreshPromise) return playlistOnlyRefreshPromise;
   playlistOnlyRefreshPromise = (async () => {
@@ -1345,6 +1367,7 @@ export const refreshPlaybackChannel = createPlaylistPlaybackRefresher<Channel>(f
 
 /** Publish the complete enabled catalog, never an individual playlist, into the native guide projection. */
 export async function reloadPlaylistCatalog(refreshId?: string): Promise<void> {
+  if (guideCacheClearPromise) await guideCacheClearPromise;
   const prior = catalogPublishPromise;
   const next = (prior || Promise.resolve()).catch(() => undefined).then(() => publishPlaylistCatalog(refreshId));
   catalogPublishPromise = next;
@@ -1372,6 +1395,7 @@ async function publishPlaylistCatalog(refreshId?: string): Promise<void> {
 
 /** Scheduler already checked playlists; do not reload unchanged catalogs here. */
 export async function refreshSourcesIfDue(canStartNext: () => boolean = () => true): Promise<SourceStatus> {
+  if (guideCacheClearPromise) await guideCacheClearPromise;
   if (!canStartNext()) return sourceStatus();
   if (refreshPromise) {
     await refreshPromise;
@@ -1393,6 +1417,7 @@ export async function refreshSourcesIfDue(canStartNext: () => boolean = () => tr
 
 /** Refresh XMLTV only — keep current playlist rows (independent epochs). */
 export async function refreshEpgOnly(includeAdditional = true, canStartNext: () => boolean = () => true): Promise<SourceStatus> {
+  if (guideCacheClearPromise) await guideCacheClearPromise;
   if (!canStartNext()) return sourceStatus();
   if (catalogPublishPromise) await catalogPublishPromise;
   // TiviMate-style single refresh owner: if a full/EPG refresh is already doing
@@ -1666,7 +1691,18 @@ export function invalidateGuideOwnershipCaches(): void {
   emit();
 }
 
-export async function clearGuideCache(): Promise<void> {
+export function clearGuideCache(): Promise<void> {
+  if (guideCacheClearPromise) return guideCacheClearPromise;
+  guideCacheMaintenanceGeneration++;
+  // Drain owners which can still write the cache before deleting it. New
+  // writers wait for this barrier, including those triggered by source events.
+  const active = [initialLoadPromise, refreshPromise, playlistOnlyRefreshPromise, catalogPublishPromise];
+  const clear = Promise.allSettled(active).then(clearGuideCacheAfterRefresh);
+  guideCacheClearPromise = clear.finally(() => { guideCacheClearPromise = null; });
+  return guideCacheClearPromise;
+}
+
+async function clearGuideCacheAfterRefresh(): Promise<void> {
   MEM = null;
   lastNativeMatchWriteFingerprint = "";
   lastSourceError = null;

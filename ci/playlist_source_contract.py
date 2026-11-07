@@ -18,15 +18,17 @@ RC17 publishes cold-start channels before cache/index/guide work and rejects
 late publication after a protected-access change. It records bounded timing
 for catalog and native import stages without changing transport.
 See docs/rc17-startup-focus-repair.md.
+RC17 audit adds cache maintenance and native stream lifetime safeguards.
+See docs/audit-rc17-sources.md for the reviewed scope.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': '21ce82306c04745a97e27064d49ab10978ec72bf28a872f5f3f4fefca2ff3efa',
+    'frontend/src/source.native.ts': '6ab9cfe3f6853c9ffe66106e52248d6a4c0030de31d15a1673966f9e9391fc59',
     'frontend/src/nativeEpg.ts': '2679305589ac6e4c64c0ec44b676b9c257f7939adbcee912cb26296f80018873',
-    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'a242dd8b03850f9956d089b3022890d09f9a04b34f955ad39f238285576ce43b',
+    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'f5ae0b9855e4cda27296dd7544e48a99488ae6236510316d525aa312f0f281a2',
 }
 
 

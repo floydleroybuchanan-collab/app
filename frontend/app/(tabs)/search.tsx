@@ -17,6 +17,7 @@ import { useStore } from "@/src/store";
 import { fonts, radius, tvColors } from "@/src/theme";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
+import { resolveGuideSearchResults } from "@/src/core/guideSearchResults";
 import { searchNativeEpg } from "@/src/nativeEpg";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { addTvKeyListener } from "@/src/utils/tvRemote";
@@ -25,7 +26,7 @@ const KEYS = ["Q","W","E","R","T","Y","U","I","O","P","A","S","D","F","G","H","J
 const DIGITS = ["1","2","3","4","5","6","7","8","9","0"];
 const SUGGESTIONS = ["News", "Sports", "Movies", "Kids", "Discovery"];
 
-type FocusZone = "keyboard" | "results" | "header" | null;
+type FocusZone = "keyboard" | "suggestions" | "results" | "header" | null;
 
 function SearchScreenContent() {
   const styles = useAdaptiveStyles(baseStyles, { body: { flexDirection: "column", gap: 12 }, keyboardPanel: { flex: 0, maxWidth: undefined }, resultsPanel: { flex: 1, borderLeftWidth: 0, paddingLeft: 0 }, searchBox: { minHeight: 48 }, input: { minHeight: 48 }, resultRow: { minHeight: 56 }, guideAction: { minHeight: 48 } });
@@ -37,10 +38,11 @@ function SearchScreenContent() {
   const [cursor, setCursor] = useState(0);
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [preferKeyFocus, setPreferKeyFocus] = useState(true);
-  const [nativePrograms, setNativePrograms] = useState<{ channel: Channel; program: Program }[]>([]);
+  const [nativePrograms, setNativePrograms] = useState<{ query: string; rows: Awaited<ReturnType<typeof searchNativeEpg>> } | null>(null);
   const firstResultRef = useRef<unknown>(null);
   const firstKeyRef = useRef<unknown>(null);
-  const focusResultsWhenReadyRef = useRef(false);
+  const focusResultsWhenReadyRef = useRef<string | null>(null);
+  const [suggestionRequest, setSuggestionRequest] = useState(0);
   const focusZoneRef = useRef<FocusZone>(null);
   const keyboardIndexRef = useRef(0);
   const isTV = shouldUseTvLayout(deviceLayoutMode);
@@ -53,33 +55,17 @@ function SearchScreenContent() {
   useEffect(() => {
     let cancelled = false;
     const value = debouncedQuery.trim();
-    if (value.length < 2) {
-      setNativePrograms([]);
+    if (!isFocused || value.length < 2) {
+      setNativePrograms(null);
       return;
     }
     void searchNativeEpg(value, 24)
       .then((rows) => {
-        if (cancelled) return;
-        const wanted = new Set(rows.map((row) => row.channelId).filter(Boolean));
-        const byEpgId = new Map<string, Channel>();
-        if (wanted.size) {
-          for (const channel of channels) {
-            if (channel.id && wanted.has(channel.id)) byEpgId.set(channel.id, channel);
-            if (channel.tvg_id && wanted.has(channel.tvg_id)) byEpgId.set(channel.tvg_id, channel);
-            if (channel.raw_tvg_id && wanted.has(channel.raw_tvg_id)) byEpgId.set(channel.raw_tvg_id, channel);
-            if (byEpgId.size >= wanted.size) break;
-          }
-        }
-        const next: { channel: Channel; program: Program }[] = [];
-        for (const { channelId, program } of rows) {
-          const channel = byEpgId.get(channelId);
-          if (channel) next.push({ channel, program });
-        }
-        setNativePrograms(next);
+        if (!cancelled) setNativePrograms({ query: value, rows });
       })
-      .catch(() => { if (!cancelled) setNativePrograms([]); });
+      .catch(() => { if (!cancelled) setNativePrograms(null); });
     return () => { cancelled = true; };
-  }, [channels, debouncedQuery]);
+  }, [debouncedQuery, isFocused]);
 
   // Search is a persistent tab. Explicitly reclaim a known key on every entry;
   // returning from Guide/player must never inherit a detached Android focus node.
@@ -87,8 +73,9 @@ function SearchScreenContent() {
     useCallback(() => {
       focusZoneRef.current = null;
       setPreferKeyFocus(true);
-      const cancelFocus = requestNativeFocusWithRetry(firstKeyRef.current, [0, 80, 180, 320, 560], () => focusZoneRef.current !== null);
+      const cancelFocus = requestNativeFocusWithRetry(() => firstKeyRef.current, [0, 80, 180, 320, 560], () => focusZoneRef.current !== null);
       return () => {
+        focusResultsWhenReadyRef.current = null;
         setPreferKeyFocus(false);
         cancelFocus?.();
       };
@@ -114,8 +101,9 @@ function SearchScreenContent() {
   }, [query]);
 
   const results = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
-    if (!q) return { channels: [] as Channel[], programs: [] as { channel: Channel; program: Program }[] };
+    const settledQuery = debouncedQuery.trim();
+    const q = settledQuery.toLowerCase();
+    if (!q || query.trim() !== settledQuery) return { channels: [] as Channel[], programs: [] as { channel: Channel; program: Program }[] };
     // Bound channel results while scanning instead of filter(...).slice(0,18),
     // which materialized every matching channel before discarding the tail.
     const channelMatches: Channel[] = [];
@@ -144,16 +132,16 @@ function SearchScreenContent() {
         if (programs.length >= 24) break;
       }
     }
-    const mergedPrograms = nativePrograms.length ? nativePrograms : programs;
+    const mergedPrograms = nativePrograms?.query === settledQuery ? resolveGuideSearchResults(nativePrograms.rows, channels) : programs;
     return { channels: channelMatches, programs: mergedPrograms };
-  }, [channels, debouncedQuery, nativePrograms]);
+  }, [channels, debouncedQuery, nativePrograms, query]);
 
   useEffect(() => {
-    if (!focusResultsWhenReadyRef.current || !debouncedQuery.trim()) return;
+    if (!isFocused || !focusResultsWhenReadyRef.current || focusResultsWhenReadyRef.current !== debouncedQuery.trim()) return;
     if (!results.channels.length && !results.programs.length) return;
-    focusResultsWhenReadyRef.current = false;
-    return requestNativeFocusWithRetry(firstResultRef.current, [0, 80, 180, 320, 520]);
-  }, [debouncedQuery, results.channels.length, results.programs.length]);
+    return requestNativeFocusWithRetry(() => firstResultRef.current, [0, 80, 180, 320, 520], () =>
+      focusResultsWhenReadyRef.current == null || focusZoneRef.current === "results");
+  }, [debouncedQuery, isFocused, results.channels.length, results.programs.length, suggestionRequest]);
 
   const play = useCallback((channel: Channel) => {
     void Haptics.selectionAsync().catch(() => undefined);
@@ -177,16 +165,19 @@ function SearchScreenContent() {
   );
 
   const replaceQuery = useCallback((next: string) => {
+    focusResultsWhenReadyRef.current = null;
     setQuery(next);
     setCursor(next.length);
   }, []);
 
   const chooseSuggestion = useCallback((next: string) => {
-    focusResultsWhenReadyRef.current = true;
     replaceQuery(next);
+    focusResultsWhenReadyRef.current = next.trim();
+    setSuggestionRequest(value => value + 1);
   }, [replaceQuery]);
 
   const insertAtCursor = useCallback((chunk: string) => {
+    focusResultsWhenReadyRef.current = null;
     setQuery((value) => {
       const at = Math.max(0, Math.min(cursor, value.length));
       return `${value.slice(0, at)}${chunk}${value.slice(at)}`;
@@ -195,6 +186,7 @@ function SearchScreenContent() {
   }, [cursor]);
 
   const backspaceAtCursor = useCallback(() => {
+    focusResultsWhenReadyRef.current = null;
     setQuery((value) => {
       const at = Math.max(0, Math.min(cursor, value.length));
       if (at <= 0) return value;
@@ -215,6 +207,7 @@ function SearchScreenContent() {
   const noteResultsFocus = useCallback(() => {
     setPreferKeyFocus(false);
     focusZoneRef.current = "results";
+    focusResultsWhenReadyRef.current = null;
   }, []);
 
   const before = query.slice(0, cursor);
@@ -254,10 +247,7 @@ function SearchScreenContent() {
               ) : (
                 <TextInput
                   value={query}
-                  onChangeText={(value) => {
-                    setQuery(value);
-                    setCursor(value.length);
-                  }}
+                  onChangeText={replaceQuery}
                   onSelectionChange={(event) => {
                     setCursor(event.nativeEvent.selection.start);
                   }}
@@ -341,7 +331,7 @@ function SearchScreenContent() {
               <>
                 <Text style={styles.resultsTitle}>Suggested</Text>
                 {SUGGESTIONS.map((item) => (
-                  <Pressable key={item} onFocus={noteResultsFocus} onPress={() => chooseSuggestion(item)} style={({ focused }: any) => [styles.suggestion, focused && styles.focused]}>
+                  <Pressable key={item} onFocus={() => { setPreferKeyFocus(false); focusZoneRef.current = "suggestions"; }} onPress={() => chooseSuggestion(item)} style={({ focused }: any) => [styles.suggestion, focused && styles.focused]}>
                     <Text style={styles.suggestionText}>{item}</Text>
                   </Pressable>
                 ))}

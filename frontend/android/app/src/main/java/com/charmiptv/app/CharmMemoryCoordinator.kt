@@ -3,8 +3,6 @@ package com.charmiptv.app
 import android.app.ActivityManager
 import android.content.Context
 
-internal enum class CharmTrimLevel { BACKGROUND, MODERATE, CRITICAL }
-
 internal data class CharmMemoryBudgets(
   val memoryClassMb: Int,
   val lowRam: Boolean,

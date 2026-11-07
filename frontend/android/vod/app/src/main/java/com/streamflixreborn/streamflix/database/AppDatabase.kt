@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.database
 
 import android.content.Context
+import java.util.concurrent.TimeUnit
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -30,6 +31,10 @@ import com.streamflixreborn.streamflix.utils.UserPreferences
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
+    // Stable identity: retained screens keep their source even after another result is opened.
+    lateinit var providerName: String
+        private set
+
     abstract fun movieDao(): MovieDao
 
     abstract fun tvShowDao(): TvShowDao
@@ -40,13 +45,12 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
 
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-        @Volatile
-        private var currentProviderName: String? = null
+        // Weak wrappers do not retain abandoned navigation graphs. Room closes idle
+        // connections itself and can reopen them when a retained screen resumes.
+        private val instances = SourceDatabaseRegistry<AppDatabase>()
 
         private fun sanitizeProviderName(name: String): String {
-            // Rimuove caratteri non validi per i nomi dei file DB, 
+            // Rimuove caratteri non validi per i nomi dei file DB,
             // come spazi, parentesi, e li converte in lowercase.
             return name.lowercase()
                 .replace("[^a-z0-9]".toRegex(), "_")
@@ -65,33 +69,24 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             val providerName = UserPreferences.currentProvider?.name
-                ?: currentProviderName
                 ?: throw IllegalStateException("Current provider is not set")
-
-            return INSTANCE?.takeIf { currentProviderName == providerName } ?: synchronized(this) {
-                INSTANCE?.takeIf { currentProviderName == providerName } ?: run {
-                    INSTANCE?.close()
-                    buildDatabase(providerName, context).also { instance ->
-                        INSTANCE = instance
-                        currentProviderName = providerName
-                    }
-                }
-            }
+            return getSharedInstanceForProvider(providerName, context)
         }
 
-        // Metodo per forzare il cambio di database quando cambia il provider
+        fun getSharedInstanceForProvider(providerName: String, context: Context): AppDatabase =
+            instances.get(providerName) { buildDatabase(providerName, context) }
+
+        // Only destructive restore uses this. Ordinary source selection must never
+        // close a database still owned by a retained ViewModel or query.
         fun resetInstance() {
-            synchronized(this) {
-                INSTANCE?.close()
-                INSTANCE = null
-                currentProviderName = null
-            }
+            instances.clear { it.close() }
         }
 
         fun getInstanceForProvider(providerName: String, context: Context): AppDatabase {
             return buildDatabase(providerName, context)
         }
 
+        @OptIn(androidx.room.ExperimentalRoomApi::class)
         private fun buildDatabase(providerName: String, context: Context): AppDatabase {
             val sanitizedName = sanitizeProviderName(providerName)
             return Room.databaseBuilder(
@@ -100,6 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
                 name = "$sanitizedName.db"
             )
                 .allowMainThreadQueries()
+                .setAutoCloseTimeout(15, TimeUnit.SECONDS)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
@@ -108,7 +104,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_6_7)
                 .addMigrations(MIGRATION_7_8)
                 .addMigrations(MIGRATION_8_9)
-                .build()
+                .build().also { it.providerName = providerName }
         }
 
 
@@ -182,7 +178,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_7_8: Migration = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // No SQL changes needed as indices were already created in previous migrations 
+                // No SQL changes needed as indices were already created in previous migrations
                 // but are now formally declared in Entity classes, requiring a version bump.
             }
         }

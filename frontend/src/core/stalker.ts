@@ -73,15 +73,24 @@ export function createStalkerClient(raw: StalkerLogin, fetcher: typeof fetch = f
     }
   }
   async function ensure() {
+    if (pending) return pending;
     if (token) return;
     if (!pending) pending = authenticate().catch((error) => { token = ""; hash = ""; throw error; }).finally(() => { pending = null; });
     await pending;
   }
   async function call(type: string, action: string, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<any> {
     try {
+      aborted(signal);
       await ensure(); aborted(signal);
+      const requestToken = token;
       try { return await request(type, action, params, signal); }
-      catch (error) { if (!(error instanceof PortalAuthError)) throw error; token = ""; await ensure(); aborted(signal); return await request(type, action, params, signal); }
+      catch (error) {
+        if (!(error instanceof PortalAuthError)) throw error;
+        aborted(signal);
+        if (token === requestToken) token = "";
+        await ensure(); aborted(signal);
+        return await request(type, action, params, signal);
+      }
     } catch (error) { if (signal?.aborted) throw new Error("Portal operation cancelled."); if (error instanceof PortalAuthError) throw error; throw new Error(SAFE_ERROR); }
   }
   async function channels(signal?: AbortSignal): Promise<Channel[]> {

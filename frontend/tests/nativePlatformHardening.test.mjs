@@ -98,16 +98,17 @@ test("native provider connections close when connect or response acquisition fai
 });
 
 test("memory and logo work is bounded and releases native listeners", async () => {
-  const [memory, ram, logo, local, glide, application] = await Promise.all([
+  const [memory, ram, logo, local, glide, application, trimPolicy] = await Promise.all([
     source("android/app/src/main/java/com/charmiptv/app/CharmMemoryCoordinator.kt"),
     source("android/app/src/main/java/com/charmiptv/app/EpgRamEngine.kt"),
     source("src/components/ChannelLogo.tsx"),
     source("src/core/localLogoFolder.ts"),
     source("android/app/src/main/java/com/charmiptv/app/CharmGlideModule.kt"),
     source("android/app/src/main/java/com/charmiptv/app/MainApplication.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmMemoryTrimPolicy.kt"),
   ]);
   assert.match(memory, /isLowRamDevice/);
-  assert.match(memory, /BACKGROUND, MODERATE, CRITICAL/);
+  assert.match(trimPolicy, /BACKGROUND, MODERATE, CRITICAL/);
   assert.match(memory, /playbackStartingUntilMs/);
   assert.match(ram, /unregisterMemoryListener\(\)/);
   assert.match(logo, /MAX_URI_HISTORY = 192/);

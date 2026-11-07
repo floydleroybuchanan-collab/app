@@ -29,12 +29,12 @@ internal data class BackgroundEpgResult(
 internal class BackgroundEpgUpdater(private val context: Context) {
   private val dao = EpgControlDatabase.get(context).dao()
 
-  fun refresh(source: EpgSourceEntity): BackgroundEpgResult {
+  fun refresh(source: EpgSourceEntity, checkRunning: () -> Unit = {}): BackgroundEpgResult {
     val threadId = android.os.Process.myTid()
     val previousPriority = android.os.Process.getThreadPriority(threadId)
     try {
       android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
-      return acquireImport(source).use { refreshLocked(source) }
+      return acquireImport(source).use { refreshLocked(source, checkRunning) }
     } finally { android.os.Process.setThreadPriority(previousPriority) }
   }
 
@@ -42,7 +42,8 @@ internal class BackgroundEpgUpdater(private val context: Context) {
     (if (source.playlistId == PRIMARY_SOURCE) EpgDatabase.shared(context)
       else CustomEpgStoreRegistry.database(context, source.playlistId)).acquireImport()
 
-  private fun refreshLocked(source: EpgSourceEntity): BackgroundEpgResult {
+  private fun refreshLocked(source: EpgSourceEntity, checkRunning: () -> Unit): BackgroundEpgResult {
+    checkRunning()
     val sourceId = source.playlistId
     val primary = sourceId == PRIMARY_SOURCE
     val database = if (primary) EpgDatabase.shared(context) else CustomEpgStoreRegistry.database(context, sourceId)
@@ -75,9 +76,19 @@ internal class BackgroundEpgUpdater(private val context: Context) {
     val names = LinkedHashMap<String, String>()
     val icons = LinkedHashMap<String, String>()
     var accepted = 0L
-    val batches = stream(
-      source.url,
-      database,
+    fun checkCurrentSource() {
+      checkRunning()
+      val current = dao.source(sourceId)
+      check(current != null && current.enabled && current.url == source.url && current.updatedAtSeconds == source.updatedAtSeconds) {
+        "Guide source changed while its update was running"
+      }
+    }
+    val swapped = activeIds.isNotEmpty()
+    // The consumer owns the connection. A staged SQLite failure can abandon
+    // a suspended sequence without resuming its generator's finally block.
+    open(source.url, database).use { input ->
+      val batches = stream(
+      input,
       activeIds,
       minStop,
       maxStart,
@@ -85,21 +96,15 @@ internal class BackgroundEpgUpdater(private val context: Context) {
       offsetsByXmltv,
       names,
       icons,
-    ) { accepted += 1L }
-
-    var swapped = false
-    if (activeIds.isNotEmpty()) {
-      database.replaceBatches(batches) {
-        val current = dao.source(sourceId)
-        check(current != null && current.enabled && current.url == source.url && current.updatedAtSeconds == source.updatedAtSeconds) {
-          "Guide source changed while its update was running"
-        }
+      checkRunning,
+      ) { accepted += 1L }
+      if (swapped) {
+        database.replaceBatches(batches, ::checkCurrentSource)
+      } else {
+        // Directory-only refresh must not replace good programme rows.
+        for (ignored in batches) Unit
+        checkCurrentSource()
       }
-      swapped = true
-    } else {
-      // Still consume the stream so the directory can be indexed for a later
-      // manual/automatic assignment without replacing good programme rows.
-      for (ignored in batches) Unit
     }
     val aliases = ArrayList<Triple<String, String, String>>(names.size * 2 + icons.size)
     for ((id, name) in names) {
@@ -118,8 +123,7 @@ internal class BackgroundEpgUpdater(private val context: Context) {
   }
 
   private fun stream(
-    sourceUrl: String,
-    database: EpgDatabase,
+    input: InputStream,
     activeIds: Set<String>,
     minStop: Long,
     maxStart: Long,
@@ -127,9 +131,9 @@ internal class BackgroundEpgUpdater(private val context: Context) {
     offsetsByXmltv: Map<String, Long>,
     names: MutableMap<String, String>,
     icons: MutableMap<String, String>,
+    checkRunning: () -> Unit,
     onAccepted: () -> Unit,
   ): Sequence<List<NativeEpgProgram>> = sequence {
-    open(sourceUrl, database).use { input ->
       val parser = Xml.newPullParser()
       parser.setInput(input, "UTF-8")
       val batch = ArrayList<NativeEpgProgram>(BATCH_SIZE)
@@ -143,7 +147,9 @@ internal class BackgroundEpgUpdater(private val context: Context) {
       var description: String? = null
       var category: String? = null
       var rawProgrammes = 0L
+      var events = 0
       while (event != XmlPullParser.END_DOCUMENT) {
+        if ((events++ and 255) == 0) checkRunning()
         when (event) {
           XmlPullParser.START_TAG -> when (parser.name) {
             "channel" -> metadataId = parser.getAttributeValue(null, "id")?.trim()?.takeIf(String::isNotEmpty)
@@ -182,7 +188,6 @@ internal class BackgroundEpgUpdater(private val context: Context) {
         event = parser.next()
       }
       if (batch.isNotEmpty()) yield(ArrayList(batch))
-    }
   }
 
   private fun open(rawUrl: String, database: EpgDatabase): InputStream {

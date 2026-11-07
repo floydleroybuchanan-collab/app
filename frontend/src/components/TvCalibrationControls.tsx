@@ -27,6 +27,7 @@ export function TvCalibrationControls() {
   const { draftCalibration, setSide, save, reset, discard, hasChanges } = useTvCalibration();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const savingRef = useRef(false);
   const lastAdjustAt = useRef(0);
 
@@ -40,10 +41,12 @@ export function TvCalibrationControls() {
   }
 
   const adjust = (side: Side, delta: number) => {
+    if (savingRef.current) return;
     const now = Date.now();
     if (now - lastAdjustAt.current < MIN_ADJUST_INTERVAL_MS) return;
     lastAdjustAt.current = now;
     setSaved(false);
+    setSaveError(false);
     void Haptics.selectionAsync().catch(() => {});
     const next = Math.max(
       TV_CALIBRATION_MIN_OFFSET,
@@ -56,8 +59,9 @@ export function TvCalibrationControls() {
     if (!hasChanges || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
+    setSaveError(false);
     try {
-      await save();
+      if (!(await save())) { setSaveError(true); return; }
       setSaved(true);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } finally {
@@ -80,6 +84,7 @@ export function TvCalibrationControls() {
           onPress={() => {
             if (savingRef.current) return;
             setSaved(false);
+            setSaveError(false);
             void Haptics.selectionAsync().catch(() => {});
             reset();
           }}
@@ -123,6 +128,7 @@ export function TvCalibrationControls() {
           onPress={() => {
             if (savingRef.current) return;
             setSaved(false);
+            setSaveError(false);
             discard();
             void Haptics.selectionAsync().catch(() => {});
           }}
@@ -149,6 +155,7 @@ export function TvCalibrationControls() {
           <Text style={styles.saveText}>{saving ? "Saving…" : saved ? "Applied" : "Save & Apply"}</Text>
         </Pressable>
       </View>
+      {saveError ? <Text accessibilityRole="alert" style={styles.hint}>Could not save screen fit. Your draft is still available.</Text> : null}
     </View>
   );
 }

@@ -12,6 +12,7 @@ import {fonts,tvColors} from '@/src/theme';
 import {FocusGuide} from './TVFocusGuideView';
 import {LocalQrCode} from './LocalQrCode';
 import {useAnnouncementsPaused} from '@/src/core/announcementPause';
+import {nextAnnouncement} from '@/src/core/announcementEligibility';
 
 type Notice={id:string;title:string;message:string;url:string;version_code:number;kind:'update'|'general';expires_at:number;reminder_hours:number;sound:boolean};
 type History=Record<string,{next:number;sounded:boolean}>;
@@ -22,57 +23,74 @@ export function AnnouncementCenter(){
  const userId=user?.id,paused=useAnnouncementsPaused();
  const [notices,setNotices]=useState<Notice[]>([]),[active,setActive]=useState<Notice|null>(null),[ready,setReady]=useState(false),[foreground,setForeground]=useState(AppState.currentState==='active');
  const [sound,setSound]=useState(true),[help,setHelp]=useState(false),[error,setError]=useState('');
- const history=useRef<History>({}),cooldown=useRef(0),busy=useRef(false);
+ const history=useRef<History>({}),cooldown=useRef(0);
  const historyKey='charm_announcement_history:'+user?.id;
  const [loadedHistoryKey,setLoadedHistoryKey]=useState('');
  const version=Number(Constants.expoConfig?.android?.versionCode||0);
  // Native VOD is a separate activity. Foreground state defers notices there too.
  const safe=!!userId&&!paused&&loadedHistoryKey===historyKey&&foreground&&['/','/index','/home','/settings'].includes(path);
+ const noticeOwner=useRef({historyKey,id:active?.id,safe});
+ noticeOwner.current={historyKey,id:active?.id,safe};
  useEffect(()=>{
   let stopped=false;
-  setReady(false);setActive(null);setNotices([]);history.current={};
+  setReady(false);setActive(null);setNotices([]);history.current={};cooldown.current=0;
   void Promise.all([storage.getItem<History>(historyKey,{}),storage.getItem<boolean>(UPDATE_SOUND_KEY,true)]).then(([saved,soundEnabled])=>{if(!stopped){history.current=saved||{};setSound(soundEnabled!==false);setLoadedHistoryKey(historyKey);setReady(true);}});
   return()=>{stopped=true;};
  },[historyKey]);
  useEffect(()=>{
-  let stopped=false;
+  const subscription=AppState.addEventListener('change',state=>setForeground(state==='active'));
+  return()=>subscription.remove();
+ },[]);
+ useEffect(()=>{
+  if(!userId||!foreground||!policy.announcements_supported||!version)return;
+  let stopped=false,busy=false;
   const refresh=async()=>{
-   if(!userId||busy.current||AppState.currentState!=='active'||!policy.announcements_supported||!version)return;
-   busy.current=true;
+   if(stopped||busy||AppState.currentState!=='active')return;
+   busy=true;
    try{
     const data=await securityRequest<{announcements:Notice[]}>('/announcements',{version_code:version},true);
-    if(!stopped){const list=data.announcements.filter(a=>a.expires_at>Date.now()/1000&&(!a.url||validLink(a.url)));setNotices(list);setActive(current=>current&&!current.id.startsWith('legacy:')?(list.find(a=>a.id===current.id)||null):current);}
-   }catch{/* Notification failures must not block watching. */}finally{busy.current=false;}
+    if(!stopped&&noticeOwner.current.historyKey===historyKey&&AppState.currentState==='active'){
+     const list=data.announcements.filter(a=>a.expires_at>Date.now()/1000&&(!a.url||validLink(a.url)));
+     setNotices(list);
+     setActive(current=>current&&!current.id.startsWith('legacy:')?(list.find(a=>a.id===current.id)||null):current);
+    }
+   }catch{/* Notification failures must not block watching. */}finally{busy=false;}
   };
   void refresh();const timer=setInterval(()=>void refresh(),5*60_000);
-  const subscription=AppState.addEventListener('change',state=>{setForeground(state==='active');if(state==='active')void refresh();});
-  return()=>{stopped=true;clearInterval(timer);subscription.remove();};
- },[policy.announcements_supported,version,userId]);
+  return()=>{stopped=true;clearInterval(timer);};
+ },[foreground,historyKey,policy.announcements_supported,version,userId]);
  useEffect(()=>{
-  if(!safe||!ready||active||Date.now()<cooldown.current)return;
-  const legacy=!policy.announcements_supported&&policy.update.version_code>version&&validLink(policy.update.url)?{id:'legacy:'+policy.update.version_code,title:'Charming MediaLab update available',message:policy.update.message,url:policy.update.url,version_code:policy.update.version_code,kind:'update' as const,expires_at:Math.floor(Date.now()/1000)+86400,reminder_hours:24,sound:false}:null;
+  if(!safe||!ready||active)return;
+  const legacy=!policy.announcements_supported&&policy.update.version_code>version&&validLink(policy.update.url)?{id:'legacy:'+policy.update.version_code,title:'Charming MediaLab update available',message:policy.update.message,url:policy.update.url,version_code:policy.update.version_code,kind:'update' as const,expires_at:Number.MAX_SAFE_INTEGER/1000,reminder_hours:24,sound:false}:null;
   const list=notices.length?notices:legacy?[legacy]:[];
-  const next=list.find(a=>a.expires_at>Date.now()/1000&&(a.kind!=='update'||a.version_code>version)&&(!history.current[a.id]||history.current[a.id].next<=Date.now()));
-  if(next){setError('');setHelp(false);setActive(next);}
+  let timer:ReturnType<typeof setTimeout>;
+  const check=()=>{
+   const now=Date.now();
+   const {notice,wakeAt}=nextAnnouncement(list,history.current,cooldown.current,version,now);
+   if(notice){setError('');setHelp(false);setActive(notice);return;}
+   if(wakeAt!==null)timer=setTimeout(check,Math.min(wakeAt-now,3600_000));
+  };
+  check();return()=>clearTimeout(timer);
  },[safe,ready,active,notices,policy.update,policy.announcements_supported,version]);
  useEffect(()=>{
-  if(!active)return;
+  if(!active||!foreground||active.id.startsWith('legacy:'))return;
   let timer:ReturnType<typeof setTimeout>;
   const check=()=>{const remaining=active.expires_at*1000-Date.now();if(remaining<=0)setActive(null);else timer=setTimeout(check,Math.min(remaining,3600_000));};
   check();return()=>clearTimeout(timer);
- },[active]);
+ },[active,foreground]);
  const persist=()=>{history.current=Object.fromEntries(Object.entries(history.current).sort((a,b)=>b[1].next-a[1].next).slice(0,100));void storage.setItem(historyKey,history.current);};
- const receipt=(event:'displayed'|'dismissed'|'opened')=>{if(active&&!active.id.startsWith('legacy:'))void securityRequest('/announcements/receipt',{id:active.id,event},true).catch(()=>{});};
+ const stillOwnsNotice=()=>!!active&&noticeOwner.current.historyKey===historyKey&&noticeOwner.current.id===active.id;
+ const receipt=(event:'displayed'|'dismissed'|'opened')=>{if(stillOwnsNotice()&&active&&!active.id.startsWith('legacy:'))void securityRequest('/announcements/receipt',{id:active.id,event},true).catch(()=>{});};
  const onShow=()=>{
-  if(!active)return;const previous=history.current[active.id];
+  if(!active||!stillOwnsNotice()||!noticeOwner.current.safe||active.expires_at*1000<=Date.now())return;const previous=history.current[active.id];
   history.current[active.id]={next:Date.now()+active.reminder_hours*3600_000,sounded:true};persist();receipt('displayed');
   if(active.sound&&sound&&!previous?.sounded)void NativeModules.CharmAnnouncements?.playChime?.().catch(()=>{});
  };
- const dismiss=()=>{receipt('dismissed');cooldown.current=Date.now()+30_000;setActive(null);};
- const open=async()=>{if(!active?.url)return;try{await Linking.openURL(active.url);receipt('opened');}catch{setError('Telegram could not open on this device. Scan the QR with your phone or use Installation help.');}};
+ const dismiss=()=>{if(!stillOwnsNotice())return;receipt('dismissed');cooldown.current=Date.now()+30_000;setActive(null);};
+ const open=async()=>{if(!active?.url||!stillOwnsNotice()||active.expires_at*1000<=Date.now())return;try{await Linking.openURL(active.url);receipt('opened');}catch{if(stillOwnsNotice())setError('Telegram could not open on this device. Scan the QR with your phone or use Installation help.');}};
  const entryFocus=useTVFocusEntry(!!active&&safe,(active?.id||'')+':'+help);
  const button=(label:string,action:()=>void,primary=false)=><Pressable key={label} ref={primary||label==='Back to update'?entryFocus.entryRef:label==='Exit'?entryFocus.fallbackRef:undefined} accessibilityRole="button" onPress={action} style={({focused})=>[styles.button,primary&&styles.primary,focused&&styles.focused]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
- if(!active||!safe)return null;
+ if(!active||!safe||active.expires_at*1000<=Date.now())return null;
  return <Modal transparent animationType="fade" onShow={()=>{onShow();entryFocus.onLayout();}} onRequestClose={dismiss}><View style={styles.scrim}><FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={[styles.card,{width:Math.min(width-40,820),maxHeight:height-40}]}><ScrollView focusable={false} removeClippedSubviews={false} onLayout={entryFocus.onLayout} contentContainerStyle={styles.content}><View style={{gap:18}} onFocusCapture={entryFocus.onFocusCapture}>
   <View style={styles.header}><Ionicons name="cloud-download-outline" size={34} color="#C4B5FD"/><Text style={styles.brand}>CHARMING MEDIALAB</Text></View>
   <Text style={styles.title}>{active.title}</Text><Text style={styles.message}>{active.message}</Text>

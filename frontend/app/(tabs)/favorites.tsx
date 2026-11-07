@@ -42,7 +42,7 @@ const FavoriteRow = memo(function FavoriteRow({
   folderMode: boolean;
   onPlay: (channel: Channel) => void;
   onLongPress: (id: string) => void;
-  onFocusChannel: (id: string | null) => void;
+  onFocusChannel: (id: string, focused: boolean) => void;
 }) {
   const styles = useAdaptiveStyles(baseStyles, { row: { flexWrap: "wrap", paddingVertical: 10 }, name: { flex: 1, width: undefined }, programBlock: { flexBasis: "100%" }, time: { width: undefined }, folderChip: { minHeight: 48 }, searchHit: { width: 48, height: 48 }, guideButton: { minHeight: 48 }, empty: { paddingHorizontal: 12 } });
   const programmes = useGuidePrograms(channel.id);
@@ -51,8 +51,8 @@ const FavoriteRow = memo(function FavoriteRow({
   const progress = current ? progressPct(current, now) : 0;
   return (
     <Pressable
-      onFocus={() => onFocusChannel(channel.id)}
-      onBlur={() => onFocusChannel(null)}
+      onFocus={() => onFocusChannel(channel.id, true)}
+      onBlur={() => onFocusChannel(channel.id, false)}
       onPress={() => onPlay(channel)}
       onLongPress={isTV ? undefined : () => onLongPress(channel.id)}
       delayLongPress={450}
@@ -154,8 +154,9 @@ function FavoritesScreenContent() {
     else toggleFavorite(id);
   }, [folderId, folderMode, toggleFavorite, toggleFavoriteFolderChannel]);
 
-  const noteChannelFocus = useCallback((id: string | null) => {
-    focusedChannelIdRef.current = id;
+  const noteChannelFocus = useCallback((id: string, focused: boolean) => {
+    if (focused) focusedChannelIdRef.current = id;
+    else if (focusedChannelIdRef.current === id) focusedChannelIdRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -163,7 +164,10 @@ function FavoritesScreenContent() {
     return addTvLongPressListener((key) => {
       if (key !== "SELECT") return;
       const id = focusedChannelIdRef.current;
-      if (id) onLongPress(id);
+      if (id) {
+        focusedChannelIdRef.current = null;
+        onLongPress(id);
+      }
     });
   }, [isFocused, isTV, onLongPress]);
 

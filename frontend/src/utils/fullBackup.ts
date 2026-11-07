@@ -2,7 +2,7 @@ import { Alert, NativeModules, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
-import { listPlaylists } from "@/src/core/playlistRegistry";
+import { listPlaylists, validatePlaylistUrl } from "@/src/core/playlistRegistry";
 import { decodeStalker } from "@/src/core/stalker";
 import { scopePlaylistChannels, type PlaylistRecord } from "@/src/core/playlistCatalog";
 import { readNativeCustomization, nativeSetChannelHidden, nativeSetCustomNumber, nativeSetChannelOrder, nativeCreateCustomGroup, nativeDeleteCustomGroup, nativeSetCustomGroupMembership, type NativeCustomizationSnapshot } from "@/src/nativeCustomization";
@@ -14,6 +14,8 @@ const PREFIX = "Charming MediaLab-Full-Backup-";
 const ROOT = `${FileSystem.documentDirectory || ""}full-backups/`;
 const PLAYLIST_ROOT = `${FileSystem.documentDirectory || ""}playlists/`;
 const MAX_PLAYLIST_BACKUP_BYTES = 12 * 1024 * 1024;
+const MAX_BACKUP_TEXT = 16 * 1024 * 1024;
+const catalogName = /^[a-z0-9-]{1,180}\.json$/;
 const SAFE_SETTINGS = new Set(["gs_favorites", "gs_pointer_mode", "gs_guide_layout", "gs_guide_density", "gs_safe_preview_mode", "gs_channel_numbers", "gs_channel_logos", "gs_device_layout_mode", "gs_player_timeout_ms", "gs_power_profile", "gs_logos_off_while_surfing", "gs_epg_guide_filter", "gs_guide_window_hours", "gs_clock_24h", "gs_start_screen", "gs_instant_guide"]);
 
 type FullBackupPayload = {
@@ -73,29 +75,104 @@ function timestamp() { return new Date().toISOString().replace(/[-:]/g, "").repl
 function allowedKey(key: string) {
   return /^(gs_|charm_playlist_registry_v1$)/.test(key) && !/(cache|diagnostic|last_error|progress)/i.test(key);
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function boundedText(value: unknown, max = 180): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= max;
+}
+
+async function readPlaylistFiles(): Promise<Record<string, string>> {
+  if (!FileSystem.documentDirectory) throw new Error("App storage is unavailable.");
+  const root = await FileSystem.getInfoAsync(PLAYLIST_ROOT);
+  if (!root.exists) return {};
+  if (!root.isDirectory) throw new Error("Saved playlist storage is not a directory.");
+  const files: Record<string, string> = {};
+  let remaining = MAX_PLAYLIST_BACKUP_BYTES;
+  for (const name of await FileSystem.readDirectoryAsync(PLAYLIST_ROOT)) {
+    if (!catalogName.test(name)) continue;
+    const path = PLAYLIST_ROOT + name;
+    const info = await FileSystem.getInfoAsync(path);
+    if (!info.exists || info.isDirectory) throw new Error("A saved playlist catalog could not be read.");
+    if (info.size > remaining) throw new Error("Saved playlists are too large for a safe backup or restore.");
+    const raw = await FileSystem.readAsStringAsync(path);
+    remaining -= raw.length * 2;
+    if (remaining < 0) throw new Error("Saved playlists are too large for a safe backup or restore.");
+    files[name] = raw;
+  }
+  return files;
+}
+
+function validateBackupData(value: FullBackupPayload): void {
+  if (!isRecord(value.settings) || !isRecord(value.personalPlaylistUrls) || !isRecord(value.playlistFiles) ||
+      !isRecord(value.customization) || !isRecord(value.manualEpgBindings) || !boundedText(value.createdAt, 80)) {
+    throw new Error("Invalid backup data.");
+  }
+  if (Object.keys(value.settings).length > 300 || Object.entries(value.settings).some(([key, raw]) => !allowedKey(key) || typeof raw !== "string")) throw new Error("Invalid backup settings.");
+  if (Object.entries(value.personalPlaylistUrls).some(([id, url]) => !/^user-[a-z0-9-]{1,100}$/.test(id) || !boundedText(url, 8192))) throw new Error("Invalid personal playlist backup.");
+  for (const url of Object.values(value.personalPlaylistUrls)) validatePlaylistUrl(url);
+  if (Object.entries(value.manualEpgBindings).some(([id, xmltv]) => !boundedText(id) || !boundedText(xmltv))) throw new Error("Invalid guide assignments.");
+  const { hiddenIds, customOrder, customNumbers, groups } = value.customization;
+  const channelIds = (ids: unknown) => Array.isArray(ids) && ids.length <= 100_000 && ids.every(id => boundedText(id));
+  if (!channelIds(hiddenIds) || !channelIds(customOrder) || !isRecord(customNumbers) ||
+      Object.entries(customNumbers).some(([id, number]) => !boundedText(id) || !Number.isSafeInteger(number) || number < 0) ||
+      !Array.isArray(groups) || groups.length > 10_000 || groups.some(group => !isRecord(group) ||
+        !boundedText(group.id) || !boundedText(group.name, 512) || !Number.isSafeInteger(group.position) || !channelIds(group.channelIds))) {
+    throw new Error("Invalid channel customizations.");
+  }
+  let bytes = 0;
+  for (const [name, raw] of Object.entries(value.playlistFiles)) {
+    if (!catalogName.test(name) || typeof raw !== "string") throw new Error("Invalid playlist catalog path or data.");
+    bytes += raw.length * 2;
+    if (bytes > MAX_PLAYLIST_BACKUP_BYTES) throw new Error("Backup playlist catalogs exceed the safety limit.");
+  }
+  const registry = value.settings.charm_playlist_registry_v1;
+  const rows: unknown = registry === undefined ? [] : JSON.parse(registry);
+  if (!Array.isArray(rows) || rows.length > 10_000) throw new Error("Invalid playlist registry.");
+  const expectedFiles = new Set<string>();
+  const activeFiles = new Set<string>();
+  const registered = new Set<string>();
+  const personal = new Set<string>();
+  for (const row of rows) {
+    if (!isRecord(row) || typeof row.id !== "string" || !/^[a-z0-9-]{1,105}$/.test(row.id) || registered.has(row.id) ||
+        typeof row.managed !== "boolean" || typeof row.enabled !== "boolean" || typeof row.name !== "string" ||
+        !Array.isArray(row.epgSourceIds) || row.epgSourceIds.some(id => !boundedText(id))) throw new Error("Invalid playlist registry entry.");
+    registered.add(row.id);
+    if (!row.managed) personal.add(row.id);
+    expectedFiles.add(`${row.id}-tombstones.json`);
+    for (const revision of [row.revision, row.previousRevision]) {
+      if (revision === "" || revision === undefined) continue;
+      if (typeof revision !== "string" || !/^[a-z0-9-]{1,70}$/.test(revision)) throw new Error("Invalid playlist catalog revision.");
+      const name = `${row.id}-${revision}.json`;
+      expectedFiles.add(name);
+      if (revision === row.revision) {
+        activeFiles.add(name);
+        if (!Object.hasOwn(value.playlistFiles, name)) throw new Error("Backup is missing an active playlist catalog.");
+      }
+    }
+  }
+  for (const [name, raw] of Object.entries(value.playlistFiles)) {
+    if (!expectedFiles.has(name)) throw new Error("Backup contains an unregistered playlist catalog.");
+    const channels: unknown = JSON.parse(raw);
+    if (!Array.isArray(channels) || (activeFiles.has(name) && !channels.length) || channels.length > 25_000 || channels.some(channel => !isRecord(channel) ||
+      !boundedText(channel.id) || typeof channel.name !== "string" || typeof channel.url !== "string")) throw new Error("Invalid playlist catalog rows.");
+  }
+  if (Object.keys(value.personalPlaylistUrls).some(id => !personal.has(id))) throw new Error("Backup contains credentials for an unknown personal playlist.");
+}
 async function capture(): Promise<Omit<FullBackupPayload, "checksum">> {
+  const playlists = await listPlaylists();
   const keys = (await AsyncStorage.getAllKeys()).filter(allowedKey).slice(0, 300);
   const settings = Object.fromEntries((await AsyncStorage.multiGet(keys)).flatMap(([key, value]) => value == null ? [] : [[key, value]]));
-  const playlists = await listPlaylists();
   const personalPlaylistUrls: Record<string, string> = {};
   for (const playlist of playlists.filter((item) => !item.managed)) {
     const value = await SecureStore.getItemAsync(`playlist-${playlist.id}`);
     if (value) personalPlaylistUrls[playlist.id] = value;
   }
-  const playlistFiles: Record<string, string> = {};
-  let playlistBytes = 0;
-  try {
-    for (const name of await FileSystem.readDirectoryAsync(PLAYLIST_ROOT)) {
-      if (!/^[a-z0-9-]+\.json$/.test(name)) continue;
-      const info = await FileSystem.getInfoAsync(`${PLAYLIST_ROOT}${name}`);
-      if (info.exists && info.size && info.size > MAX_PLAYLIST_BACKUP_BYTES) throw new Error("Saved playlists are too large for a safe TV backup. Export settings only.");
-      const raw = await FileSystem.readAsStringAsync(`${PLAYLIST_ROOT}${name}`);
-      playlistBytes += raw.length * 2;
-      if (playlistBytes > MAX_PLAYLIST_BACKUP_BYTES) throw new Error("Saved playlists are too large for a safe TV backup. Remove an unused playlist or old catalog and try again.");
-      playlistFiles[name] = raw;
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("too large")) throw error;
+  const playlistFiles = await readPlaylistFiles();
+  if ((await AsyncStorage.getItem("charm_playlist_registry_v1") || "") !== (settings.charm_playlist_registry_v1 || "")) {
+    throw new Error("Saved playlists changed while the backup was being read. Try again.");
   }
   let portalGuideBindings: PortalGuideBinding[] | undefined;
   if (playlists.some(row => row.kind === "stalker")) {
@@ -106,13 +183,13 @@ async function capture(): Promise<Omit<FullBackupPayload, "checksum">> {
   return { format: FORMAT, version: VERSION, createdAt: new Date().toISOString(), settings, personalPlaylistUrls, playlistFiles, customization: await readNativeCustomization(), manualEpgBindings: await readNativeEpgBindings(), ...(portalGuideBindings ? { portalGuideBindings } : {}) };
 }
 function parse(raw: string): FullBackupPayload {
+  if (raw.length > MAX_BACKUP_TEXT) throw new Error("Backup exceeds the safety limit.");
   const value = JSON.parse(raw) as FullBackupPayload;
   if (value?.format !== FORMAT || value.version !== VERSION || typeof value.settings !== "object" || typeof value.personalPlaylistUrls !== "object" || typeof value.playlistFiles !== "object" || !value.customization || typeof value.manualEpgBindings !== "object") throw new Error("This is not a supported Charming MediaLab full backup.");
   if (value.scope != null && value.scope !== "settings" && value.scope !== "live-tv") throw new Error("Unsupported backup coverage.");
-  if (Object.entries(value.settings).some(([key,raw]) => !allowedKey(key) || typeof raw !== "string")) throw new Error("Invalid backup settings.");
-  if (Object.entries(value.personalPlaylistUrls).some(([id,url]) => !/^user-[a-z0-9-]+$/.test(id) || typeof url !== "string")) throw new Error("Invalid personal playlist backup.");
   const { checksum: supplied, ...body } = value;
   if (!supplied || checksum(withoutChecksum(body)) !== supplied) throw new Error("Backup integrity check failed. The file may be incomplete or changed.");
+  validateBackupData(value);
   if (value.portalGuideBindings !== undefined) validatePortalGuideBindings(value.portalGuideBindings, value.settings, value.playlistFiles);
   return value;
 }
@@ -155,23 +232,21 @@ async function apply(value: FullBackupPayload) {
     catch (error) { await AsyncStorage.multiSet(previous.filter((entry): entry is [string,string] => entry[1] != null)); await AsyncStorage.multiRemove(previous.filter(([,v]) => v == null).map(([k])=>k)); throw error; }
     return;
   }
+  const currentPlaylists = await listPlaylists();
   const currentAllowedKeys = (await AsyncStorage.getAllKeys()).filter(allowedKey).slice(0, 300);
   const currentSettings = Object.fromEntries((await AsyncStorage.multiGet(currentAllowedKeys)).flatMap(([key, raw]) => raw == null ? [] : [[key, raw]]));
   const currentCustomization = await readNativeCustomization();
   const currentBindings = await readNativeEpgBindings();
-  const currentPlaylists = await listPlaylists();
   const restorePortalBindings = value.portalGuideBindings !== undefined || currentPlaylists.some(row => row.kind === "stalker");
   const portalModule = NativeModules.CharmCustomEpg;
   if (restorePortalBindings && typeof portalModule?.restorePortalBackupBindings !== "function") throw new Error("This app build cannot restore portal guide assignments.");
   const urlIds = new Set([...currentPlaylists.filter((item) => !item.managed).map((item) => item.id), ...Object.keys(value.personalPlaylistUrls)]);
   const currentUrls: Record<string, string> = {};
   for (const id of urlIds) currentUrls[id] = await SecureStore.getItemAsync(`playlist-${id}`) || "";
-  const currentPlaylistFiles: Record<string, string> = {};
-  try {
-    for (const name of await FileSystem.readDirectoryAsync(PLAYLIST_ROOT)) {
-      if (/^[a-z0-9-]+\.json$/.test(name)) currentPlaylistFiles[name] = await FileSystem.readAsStringAsync(`${PLAYLIST_ROOT}${name}`);
-    }
-  } catch {}
+  const currentPlaylistFiles = await readPlaylistFiles();
+  if ((await AsyncStorage.getItem("charm_playlist_registry_v1") || "") !== (currentSettings.charm_playlist_registry_v1 || "")) {
+    throw new Error("Saved playlists changed before restore. Try again.");
+  }
   try {
     await FileSystem.makeDirectoryAsync(PLAYLIST_ROOT, { intermediates: true });
     for (const [name, raw] of Object.entries(value.playlistFiles)) {
@@ -221,8 +296,9 @@ export async function writeFullBackup(password: string, settingsOnly = false) {
     settings: Object.fromEntries((await AsyncStorage.multiGet([...SAFE_SETTINGS])).filter((entry): entry is [string,string] => entry[1] != null)),
     personalPlaylistUrls:{}, playlistFiles:{}, customization: {hiddenIds:[],customNumbers:{},customOrder:[],groups:[]} as NativeCustomizationSnapshot, manualEpgBindings:{}
   } : {...await capture(),scope:"live-tv"};
+  validateBackupData({ ...body, checksum: "" });
   let raw = JSON.stringify({ ...body, checksum: checksum(withoutChecksum(body)) });
-  if (raw.length > 16 * 1024 * 1024) throw new Error("Backup exceeds the safety limit. Export settings only or remove unused playlists.");
+  if (raw.length > MAX_BACKUP_TEXT) throw new Error("Backup exceeds the safety limit. Export settings only or remove unused playlists.");
   if (!settingsOnly) {
     if (!NativeModules.CharmBackupCrypto) throw new Error("Install the updated Android app to create encrypted backups.");
     raw = await NativeModules.CharmBackupCrypto.encrypt(raw,password);

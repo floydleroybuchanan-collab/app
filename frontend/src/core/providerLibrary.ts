@@ -15,6 +15,12 @@ export function updateProviderLibrary(patch: Partial<ProviderLibraryEntry> & Pic
 }
 export function useProviderLibrary() {
   const [rows, setRows] = useState<ProviderLibraryEntry[]>([]);
-  useEffect(() => { let alive = true; const publish = (next: ProviderLibraryEntry[]) => { if (alive) setRows(next); }; listeners.add(publish); void readProviderLibrary().then(publish); return () => { alive = false; listeners.delete(publish); }; }, []);
+  useEffect(() => {
+    let alive = true, updated = false;
+    const publish = (next: ProviderLibraryEntry[]) => { updated = true; if (alive) setRows(next); };
+    listeners.add(publish);
+    void readProviderLibrary().then(next => { if (alive && !updated) setRows(next); }).catch(() => undefined);
+    return () => { alive = false; listeners.delete(publish); };
+  }, []);
   return rows;
 }

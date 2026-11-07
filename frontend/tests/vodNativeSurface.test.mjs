@@ -77,3 +77,32 @@ test('host declares its RecyclerView focus API dependency explicitly',()=>{
  const vod=source('android/vod/app/build.gradle');
  assert.match(vod,/androidx.leanback:leanback:1\.2\.0/);
 });
+
+test('VOD handoff rejects uncertain decoder ownership before applying shared settings',()=>{
+ const s=source('android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt');
+ const config=s.slice(s.indexOf('@ReactMethod fun configureSurface'),s.indexOf('@ReactMethod fun surfaceMenu'));
+ assert.match(config,/context.runOnUiQueueThread/);
+ assert.match(config,/hasReleaseFailure\(\) \|\| NativeMultiview.active \|\| NativePlaybackManager.currentOwner\(\) != NativePlaybackManager.Owner.NONE/);
+ assert.ok(config.indexOf('promise.reject(')<config.indexOf('CharmSharedPlayback.configure(settings)'));
+ assert.match(s,/context.addActivityEventListener\(activityListener\)/);
+ assert.match(s,/override fun invalidate\(\)[\s\S]*context.removeActivityEventListener\(activityListener\)/);
+});
+test('VOD Back preserves inner TV/mobile player and settings layers before popping a screen',()=>{
+ const s=source('android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt');
+ for(const type of ['PlayerTvFragment','PlayerMobileFragment','SettingsTvFragment','SettingsMobileFragment']) assert.ok(s.includes('is com.streamflixreborn.streamflix.fragments.'+(type.startsWith('Player')?'player.':'settings.')+type));
+ assert.match(s,/if \(page\?\.view == null\) false/);
+ assert.match(s,/promise.resolve\(handled \|\| host\?\.navController\?\.popBackStack\(\) == true\)/);
+});
+test('shared-activity VOD presence follows the attached surface instead of the activity name alone',()=>{
+ const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmUsageReporter.kt');
+ const report=s.slice(s.indexOf('private fun report()'));
+ assert.match(report,/if \(activity == null\) "idle" else if \(CharmHostSession.hasSurface\(activity\)/);
+ assert.ok(report.indexOf('CharmHostSession.hasSurface')<report.indexOf('val active='));
+});
+
+
+test('host declares the settings Back dispatch superclass dependency explicitly',()=>{
+ const host=source('android/app/build.gradle');
+ const vod=source('android/vod/app/build.gradle');
+ for(const gradle of [host,vod]) assert.match(gradle,/implementation ['"]androidx.preference:preference-ktx:1\.2\.1['"]/);
+});
