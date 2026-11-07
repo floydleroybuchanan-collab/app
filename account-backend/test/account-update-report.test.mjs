@@ -17,7 +17,7 @@ test('RC17 sideload update keeps the public baseline and recognizes both new tes
  assert.match(releaseName(36),/RC15-Sideload-220/);
  assert.match(releaseName(37),/RC16-Sideload-222/);
  assert.match(releaseName(38),/RC17-Sideload-224.*TEST BUILD/);
- assert.match(releaseName(39),/not mapped/);
+ assert.match(releaseName(44),/not mapped/);
  assert.equal(r.users.find(u=>u.username==='previous').updated,true);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(2\)/);
 });
@@ -80,4 +80,13 @@ test('older release mapping shows verified APK names',()=>{assert.match(releaseN
  assert.match(report,/UNRECOGNIZED NEWER VERSION \(1\)/);
  assert.match(report,/RC9-Sideload-196 \[CURRENT PUBLIC RELEASE\]/);
  assert.match(releaseName(99),/not mapped/);
+});
+
+test('RC22 maps the signed rework without promoting the public baseline',async()=>{
+ const f=fixture();f.user('rc22');
+ await f.request('/me/activity',{method:'POST',token:f.token('rc22'),body:{sequence:1,mode:'idle',playing:false,build:43}});
+ const r=await accountUpdateReport(f.env,auth);
+ assert.equal(r.target,27);assert.equal(r.users.find(u=>u.username==='rc22').updated,true);
+ assert.match(releaseName(43),/RC22-Sideload-233.*TEST BUILD/);
+ assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(1\)/);
 });
