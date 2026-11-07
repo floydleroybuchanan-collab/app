@@ -104,7 +104,7 @@ test('embedded VOD exposes a visible Stop and Exit path that pauses before navig
 });
 test('VOD settings grid measures the host width and uses fixed safe-area padding',()=>{
  const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/CharmSettingsLayout.kt');
- assert.match(s,/clipToPadding = false/);
+ assert.match(s,/clipToPadding = true/);
  assert.match(s,/val horizontal = dp\(24\)/);
  assert.match(s,/root.width.takeIf \{ it > 0 \} \?: context.resources.displayMetrics.widthPixels/);
  assert.match(s,/coerceIn\(2, 4\)/);

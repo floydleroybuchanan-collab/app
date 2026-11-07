@@ -19,7 +19,7 @@ test('RC20 sideload update keeps the public baseline and recognizes the VOD sour
  assert.match(releaseName(38),/RC17-Sideload-224.*TEST BUILD/);
  assert.match(releaseName(39),/RC18-Sideload-225.*TEST BUILD/);
  assert.match(releaseName(40),/RC19-Sideload-226.*TEST BUILD/);
- assert.match(releaseName(41),/RC20-Sideload-228.*TEST BUILD/);
+ assert.match(releaseName(41),/RC20-Sideload-229.*TEST BUILD/);
  assert.equal(r.users.find(u=>u.username==='previous').updated,true);
  assert.match(formatAccountUpdateReport(r),/TEST BUILD REPORTED \(2\)/);
 });
