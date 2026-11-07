@@ -100,6 +100,10 @@ test('embedded VOD integrates Stop into the auto-hiding native TV player control
  assert.doesNotMatch(route,/vod-stop-and-exit|Stop &amp; Exit|surfaceStop\(\)/);
  assert.match(controller,/android:id="@\+id\/btn_exo_stop"/);
  assert.match(controller,/android:text="Stop"/);
+ assert.ok(controller.indexOf('@+id/btn_exo_sources') < controller.indexOf('@+id/btn_exo_stop'));
+ assert.ok(controller.indexOf('@+id/btn_exo_stop') < controller.indexOf('android:id="@id/exo_settings"'));
+ assert.match(controller,/btn_exo_sources[\s\S]*nextFocusRight="@id\/btn_exo_stop"/);
+ assert.match(controller,/btn_exo_stop[\s\S]*nextFocusLeft="@id\/btn_exo_sources"[\s\S]*nextFocusRight="@id\/exo_settings"/);
  assert.match(player,/btnExoStop\.setOnClickListener[\s\S]*player\.pause\(\)[\s\S]*findNavController\(\)\.navigateUp\(\)/);
 });
 test('VOD settings grid measures the host width and uses fixed safe-area padding',()=>{
@@ -109,6 +113,22 @@ test('VOD settings grid measures the host width and uses fixed safe-area padding
  assert.match(s,/root.width.takeIf \{ it > 0 \} \?: context.resources.displayMetrics.widthPixels/);
  assert.match(s,/coerceIn\(2, 4\)/);
  assert.doesNotMatch(s,/root\.width\*\.135f/);
+ assert.doesNotMatch(s,/row\.addView\(sections/);
+ assert.match(s,/sections\.visibility = View\.GONE/);
+});
+test('VOD detail pages expose only the unified action row on TV',()=>{
+ const movie=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/adapters/viewholders/MovieViewHolder.kt');
+ const show=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/adapters/viewholders/TvShowViewHolder.kt');
+ assert.match(movie,/btnMovieTrailer\.visibility = View\.GONE[\s\S]*btnMovieFavorite\.visibility = View\.GONE[\s\S]*charmDetailMyList\.setOnClickListener/);
+ assert.match(show,/btnTvShowTrailer\.visibility = View\.GONE[\s\S]*btnTvShowFavorite\.visibility = View\.GONE[\s\S]*charmDetailMyList\.setOnClickListener/);
+});
+test('Live home places the refreshable VOD history shelf after recent channels',()=>{
+ const home=source('app/(tabs)/index.tsx');
+ const shelf=source('src/components/MediaLibraryShelf.tsx');
+ assert.ok(home.indexOf('Recently Watched Channels') < home.indexOf('<MediaLibraryShelf />'));
+ assert.match(shelf,/useIsFocused\(\)/);
+ assert.match(shelf,/AppState\.addEventListener\("change"[\s\S]*state === "active"[\s\S]*setRevision/);
+ assert.match(shelf,/Recently Watched Video On Demand/);
 });
 test('home shelf combines resumable progress with immediate recent playback records',()=>{
  const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmLibraryProvider.kt');
