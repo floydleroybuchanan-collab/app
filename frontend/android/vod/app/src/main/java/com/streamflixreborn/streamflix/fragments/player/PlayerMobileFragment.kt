@@ -687,6 +687,10 @@ class PlayerMobileFragment : Fragment() {
             binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
             showSourcePicker()
         }
+        binding.pvPlayer.controller.binding.btnExoStop.setOnClickListener {
+            if (::player.isInitialized) player.pause()
+            findNavController().navigateUp()
+        }
 
         binding.settings.setOnLocalSubtitlesClickedListener {
             isIgnoringPip = true
@@ -845,7 +849,7 @@ class PlayerMobileFragment : Fragment() {
     }
 
     private fun refreshEpisodeNavigation(type: Video.Type.Episode) {
-        lifecycleScope.launch(Dispatchers.IO) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             EpisodeManager.ensureNextEpisodeAvailable(type, database)
             withContext(Dispatchers.Main) {
                 setupEpisodeNavigationButtons()
@@ -856,7 +860,7 @@ class PlayerMobileFragment : Fragment() {
     private fun playNextEpisodeAcrossSeasons(autoplay: Boolean = false) {
         val type = args.videoType as? Video.Type.Episode ?: return
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val hasNextEpisode = withContext(Dispatchers.IO) {
                 EpisodeManager.ensureNextEpisodeAvailable(type, database)
             }
@@ -1343,6 +1347,7 @@ class PlayerMobileFragment : Fragment() {
         UserDataCache.syncEpisodeToCache(requireContext(), provider, persistedNextEpisode)
     }
     private fun startProgressHandler() {
+        stopProgressHandler()
         progressHandler = android.os.Handler(android.os.Looper.getMainLooper())
         progressRunnable = Runnable {
             if (player.isPlaying) {
@@ -1402,7 +1407,7 @@ class PlayerMobileFragment : Fragment() {
 
         nextEpisodePrefetchTargetId = currentEpisode.id
         nextEpisodePrefetchJob?.cancel()
-        nextEpisodePrefetchJob = lifecycleScope.launch(Dispatchers.IO) {
+        nextEpisodePrefetchJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             val loaded = EpisodeManager.ensureNextEpisodeAvailable(currentEpisode, database)
             withContext(Dispatchers.Main) {
                 if (!isAdded || _binding == null) return@withContext
@@ -1480,15 +1485,8 @@ class PlayerMobileFragment : Fragment() {
     private var currentSoftwareDecoder = false
 
     private fun buildPlayer(extraBuffering: Boolean): ExoPlayer {
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                if (extraBuffering) 300_000 else DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
-            )
-                .let { if (extraBuffering) it else com.streamflixreborn.streamflix.charm.CharmSharedPlayback.buffer(it) }
-            .build()
+        val loadControl = com.streamflixreborn.streamflix.charm.CharmPlaybackCore.vodLoadControl(
+            requireContext(), com.streamflixreborn.streamflix.charm.CharmSharedPlayback.settings.optString("buffer", "balanced"), extraBuffering)
 
         val renderersFactory = SubtitleOffsetRenderersFactory(requireContext()).apply {
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.N_MR1 || currentSoftwareDecoder) {
@@ -1498,7 +1496,7 @@ class PlayerMobileFragment : Fragment() {
                 }
             }
         }
-        val baseBuilder = ExoPlayer.Builder(requireContext(), renderersFactory)
+        val baseBuilder = com.streamflixreborn.streamflix.charm.CharmPlaybackCore.builder(requireContext(), renderersFactory)
 
         return baseBuilder
             .setSeekBackIncrementMs(10_000)
@@ -1506,6 +1504,7 @@ class PlayerMobileFragment : Fragment() {
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setLoadControl(loadControl)
             .build()
+            .also(com.streamflixreborn.streamflix.charm.CharmPlaybackCore::configure)
     }
 
     private fun initializePlayer(extraBuffering: Boolean, softwareDecoder: Boolean = currentSoftwareDecoder) {
@@ -1541,6 +1540,12 @@ class PlayerMobileFragment : Fragment() {
         dataSourceFactory = DefaultDataSource.Factory(requireContext(), httpDataSource)
 
         player = buildPlayer(extraBuffering).also { player ->
+                try {
+                    com.streamflixreborn.streamflix.charm.CharmPlaybackCore.claim(player) { player.pause(); releasePlayer() }
+                } catch (failure: Throwable) {
+                    com.streamflixreborn.streamflix.charm.CharmPlaybackCore.release(player)
+                    throw failure
+                }
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -1572,14 +1577,12 @@ class PlayerMobileFragment : Fragment() {
     private fun releasePlayer() {
         com.streamflixreborn.streamflix.charm.CharmUsageReporter.playback("vod-mobile", false)
         stopProgressHandler()
+        if (::mediaSession.isInitialized) mediaSession.release()
         binding.pvPlayer.player = null
         binding.settings.player = null
         binding.settings.subtitleView = null
         if (::player.isInitialized) {
-            player.release()
-        }
-        if (::mediaSession.isInitialized) {
-            mediaSession.release()
+            com.streamflixreborn.streamflix.charm.CharmPlaybackCore.release(player)
         }
     }
 
@@ -1623,4 +1626,5 @@ class PlayerMobileFragment : Fragment() {
         cookieManager.flush()
     }
 }
+
 

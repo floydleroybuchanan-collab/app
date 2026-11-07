@@ -46,8 +46,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     @ReactMethod fun surfaceBack(promise: Promise) {
         context.runOnUiQueueThread {
             val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
-            val host = activity?.supportFragmentManager?.findFragmentById(com.streamflixreborn.streamflix.R.id.nav_main_fragment) as? androidx.navigation.fragment.NavHostFragment
-            promise.resolve(host?.navController?.popBackStack() == true)
+            promise.resolve(activity != null && com.streamflixreborn.streamflix.charm.CharmHostSession.navigateBack(activity))
         }
     }
 
@@ -60,15 +59,15 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
         } catch (error: Exception) { promise.reject("E_DONATION_COPY", "Could not copy the payment request.", error) }
     }
 
-    init {
-        context.addActivityEventListener(object : BaseActivityEventListener() {
+    private val activityListener = object : BaseActivityEventListener() {
             override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
                 if (requestCode != REQUEST_VOD) return
                 pending?.resolve(data?.getStringExtra("medialab.route"))
                 pending = null
             }
-        })
-    }
+        }
+
+    init { context.addActivityEventListener(activityListener) }
 
     override fun getName() = "CharmVod"
 
@@ -116,6 +115,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     }
 
     override fun invalidate() {
+        context.removeActivityEventListener(activityListener)
         pending?.reject("E_VOD_CLOSED", "Charming MediaLab's screen was recreated.")
         pending = null
         libraryScope.cancel()

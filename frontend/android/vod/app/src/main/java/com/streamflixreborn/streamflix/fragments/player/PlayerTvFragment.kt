@@ -646,7 +646,7 @@ class PlayerTvFragment : Fragment() {
     }
 
     private fun refreshEpisodeNavigation(type: Video.Type.Episode) {
-        lifecycleScope.launch(Dispatchers.IO) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             EpisodeManager.ensureNextEpisodeAvailable(type, database)
             withContext(Dispatchers.Main) {
                 setupEpisodeNavigationButtons()
@@ -657,7 +657,7 @@ class PlayerTvFragment : Fragment() {
     private fun playNextEpisodeAcrossSeasons(autoplay: Boolean = false) {
         val type = args.videoType as? Video.Type.Episode ?: return
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val hasNextEpisode = withContext(Dispatchers.IO) {
                 EpisodeManager.ensureNextEpisodeAvailable(type, database)
             }
@@ -821,6 +821,10 @@ class PlayerTvFragment : Fragment() {
             binding.pvPlayer.controller.binding.btnExoSources.setOnClickListener {
                 binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
                 showSourcePicker()
+            }
+            binding.pvPlayer.controller.binding.btnExoStop.setOnClickListener {
+                if (::player.isInitialized) player.pause()
+                findNavController().navigateUp()
             }
 
             binding.pvPlayer.controller.binding.btnSkipIntro.setOnClickListener {
@@ -1501,6 +1505,7 @@ class PlayerTvFragment : Fragment() {
         }
 
         private fun startProgressHandler() {
+        stopProgressHandler()
             progressHandler = android.os.Handler(android.os.Looper.getMainLooper())
             progressRunnable = Runnable {
                 if (player.isPlaying) {
@@ -1560,7 +1565,7 @@ class PlayerTvFragment : Fragment() {
 
             nextEpisodePrefetchTargetId = currentEpisode.id
             nextEpisodePrefetchJob?.cancel()
-            nextEpisodePrefetchJob = lifecycleScope.launch(Dispatchers.IO) {
+            nextEpisodePrefetchJob = viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                 val loaded = EpisodeManager.ensureNextEpisodeAvailable(currentEpisode, database)
                 withContext(Dispatchers.Main) {
                     if (!isAdded || _binding == null) return@withContext
@@ -1694,15 +1699,8 @@ class PlayerTvFragment : Fragment() {
         private var currentSoftwareDecoder = false
 
         private fun buildPlayer(extraBuffering: Boolean): ExoPlayer {
-            val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                    if (extraBuffering) 300_000 else DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                    DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
-                )
-                .let { if (extraBuffering) it else com.streamflixreborn.streamflix.charm.CharmSharedPlayback.buffer(it) }
-                .build()
+            val loadControl = com.streamflixreborn.streamflix.charm.CharmPlaybackCore.vodLoadControl(
+                requireContext(), com.streamflixreborn.streamflix.charm.CharmSharedPlayback.settings.optString("buffer", "balanced"), extraBuffering)
 
             val renderersFactory = SubtitleOffsetRenderersFactory(requireContext()).apply {
                 if (Build.VERSION.SDK_INT > Build.VERSION_CODES.N_MR1 || currentSoftwareDecoder) {
@@ -1712,12 +1710,13 @@ class PlayerTvFragment : Fragment() {
                     }
                 }
             }
-            val baseBuilder = ExoPlayer.Builder(requireContext(), renderersFactory)
+            val baseBuilder = com.streamflixreborn.streamflix.charm.CharmPlaybackCore.builder(requireContext(), renderersFactory)
 
             return baseBuilder
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
                 .setLoadControl(loadControl)
                 .build()
+                .also(com.streamflixreborn.streamflix.charm.CharmPlaybackCore::configure)
         }
 
         private fun initializePlayer(extraBuffering: Boolean, softwareDecoder: Boolean = currentSoftwareDecoder) {
@@ -1754,6 +1753,12 @@ class PlayerTvFragment : Fragment() {
             dataSourceFactory = DefaultDataSource.Factory(requireContext(), httpDataSource)
 
             player = buildPlayer(extraBuffering).also { player ->
+                    try {
+                        com.streamflixreborn.streamflix.charm.CharmPlaybackCore.claim(player) { player.pause(); releasePlayer() }
+                    } catch (failure: Throwable) {
+                        com.streamflixreborn.streamflix.charm.CharmPlaybackCore.release(player)
+                        throw failure
+                    }
                     player.setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(C.USAGE_MEDIA)
@@ -1785,14 +1790,12 @@ class PlayerTvFragment : Fragment() {
 
         private fun releasePlayer() {
             stopProgressHandler()
+            if (::mediaSession.isInitialized) mediaSession.release()
             binding.pvPlayer.player = null
             binding.settings.player = null
             binding.settings.subtitleView = null
             if (::player.isInitialized) {
-                player.release()
-            }
-            if (::mediaSession.isInitialized) {
-                mediaSession.release()
+                com.streamflixreborn.streamflix.charm.CharmPlaybackCore.release(player)
             }
         }
 
@@ -2024,4 +2027,5 @@ class PlayerTvFragment : Fragment() {
 
 
     }
+
 

@@ -81,8 +81,16 @@ object SourcePicker {
             (kind == 0 || (kind == 1 && d?.isDebrid != true) || (kind == 2 && d?.isDebrid == true)) &&
                 (resolution == 0 || d?.height == resolution) &&
                 (!readyOnly || d?.kind != SourceDetails.Kind.REAL_DEBRID || SourceDiscovery.cached(d))
-        }
+        }.sortedWith(compareBy<Video.Server> { row ->
+            when {
+                row.details?.kind == SourceDetails.Kind.REAL_DEBRID && row.details?.let(SourceDiscovery::cached) == true -> 0
+                row.details?.isDebrid == true -> 1
+                else -> 2
+            }
+        }.thenByDescending { it.details?.height ?: 0 }.thenBy { it.name.lowercase() })
         var rows = filtered()
+        // Reveal the first arriving debrid batch once per dialog, not on every filter/retry.
+        var revealedDebrid = rows.any { it.details?.isDebrid == true }
         var selectedSourceId: String? = currentId
         var detailsDialog: AlertDialog? = null
         fun showDetails(index: Int) {
@@ -124,12 +132,18 @@ object SourcePicker {
             }
         }
         list.adapter = adapter
-        fun updateRows() {
+        fun updateRows(sourceUpdate: Boolean = false) {
             val focusedId = rows.getOrNull(list.selectedItemPosition)?.id ?: selectedSourceId
             rows = filtered()
             adapter.notifyDataSetChanged()
-            val at = rows.indexOfFirst { it.id == focusedId }
-            if (rows.isNotEmpty()) list.setSelection(if (at >= 0) at else 0)
+            val gainedDebrid = sourceUpdate && !revealedDebrid && rows.any { it.details?.isDebrid == true }
+            if (gainedDebrid) revealedDebrid = true
+            val at = if (gainedDebrid) 0 else rows.indexOfFirst { it.id == focusedId }
+            if (rows.isNotEmpty()) {
+                if (gainedDebrid) list.setSelectionFromTop(0, 0)
+                else list.setSelection(if (at >= 0) at else 0)
+                // Keep focus on filters/details if the user moved there during discovery.
+            }
             footer.text = "${rows.size} of ${allRows.size} sources · Hold OK / long press for full details. Cache reports may be stale. Full release information is in Details."
         }
         val compactButtons = mutableListOf<Button>()
@@ -169,7 +183,7 @@ object SourcePicker {
         val job = fragment.lifecycleScope.launch {
             sourceFlow.collect {
                 allRows = it
-                updateRows()
+                updateRows(sourceUpdate = true)
             }
         }
         val statusJob = fragment.lifecycleScope.launch {
@@ -221,7 +235,9 @@ object SourcePicker {
         activityDecor.addOnLayoutChangeListener(layoutListener)
         if (rows.isEmpty()) detailButton.requestFocus() else list.requestFocus()
         val active = rows.indexOfFirst { it.id == currentId }
-        if (active >= 0) list.setSelection(active)
+        val firstDebrid = rows.indexOfFirst { it.details?.isDebrid == true }
+        if (firstDebrid >= 0) list.setSelectionFromTop(firstDebrid, 0)
+        else if (active >= 0) list.setSelection(active)
         discover()
         return dialog
     }

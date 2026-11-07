@@ -7,6 +7,21 @@ import { createStalkerClient, encodeStalker, decodeStalker, normalizeStalkerGuid
 import { scopePlaylistChannels } from "../src/core/playlistCatalog.ts";
 
 const login = { server: "https://portal.invalid/c/", mac: "00:1a:79:00:11:22", serial: "provided-serial", deviceId: "provided-device", timezone: "UTC" };
+test("catalog lifetime cancellation also aborts portal authentication", async () => {
+  const lifetime = new AbortController();
+  let count = 0, aborted = false;
+  const client = createStalkerClient(login, async (_url, options) => {
+    count++;
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => { aborted = true; reject(new Error("aborted")); }, { once: true });
+      lifetime.abort();
+    });
+  }, lifetime.signal);
+  await assert.rejects(client.call("vod", "get_ordered_list"), /cancelled/);
+  assert.equal(aborted, true);
+  await assert.rejects(client.call("vod", "get_ordered_list"), /cancelled/);
+  assert.equal(count, 1);
+});
 function portal(handler) {
   const calls = [];
   const fetcher = async (raw, options) => {

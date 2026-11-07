@@ -60,6 +60,12 @@ interface Provider {
         )
 
         val providers = mapOf(
+            NetPrimeProvider to ProviderSupport(movies = true, tvShows = true),
+            FilmoProvider to ProviderSupport(movies = true, tvShows = false),
+            KellerKinoProvider to ProviderSupport(movies = true, tvShows = false),
+            KinoGerProvider to ProviderSupport(movies = true, tvShows = true),
+            euroStreamingProvider to ProviderSupport(movies = false, tvShows = true),
+            VavooProvider("en") to ProviderSupport(movies = false, tvShows = true),
             SflixProvider to ProviderSupport(movies = true, tvShows = true),
             FanpelisProvider to ProviderSupport(movies = true, tvShows = true),
             SerienStreamProvider to ProviderSupport(movies = false, tvShows = true),

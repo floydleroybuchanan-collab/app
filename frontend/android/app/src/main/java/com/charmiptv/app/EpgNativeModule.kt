@@ -948,6 +948,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
       val acceptAllChannels = activeIds.isEmpty() && activeNames.isEmpty()
 
       while (event != XmlPullParser.END_DOCUMENT) {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Guide import stopped")
         when (event) {
           XmlPullParser.START_TAG -> when (parser.name) {
             "channel" -> {

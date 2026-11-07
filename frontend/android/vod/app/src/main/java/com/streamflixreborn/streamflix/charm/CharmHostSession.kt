@@ -9,6 +9,13 @@ import com.streamflixreborn.streamflix.R
 
 /** Intent-based handoff works across the protected VOD process boundary. */
 object CharmHostSession {
+    fun navigateBack(activity: FragmentActivity): Boolean {
+        val host = activity.supportFragmentManager.findFragmentById(R.id.nav_main_fragment)
+            as? androidx.navigation.fragment.NavHostFragment ?: return false
+        val settings = host.childFragmentManager.primaryNavigationFragment
+            as? com.streamflixreborn.streamflix.fragments.settings.SettingsTvFragment
+        return settings?.navigateBackInSettings() == true || host.navController.popBackStack()
+    }
     private val surfaces = java.util.WeakHashMap<Activity, (String) -> Unit>()
     fun attachSurface(activity: Activity, navigate: (String) -> Unit) { surfaces[activity] = navigate }
     fun detachSurface(activity: Activity) { surfaces.remove(activity) }

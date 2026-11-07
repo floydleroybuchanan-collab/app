@@ -6,7 +6,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.doOnLayout
-import androidx.core.widget.NestedScrollView
+import android.widget.FrameLayout
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceGroup
@@ -27,10 +27,9 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
     private val title = TextView(context).apply { textSize = 28f; setTextColor(0xFFECEBF2.toInt()); setPadding(0,0,0,dp(8)) }
     private val subtitle = TextView(context).apply { textSize = 13f; setTextColor(0xFFC1B9D1.toInt()); setPadding(0,0,0,dp(22)) }
     private val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-    private val sections = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    val root = NestedScrollView(context).apply {
-        setBackgroundColor(Color.TRANSPARENT); clipToPadding = true; isFillViewport = true
-        addView(content, ViewGroup.LayoutParams(-1,-2))
+    val root = FrameLayout(context).apply {
+        setBackgroundColor(Color.TRANSPARENT); clipToPadding = true
+        addView(content, ViewGroup.LayoutParams(-1,-1))
     }
     private val pages = linkedMapOf(
         "screen_connected_accounts" to "Accounts", "screen_vod_sources" to "Content & sources", "screen_content" to "Content & safety",
@@ -41,10 +40,19 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         (list.parent as? ViewGroup)?.removeView(list)
         list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = false
         list.setPadding(0,0,0,0); list.itemAnimator = null
-        content.addView(title); content.addView(subtitle); content.addView(row)
-        row.addView(sections, LinearLayout.LayoutParams(dp(168), -2).apply { marginEnd = dp(18) })
-        row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
-        root.doOnLayout { root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, 0); content.setPadding((root.width*.135f).toInt(), 0, (root.width*.024f).toInt(), dp(36)) }
+        content.addView(title); content.addView(subtitle)
+        content.addView(row, LinearLayout.LayoutParams(-1, 0, 1f))
+        row.addView(list, LinearLayout.LayoutParams(0,-1,1f))
+        val fit = {
+            root.setPadding(0, 0, 0, 0)
+            content.setPadding(dp(16), dp(8), dp(16), dp(24))
+            val columns = ((root.width - dp(32)) / dp(250)).coerceIn(1, 4)
+            (list.layoutManager as? GridLayoutManager)?.spanCount = columns
+        }
+        root.doOnLayout { fit() }
+        root.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            if (r - l != oldR - oldL || b - t != oldB - oldT) fit()
+        }
         list.addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) { outRect.set(dp(4),dp(4),dp(4),dp(4)) }
         })
@@ -53,23 +61,13 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         val overview = key == null
         title.text = if (overview) "Your VOD. Your way." else pages[key] ?: name ?: "Settings"
         subtitle.text = if (overview) "Personalize playback, manage your account and make yourself at home." else "Settings  /  ${title.text}"
-        sections.visibility = if (overview) View.GONE else View.VISIBLE
-        sections.removeAllViews()
-        if (!overview) {
-            (linkedMapOf<String?,String>(null to "All settings") + pages).forEach { (page,label) ->
-                sections.addView(CharmVodPageLayout.chip(root,label).apply {
-                    gravity = android.view.Gravity.CENTER_VERTICAL; textSize = 12f; isSelected = page == key
-                    setOnClickListener { open(page,label) }
-                }, LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(7) })
-            }
-        }
-        val columns = if (overview) 4 else 2
+        val columns = ((root.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels) / dp(250)).coerceIn(1, 4)
         list.layoutManager = GridLayoutManager(context, columns).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int): Int = if ((list.adapter as? PreferenceGroupAdapter)?.getItem(position) is PreferenceCategory) columns else 1
+                override fun getSpanSize(position: Int): Int = if ((list.adapter as? PreferenceGroupAdapter)?.getItem(position) is PreferenceCategory) (list.layoutManager as? GridLayoutManager)?.spanCount ?: 1 else 1
             }
         }
-        root.scrollTo(0,0)
+        list.scrollToPosition(0)
         CharmDesign.styleTree(content)
     }
     companion object {

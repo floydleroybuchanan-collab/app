@@ -18,6 +18,51 @@ import org.robolectric.annotation.ConscryptMode
 @Config(sdk=[35], application=Application::class)
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class PlayerControlRevealTest {
+    @Test fun playbackHandoffReleasesOldOwnerAndIgnoresStaleRelease() {
+        val context = RuntimeEnvironment.getApplication()
+        val first = ExoPlayer.Builder(context).build()
+        val second = ExoPlayer.Builder(context).build()
+        val third = ExoPlayer.Builder(context).build()
+        var releasedFirst = false
+        var releasedSecond = false
+        val core = com.streamflixreborn.streamflix.charm.CharmPlaybackCore
+        try {
+            core.claim(first) { releasedFirst = true; core.release(first) }
+            core.claim(second) { releasedSecond = true; core.release(second) }
+            assertTrue(releasedFirst)
+            core.release(first)
+            core.claim(third) { core.release(third) }
+            assertTrue(releasedSecond)
+        } finally { core.release(first); core.release(second); core.release(third) }
+    }
+
+    @Test fun failedReleaseDoesNotAdmitAnotherOwner() {
+        val context = RuntimeEnvironment.getApplication()
+        val first = ExoPlayer.Builder(context).build()
+        val second = ExoPlayer.Builder(context).build()
+        val core = com.streamflixreborn.streamflix.charm.CharmPlaybackCore
+        try {
+            core.claim(first) { /* platform failure left its decoder alive */ }
+            assertThrows(IllegalStateException::class.java) { core.claim(second) { core.release(second) } }
+        } finally { core.release(first); core.release(second) }
+    }
+    @Test fun stopBelongsToTheControllerAndHidesWithIt() {
+        val context = RuntimeEnvironment.getApplication()
+        val player = ExoPlayer.Builder(context).build()
+        val attrs = org.robolectric.Robolectric.buildAttributeSet().addAttribute(androidx.media3.ui.R.attr.controller_layout_id, "@layout/content_exo_controller_tv").build()
+        val view = PlayerTvView(context, attrs).apply { this.player = player }
+        val stop = view.findViewById<android.view.View>(com.streamflixreborn.streamflix.R.id.btn_exo_stop)
+        try {
+            view.showController()
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300))
+            assertTrue(view.isControllerFullyVisible)
+            assertEquals(com.streamflixreborn.streamflix.R.id.exo_settings, stop.nextFocusRightId)
+            assertEquals(com.streamflixreborn.streamflix.R.id.btn_exo_sources, stop.nextFocusLeftId)
+            view.hideController()
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
+            assertFalse(view.isControllerFullyVisible)
+        } finally { view.player = null; player.release() }
+    }
     @Test fun firstRemotePressRevealsControlsWithoutSeekingOrPausing() {
         val context=RuntimeEnvironment.getApplication()
         val player=ExoPlayer.Builder(context).build()
@@ -36,3 +81,5 @@ class PlayerControlRevealTest {
         } finally {view.player=null;player.release()}
     }
 }
+
+

@@ -258,6 +258,8 @@ object NativePlaybackManager {
       "playing" to (instance?.isPlaying == true), "userPaused" to userPaused,
       "suppression" to (instance?.playbackSuppressionReason ?: 0),
       "sourceFps" to sourceFrameRate, "displayHz" to (activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f),
+      "playbackSpeed" to (instance?.playbackParameters?.speed ?: 1f),
+      "surfaceType" to (playerViewFor(owner)?.videoSurfaceView?.javaClass?.simpleName ?: "none"),
       "droppedInWindow" to droppedFrameWindow, "dropWindowMs" to droppedFrameWindowMs,
       "videoMime" to safeCode(videoMimeType), "audioMime" to safeCode(audioMimeType),
       "videoDecoder" to safeCode(videoDecoder), "audioDecoder" to safeCode(audioDecoder),
@@ -610,7 +612,7 @@ object NativePlaybackManager {
   // reference so the coordinator cannot allocate a replacement decoder.
   private fun releaseDecoder(instance: ExoPlayer?): Boolean = try {
     playbackRevision += 1
-    instance?.release()
+    com.streamflixreborn.streamflix.charm.CharmPlaybackCore.release(instance)
     if (player === instance) player = null
     decoderReleaseFailure = null
     true
@@ -638,11 +640,18 @@ object NativePlaybackManager {
       // MediaCodec queueing while audio continues. Disable async so hardware
       // video can paint; FFmpeg remains the audio extension fallback.
       .forceDisableMediaCodecAsynchronousQueueing()
-    return ExoPlayer.Builder(context, renderers)
+    return com.streamflixreborn.streamflix.charm.CharmPlaybackCore.builder(context, renderers)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
       .setWakeMode(C.WAKE_MODE_NETWORK)
       .build().also { created ->
+        com.streamflixreborn.streamflix.charm.CharmPlaybackCore.configure(created)
+        try {
+          com.streamflixreborn.streamflix.charm.CharmPlaybackCore.claim(created) { stopInternal(releasePlayer = true) }
+        } catch (failure: Throwable) {
+          com.streamflixreborn.streamflix.charm.CharmPlaybackCore.release(created)
+          throw failure
+        }
         player = created
         applyAudioAttributes(created, owner)
         created.volume = if (mutedState) 0f else 1f
@@ -1446,13 +1455,7 @@ object NativePlaybackManager {
 
   /** Small / Medium / Large -> bounded live-TV LoadControl durations. */
   private fun media3BufferDurationsMs(profile: String, lowRam: Boolean): IntArray {
-    val durations = when (profile) {
-      "low_latency" -> intArrayOf(1_000, 5_000, 500, 1_000)
-      "balanced" -> intArrayOf(3_000, 15_000, 1_000, 2_000)
-      else -> intArrayOf(10_000, 30_000, 1_500, 3_000)
-    }
-    if (lowRam) durations[1] = minOf(durations[1], 15_000)
-    return durations
+    return com.streamflixreborn.streamflix.charm.CharmPlaybackCore.liveDurations(profile, lowRam)
   }
 
   private fun armStartupTimeout() {

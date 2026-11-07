@@ -144,6 +144,7 @@ internal class BackgroundEpgUpdater(private val context: Context) {
       var category: String? = null
       var rawProgrammes = 0L
       while (event != XmlPullParser.END_DOCUMENT) {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Guide import stopped")
         when (event) {
           XmlPullParser.START_TAG -> when (parser.name) {
             "channel" -> metadataId = parser.getAttributeValue(null, "id")?.trim()?.takeIf(String::isNotEmpty)

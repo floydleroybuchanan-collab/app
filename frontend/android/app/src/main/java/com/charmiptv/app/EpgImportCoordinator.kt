@@ -18,7 +18,7 @@ internal object EpgImportCoordinator {
 
   fun acquire(databaseKey: String): AutoCloseable {
     val lock = locks.getOrPut(databaseKey) { ReentrantLock(true) }
-    lock.lock()
+    lock.lockInterruptibly()
     val outer = lock.holdCount == 1
     if (outer) imports.incrementAndGet()
     return AutoCloseable {

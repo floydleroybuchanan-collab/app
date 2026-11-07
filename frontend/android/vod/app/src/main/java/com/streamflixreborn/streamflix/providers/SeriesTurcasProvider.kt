@@ -54,7 +54,7 @@ object SeriesTurcasProvider : Provider {
         val timestamp: Long
     )
 
-    private val detailPageCache = ConcurrentHashMap<String, CachedDocument>()
+    private val detailPageCache = com.streamflixreborn.streamflix.utils.BoundedProviderCache<String, CachedDocument>(24, 2 * 60 * 1000L)
 
     private val service: SeriesTurcasService by lazy {
         val client = OkHttpClient.Builder()

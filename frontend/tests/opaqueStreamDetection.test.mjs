@@ -108,7 +108,8 @@ test("known TS/HLS/DASH paths bypass opaque routing and keep the locked playback
   assert.match(manager, /ProgressiveMediaSource\.Factory\(dataSource, createLiveTsExtractorsFactory\(\)\)/);
   assert.match(clients, /ConnectionPool\(6, 5, TimeUnit\.MINUTES\)/);
   assert.match(manager, /fun media3BufferDurationsMs/);
-  assert.match(manager, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
+  assert.match(manager, /CharmPlaybackCore\.liveDurations\(profile, lowRam\)/);
+  assert.match(await source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmPlaybackCore.kt"), /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
   assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
   assert.match(clients, /readTimeout\(20, TimeUnit.SECONDS\)/);
   assert.match(manager, /recoveryPolicy\.decide\(failure, SystemClock\.elapsedRealtime\(\)\)/);

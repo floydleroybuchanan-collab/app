@@ -35,6 +35,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import com.streamflixreborn.streamflix.utils.providerRunCatching as runCatching
 import java.util.concurrent.ConcurrentHashMap
 
 class HomeViewModel(database: AppDatabase) : ViewModel() {
@@ -64,6 +71,8 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     private val continueWatchingSeasonEpisodesCache = ConcurrentHashMap<String, List<Episode>>()
     private val _userDataCache = MutableStateFlow<UserDataCache.UserData?>(null)
     private var currentProvider: Provider? = null
+    private var homeJob: Job? = null
+    private var userDataJob: Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: Flow<State> = combine(
@@ -347,14 +356,19 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
 
     private suspend fun enrichContinueWatchingEpisodes(episodes: List<Episode>): List<Episode> = coroutineScope {
         val provider = UserPreferences.currentProvider ?: return@coroutineScope episodes
+        val requests = Semaphore(4)
 
         episodes.map { episode ->
             async {
+                requests.withPermit {
                 val tvShowId = episode.tvShow?.id ?: return@async episode
-                val resolvedTvShow = continueWatchingTvShowCache[tvShowId] ?: runCatching {
+                val showCacheKey = "${provider.name}:$tvShowId"
+                val resolvedTvShow = continueWatchingTvShowCache[showCacheKey] ?: runCatching {
                     provider.getTvShow(tvShowId)
                 }.getOrNull()?.also { fetchedTvShow ->
-                    continueWatchingTvShowCache[tvShowId] = fetchedTvShow
+                    currentCoroutineContext().ensureActive()
+                    if (continueWatchingTvShowCache.size >= 128) continueWatchingTvShowCache.clear()
+                    continueWatchingTvShowCache[showCacheKey] = fetchedTvShow
                 }
 
                 val mergedTvShow = resolvedTvShow?.copy().apply {
@@ -372,11 +386,14 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                     val seasonId = resolvedSeason?.id
                         ?: episode.season?.id
                     seasonId?.let { key ->
-                        continueWatchingSeasonEpisodesCache[key] ?: runCatching {
+                        val seasonCacheKey = "${provider.name}:$key"
+                        continueWatchingSeasonEpisodesCache[seasonCacheKey] ?: runCatching {
                             provider.getEpisodesBySeason(key)
                         }.getOrDefault(emptyList()).also { fetchedEpisodes ->
+                            currentCoroutineContext().ensureActive()
                             if (fetchedEpisodes.isNotEmpty()) {
-                                continueWatchingSeasonEpisodesCache[key] = fetchedEpisodes
+                                if (continueWatchingSeasonEpisodesCache.size >= 128) continueWatchingSeasonEpisodesCache.clear()
+                                continueWatchingSeasonEpisodesCache[seasonCacheKey] = fetchedEpisodes
                             }
                         }
                     }?.firstOrNull { seasonEpisode ->
@@ -395,17 +412,25 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                 ).apply {
                     merge(episode)
                 }
+                }
             }
         }.awaitAll()
     }
 
-    fun getHome() = viewModelScope.launch(Dispatchers.IO) {
+    @Synchronized
+    fun getHome(): Job {
+        homeJob?.cancel()
+        return viewModelScope.launch(Dispatchers.IO) {
         val provider = UserPreferences.currentProvider ?: run {
             _state.emit(State.FailedLoading(IllegalStateException("No provider selected")))
             return@launch
         }
 
 
+        if (currentProvider?.name != provider.name) {
+            continueWatchingTvShowCache.clear()
+            continueWatchingSeasonEpisodesCache.clear()
+        }
         currentProvider = provider
         val appContext = StreamFlixApp.instance.applicationContext
         val cachedCategories = HomeCacheStore.read(appContext, provider)
@@ -418,12 +443,16 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
             _state.emit(State.Loading)
         }
 
+        currentCoroutineContext().ensureActive()
         loadUserDataCache(provider)
 
         try {
             val categories = provider.getHome()
+            currentCoroutineContext().ensureActive()
             HomeCacheStore.write(appContext, provider, categories)
             _state.emit(State.SuccessLoading(categories))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.e("HomeViewModel", "getHome: ", e)
             if (cachedCategories.isNullOrEmpty()) {
@@ -432,14 +461,18 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                 _state.emit(State.SuccessLoading(cachedCategories))
             }
         }
+        }.also { homeJob = it }
     }
 
+    @Synchronized
     private fun loadUserDataCache(provider: Provider) {
+        if (UserPreferences.currentProvider?.name != provider.name) return
+        userDataJob?.cancel()
         val appContext = StreamFlixApp.instance.applicationContext
         val cached = UserDataCache.read(appContext, provider)
         _userDataCache.value = cached
 
-        viewModelScope.launch(Dispatchers.IO) {
+        userDataJob = viewModelScope.launch(Dispatchers.IO) {
             val db = AppDatabase.getInstance(appContext)
             val moviesDeferred = async { db.movieDao().getFavorites().first() }
             val tvShowsDeferred = async { db.tvShowDao().getFavorites().first() }
@@ -478,9 +511,11 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                 ),
             )
 
+            currentCoroutineContext().ensureActive()
             UserDataCache.write(appContext, provider, newData)
+            currentCoroutineContext().ensureActive()
 
-            if (_userDataCache.value != newData) {
+            if (UserPreferences.currentProvider?.name == provider.name && _userDataCache.value != newData) {
                 _userDataCache.value = newData
             }
         }

@@ -30,7 +30,7 @@ test("Guide is a single native logical canvas with predictive prefetch", async (
   assert.match(manager, /view\.dispose\(\)/);
   assert.match(view, /fun dispose\(\)/);
   assert.doesNotMatch(view, /onDetachedFromWindow\(\)[\s\S]{0,180}(shutdownNow|database\.close)/);
-  assert.match(view, /pendingQuery = GuideQuery/);
+  assert.match(view, /pendingQuery\.set\(GuideQuery/);
   assert.match(view, /queryDrainScheduled = AtomicBoolean\(false\)/);
   assert.match(view, /Keep at most one active read plus the newest requested runway/);
   assert.match(app, /add\(NativeGuidePackage\(\)\)/);
@@ -48,7 +48,7 @@ test("Guide logical resets force a bounded native reload without remounting", as
   assert.match(bridge, /reloadGeneration=\{reloadGeneration\}/);
   assert.match(manager, /@ReactProp\(name = "reloadGeneration", defaultInt = 0\)/);
   assert.match(view, /fun setReloadGeneration\(value: Int\)/);
-  assert.match(view, /pendingQuery = null[\s\S]{0,260}loadPrograms\(\)/);
+  assert.match(view, /pendingQuery\.set\(null\)[\s\S]{0,260}loadPrograms\(\)/);
   assert.doesNotMatch(guide, /key=\{resetToken\}/);
 });
 
@@ -72,7 +72,7 @@ test("native Guide draw loop reuses formatter/date objects instead of allocating
   assert.match(view, /private var timeFormatter = SimpleDateFormat\("h:mm a", Locale\.getDefault\(\)\)/);
   assert.match(view, /private val tickDate = Date\(\)/);
   assert.match(view, /fun setClock24h\(value: Boolean\)/);
-  const drawHeader = view.match(/private fun drawHeader[\s\S]*?\n  }\n\n  private fun drawClippedText/)?.[0] || "";
+  const drawHeader = view.match(/private fun drawHeader[\s\S]*?\n  }/)?.[0] || "";
   assert.match(drawHeader, /tickDate\.time = tick/);
   assert.match(drawHeader, /timeFormatter\.format\(tickDate\)/);
   assert.doesNotMatch(drawHeader, /SimpleDateFormat\(|Date\(/);

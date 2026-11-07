@@ -16,6 +16,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
@@ -45,7 +46,7 @@ class NativeGuideView(context: Context) : View(context) {
   private var selectedTimeMs = System.currentTimeMillis().coerceIn(windowStartMs, windowEndMs - 1)
   private var firstVisibleRow = 0
   private var generation = 0
-  @Volatile private var pendingQuery: GuideQuery? = null
+  private val pendingQuery = AtomicReference<GuideQuery?>(null)
   private val queryDrainScheduled = AtomicBoolean(false)
   @Volatile private var disposed = false
   private var enabled = true
@@ -103,8 +104,8 @@ class NativeGuideView(context: Context) : View(context) {
       if (disposed) return@post
       programs = emptyMap()
       generation += 1
-      pendingQuery = null
-      loadPrograms()
+      pendingQuery.set(null)
+      if (enabled && isAttachedToWindow) loadPrograms()
       invalidate()
     }
   }
@@ -144,7 +145,9 @@ class NativeGuideView(context: Context) : View(context) {
   init {
     isFocusable = true
     isFocusableInTouchMode = true
-    setBackgroundColor(Color.BLACK)
+    // onDraw owns the background. An opaque Android View background would
+    // remain underneath translucent Paints and conceal the playing video.
+    setBackgroundColor(Color.TRANSPARENT)
   }
 
   private fun scheduleLiveClock() {
@@ -239,7 +242,8 @@ class NativeGuideView(context: Context) : View(context) {
     overlayMode = value
     background.alpha = if (value) 0 else 255
     header.alpha = if (value) 205 else 255
-    rowSurface.alpha = if (value) 100 else 255
+    // Draw one tinted cell layer, rather than stacking two translucent fills.
+    rowSurface.alpha = if (value) 0 else 255
     cell.alpha = if (value) 130 else 255
     invalidate()
   }
@@ -302,7 +306,7 @@ class NativeGuideView(context: Context) : View(context) {
     removeCallbacks(settleSelectionRunnable)
     reloadGeneration = value
     generation += 1
-    pendingQuery = null
+    pendingQuery.set(null)
     // Logical Guide resets (group switch/Search/fullscreen return) keep the
     // same native view and cursor, but must always request a fresh bounded
     // visible runway even when the channel array itself is unchanged.
@@ -366,25 +370,24 @@ class NativeGuideView(context: Context) : View(context) {
     val ids = rows.subList(from, to).map { it.id }
     if (ids.isEmpty()) {
       generation += 1
-      pendingQuery = null
+      pendingQuery.set(null)
       programs = emptyMap()
       return
     }
 
     val queryStart = max(windowStartMs, viewportStartMs - horizontalPrefetchBeforeMs)
     val queryEnd = min(windowEndMs, viewportEndMs() + horizontalPrefetchAfterMs)
-    pendingQuery = GuideQuery(++generation, queryStart, queryEnd, ids)
+    pendingQuery.set(GuideQuery(++generation, queryStart, queryEnd, ids))
     scheduleQueryDrain()
   }
 
   /** Keep at most one active read plus the newest requested runway. */
   private fun scheduleQueryDrain() {
     if (disposed || io.isShutdown || !queryDrainScheduled.compareAndSet(false, true)) return
-    io.execute {
+    try { io.execute {
       try {
         while (!disposed) {
-          val request = pendingQuery ?: break
-          pendingQuery = null
+          val request = pendingQuery.getAndSet(null) ?: break
           // A table swap during EPG refresh can briefly make a read fail. Keep
           // the last-good painted rows instead of replacing the canvas with an
           // empty map (the reported black-guide failure).
@@ -422,8 +425,12 @@ class NativeGuideView(context: Context) : View(context) {
         }
       } finally {
         queryDrainScheduled.set(false)
-        if (!disposed && pendingQuery != null) scheduleQueryDrain()
+        if (!disposed && pendingQuery.get() != null) scheduleQueryDrain()
       }
+    } } catch (_: java.util.concurrent.RejectedExecutionException) {
+      // Disposal may win after the isShutdown check but before execute.
+      queryDrainScheduled.set(false)
+      pendingQuery.set(null)
     }
   }
 
@@ -436,7 +443,8 @@ class NativeGuideView(context: Context) : View(context) {
     selectLongPressSeen = false
     moveVelocity = 0
     generation += 1
-    pendingQuery = null
+    pendingQuery.set(null)
+    programs = emptyMap()
     super.onDetachedFromWindow()
   }
 
@@ -463,7 +471,7 @@ class NativeGuideView(context: Context) : View(context) {
     moveVelocity = 0
     disposed = true
     generation += 1
-    pendingQuery = null
+    pendingQuery.set(null)
     programs = emptyMap()
     unregisterMemoryListener()
     io.shutdownNow()
@@ -740,7 +748,7 @@ class NativeGuideView(context: Context) : View(context) {
 
     if (wallClockNow in visibleStartMs..visibleEndMs) {
       val x = timeToX(wallClockNow, visibleStartMs, visibleEndMs)
-      canvas.drawLine(x, headerHeight, x, height.toFloat(), nowPaint)
+      canvas.drawLine(x, headerHeight, x, guideContentBottom(), nowPaint)
     }
   }
 
@@ -779,10 +787,15 @@ class NativeGuideView(context: Context) : View(context) {
       tickDate.time = tick
       val timeLabel = timeFormatter.format(tickDate)
       canvas.drawText(timeLabel, x + pad, headerHeight * .66f, muted)
-      canvas.drawLine(x, headerHeight, x, height.toFloat(), divider)
+      // Time marks belong to the header. Painting them behind programme
+      // cells left bright dots in gutters and phantom columns after the
+      // final channel. Programme boundaries are rendered with their rows.
       tick += 1_800_000L
     }
   }
+
+  private fun guideContentBottom(): Float = min(height.toFloat(),
+    headerHeight + max(0, rows.size - firstVisibleRow) * rowHeight)
 
   private fun drawClippedText(canvas: Canvas, value: String, x: Float, baseline: Float, right: Float, paint: Paint) {
     if (right <= x) return

@@ -32,11 +32,11 @@ export function stalkerEndpoint(login: StalkerLogin): string {
 }
 class PortalAuthError extends Error {}
 function aborted(signal?: AbortSignal) { if (signal?.aborted) throw new Error("Portal operation cancelled."); }
-export function createStalkerClient(raw: StalkerLogin, fetcher: typeof fetch = fetch) {
+export function createStalkerClient(raw: StalkerLogin, fetcher: typeof fetch = fetch, lifetimeSignal?: AbortSignal) {
   const login = normalizeStalker(raw);
   const cookie = `mac=${login.mac}; timezone=${login.timezone}`;
   let token = "", hash = "", pending: Promise<void> | null = null;
-  async function request(type: string, action: string, params: Record<string, string | number> = {}, signal?: AbortSignal, authenticated = true): Promise<any> {
+  async function request(type: string, action: string, params: Record<string, string | number> = {}, signal: AbortSignal | undefined = lifetimeSignal, authenticated = true): Promise<any> {
     aborted(signal);
     const url = new URL(stalkerEndpoint(login));
     for (const [key, value] of Object.entries({ type, action, ...params })) url.searchParams.set(key, String(value));
@@ -77,8 +77,9 @@ export function createStalkerClient(raw: StalkerLogin, fetcher: typeof fetch = f
     if (!pending) pending = authenticate().catch((error) => { token = ""; hash = ""; throw error; }).finally(() => { pending = null; });
     await pending;
   }
-  async function call(type: string, action: string, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<any> {
+  async function call(type: string, action: string, params: Record<string, string | number> = {}, signal: AbortSignal | undefined = lifetimeSignal): Promise<any> {
     try {
+      aborted(signal);
       await ensure(); aborted(signal);
       try { return await request(type, action, params, signal); }
       catch (error) { if (!(error instanceof PortalAuthError)) throw error; token = ""; await ensure(); aborted(signal); return await request(type, action, params, signal); }

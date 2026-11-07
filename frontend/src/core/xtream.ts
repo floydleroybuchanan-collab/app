@@ -27,8 +27,11 @@ export function xtreamEndpoint(login: XtreamLogin, file: string, action?: string
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url.toString();
 }
-async function json(login: XtreamLogin, action?: string, params: Record<string, string> = {}): Promise<any> {
+async function json(login: XtreamLogin, action?: string, params: Record<string, string> = {}, signal?: AbortSignal): Promise<any> {
+  if (signal?.aborted) throw new Error("Provider operation cancelled.");
   const abort = new AbortController(); const timer = setTimeout(() => abort.abort(), 30_000);
+  const cancel = () => abort.abort();
+  signal?.addEventListener("abort", cancel, { once: true });
   try {
     const response = await fetch(xtreamEndpoint(login, "player_api.php", action, params), { signal: abort.signal, redirect: "error" });
     if (!response.ok) throw new Error("Provider request failed.");
@@ -39,7 +42,7 @@ async function json(login: XtreamLogin, action?: string, params: Record<string, 
     return JSON.parse(body);
   } catch {
     throw new Error("Could not contact the Xtream provider. Check the server, login and connection. Existing channels are unchanged.");
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); }
 }
 export function accountInfo(payload: any): XtreamAccount {
   const user = payload?.user_info;
@@ -116,17 +119,17 @@ export function mapXtreamDetails(payload: any, kind: "movie" | "series"): Xtream
     released: text(kind === "movie" ? info.releasedate : info.releaseDate), durationSeconds: Math.max(0, Number(info.duration_secs) || 0),
     trailer: text(info.youtube_trailer), extension: kind === "movie" ? extension(payload.movie_data?.container_extension) : "", episodes };
 }
-export async function loadXtreamCatalog(raw: XtreamLogin, kind: "movie" | "series"): Promise<XtreamTitle[]> {
+export async function loadXtreamCatalog(raw: XtreamLogin, kind: "movie" | "series", signal?: AbortSignal): Promise<XtreamTitle[]> {
   const login = normalizeXtream(raw);
-  accountInfo(await json(login));
+  accountInfo(await json(login, undefined, {}, signal));
   const prefix = kind === "movie" ? "vod" : "series";
-  const categories = await json(login, `get_${prefix}_categories`);
-  const rows = await json(login, kind === "movie" ? "get_vod_streams" : "get_series");
+  const categories = await json(login, `get_${prefix}_categories`, {}, signal);
+  const rows = await json(login, kind === "movie" ? "get_vod_streams" : "get_series", {}, signal);
   return mapXtreamTitles(kind, rows, categories);
 }
-export async function loadXtreamDetails(raw: XtreamLogin, kind: "movie" | "series", id: string): Promise<XtreamDetails> {
+export async function loadXtreamDetails(raw: XtreamLogin, kind: "movie" | "series", id: string, signal?: AbortSignal): Promise<XtreamDetails> {
   const login = normalizeXtream(raw), key = kind === "movie" ? "vod_id" : "series_id";
-  return mapXtreamDetails(await json(login, kind === "movie" ? "get_vod_info" : "get_series_info", { [key]: numericId(id) }), kind);
+  return mapXtreamDetails(await json(login, kind === "movie" ? "get_vod_info" : "get_series_info", { [key]: numericId(id) }, signal), kind);
 }
 export function xtreamMediaUrl(raw: XtreamLogin, kind: "movie" | "series", id: string, format: string): string {
   const login = normalizeXtream(raw), ext = extension(format);

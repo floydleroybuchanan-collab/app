@@ -107,6 +107,27 @@ object UserPreferences {
         }
     }
 
+    @Synchronized
+    fun setProviderCustomDomain(providerName: String, value: String) {
+        val input = value.trim().let { if (it.contains("://")) it else "https://$it" }
+        val uri = android.net.Uri.parse(input)
+        val host = uri.host?.takeIf { it.isNotBlank() } ?: return
+        if (uri.userInfo != null || uri.scheme !in listOf("http", "https")) return
+        val domain = host + if (uri.port >= 0) ":${uri.port}" else ""
+        val stored = providerCache.optJSONObject(providerName)
+            ?: JSONObject().also { providerCache.put(providerName, it) }
+        stored.put("CUSTOM_DOMAIN", domain)
+        Key.PROVIDER_CACHE.setString(providerCache.toString())
+    }
+
+    @Synchronized
+    fun resolveProviderBaseUrl(providerName: String, defaultBaseUrl: String): String {
+        if (!::providerCache.isInitialized) return defaultBaseUrl
+        val domain = providerCache.optJSONObject(providerName)?.optString("CUSTOM_DOMAIN").orEmpty()
+        if (domain.isBlank()) return defaultBaseUrl
+        return android.net.Uri.parse(defaultBaseUrl).buildUpon().encodedAuthority(domain).build().toString()
+    }
+
     var currentLanguage: String?
         get() = Key.CURRENT_LANGUAGE.getString()
         set(value) = Key.CURRENT_LANGUAGE.setString(value)

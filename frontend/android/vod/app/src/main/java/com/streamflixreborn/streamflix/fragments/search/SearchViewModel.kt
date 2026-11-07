@@ -25,6 +25,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 // DEFINICIONES DE ESTADO Y RESULTADOS (Fuera de la clase para mejor acceso)
 sealed class State {
@@ -156,10 +158,8 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
                 val results = withContext(Dispatchers.IO) {
                     ParentalControlUtils.filterItems(provider.search(submittedQuery, nextPage))
                 }
-                val keys = currentState.results.map { it.searchIdentityKey() }.toHashSet()
-                val unique = results.filter { keys.add(it.searchIdentityKey()) }
                 page = nextPage
-                _state.value = State.SuccessSearching(currentState.results + unique, results.isNotEmpty())
+                _state.value = mergeSearchPage(currentState.results, results)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -181,17 +181,18 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
             val results = targets.map { ProviderResult(it, ProviderResult.State.Loading) }.toMutableList()
             _state.value = State.SuccessGlobalSearching(results.toList())
             val mutex = Mutex()
+            val requests = Semaphore(4)
             targets.forEachIndexed { index, provider ->
                 launch {
                     val result = try {
-                        val items = withContext(Dispatchers.IO) {
+                        val items = requests.withPermit { withContext(Dispatchers.IO) {
                             ParentalControlUtils.filterItems(provider.search(submittedQuery).onEach {
                                 when (it) {
                                     is Movie -> it.providerName = provider.name
                                     is TvShow -> it.providerName = provider.name
                                 }
                             })
-                        }
+                        } }
                         ProviderResult(provider, ProviderResult.State.Success(items))
                     } catch (e: CancellationException) {
                         throw e
@@ -213,6 +214,12 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
         }.also { searchJob = it }
     }
 
+}
+
+internal fun mergeSearchPage(existing: List<AppAdapter.Item>, incoming: List<AppAdapter.Item>): State.SuccessSearching {
+    val keys = existing.map { it.searchIdentityKey() }.toHashSet()
+    val unique = incoming.filter { keys.add(it.searchIdentityKey()) }
+    return State.SuccessSearching(existing + unique, unique.isNotEmpty())
 }
 
 private fun AppAdapter.Item.searchIdentityKey(): String = when (this) {

@@ -19,6 +19,8 @@ late publication after a protected-access change. It records bounded timing
 for catalog and native import stages without changing transport.
 See docs/rc17-startup-focus-repair.md.
 Any later edit must be reviewed again; the remaining player checks still run.
+RC16 rework: the EpgNativeModule parser loop adds an interruption checkpoint.
+Network transport and publication remain unchanged; see the guide-memory audit.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
 """
 import hashlib
@@ -26,7 +28,7 @@ import hashlib
 REVIEWED_PLAYLIST_TRANSPORT = {
     'frontend/src/source.native.ts': '21ce82306c04745a97e27064d49ab10978ec72bf28a872f5f3f4fefca2ff3efa',
     'frontend/src/nativeEpg.ts': '2679305589ac6e4c64c0ec44b676b9c257f7939adbcee912cb26296f80018873',
-    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'a242dd8b03850f9956d089b3022890d09f9a04b34f955ad39f238285576ce43b',
+    'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': 'f8300df6be01eaf102ec8fa6371eafbb5ea638f619bc5cef7e7a49bf90cd5b66',
 }
 
 

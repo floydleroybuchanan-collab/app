@@ -12,6 +12,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 
 internal object EpgUpdateScheduler {
   private const val UNIQUE_WORK = "charm-epg-update-scheduler-v2"
@@ -52,13 +54,16 @@ internal class EpgUpdateWorker(
   appContext: Context,
   params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-  override suspend fun doWork(): Result {
+  override suspend fun doWork(): Result = runInterruptible(Dispatchers.IO) { performWork() }
+
+  private fun performWork(): Result {
     val nowSeconds = System.currentTimeMillis() / 1000L
     val dao = EpgControlDatabase.get(applicationContext).dao()
     val updater = BackgroundEpgUpdater(applicationContext)
     var retryNeeded = false
     var refreshed = false
     for (source in dao.enabledSources()) {
+      if (Thread.currentThread().isInterrupted || isStopped) throw InterruptedException("Guide update stopped")
       if (!EpgImportCoordinator.canStartBackground()) { retryNeeded = true; break }
       val importLease = updater.acquireImport(source)
       try {
@@ -111,6 +116,7 @@ internal class EpgUpdateWorker(
         dao.finishUpdateHistory(historyId, if (result.swapped) "succeeded" else "waiting_for_bindings", finishedMs / 1000L, result.programmeCount, "")
         refreshed = refreshed || result.swapped
       } catch (t: Throwable) {
+        if (t is InterruptedException || t is kotlinx.coroutines.CancellationException || Thread.currentThread().isInterrupted) throw t
         val finishedMs = System.currentTimeMillis()
         val delayMinutes = min(12 * 60L, 15L * (1L shl min(5, attempt - 1)))
         val message = EpgDiagnosticSafety.message(t)

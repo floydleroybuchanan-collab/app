@@ -62,4 +62,24 @@ class EpgImportCoordinatorTest {
       }
     } finally { EpgImportCoordinator.appVisible = false; EpgImportCoordinator.playbackActive = false }
   }
+  @Test fun cancelledWaiterDoesNotAcquireOrLeakAnImportLease() {
+    val entered=CountDownLatch(1)
+    val stopped=CountDownLatch(1)
+    val acquired=java.util.concurrent.atomic.AtomicBoolean(false)
+    val lease=EpgImportCoordinator.acquire("cancelled-waiter")
+    val waiter=Thread {
+      entered.countDown()
+      try { EpgImportCoordinator.acquire("cancelled-waiter").use { acquired.set(true) } }
+      catch (_: InterruptedException) { stopped.countDown() }
+    }
+    try {
+      waiter.start()
+      assertTrue(entered.await(2,TimeUnit.SECONDS))
+      waiter.interrupt()
+      assertTrue("Waiting importer must stop before current owner releases",stopped.await(2,TimeUnit.SECONDS))
+      assertFalse(acquired.get())
+      assertEquals(1,EpgImportCoordinator.activeImports())
+    } finally { lease.close();waiter.interrupt();waiter.join(2000) }
+    assertEquals(0,EpgImportCoordinator.activeImports())
+  }
 }

@@ -5,6 +5,9 @@ import { createStalkerClient, normalizeStalker, STALKER_USER_AGENT, type Stalker
 type Kind = "movie" | "series";
 type PortalRow = Record<string, unknown>;
 type Client = ReturnType<typeof createStalkerClient>;
+function mediaClient(login: StalkerLogin, signal?: AbortSignal): Client {
+  return createStalkerClient(login, undefined, signal);
+}
 type Episode = XtreamEpisode & { command?: string; seriesNumber?: number };
 type CatalogRow = { row: PortalRow; type: "vod" | "series"; title: XtreamTitle };
 type Details = Omit<XtreamDetails, "episodes"> & { command?: string; episodes: Episode[] };
@@ -63,8 +66,8 @@ async function catalog(login: StalkerLogin, kind: Kind, client: Client): Promise
   return result;
 }
 
-export async function listStalkerCatalog(login: StalkerLogin, kind: Kind): Promise<XtreamTitle[]> {
-  return (await catalog(login, kind, createStalkerClient(login))).map(item => item.title);
+export async function listStalkerCatalog(login: StalkerLogin, kind: Kind, signal?: AbortSignal): Promise<XtreamTitle[]> {
+  return (await catalog(login, kind, mediaClient(login, signal))).map(item => item.title);
 }
 
 /** Clone m13381 recovered as m12185 (ev_7d7eb79ba28559c6affc486a04b8a3e7677e126aae8f31021bfa14149c2ea58f).
@@ -102,8 +105,8 @@ async function episodesFor(client: Client, item: CatalogRow): Promise<Episode[]>
   return [...new Map(episodes.map(episode => [episode.id, episode])).values()];
 }
 
-export async function loadStalkerDetails(login: StalkerLogin, kind: Kind, id: string): Promise<Details> {
-  const client = createStalkerClient(login);
+export async function loadStalkerDetails(login: StalkerLogin, kind: Kind, id: string, signal?: AbortSignal): Promise<Details> {
+  const client = mediaClient(login, signal);
   const item = (await catalog(login, kind, client)).find(entry => entry.title.id === id);
   if (!item) throw new Error("This portal title is unavailable.");
   const row = item.row;

@@ -17,7 +17,11 @@ test("RAM EPG engine remains bounded, restart-local, and SQLite-fallback safe", 
     read("src/core/sourceRefreshPreferences.ts"),
   ]);
 
-  assert.match(engine, /queryWindow\(startMs, endMs, missing\)/);
+  assert.match(engine, /constructor\(database: EpgDatabase\) : this\(\{ start, end, ids -> database\.queryWindow\(start, end, ids\) \}\)/);
+  assert.match(engine, /val rows = query\(startMs, endMs, missing\)/);
+  assert.match(engine, /queryGeneration = generation/);
+  assert.match(engine, /if \(disposed \|\| queryGeneration != generation\) return/);
+  assert.match(engine, /fun clear\(cooldownMs: Long = 0L\) = synchronized\(lock\) \{\s*generation\+\+/);
   assert.match(engine, /runtime\.maxMemory\(\) \* 0\.18/);
   assert.match(engine, /CharmMemoryCoordinator\.budgets\(\)/);
   assert.match(engine, /LOW_RAM_CHANNEL_LIMIT/);

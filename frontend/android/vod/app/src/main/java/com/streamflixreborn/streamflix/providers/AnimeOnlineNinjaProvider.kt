@@ -55,7 +55,7 @@ object AnimeOnlineNinjaProvider : Provider {
 
     private val providerMutex = Mutex()
     private var webViewResolver: WebViewResolver? = null
-    private val documentCache = ConcurrentHashMap<String, CachedDocument>()
+    private val documentCache = com.streamflixreborn.streamflix.utils.BoundedProviderCache<String, CachedDocument>(24, DOCUMENT_CACHE_TTL_MS)
     @Volatile
     private var clearanceCookieHeader: String? = null
 

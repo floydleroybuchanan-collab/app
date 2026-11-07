@@ -27,6 +27,54 @@ class SourcePickerLayoutTest {
     private fun views(root: View): List<View> = listOf(root) + if (root is ViewGroup) (0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
     @Test fun compactControlsFilterAndRetainAUsableDialogAcrossResize() = verify(1f)
     @Test fun largeSystemTextFitsTheCompactControls() = verify(2f)
+    @Test fun arrivingDebridIsFirstWithoutStealingControlsOrRepeatedlyResettingSelection() {
+        val controller = Robolectric.buildActivity(FragmentActivity::class.java)
+        controller.get().setTheme(R.style.AppTheme_Tv)
+        val activity = controller.setup().get()
+        val fragment = Fragment()
+        activity.supportFragmentManager.beginTransaction().add(fragment, "arrival").commitNow()
+        val direct = Video.Server("direct", "Direct stream")
+        val debrid = Video.Server("cached", "Cached source", details = SourceDetails(
+            kind = SourceDetails.Kind.REAL_DEBRID, availability = SourceDetails.Availability.REPORTED_CACHED))
+        val flow = MutableStateFlow(listOf(direct))
+        val dialog = SourcePicker.show(fragment, flow, MutableStateFlow("Loading"), true, {}, "direct", {})!!
+        fun drain() = shadowOf(Looper.getMainLooper()).idle()
+        drain()
+        val all = views(dialog.window!!.decorView)
+        val list = all.filterIsInstance<ListView>().single()
+        val retry = all.filterIsInstance<Button>().single { it.text == "Retry" }
+        retry.requestFocus()
+        flow.value = listOf(direct, debrid)
+        drain()
+        assertEquals("cached", (list.adapter.getItem(0) as Video.Server).id)
+        assertTrue("New results must not steal toolbar focus", retry.isFocused)
+        list.requestFocus()
+        list.setSelection(1)
+        drain()
+        assertEquals("direct", (list.selectedItem as Video.Server).id)
+        // A refresh that briefly removes debrid must not start another focus jump.
+        flow.value = listOf(direct)
+        drain()
+        flow.value = listOf(direct, debrid)
+        drain()
+        assertEquals("direct", (list.selectedItem as Video.Server).id)
+        val type = all.filterIsInstance<Button>().single { it.text.startsWith("Type:") }
+        type.requestFocus()
+        type.performClick()
+        drain()
+        assertEquals(1, list.adapter.count)
+        assertTrue(type.isFocused)
+        type.performClick()
+        drain()
+        assertEquals("cached", (list.adapter.getItem(0) as Video.Server).id)
+        assertTrue("Filter changes must retain filter focus", type.isFocused)
+        dialog.dismiss()
+        drain() // Android delivers OnDismiss through the main-handler queue.
+        flow.value = emptyList()
+        drain()
+        assertEquals("Dismiss must cancel source collection", 1, list.adapter.count)
+        controller.pause().stop().destroy()
+    }
     private fun verify(fontScale: Float) {
         val controller = Robolectric.buildActivity(FragmentActivity::class.java)
         val resources = controller.get().resources

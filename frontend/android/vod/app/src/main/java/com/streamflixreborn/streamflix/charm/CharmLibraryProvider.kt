@@ -32,8 +32,19 @@ class CharmLibraryProvider : ContentProvider() {
                         it.movieDao().getFavorites().first() + it.tvShowDao().getFavorites().first()
                     }
                     method == "continue" -> AppDatabase.getInstance(requireNotNull(context)).let {
-                        (it.movieDao().getWatchingMovies().first() + it.episodeDao().getWatchingEpisodes().first())
-                            .sortedByDescending { item -> (item as? WatchItem)?.watchHistory?.lastEngagementTimeUtcMillis ?: 0 }
+                        (it.movieDao().getWatchingMovies().first() + it.episodeDao().getWatchingEpisodes().first() +
+                            it.movieDao().getRecentlyWatched().first() + it.tvShowDao().getRecentlyWatched().first())
+                            .sortedByDescending { item -> when (item) {
+                                is Movie -> maxOf(item.lastPlayedAtMillis ?: 0, item.watchHistory?.lastEngagementTimeUtcMillis ?: 0)
+                                is TvShow -> item.lastPlayedAtMillis ?: 0
+                                is Episode -> item.watchHistory?.lastEngagementTimeUtcMillis ?: 0
+                                else -> 0
+                            } }.distinctBy { item -> when (item) {
+                                is Movie -> "movie:${item.id}"
+                                is TvShow -> "show:${item.id}"
+                                is Episode -> "show:${item.tvShow?.id ?: item.id}"
+                                else -> item.toString()
+                            } }
                     }
                     else -> emptyList()
                 }

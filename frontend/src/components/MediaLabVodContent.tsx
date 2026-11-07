@@ -68,7 +68,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   }, [back, focused, providerMode]);
   return <View style={{ flex: 1, backgroundColor: tvColors.canvas }}>
     {!player && !settings && <View pointerEvents="none" style={styles.banner}><MediaLabArt kind="banner" width={240} height={72} /></View>}
-    {!player && <View style={styles.toolbar}>
+    {!player && !settings && <View style={styles.toolbar}>
       {(settings ? [["back", "Back to Settings"]] : [["back", "Back"], ...sections]).map(([value, label]) => <Pressable key={value}
         ref={value === section || (settings && value === "back") ? bindToolbarEntry : undefined}
         onFocus={event => setToolbarFocusTag(event.nativeEvent.target)}

@@ -76,14 +76,21 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
     ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
   }
 
+  override fun onLowMemory() {
+    super.onLowMemory()
+    if (!com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) {
+      CharmMemoryCoordinator.trim(CharmTrimLevel.CRITICAL)
+    }
+  }
+
   override fun onTrimMemory(level: Int) {
     super.onTrimMemory(level)
     if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
     val trimLevel = when {
       level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
         level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> CharmTrimLevel.CRITICAL
+      level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> CharmTrimLevel.BACKGROUND
       level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> CharmTrimLevel.MODERATE
-      level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> CharmTrimLevel.BACKGROUND
       else -> null
     } ?: return
     CharmMemoryCoordinator.trim(trimLevel)

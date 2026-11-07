@@ -248,10 +248,25 @@
             android:gravity="center"
             android:textColor="#FFFFFF"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/exo_settings"
+            app:layout_constraintEnd_toStartOf="@id/btn_exo_stop"
             app:layout_constraintTop_toTopOf="parent"
             tools:ignore="PrivateResource,UseAppTint"
         android:fontFamily="@font/charm_geist_regular" />
+
+        <TextView
+            android:id="@+id/btn_exo_stop"
+            android:layout_width="64dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:text="Stop"
+            android:contentDescription="Stop playback and return"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:fontFamily="@font/charm_geist_regular"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/exo_settings"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <ImageView
             android:id="@+id/exo_settings"

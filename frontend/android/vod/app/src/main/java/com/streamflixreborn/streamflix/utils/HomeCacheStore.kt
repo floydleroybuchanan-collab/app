@@ -13,50 +13,97 @@ import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.models.WatchItem
 import com.streamflixreborn.streamflix.providers.Provider
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 
 object HomeCacheStore {
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, List<CachedCategory>>()
+    private const val MAX_FILE_BYTES = 4 * 1024 * 1024
+    private const val MAX_MEMORY_PROVIDERS = 2
+    private const val CACHE_TTL_MS = 6L * 60 * 60 * 1000
+    private val memoryCache = LinkedHashMap<String, Pair<Long, String>>(4, .75f, true)
+    private val memoryLock = Any()
+    private val ioLock = Any()
+    private var memoryEpoch = 0L
+    fun trimMemory() = synchronized(memoryLock) { memoryEpoch++; memoryCache.clear() }
+    fun clearDiskCache(context: Context) = synchronized(ioLock) {
+        trimMemory()
+        File(context.filesDir, "home-cache").listFiles()?.filter { it.isFile && it.extension == "json" }?.forEach { it.delete() }
+    }
+    private fun remember(key: String, json: String, writtenAt: Long, epoch: Long) = synchronized(memoryLock) {
+        if (epoch != memoryEpoch) return@synchronized
+        memoryCache[key] = writtenAt to json
+        while (memoryCache.size > MAX_MEMORY_PROVIDERS) memoryCache.remove(memoryCache.keys.first())
+    }
+    private fun recalled(key: String): String? = synchronized(memoryLock) {
+        val entry = memoryCache[key] ?: return null
+        if (System.currentTimeMillis() - entry.first > CACHE_TTL_MS) { memoryCache.remove(key); return null }
+        entry.second
+    }
+    private fun forget(key: String) = synchronized(memoryLock) { memoryCache.remove(key) }
 
-    fun read(context: Context, provider: Provider): List<Category>? {
+    fun read(context: Context, provider: Provider): List<Category>? = synchronized(ioLock) {
+        val epoch = synchronized(memoryLock) { memoryEpoch }
         val cacheKey = cacheKey(provider)
-        memoryCache[cacheKey]?.let { payload ->
-            return payload.toCategories()
-        }
-
         val file = cacheFile(context, cacheKey)
-        if (!file.exists()) return null
-
-        return runCatching {
+        runCatching {
+            val json = recalled(cacheKey) ?: run {
+                if (!file.exists() || file.length() > MAX_FILE_BYTES || System.currentTimeMillis() - file.lastModified() > CACHE_TTL_MS) return null
+                // Bound the actual read too, in case the file grows after stat.
+                val bytes = file.inputStream().use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (output.size() + count > MAX_FILE_BYTES) return null
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                }
+                bytes.toString(Charsets.UTF_8)
+            }
             val type = object : TypeToken<List<CachedCategory>>() {}.type
-            val payload: List<CachedCategory> = gson.fromJson(file.readText(), type)
-            memoryCache[cacheKey] = payload
+            val payload: List<CachedCategory> = gson.fromJson(json, type)
+            remember(cacheKey, json, file.lastModified(), epoch)
             payload.toCategories()
         }.recoverCatching {
             if (it is JsonSyntaxException) {
-                memoryCache.remove(cacheKey)
+                forget(cacheKey)
                 file.delete()
             }
             null
         }.getOrNull()
     }
 
-    fun write(context: Context, provider: Provider, categories: List<Category>) {
+    fun write(context: Context, provider: Provider, categories: List<Category>): Unit = synchronized(ioLock) {
+        val epoch = synchronized(memoryLock) { memoryEpoch }
         runCatching {
             val payload = categories.map { CachedCategory.from(it) }
             val cacheKey = cacheKey(provider)
-            memoryCache[cacheKey] = payload
+            val json = gson.toJson(payload)
+            if (json.length > MAX_FILE_BYTES || json.toByteArray(Charsets.UTF_8).size > MAX_FILE_BYTES) {
+                forget(cacheKey)
+                cacheFile(context, cacheKey).delete()
+                return@synchronized
+            }
+            remember(cacheKey, json, System.currentTimeMillis(), epoch)
             cacheFile(context, cacheKey).apply {
                 parentFile?.mkdirs()
-                writeText(gson.toJson(payload))
+                writeText(json)
+            }
+            val files = File(context.filesDir, "home-cache").listFiles()?.filter { it.isFile && it.extension == "json" }?.sortedByDescending { it.lastModified() }.orEmpty()
+            var retainedBytes = 0L
+            files.forEachIndexed { index, file ->
+                retainedBytes += file.length()
+                if (index >= 16 || retainedBytes > 32L * 1024 * 1024) file.delete()
             }
         }
+        Unit
     }
 
-    fun clear(context: Context, provider: Provider) {
+    fun clear(context: Context, provider: Provider) = synchronized(ioLock) {
         val cacheKey = cacheKey(provider)
-        memoryCache.remove(cacheKey)
+        forget(cacheKey)
         cacheFile(context, cacheKey).delete()
     }
 

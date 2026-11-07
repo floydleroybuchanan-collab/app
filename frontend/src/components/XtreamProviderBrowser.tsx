@@ -28,6 +28,8 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   const requestedTitle = useRef(initialTitle);
   const [catalog, setCatalog] = useState<{ source: (typeof playlists)[number]; kind: typeof kind; login: ProviderLogin; rows: ProviderTitle[] } | null>(null);
   const [selected, setSelected] = useState<ProviderTitle | null>(null), [details, setDetails] = useState<ProviderDetails | null>(null);
+  const selectedRef = useRef<ProviderTitle | null>(null);
+  selectedRef.current = selected;
   const [category, setCategory] = useState(""), [query, setQuery] = useState(""), [season, setSeason] = useState("");
   const library = useProviderLibrary();
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -47,18 +49,21 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   useEffect(() => { if (providers.length && !providers.some(row => row.id === owner)) setOwner(providers[0].id); }, [owner, providers]);
   useEffect(() => {
     let alive = true;
+    const abort = new AbortController();
+    if (!focused && selectedRef.current) requestedTitle.current = { owner, kind, catalogId: selectedRef.current.id };
     setCatalog(null); setSelected(null); setDetails(null); setCategory(""); setError(null);
-    if (!activeSource) { setLoadingCatalog(false); return; }
+    if (!focused || !activeSource) { setLoadingCatalog(false); return; }
     setLoadingCatalog(true);
     void (async () => {
       const row = (await listPlaylists()).find(item => item.id === owner && item.enabled);
       if (!row) throw Error();
       const secret = await getPlaylistUrl(row);
+      if (!alive) return;
       const xtream = row.kind === "xtream" ? decodeXtream(secret) : null;
       const stalker = row.kind === "stalker" ? decodeStalker(secret) : null;
       const credentials: ProviderLogin | null = xtream ? { protocol: "xtream", value: xtream } : stalker ? { protocol: "stalker", value: stalker } : null;
       if (!credentials) throw Error();
-      const rows = credentials.protocol === "xtream" ? await loadXtreamCatalog(credentials.value, kind) : await listStalkerCatalog(credentials.value, kind);
+      const rows = credentials.protocol === "xtream" ? await loadXtreamCatalog(credentials.value, kind, abort.signal) : await listStalkerCatalog(credentials.value, kind, abort.signal);
       if (!alive) return;
       setCatalog({ source: activeSource, kind, login: credentials, rows });
       const target = requestedTitle.current;
@@ -70,23 +75,24 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
       }
     })().catch(() => { if (alive) setError("Could not load this provider library. Check the account in Settings → Playlists."); })
       .finally(() => { if (alive) setLoadingCatalog(false); });
-    return () => { alive = false; };
-  }, [activeSource, kind, owner]);
+    return () => { alive = false; abort.abort(); };
+  }, [activeSource, focused, kind, owner]);
   useEffect(() => {
-    if (!selected || !login || !activeSource) {
+    if (!focused || !selected || !login || !activeSource) {
       setLoadingDetails(false);
       return;
     }
     let alive = true;
+    const abort = new AbortController();
     setDetails(null);
     setError(null);
     setLoadingDetails(true);
     setSeason("");
-    const request = login.protocol === "xtream" ? loadXtreamDetails(login.value, selected.kind, selected.id) : loadStalkerDetails(login.value, selected.kind, selected.id);
+    const request = login.protocol === "xtream" ? loadXtreamDetails(login.value, selected.kind, selected.id, abort.signal) : loadStalkerDetails(login.value, selected.kind, selected.id, abort.signal);
     void request.then(value => { if (alive) { setDetails(value); setSeason(value.episodes[0]?.season || ""); } })
       .catch(() => { if (alive) setError("Could not load this title's details. Try another title."); }).finally(() => { if (alive) setLoadingDetails(false); });
-    return () => { alive = false; };
-  }, [activeSource, login, selected]);
+    return () => { alive = false; abort.abort(); };
+  }, [activeSource, focused, login, selected]);
   useEffect(() => {
     if (!focused) return;
     const back = BackHandler.addEventListener("hardwareBackPress", () => { if (selected) setSelected(null); else onClose(); return true; });

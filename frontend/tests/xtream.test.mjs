@@ -1,8 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeXtream, encodeXtream, decodeXtream, mapXtreamChannels, accountInfo, previewXtream } from "../src/core/xtream.ts";
+import { normalizeXtream, encodeXtream, decodeXtream, mapXtreamChannels, accountInfo, previewXtream, loadXtreamCatalog } from "../src/core/xtream.ts";
 
 const login = { server: "http://provider.invalid:8080/", username: "user+one", password: "p/a&?", output: "ts" };
+
+test("leaving an Xtream catalog cancels its request and prevents the next page", async () => {
+  const original = globalThis.fetch, controller = new AbortController();
+  let requests = 0, aborted = false;
+  globalThis.fetch = async (_url, options) => {
+    requests++;
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => { aborted = true; reject(new Error("aborted")); }, { once: true });
+      controller.abort();
+    });
+  };
+  try {
+    await assert.rejects(loadXtreamCatalog(login, "movie", controller.signal));
+    assert.equal(aborted, true);
+    assert.equal(requests, 1);
+    await assert.rejects(loadXtreamCatalog(login, "movie", controller.signal));
+    assert.equal(requests, 1);
+  } finally { globalThis.fetch = original; }
+});
 test("Xtream login round-trip preserves port, password and chosen protocol", () => {
   assert.deepEqual(decodeXtream(encodeXtream(login)), { ...login, server: "http://provider.invalid:8080" });
   assert.equal(decodeXtream("https://example.invalid/a.m3u"), null);

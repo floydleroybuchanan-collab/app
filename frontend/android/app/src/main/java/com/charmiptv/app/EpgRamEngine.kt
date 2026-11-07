@@ -1,7 +1,8 @@
 package com.charmiptv.app
 
 /** Channel-scoped hot cache. SQLite remains authoritative and complete. */
-internal class EpgRamEngine(private val database: EpgDatabase) {
+internal class EpgRamEngine(private val query: (Long, Long, Collection<String>) -> List<NativeEpgProgram>) {
+  constructor(database: EpgDatabase) : this({ start, end, ids -> database.queryWindow(start, end, ids) })
   private data class Entry(
     val programmes: Array<NativeEpgProgram>,
     val startMs: Long,
@@ -14,6 +15,8 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
   private val entries = LinkedHashMap<String, Entry>(64, 0.75f, true)
   private var playlistToXmltv: Map<String, String> = emptyMap()
   private var estimatedBytes = 0L
+  private var generation = 0L
+  private var disposed = false
   private val unregisterMemoryListener = CharmMemoryCoordinator.register { level, _ ->
     when (level) {
       CharmTrimLevel.BACKGROUND -> synchronized(lock) { trimFraction(0.75) }
@@ -24,12 +27,14 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
   private val unregisterDiagnostics = CharmEpgRamDiagnostics.register(::stats)
 
   fun clear(cooldownMs: Long = 0L) = synchronized(lock) {
+    generation++
     entries.clear()
     estimatedBytes = 0L
   }
 
   fun clearPrograms() = clear()
   fun dispose() {
+    synchronized(lock) { disposed = true; playlistToXmltv = emptyMap() }
     unregisterMemoryListener()
     unregisterDiagnostics()
     clear()
@@ -38,6 +43,8 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
   fun hasMatches(): Boolean = synchronized(lock) { playlistToXmltv.isNotEmpty() }
 
   fun replaceMatches(rows: Collection<PlaylistEpgMatchRow>) = synchronized(lock) {
+    if (disposed) return@synchronized
+    generation++
     val next = HashMap<String, String>(rows.size * 2)
     for (row in rows) {
       if (row.playlistId.isNotBlank() && row.xmltvId.isNotBlank()) next[row.playlistId] = row.xmltvId
@@ -93,7 +100,10 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
     if (endMs <= startMs) return
     val now = System.currentTimeMillis()
     val missing = ArrayList<String>()
+    val queryGeneration: Long
     synchronized(lock) {
+      if (disposed) return
+      queryGeneration = generation
       evictExpired(now)
       for (id in ids) {
         val entry = entries[id]
@@ -102,7 +112,7 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
     }
     if (missing.isEmpty()) return
 
-    val rows = database.queryWindow(startMs, endMs, missing)
+    val rows = query(startMs, endMs, missing)
     // Avoid Kotlin groupBy(): it allocates a Map + List wrapper graph over every
     // programme while the original SQLite result list is still live. Fill only
     // the requested per-channel arrays through mutable buckets, then release the
@@ -111,6 +121,7 @@ internal class EpgRamEngine(private val database: EpgDatabase) {
     for (row in rows) grouped.getOrPut(row.channelId) { ArrayList() }.add(row)
 
     synchronized(lock) {
+      if (disposed || queryGeneration != generation) return
       for (id in missing) {
         entries.remove(id)?.let { estimatedBytes -= it.estimatedBytes }
         val list = grouped[id]

@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.providers
 
 import android.util.Log
+import com.streamflixreborn.streamflix.utils.awaitProviderResponse
 import com.streamflixreborn.streamflix.adapters.AppAdapter
 import com.streamflixreborn.streamflix.models.*
 import okhttp3.*
@@ -18,6 +19,7 @@ class VavooProvider(override val language: String) : IptvProvider {
 
         // Only the languages supported by the app
         private val LANG_CONFIG = mapOf(
+            "en" to Triple("en", "GB", listOf("United Kingdom", "United States")),
             "de" to Triple("de", "DE", listOf("Germany", "GERMANY")),
             "it" to Triple("it", "IT", listOf("Italy")),
             "fr" to Triple("fr", "FR", listOf("France", "France Sport")),
@@ -25,7 +27,7 @@ class VavooProvider(override val language: String) : IptvProvider {
             "pl" to Triple("pl", "PL", listOf("Poland"))
         )
 
-        private val client = OkHttpClient.Builder()
+        private val client = OkHttpClient.Builder().callTimeout(40, TimeUnit.SECONDS)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .build()
@@ -41,7 +43,7 @@ class VavooProvider(override val language: String) : IptvProvider {
     private val cacheTimestamps = mutableMapOf<String, Long>()
     
     // Cache to temporarily map channel IDs to their names when found via search/genres
-    private val searchCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val searchCache = com.streamflixreborn.streamflix.utils.BoundedProviderCache<String, String>(1024, CACHE_DURATION)
 
     data class VavooChannel(
         val id: String,
@@ -57,13 +59,13 @@ class VavooProvider(override val language: String) : IptvProvider {
 
     private val primaryGroups: List<String> = config.third
 
-    private fun fetchChannels(search: String, group: String, cursor: Int? = null): Pair<List<VavooChannel>, Int?> {
+    private suspend fun fetchChannels(search: String, group: String, cursor: Int? = null): Pair<List<VavooChannel>, Int?> {
         val filterObj = JSONObject().apply {
             put("group", group)
         }
         val body = JSONObject().apply {
-            put("language", "de")
-            put("region", "DE")
+            put("language", config.first)
+            put("region", config.second)
             put("catalogId", "iptv")
             put("id", "")
             put("adult", false)
@@ -82,8 +84,10 @@ class VavooProvider(override val language: String) : IptvProvider {
                 .header("Referer", "$baseUrl/")
                 .build()
 
-            val response = client.newCall(request).execute()
-            val json = JSONObject(response.body?.string() ?: return Pair(emptyList(), null))
+            val json = client.newCall(request).awaitProviderResponse().use { response ->
+                if (!response.isSuccessful) throw java.io.IOException("Catalog HTTP ${response.code}")
+                JSONObject(com.streamflixreborn.streamflix.vod.VodHttp.text(response))
+            }
             val items = json.optJSONArray("items") ?: return Pair(emptyList(), null)
             val nextCursor = if (json.isNull("nextCursor")) null else json.optInt("nextCursor")
 
@@ -99,12 +103,13 @@ class VavooProvider(override val language: String) : IptvProvider {
             }
             Pair(channels, nextCursor)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "Error fetching channels (search='$search', group='$group'): ${e.message}")
             Pair(emptyList(), null)
         }
     }
 
-    private fun loadHomeGroupChannels(group: String): List<VavooChannel> {
+    private suspend fun loadHomeGroupChannels(group: String): List<VavooChannel> {
         val now = System.currentTimeMillis()
         val cached = homeCache[group]
         if (cached != null && (now - (cacheTimestamps[group] ?: 0)) < CACHE_DURATION) {
@@ -120,10 +125,10 @@ class VavooProvider(override val language: String) : IptvProvider {
 
     data class ResolvedChannel(val name: String, val url: String)
 
-    private fun resolveChannel(vavooUrl: String): ResolvedChannel? {
+    private suspend fun resolveChannel(vavooUrl: String): ResolvedChannel? {
         val body = JSONObject().apply {
-            put("language", "de")
-            put("region", "DE")
+            put("language", config.first)
+            put("region", config.second)
             put("url", vavooUrl)
         }.toString()
         return try {
@@ -134,8 +139,10 @@ class VavooProvider(override val language: String) : IptvProvider {
                 .header("Origin", baseUrl)
                 .header("Referer", "$baseUrl/")
                 .build()
-            val response = client.newCall(request).execute()
-            val jsonArray = org.json.JSONArray(response.body?.string() ?: return null)
+            val jsonArray = client.newCall(request).awaitProviderResponse().use { response ->
+                if (!response.isSuccessful) throw java.io.IOException("Resolve HTTP ${response.code}")
+                org.json.JSONArray(com.streamflixreborn.streamflix.vod.VodHttp.text(response))
+            }
             if (jsonArray.length() > 0) {
                 val obj = jsonArray.getJSONObject(0)
                 val url = obj.optString("url").takeIf { it.isNotEmpty() } ?: return null
@@ -143,6 +150,7 @@ class VavooProvider(override val language: String) : IptvProvider {
                 ResolvedChannel(name = name, url = url)
             } else null
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "Resolve error for $vavooUrl: ${e.message}")
             null
         }

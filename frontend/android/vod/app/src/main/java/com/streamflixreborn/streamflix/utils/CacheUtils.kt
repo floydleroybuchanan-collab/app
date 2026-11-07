@@ -2,58 +2,40 @@ package com.streamflixreborn.streamflix.utils
 
 import android.content.Context
 import android.util.Log
-import android.webkit.WebView
+import android.content.ComponentCallbacks2
+import android.os.Handler
+import android.os.Looper
 import com.bumptech.glide.Glide
 import java.io.File
 
 object CacheUtils {
     private const val TAG = "CacheUtils"
+    private val maintenance = java.util.concurrent.Executors.newSingleThreadExecutor { task -> Thread(task, "CharmVodCacheMaintenance").apply { isDaemon = true } }
+    private val clearing = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun trimMemory(context: Context, level: Int) {
+        if (level != ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN && level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) return
+        HomeCacheStore.trimMemory()
+        val app = context.applicationContext
+        val trim = Runnable { runCatching { Glide.get(app).trimMemory(level) } }
+        if (Looper.myLooper() == Looper.getMainLooper()) trim.run() else Handler(Looper.getMainLooper()).post(trim)
+    }
 
     fun clearAppCache(context: Context) {
-        // The unified host shares its process with Live TV. Never clear its guide,
-        // logo or bridge caches when a VOD provider requests cache recovery.
-        if (!com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) {
-            File(context.applicationContext.cacheDir, "vod").deleteRecursively()
-            return
-        }
-        Log.d(TAG, "Inizio pulizia cache completa...")
-        try {
-            context.applicationContext.cacheDir?.deleteRecursively()
-            Log.d(TAG, "Cache interna eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore eliminazione cache interna: ${e.message}")
-        }
-
-        try {
-            Glide.get(context).clearMemory()
-            Thread {
-                try {
-                    Glide.get(context).clearDiskCache()
-                    Log.d(TAG, "Cache Glide eliminata.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Errore eliminazione cache Glide: ${e.message}")
-                }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore Glide: ${e.message}")
-        }
-
-        try {
-            WebView(context).apply {
-                clearCache(true)
-                destroy()
-            }
-            Log.d(TAG, "Cache WebView eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore WebView: ${e.message}")
+        HomeCacheStore.trimMemory()
+        val app = context.applicationContext
+        if (!clearing.compareAndSet(false, true)) return
+        maintenance.execute {
+            try { HomeCacheStore.clearDiskCache(app) }
+            finally { clearing.set(false) }
         }
     }
 
     fun getCacheSize(context: Context): Long {
         var size: Long = 0
         try {
-            size += getFolderSize(context.applicationContext.cacheDir)
-            size += getFolderSize(context.applicationContext.externalCacheDir)
+            // Match the scope of clearAppCache: only regenerable catalog JSON.
+            size += File(context.filesDir, "home-cache").listFiles()?.filter { it.isFile && it.extension == "json" }?.sumOf { it.length() } ?: 0L
         } catch (_: Exception) {
         }
         return size

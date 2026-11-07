@@ -70,6 +70,7 @@ internal object NativePlaylistParser {
         var firstLine = true
         var rawLineCount = 0L
         while (true) {
+          if (Thread.currentThread().isInterrupted) throw InterruptedException("Playlist import stopped")
           val rawLine = reader.readLine() ?: break
           rawLineCount += 1L
           if (documentStream == null && (rawLineCount and 0xffL) == 0L) {

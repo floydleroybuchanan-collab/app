@@ -4,6 +4,9 @@ The old standalone catch-up implementation remains prohibited. These reviewed
 adapters use the owned StreamPlayer through an opaque one-use handoff, verify
 current source credentials, and expose replay only inside the provider window.
 See docs/rc16-integration-validation.md and frontend/tests/xtreamMedia.test.mjs.
+RC16 rework: optional catalog/detail cancellation signals propagate through
+Xtream and Stalker clients; replay URL construction is unchanged. Exact snapshots
+were re-reviewed with protocol cancellation tests and app lifecycle documentation.
 """
 import hashlib
 import json

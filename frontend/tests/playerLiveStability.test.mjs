@@ -23,10 +23,12 @@ test("channel changes build a fresh Media3 source on the same native ExoPlayer",
 
 test("Media3 uses bounded TV buffers and paced event-driven reconnects", async () => {
   const native = await source("android/app/src/main/java/com/charmiptv/app/NativePlaybackManager.kt");
+  const core = await source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmPlaybackCore.kt");
   assert.match(native, /fun media3BufferDurationsMs/);
-  assert.match(native, /"low_latency" -> intArrayOf\(1_000, 5_000, 500, 1_000\)/);
-  assert.match(native, /"balanced" -> intArrayOf\(3_000, 15_000, 1_000, 2_000\)/);
-  assert.match(native, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
+  assert.match(native, /CharmPlaybackCore\.liveDurations\(profile, lowRam\)/);
+  assert.match(core, /"low_latency" -> intArrayOf\(1_000, 5_000, 500, 1_000\)/);
+  assert.match(core, /"balanced" -> intArrayOf\(3_000, 15_000, 1_000, 2_000\)/);
+  assert.match(core, /else -> intArrayOf\(10_000, 30_000, 1_500, 3_000\)/);
   assert.match(native, /TARGET_BUFFER_BYTES_LOW_RAM = 16 \* 1024 \* 1024/);
   assert.match(native, /TARGET_BUFFER_BYTES_NORMAL = 48 \* 1024 \* 1024/);
   assert.match(native, /CharmMemoryCoordinator\.budgets\(\)\.lowRam/);
