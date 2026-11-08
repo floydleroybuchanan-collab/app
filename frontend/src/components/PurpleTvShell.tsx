@@ -5,6 +5,7 @@ import {
   Animated,
   BackHandler,
   DeviceEventEmitter,
+  NativeModules,
   Easing,
   findNodeHandle,
   Platform,
@@ -460,6 +461,13 @@ export function PurpleTvShell({
     useCallback(() => {
       if (Platform.OS === "web") return;
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        // Fallback when the nested VOD screen has temporarily lost its own
+        // Back listener during fullscreen/fragment transitions. Never pass a
+        // VOD player Back through to Android exitApp or drawer reopen.
+        if (active === "/vod" && !drawerOpen) {
+          void Promise.resolve(NativeModules.CharmVod?.surfaceBack?.()).catch(() => undefined);
+          return true;
+        }
         if (active === "/guide" && !drawerOpen && !activeProgram) {
           reopenArmedAtRef.current = 0;
           // Guide owns closed-guide Back so it can enter the dedicated Groups
@@ -789,7 +797,7 @@ export function PurpleTvShell({
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod"}
-        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod"}
         trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         onFocusCapture={(event: any) => {

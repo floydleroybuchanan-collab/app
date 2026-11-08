@@ -84,12 +84,18 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     }
     fun television(value: Boolean) { television = value }
     private fun handoffUpToToolbar(): Boolean {
-        // Details and player own their D-pad focus. Up must not escape from
-        // Watch/Trailer/My List to the React toolbar or compact icon rail.
-        if (host?.navController?.currentDestination?.id in setOf(VodR.id.player, VodR.id.movie, VodR.id.tv_show)) return false
+        // Fullscreen playback keeps DPAD keys. In the VOD catalog, including
+        // movie/series detail actions, UP can reach the top React toolbar.
+        // The icon rail is not an intermediate focus destination.
+        val destination = host?.navController?.currentDestination?.id
+        if (destination == VodR.id.player) return false
         val focused = findFocus() ?: return false
         val target = owner?.findViewById<View>(toolbarFocusTag) ?: return false
-        if (!target.isShown || !target.isFocusable) return false
+        if (!target.isShown || !target.isFocusable || !target.isEnabled) return false
+        // Detail actions are the top-level controls on these native pages:
+        // UP goes to the VOD toolbar directly, not out into the icon rail.
+        if (destination == VodR.id.movie || destination == VodR.id.tv_show)
+            return target.requestFocus(View.FOCUS_UP)
         // Preserve upper rows in every nested catalog (Home contains horizontal
         // poster lists inside a vertical list). Only the actual first row exits.
         var child: View = focused
@@ -184,9 +190,27 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
             graph.setStartDestination(if (section in setOf("settings", "accounts")) VodR.id.settings else VodR.id.home)
             com.streamflixreborn.streamflix.utils.CatalogSource.install(fragment.navController)
             fragment.navController.graph = graph
+            var lastDestinationWasPlayer = false
             fragment.navController.addOnDestinationChangedListener { _, destination, _ ->
                 scheduleNativeLayout()
-                event("player", if (destination.id == VodR.id.player) "true" else "false")
+                val nowPlayer = destination.id == VodR.id.player
+                if (lastDestinationWasPlayer && !nowPlayer) {
+                    // Fullscreen playback requests sensor landscape. Reset the
+                    // host orientation and system bars after exiting the player;
+                    // leaving the React activity locked in player mode can
+                    // relaunch the TV shell or strand it at the splash screen.
+                    post {
+                        if (!disposed && owner === activity && !activity.isFinishing) {
+                            if (activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+                                activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            androidx.core.view.WindowCompat.getInsetsController(
+                                activity.window, activity.window.decorView
+                            ).show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                        }
+                    }
+                }
+                lastDestinationWasPlayer = nowPlayer
+                event("player", if (nowPlayer) "true" else "false")
             }
             navigate(fragment, section)
             scheduleNativeLayout()

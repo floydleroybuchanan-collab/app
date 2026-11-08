@@ -61,7 +61,8 @@ test('shared VOD options remain reachable without duplicate native menu and dona
 test('catalog Up handoff respects nested first rows, native headers and player ownership',()=>{
  const s=source('android/app/src/main/java/com/charmiptv/app/CharmVodSurface.kt');
  const handoff=s.slice(s.indexOf('private fun handoffUpToToolbar'),s.indexOf('override fun dispatchKeyEvent'));
- assert.match(handoff,/currentDestination\?\.id in setOf\(VodR\.id\.player, VodR\.id\.movie, VodR\.id\.tv_show\)/);
+ assert.match(handoff,/if \(destination == VodR\.id\.player\) return false/);
+ assert.match(handoff,/if \(destination == VodR\.id\.movie \|\| destination == VodR\.id\.tv_show\)/);
  assert.match(handoff,/!target.isShown \|\| !target.isFocusable/);
  assert.match(handoff,/while \(parent is View && parent !== this\)/);
  assert.match(handoff,/manager.findViewByPosition\(0\)/);
@@ -87,11 +88,15 @@ test('VOD handoff rejects uncertain decoder ownership before applying shared set
  assert.match(s,/context.addActivityEventListener\(activityListener\)/);
  assert.match(s,/override fun invalidate\(\)[\s\S]*context.removeActivityEventListener\(activityListener\)/);
 });
-test('VOD Back preserves inner TV/mobile player and settings layers before popping a screen',()=>{
+test('VOD Back safely exits fullscreen to the last detail screen, Home resets the native stack',()=>{
  const s=source('android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt');
- for(const type of ['PlayerTvFragment','PlayerMobileFragment','SettingsTvFragment','SettingsMobileFragment']) assert.ok(s.includes('is com.streamflixreborn.streamflix.fragments.'+(type.startsWith('Player')?'player.':'settings.')+type));
- assert.match(s,/if \(page\?\.view == null\) false/);
- assert.match(s,/promise.resolve\(handled \|\| host\?\.navController\?\.popBackStack\(\) == true\)/);
+ assert.match(s,/val playerDestination = nav\.currentDestination\?\.id == com\.streamflixreborn\.streamflix\.R\.id\.player/);
+ assert.match(s,/if \(playerDestination\) \{/);
+ assert.match(s,/player\?\.pause\(\)/);
+ assert.match(s,/if \(!nav\.popBackStack\(\)\) com\.streamflixreborn\.streamflix\.charm\.CharmNavigation\.home\(activity\)/);
+ assert.match(s,/fun surfaceHome\(promise: Promise\)/);
+ assert.match(s,/CharmNavigation\.home\(activity\)/);
+ assert.match(s,/promise\.reject\("E_VOD_BACK"/);
 });
 test('embedded VOD integrates Stop into the auto-hiding native TV player controls',()=>{
  const route=source('src/components/MediaLabVodContent.tsx');
