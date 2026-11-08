@@ -54,13 +54,12 @@ jobs:
         run: |
           $exe = Join-Path (Get-Location) 'CharmingMediaLab-APK-Decryptor.exe'
           $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
-          try {
-            Wait-Process -Id $process.Id -Timeout 20 -ErrorAction Stop
-          } catch {
+          if (-not $process.WaitForExit(20000)) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw 'Windows GUI startup smoke test timed out'
+            throw 'Windows GUI startup smoke test timed out after 20 seconds'
           }
           $process.Refresh()
+          Write-Host "Windows GUI smoke-test exit code: $($process.ExitCode)"
           if ($process.ExitCode -ne 0) { throw "Windows GUI startup smoke test failed (exit code $($process.ExitCode))" }
           Write-Host 'Windows GUI successfully launched, initialized all controls, and exited cleanly.'
 
