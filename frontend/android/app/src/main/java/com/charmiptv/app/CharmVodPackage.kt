@@ -82,19 +82,68 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
 
     @ReactMethod fun surfaceBack(promise: Promise) {
         context.runOnUiQueueThread {
-            val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
-            val host = activity?.supportFragmentManager?.findFragmentById(com.streamflixreborn.streamflix.R.id.nav_main_fragment) as? androidx.navigation.fragment.NavHostFragment
-            val page = host?.childFragmentManager?.primaryNavigationFragment
-            // The standalone host previously dispatched these inner layers.
-            // Preserve that contract now that React owns the hardware Back key.
-            val handled = if (page?.view == null) false else when (page) {
-                is com.streamflixreborn.streamflix.fragments.player.PlayerTvFragment -> page.onBackPressed()
-                is com.streamflixreborn.streamflix.fragments.player.PlayerMobileFragment -> page.onBackPressed()
-                is com.streamflixreborn.streamflix.fragments.settings.SettingsTvFragment -> page.navigateBackInSettings()
-                is com.streamflixreborn.streamflix.fragments.settings.SettingsMobileFragment -> page.navigateBackInSettings()
-                else -> false
+            try {
+                val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
+                val host = activity?.supportFragmentManager
+                    ?.findFragmentById(com.streamflixreborn.streamflix.R.id.nav_main_fragment)
+                    as? androidx.navigation.fragment.NavHostFragment
+                val nav = host?.navController
+                if (activity == null || nav == null || activity.supportFragmentManager.isStateSaved) {
+                    // A React/fragment transition must never fall through into
+                    // BackHandler.exitApp() while the movie/player is mounted.
+                    promise.resolve(true)
+                    return@runOnUiQueueThread
+                }
+                val page = host.childFragmentManager.primaryNavigationFragment
+                val playerDestination = nav.currentDestination?.id == com.streamflixreborn.streamflix.R.id.player
+                if (playerDestination) {
+                    // BACK from fullscreen means leave playback and restore the
+                    // previous detail/episode page, not just hide the controller.
+                    page?.view?.findViewById<androidx.media3.ui.PlayerView>(
+                        com.streamflixreborn.streamflix.R.id.pv_player
+                    )?.player?.pause()
+                    if (!nav.popBackStack()) com.streamflixreborn.streamflix.charm.CharmNavigation.home(activity)
+                    promise.resolve(true)
+                    return@runOnUiQueueThread
+                }
+                val handled = if (page?.view == null) false else when (page) {
+                    is com.streamflixreborn.streamflix.fragments.settings.SettingsTvFragment ->
+                        page.navigateBackInSettings()
+                    is com.streamflixreborn.streamflix.fragments.settings.SettingsMobileFragment ->
+                        page.navigateBackInSettings()
+                    else -> false
+                }
+                if (!handled && !nav.popBackStack())
+                    com.streamflixreborn.streamflix.charm.CharmNavigation.home(activity)
+                promise.resolve(true)
+            } catch (failure: Exception) {
+                promise.reject("E_VOD_BACK", "Could not navigate back from VOD.", failure)
             }
-            promise.resolve(handled || host?.navController?.popBackStack() == true)
+        }
+    }
+
+    @ReactMethod fun surfaceHome(promise: Promise) {
+        context.runOnUiQueueThread {
+            try {
+                val activity = context.currentActivity as? androidx.fragment.app.FragmentActivity
+                if (activity == null || activity.supportFragmentManager.isStateSaved) {
+                    promise.resolve(false)
+                    return@runOnUiQueueThread
+                }
+                val host = activity.supportFragmentManager
+                    .findFragmentById(com.streamflixreborn.streamflix.R.id.nav_main_fragment)
+                    as? androidx.navigation.fragment.NavHostFragment
+                if (host == null) {
+                    promise.resolve(false)
+                    return@runOnUiQueueThread
+                }
+                // Explicit Home must work even when React's current section is
+                // already "home" but the native stack is on a movie or player.
+                com.streamflixreborn.streamflix.charm.CharmNavigation.home(activity)
+                promise.resolve(host.navController.currentDestination?.id == com.streamflixreborn.streamflix.R.id.home)
+            } catch (failure: Exception) {
+                promise.reject("E_VOD_HOME", "Could not open VOD Home.", failure)
+            }
         }
     }
 
