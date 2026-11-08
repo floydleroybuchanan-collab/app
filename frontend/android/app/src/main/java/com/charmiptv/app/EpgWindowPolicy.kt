@@ -1,5 +1,7 @@
 package com.charmiptv.app
 
+import android.content.Context
+
 /** Shared rules for interactive, custom and WorkManager EPG imports. */
 internal object EpgWindowPolicy {
   // Future data is limited to the maximum supported TV Guide runway, not the
