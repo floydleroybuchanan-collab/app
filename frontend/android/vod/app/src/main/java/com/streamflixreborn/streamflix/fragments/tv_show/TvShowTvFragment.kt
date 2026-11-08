@@ -102,6 +102,24 @@ class TvShowTvFragment : Fragment() {
         }
     }
 
+    private fun focusWatchAction() {
+        val root = _binding?.root ?: return
+        root.post {
+            if (!isResumed || _binding?.root !== root) return@post
+            val watch = root.findViewById<View>(com.streamflixreborn.streamflix.R.id.btn_tv_show_watch_now)
+            val target = watch?.takeIf { it.isShown && it.isEnabled && it.isFocusable }
+                ?: root.findViewById<View>(com.streamflixreborn.streamflix.R.id.charm_detail_sources)
+                    ?.takeIf { it.isShown && it.isEnabled && it.isFocusable }
+            target?.requestFocus()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Returning from playback should land on Watch, not the React rail.
+        focusWatchAction()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         appAdapter.onSaveInstanceState(binding.vgvTvShow)
@@ -142,5 +160,6 @@ class TvShowTvFragment : Fragment() {
                 ?.copy()
                 ?.apply { itemType = AppAdapter.Type.TV_SHOW_RECOMMENDATIONS_TV },
         ))
+        focusWatchAction()
     }
 }
