@@ -60,7 +60,12 @@ jobs:
           }
           $process.Refresh()
           Write-Host "Windows GUI smoke-test exit code: $($process.ExitCode)"
-          if ($process.ExitCode -ne 0) { throw "Windows GUI startup smoke test failed (exit code $($process.ExitCode))" }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path 'gui-startup-smoke-error.txt') {
+              Get-Content 'gui-startup-smoke-error.txt'
+            }
+            throw "Windows GUI startup smoke test failed (exit code $($process.ExitCode))"
+          }
           Write-Host 'Windows GUI successfully launched, initialized all controls, and exited cleanly.'
 
       - name: Package downloadable artifacts
