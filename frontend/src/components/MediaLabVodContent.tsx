@@ -13,16 +13,15 @@ import { usePurpleTvDrawer } from "./PurpleTvShell";
 import { useDonation } from "./DonationDialog";
 import { MediaLabArt } from "./MediaLabBrand";
 import { XtreamProviderBrowser } from "./XtreamProviderBrowser";
-import { UnifiedVodOverview } from "./UnifiedVodOverview";
 import { PLAYLIST_VOD_ENABLED } from "@/src/core/vodFeatureFlags";
 
 const Surface = Platform.OS === "android" ? requireNativeComponent<any>("CharmVodSurface") : View;
-const sections = [["all", "All VOD"], ["home", "Streamflix"], ["movies", "Movies"], ["series", "Series"], ["favorites", "My list"], ["search", "Search"], ...(PLAYLIST_VOD_ENABLED ? [["provider-xtream", "Xtream"], ["provider-stalker", "Stalker"]] : [])] as const;
+const sections = [["home", "Home"], ["movies", "Movies"], ["series", "Series"], ["favorites", "My List"], ["search", "Search"]] as const;
 
 function entrySection(value: string, settings: boolean) {
   if (settings) return value;
-  if (!PLAYLIST_VOD_ENABLED && (value.startsWith("provider:") || value === "provider" || value === "provider-xtream" || value === "provider-stalker")) return "all";
-  return value === "sources" || value === "accounts" || value === "settings" || value === "home" ? "all" : value;
+  if (!PLAYLIST_VOD_ENABLED && (value.startsWith("provider:") || value === "provider" || value === "provider-xtream" || value === "provider-stalker")) return "home";
+  return value === "sources" || value === "accounts" || value === "settings" || value === "all" ? "home" : value;
 }
 
 /** One app shell; existing native destinations retain their actual controls and providers. */
@@ -53,6 +52,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const [player, setPlayer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toolbarFocusTag, setToolbarFocusTag] = useState<number | null>(null);
+  const [toolbarWidth, setToolbarWidth] = useState(0);
   const bindToolbarEntry = useCallback((node: View | null) => {
     if (node) setToolbarFocusTag(findNodeHandle(node));
   }, []);
@@ -100,33 +100,47 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   }, [back, focused, nativeMode, providerMode]);
   return <View style={{ flex: 1, backgroundColor: tvColors.canvas }}>
     {!player && !settings && <View pointerEvents="none" style={styles.banner}><MediaLabArt kind="banner" width={240} height={72} /></View>}
-    {!player && <View style={styles.toolbar}>
-      {(settings ? [["back", "Back to Settings"]] : [["back", "Back"], ...sections]).map(([value, label]) => <Pressable key={value}
-        ref={value === section || (settings && value === "back") ? bindToolbarEntry : undefined}
-        onFocus={event => setToolbarFocusTag(event.nativeEvent.target)}
-        accessibilityRole="button" accessibilityState={{ selected: value === section || (value === "provider" && providerMode) }}
-        onPress={() => {
-          if (value === "back") { if (settings) router.replace("/settings"); else back(); return; }
-          setError(null);
-          setSection(value);
-        }}
-        style={({ focused: hasFocus, pressed }: any) => [styles.button,
-          (value === section || (value === "provider" && providerMode)) && styles.selected,
-          hasFocus && styles.focused, pressed && styles.pressed]}>
-        <Text style={styles.label}>{label}</Text>
-      </Pressable>)}
-      {!settings && !providerMode && ready && NativeModules.CharmVod?.surfaceMenu ? <Pressable
-        accessibilityRole="button"
-        onFocus={event => setToolbarFocusTag(event.nativeEvent.target)}
-        onPress={() => { void Promise.resolve(NativeModules.CharmVod.surfaceMenu()).catch(() => setError("Could not open VOD options. Try again.")); }}
-        style={({ focused: hasFocus, pressed }: any) => [styles.button, hasFocus && styles.focused, pressed && styles.pressed]}>
-        <Text style={styles.label}>Options</Text>
-      </Pressable> : null}
+    {!player && <View style={styles.toolbar} onLayout={event => {
+      const width = Math.round(event.nativeEvent.layout.width);
+      if (width !== toolbarWidth) setToolbarWidth(width);
+    }}>
+      {(() => {
+        const actions: { value: string; label: string }[] = settings
+          ? [{ value: "back", label: "Back to Settings" }]
+          : [{ value: "back", label: "Back" }, ...sections.map(([value, label]) => ({ value, label }))];
+        if (!settings && ready && NativeModules.CharmVod?.surfaceMenu) actions.push({ value: "menu", label: "Options" });
+        // One row when all buttons fit; otherwise a strict maximum of TWO
+        // evenly sized rows. Never allow a third clipped row under the banner.
+        const columns = toolbarWidth >= actions.length * 112 + 12
+          ? actions.length : Math.ceil(actions.length / 2);
+        const rows = [actions.slice(0, columns), actions.slice(columns)].filter(row => row.length);
+        return rows.map((row, rowIndex) => <View key={rowIndex} style={styles.toolbarRow}>
+          {row.map(({ value, label }) => <Pressable key={value}
+            ref={value === section || (settings && value === "back") ? bindToolbarEntry : undefined}
+            onFocus={event => setToolbarFocusTag(event.nativeEvent.target)}
+            accessibilityRole="button" accessibilityState={{ selected: value === section }}
+            onPress={() => {
+              if (value === "back") { if (settings) router.replace("/settings"); else back(); return; }
+              if (value === "menu") {
+                void Promise.resolve(NativeModules.CharmVod?.surfaceMenu?.()).catch(() => setError("Could not open VOD options. Try again."));
+                return;
+              }
+              setError(null);
+              setSection(value);
+            }}
+            style={({ focused: hasFocus, pressed }: any) => [styles.button,
+              value === section && styles.selected,
+              hasFocus && styles.focused, pressed && styles.pressed]}>
+            <Text style={styles.label} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82}>{label}</Text>
+          </Pressable>)}
+          {row.length < columns && !settings ? Array.from({ length: columns - row.length }, (_, i) =>
+            <View key={`empty-${i}`} style={styles.toolbarSpacer} />) : null}
+        </View>);
+      })()}
     </View>}
     {error ? <Text accessibilityRole="alert" style={{ color: "#FB7185", padding: 20 }}>{error}</Text> : null}
     {focused && nativeMode && !ready && !error && Platform.OS === "android" ? <View style={styles.status}><ActivityIndicator color={tvColors.focus} /><Text style={styles.label}>Opening Video On Demand…</Text></View> : null}
     {focused && nativeMode && Platform.OS !== "android" ? <Text style={styles.status}>The built-in video catalog is available on Android.</Text> : null}
-    {focused && section === "all" && !settings ? <UnifiedVodOverview onOpen={setSection} /> : null}
     {PLAYLIST_VOD_ENABLED && providerMode ? <XtreamProviderBrowser allowedProtocol={section === "provider-xtream" ? "xtream" : section === "provider-stalker" ? "stalker" : undefined} initialTitle={providerParts ? { owner: providerParts[1], kind: providerParts[2] as "movie" | "series", catalogId: providerParts[3] } : undefined} onClose={() => setSection("all")} /> : null}
     {focused && ready && nativeMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} toolbarFocusTag={toolbarFocusTag || 0} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
       onVodEvent={({ nativeEvent }: any) => {
@@ -164,10 +178,12 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
 
 const styles = StyleSheet.create({
   banner: { alignItems: "center", paddingTop: 4 },
-  toolbar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 5 },
+  toolbar: { flexDirection: "column", gap: 4, paddingHorizontal: 10, paddingVertical: 4 },
+  toolbarRow: { flexDirection: "row", alignItems: "stretch", gap: 4 },
+  toolbarSpacer: { flex: 1, minWidth: 0 },
   button: {
-    minHeight: 40, maxWidth: "100%", alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1,
+    flex: 1, minWidth: 0, minHeight: 44, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 6, paddingVertical: 6, borderRadius: 12, borderWidth: 1,
     borderColor: tvColors.silverEdge, borderTopColor: tvColors.silverHighlight,
     backgroundColor: tvColors.graphiteGlass,
   },
