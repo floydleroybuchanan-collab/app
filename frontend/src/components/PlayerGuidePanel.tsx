@@ -6,7 +6,7 @@ import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { fonts, tvColors } from "@/src/theme";
-import { fmtTime } from "@/src/utils/time";
+import { fmtTime, progressPct } from "@/src/utils/time";
 import { availableGuideDays, guidePanelOpacity, type GuidePresentationMode } from "@/src/core/guidePresentation";
 
 type Props = {
@@ -83,6 +83,7 @@ export function PlayerGuidePanel({
   const visibleChannel = focus?.channel || playingChannel;
   const visibleProgram = focus?.program || playingCurrent;
   const panelAlpha = guidePanelOpacity(mode, transparency);
+  const progress = visibleProgram ? progressPct(visibleProgram, new Date()) : 0;
   const panelBackground = `rgba(12,14,18,${panelAlpha.toFixed(3)})`;
   const requestGridFocus = useCallback(() => {
     focusRetry.current?.();
@@ -167,8 +168,9 @@ export function PlayerGuidePanel({
             <Text numberOfLines={1} style={styles.infoChannel}>{visibleChannel?.name || "Live TV"}</Text>
             <Text numberOfLines={2} style={styles.infoTitle}>{visibleProgram?.title || "No program information"}</Text>
             <Text numberOfLines={1} style={styles.infoTime}>{visibleProgram
-              ? `${fmtTime(visibleProgram.start)} – ${fmtTime(visibleProgram.stop || visibleProgram.start)}`
+              ? `${fmtTime(visibleProgram.start)} – ${visibleProgram.stop ? fmtTime(visibleProgram.stop) : "LIVE"}`
               : "Browse the channels below"}</Text>
+            <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
             <Text numberOfLines={3} style={styles.infoDescription}>{visibleProgram?.desc || playingNext?.title || "Use the D-pad to browse the guide."}</Text>
           </View>
         </View>
@@ -210,6 +212,12 @@ export function PlayerGuidePanel({
           <Ionicons name="close-outline" size={15} color="#fff"/>
         </Pressable>
       </View>
+      {mode === "overlay" ? (
+        <View pointerEvents="none" style={[styles.overlayInfo, { backgroundColor: panelBackground }]}>
+          <Text numberOfLines={1} style={styles.overlayInfoTitle}>{visibleChannel?.name || "Live TV"} · {visibleProgram?.title || "No program information"}</Text>
+          <Text numberOfLines={1} style={styles.overlayInfoTime}>{visibleProgram ? `${fmtTime(visibleProgram.start)} – ${visibleProgram.stop ? fmtTime(visibleProgram.stop) : "LIVE"}` : "Select a channel or program"}</Text>
+        </View>
+      ) : null}
       <View style={[styles.grid, mode === "preview" && styles.opaqueGrid]}>
         <NativeGuideCanvas
           channels={filtered}
@@ -269,7 +277,7 @@ export function PlayerGuidePanel({
         <View style={[styles.layer, { backgroundColor: "#171B23" }]}>
           <Text style={styles.layerTitle}>{detail.program.title || "Program information"}</Text>
           <Text style={styles.detailDescription}>{detail.channel.name}</Text>
-          <Text style={styles.detailDescription}>{fmtTime(detail.program.start)} – {fmtTime(detail.program.stop || detail.program.start)}</Text>
+          <Text style={styles.detailDescription}>{fmtTime(detail.program.start)} – {detail.program.stop ? fmtTime(detail.program.stop) : "LIVE"}</Text>
           <Text style={styles.detailDescription} numberOfLines={6}>{detail.program.desc || "No description available."}</Text>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.detailActions}>
             <Pressable onPress={() => { const tuned = detail.channel; setDetail(null); tuneChannel(tuned); }}
@@ -294,6 +302,11 @@ const styles = StyleSheet.create({
   infoTitle: { fontFamily: fonts.semibold, color: "#fff", fontSize: 15 },
   infoTime: { fontFamily: fonts.medium, color: tvColors.textMuted, fontSize: 12 },
   infoDescription: { fontFamily: fonts.regular, color: "#D4D8E1", fontSize: 11 },
+  progressTrack: { height: 3, width: "100%", backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden", borderRadius: 2 },
+  progressFill: { height: 3, backgroundColor: tvColors.purpleBright },
+  overlayInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 9, paddingVertical: 5, gap: 12 },
+  overlayInfoTitle: { flex: 1, color: "#fff", fontFamily: fonts.medium, fontSize: 11 },
+  overlayInfoTime: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 10 },
   liveBadge: { position: "absolute", bottom: 7, left: 7, backgroundColor: "rgba(124,58,237,0.92)", paddingHorizontal: 8, paddingVertical: 4 },
   badgeText: { color: "#fff", fontFamily: fonts.bold, fontSize: 10 },
   toolbar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5, padding: 5, minHeight: 42 },
