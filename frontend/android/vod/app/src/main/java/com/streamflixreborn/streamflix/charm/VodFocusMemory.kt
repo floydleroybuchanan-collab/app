@@ -104,6 +104,14 @@ class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager
         val lists = saved?.getParcelableArrayList<Bundle>("lists").orEmpty().toMutableList()
         pendingRestore.remove(f)?.invoke()
         val entryEpoch = userNavigationEpoch
+        // Movie/series detail pages always start on Watch. When the player
+        // exits, return to this same action rather than a stale header/rail.
+        val preferredActionId = when (f) {
+            is com.streamflixreborn.streamflix.fragments.movie.MovieTvFragment -> com.streamflixreborn.streamflix.R.id.btn_movie_watch_now
+            is com.streamflixreborn.streamflix.fragments.tv_show.TvShowTvFragment -> com.streamflixreborn.streamflix.R.id.btn_tv_show_watch_now
+            else -> View.NO_ID
+        }
+        var detailFocusAttempts = 0
         val listener = object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 if (!f.isResumed || f.view !== root || userNavigationEpoch != entryEpoch) {
@@ -120,6 +128,23 @@ class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager
                     } else false
                 }
                 if (restoredLayout) return true
+                if (preferredActionId != View.NO_ID) {
+                    val target = root.findViewById<View>(preferredActionId)
+                        ?.takeIf { it.isShown && it.isFocusable && it.isEnabled }
+                        ?: root.findViewById<View>(com.streamflixreborn.streamflix.R.id.charm_detail_sources)
+                            ?.takeIf { it.isShown && it.isFocusable && it.isEnabled }
+                    if (target != null && target.requestFocus()) {
+                        root.viewTreeObserver.removeOnPreDrawListener(this)
+                        return true
+                    }
+                    // The detail adapter binds after its movie/show request.
+                    // Do not let a stale saved bookmark pull focus into the
+                    // toolbar while data is still loading.
+                    if (++detailFocusAttempts < 12) {
+                        root.postInvalidateOnAnimation()
+                        return true
+                    }
+                }
                 if (!restoreFocus) {
                     if (lists.isEmpty()) root.viewTreeObserver.removeOnPreDrawListener(this)
                     return true
