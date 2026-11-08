@@ -50,6 +50,9 @@ function setup(overrides = {}) {
     '@/src/utils/storage': { storage },
     './rememberedLogin': { forgetRememberedLogin: async () => true, saveRememberedLogin: async () => true },
     '@/src/core/providerMediaSession': { clearProviderMedia() {} },
+    '@/src/core/providerLibrary': { setProviderLibraryAccount() {} },
+    '@/src/core/vodUnifiedSearch': { clearVodSearchCache() {} },
+    '@/src/core/vodProviderCatalogCache': { clearVodProviderCatalogCache() {} },
   };
   const exports = {};
   const js = ts.transpileModule(readFileSync(new URL('../src/auth/AuthContext.tsx', import.meta.url), 'utf8'), {
