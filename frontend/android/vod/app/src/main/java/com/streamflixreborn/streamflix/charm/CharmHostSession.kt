@@ -12,6 +12,8 @@ object CharmHostSession {
     private val surfaces = java.util.WeakHashMap<Activity, (String) -> Unit>()
     fun attachSurface(activity: Activity, navigate: (String) -> Unit) { surfaces[activity] = navigate }
     fun detachSurface(activity: Activity) { surfaces.remove(activity) }
+    /** Emitted only after Room has recorded a real VOD playback start. */
+    fun libraryUpdated(activity: Activity) { surfaces[activity]?.invoke("medialab:library-updated") }
     fun hasSurface(activity: Activity) = surfaces.containsKey(activity)
     private val states = mutableMapOf<String, Bundle>()
     private var sessionToken: String? = null
