@@ -17,10 +17,11 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.charm.CharmDesign
+import com.streamflixreborn.streamflix.charm.CharmHostSession
 import com.streamflixreborn.streamflix.charm.CharmVodPageLayout
 
 /** The native preference model still owns values, actions and dynamic visibility. */
-internal class CharmSettingsLayout(private val list: RecyclerView, private val open: (String?, String?) -> Unit) {
+internal class CharmSettingsLayout(private val list: RecyclerView, private val embedded: Boolean = (list.context as? androidx.fragment.app.FragmentActivity)?.let { CharmHostSession.hasSurface(it) } == true, private val open: (String?, String?) -> Unit) {
     private val context = list.context
     private fun dp(n: Int) = (n * context.resources.displayMetrics.density).toInt()
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -32,6 +33,8 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         setBackgroundColor(Color.TRANSPARENT); clipToPadding = true; isFillViewport = true
         addView(content, ViewGroup.LayoutParams(-1,-2))
     }
+    private var overview = true
+    private var appliedColumns = -1
     private val pages = linkedMapOf(
         "screen_connected_accounts" to "Accounts", "screen_vod_sources" to "Content & sources", "screen_content" to "Content & safety",
         "screen_playback" to "Playback", "screen_appearance" to "Appearance", "screen_network" to "Connection & services",
@@ -43,34 +46,50 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val o
         list.setPadding(0,0,0,0); list.itemAnimator = null
         content.addView(title); content.addView(subtitle); content.addView(row)
         row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
+        // React's compact navigation rail is 52dp and animates into place.
+        // Protect the first column even if the native fragment measures before
+        // that rail finishes resizing its host. Standalone VOD stays unchanged.
+        val leftInset = dp(if (embedded) 76 else 24)
+        val rightInset = dp(24)
+        content.setPadding(leftInset, 0, rightInset, dp(36))
+        root.clipToPadding = true
+        root.clipChildren = true
+        list.clipToPadding = true
         root.doOnLayout {
             root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, dp(24))
-            // The MediaLab shell already reserves its icon rail and toolbar.
-            // The old percentage inset was applied a second time, squeezing the
-            // four-column grid and clipping its first cards on TV overscan.
-            val horizontal = dp(24)
-            content.setPadding(horizontal, 0, horizontal, dp(36))
+            updateGridColumns()
+        }
+        root.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left != oldRight - oldLeft) updateGridColumns()
         }
         list.addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) { outRect.set(dp(4),dp(4),dp(4),dp(4)) }
         })
     }
+    private fun updateGridColumns() {
+        val measuredWidth = root.width.takeIf { it > 0 } ?: return
+        val available = (measuredWidth - content.paddingLeft - content.paddingRight).coerceAtLeast(dp(240))
+        val columns = if (overview) (available / dp(250)).coerceIn(1, 4) else if (available >= dp(760)) 2 else 1
+        if (columns == appliedColumns) return
+        appliedColumns = columns
+        list.layoutManager = GridLayoutManager(context, columns).apply {
+            spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                override fun getSpanSize(position: Int): Int =
+                    if ((list.adapter as? PreferenceGroupAdapter)?.getItem(position) is PreferenceCategory) columns else 1
+            }
+        }
+    }
     fun show(key: String?, name: String?) {
-        val overview = key == null
+        overview = key == null
         title.text = if (overview) "Your VOD. Your way." else pages[key] ?: name ?: "Settings"
         subtitle.text = if (overview) "Personalize playback, manage your account and make yourself at home." else "Settings  /  ${title.text}"
         // Settings use the full surface. The old embedded section rail reserved
         // a blank 168dp column and visibly cut the first card on TV screens.
         sections.visibility = View.GONE
         sections.removeAllViews()
-        val measuredWidth = root.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
-        val available = (measuredWidth - content.paddingLeft - content.paddingRight).coerceAtLeast(dp(320))
-        val columns = if (overview) (available / dp(250)).coerceIn(2, 4) else if (available >= dp(760)) 2 else 1
-        list.layoutManager = GridLayoutManager(context, columns).apply {
-            spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int): Int = if ((list.adapter as? PreferenceGroupAdapter)?.getItem(position) is PreferenceCategory) columns else 1
-            }
-        }
+        // Keep previous selection and scroll state when the column count has
+        // not changed; grid reset on every settings subpage loses TV focus.
+        updateGridColumns()
         root.scrollTo(0,0)
         CharmDesign.styleTree(content)
     }

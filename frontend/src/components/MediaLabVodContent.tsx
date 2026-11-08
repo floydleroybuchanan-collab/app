@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, findNodeHandle, BackHandler, NativeModules, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -6,6 +6,8 @@ import { useStore } from "@/src/store";
 import { shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { mediaLibraryPreferences } from "@/src/core/mediaLibrary";
+import { captureNativeVodSnapshot } from "@/src/core/vodRecentSnapshot";
+import { useAuth } from "@/src/auth/AuthContext";
 import { tvColors } from "@/src/theme";
 import { usePurpleTvDrawer } from "./PurpleTvShell";
 import { useDonation } from "./DonationDialog";
@@ -29,10 +31,21 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const showDonation = useDonation();
   const { openDrawer, closeDrawer } = usePurpleTvDrawer();
   const { deviceLayoutMode } = useStore();
+  const { user } = useAuth();
+  const accountId = user?.id || null;
+  const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [section, setSection] = useState(() => entrySection(initialSection, settings));
   const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
   const providerMode = section === "provider" || !!providerParts;
   const [ready, setReady] = useState(false);
+  const captureShelf = useCallback(() => {
+    // Called only from the actual native VOD route, never from Live TV home.
+    if (!accountId || Platform.OS !== "android" || !focused || !ready || providerMode) return;
+    void Promise.all([
+      captureNativeVodSnapshot(accountId, "continue"),
+      captureNativeVodSnapshot(accountId, "favorites"),
+    ]).catch(() => undefined);
+  }, [accountId, focused, ready, providerMode]);
   const [player, setPlayer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toolbarFocusTag, setToolbarFocusTag] = useState<number | null>(null);
@@ -54,6 +67,20 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     })().catch(() => { if (current) setError("Unable to release playback. Return and try again."); });
     return () => { current = false; onPlayerChange?.(false); };
   }, [focused, onPlayerChange]);
+  useEffect(() => {
+    if (!focused || !ready || providerMode) return;
+    // The native catalog is already mounted. Refresh the tiny display snapshot.
+    const timer = setTimeout(captureShelf, 450);
+    return () => clearTimeout(timer);
+  }, [captureShelf, focused, providerMode, ready]);
+  useEffect(() => {
+    if (!focused || providerMode) {
+      // A timer must never wake the native :vod process after Live TV resumes.
+      if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
+      snapshotTimer.current = null;
+    }
+  }, [focused, providerMode]);
+  useEffect(() => () => { if (snapshotTimer.current) clearTimeout(snapshotTimer.current); }, []);
   const back = useCallback(() => {
     if (providerMode) { setSection("home"); return; }
     const fallback = () => { if (settings) router.replace("/settings"); else openDrawer({ focusTop: true }); };
@@ -98,8 +125,21 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     {focused && ready && !providerMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} toolbarFocusTag={toolbarFocusTag || 0} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
       onVodEvent={({ nativeEvent }: any) => {
         if (nativeEvent.kind === "error") setError(nativeEvent.value);
-        if (nativeEvent.kind === "player") { const value = nativeEvent.value === "true"; setPlayer(value); onPlayerChange?.(value); if (value) closeDrawer({ force: true }); }
+        if (nativeEvent.kind === "player") {
+          const value = nativeEvent.value === "true";
+          setPlayer(value);
+          onPlayerChange?.(value);
+          if (value) closeDrawer({ force: true });
+          if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
+          // Start history is recorded during playback; stop/progress may commit
+          // slightly after the fragment destination changes.
+          if (!value) captureShelf();
+          snapshotTimer.current = setTimeout(captureShelf, value ? 2400 : 650);
+        }
         if (nativeEvent.kind === "route") {
+          // Capture before leaving the native screen; future Live TV display
+          // consumes the saved snapshot without launching the :vod process.
+          captureShelf();
           if (nativeEvent.value === "medialab:provider-changed") { router.replace("/vod"); return; }
           if (nativeEvent.value === "medialab:donate") { showDonation(); return; }
           if (nativeEvent.value === "/settings") router.replace("/settings");
