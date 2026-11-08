@@ -33,7 +33,7 @@ test("VOD content retains remote focus, artwork is decorative", () => {
   const shell = source("src/components/PurpleTvShell.tsx");
   const art = source("src/components/MediaLabBrand.tsx");
   assert.match(native, /retainDetailFocusOnLeft\(\)/);
-  assert.match(native, /VodR\.id\.movie, VodR\.id\.tv_show/);
+  assert.match(native, /destination == VodR\.id\.movie \|\| destination == VodR\.id\.tv_show/);
   assert.match(shell, /active !== "\/vod"/);
   assert.match(art, /accessible=\{false\} importantForAccessibility="no"/);
 });
