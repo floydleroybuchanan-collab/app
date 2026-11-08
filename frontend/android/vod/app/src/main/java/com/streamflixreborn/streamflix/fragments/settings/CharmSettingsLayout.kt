@@ -49,10 +49,8 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
         (list.parent as? ViewGroup)?.removeView(list)
         list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = true
         list.setPadding(0,0,0,0); list.itemAnimator = null
-        // RecyclerView is inside a wrapping NestedScrollView. It must have a
-        // LayoutManager *before* its first measure or the list measures empty
-        // and the parent never gives the settings rows usable height.
-        // Upgrade to the actual host-width column count after first layout.
+        // Choose a layout manager before measuring the full-height page.
+        // Retain the same manager while navigating settings subpages.
         list.layoutManager = GridLayoutManager(context, 1)
         content.addView(title)
         content.addView(subtitle)
@@ -71,7 +69,7 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
         list.clipChildren = true
         list.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         root.doOnLayout {
-            root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, dp(12))
+            root.setPadding(0, if (embedded) dp(8) else CharmVodPageLayout.contentTop(root), 0, dp(12))
             updateGridColumns()
         }
         root.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
