@@ -6,13 +6,16 @@ import { dirname, resolve } from "node:path";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const src = name => readFileSync(resolve(root, name), "utf8");
 
-test("three VOD sources are accessible from one lazy entry point", () => {
+test("native VOD only: playlist catalogs remain available for Live TV but VOD tabs are disabled", () => {
   const content = src("src/components/MediaLabVodContent.tsx");
   const landing = src("src/components/UnifiedVodOverview.tsx");
-  assert.match(content, /"all", "All VOD"/);
-  assert.match(content, /"provider-xtream", "Xtream"/);
-  assert.match(content, /"provider-stalker", "Stalker"/);
-  assert.match(landing, /id: "home", label: "Streamflix"/);
+  const flag = src("src/core/vodFeatureFlags.ts");
+  assert.match(flag, /PLAYLIST_VOD_ENABLED = false/);
+  assert.match(content, /"home", "Home"/);
+  assert.doesNotMatch(content, /"provider-xtream", "Xtream"|"provider-stalker", "Stalker"/);
+  assert.doesNotMatch(content, /"Streamflix"/);
+  assert.match(landing, /id: "home", label: "Browse VOD"/);
+  assert.doesNotMatch(landing, /label: "Xtream"|label: "Stalker"/);
   assert.match(landing, /readVodSnapshot/);
   assert.doesNotMatch(landing, /loadXtreamCatalog|listStalkerCatalog|NativeModules/);
 });
