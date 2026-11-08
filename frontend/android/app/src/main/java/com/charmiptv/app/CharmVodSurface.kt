@@ -84,12 +84,18 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     }
     fun television(value: Boolean) { television = value }
     private fun handoffUpToToolbar(): Boolean {
-        // Details and player own their D-pad focus. Up must not escape from
-        // Watch/Trailer/My List to the React toolbar or compact icon rail.
-        if (host?.navController?.currentDestination?.id in setOf(VodR.id.player, VodR.id.movie, VodR.id.tv_show)) return false
+        // Fullscreen playback keeps DPAD keys. In the VOD catalog, including
+        // movie/series detail actions, UP can reach the top React toolbar.
+        // The icon rail is not an intermediate focus destination.
+        val destination = host?.navController?.currentDestination?.id
+        if (destination == VodR.id.player) return false
         val focused = findFocus() ?: return false
         val target = owner?.findViewById<View>(toolbarFocusTag) ?: return false
-        if (!target.isShown || !target.isFocusable) return false
+        if (!target.isShown || !target.isFocusable || !target.isEnabled) return false
+        // Detail actions are the top-level controls on these native pages:
+        // UP goes to the VOD toolbar directly, not out into the icon rail.
+        if (destination == VodR.id.movie || destination == VodR.id.tv_show)
+            return target.requestFocus(View.FOCUS_UP)
         // Preserve upper rows in every nested catalog (Home contains horizontal
         // poster lists inside a vertical list). Only the actual first row exits.
         var child: View = focused
