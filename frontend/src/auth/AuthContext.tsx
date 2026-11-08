@@ -18,6 +18,7 @@ import { clearManagedContentAccess, configureManagedContentAccess } from "@/src/
 import { storage } from "@/src/utils/storage";
 import { forgetRememberedLogin, saveRememberedLogin } from "./rememberedLogin";
 import { clearProviderMedia } from "@/src/core/providerMediaSession";
+import { setProviderLibraryAccount } from "@/src/core/providerLibrary";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
 const SESSION_RECHECK_MS = 5 * 60_000;
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearLocalSession = useCallback(async (message?: string, forgetLogin = false) => {
     sessionEpoch.current += 1;
     clearProviderMedia();
+    setProviderLibraryAccount(null);
     tokenRef.current = null;
     NativeModules.CharmVod?.setUsageSession?.(null);
     clearManagedContentAccess();
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const message = result.data.error || "Unable to verify your account right now.";
       if (restoring) {
         tokenRef.current = token;
+        setProviderLibraryAccount(null);
         setUser(null);
         setNotice(message);
         setStatus("unavailable");
@@ -113,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenRef.current = token;
     NativeModules.CharmVod?.setUsageSession?.(token);
     lastValidatedAtRef.current = Date.now();
+    setProviderLibraryAccount(result.data.user.id);
     setUser(result.data.user);
     setNotice(sourceNotice);
     setStatus("signed_in");
@@ -128,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (sessionEpoch.current !== epoch) return;
     if (!stored) {
       tokenRef.current = null;
+      setProviderLibraryAccount(null);
       setUser(null);
       setStatus("signed_out");
       return;
@@ -219,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenRef.current = result.data.token;
     NativeModules.CharmVod?.setUsageSession?.(result.data.token);
     lastValidatedAtRef.current = Date.now();
+    setProviderLibraryAccount(result.data.user.id);
     setUser(result.data.user);
     setStatus("signed_in");
     return null;
