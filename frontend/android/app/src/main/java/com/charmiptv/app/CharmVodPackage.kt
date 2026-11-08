@@ -18,6 +18,7 @@ import com.streamflixreborn.streamflix.activities.main.MainTvActivity
 class CharmVodModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     private var pending: Promise? = null
     private var usageToken: String? = null
+    private var historyAccount: String? = null
     private val libraryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activityListener = object : BaseActivityEventListener() {
         override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
@@ -28,11 +29,27 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     }
 
     private fun readLibrary(method: String, query: String?, promise: Promise) {
+        val account = historyAccount
+        val scope = com.streamflixreborn.streamflix.charm.CharmVodAccountScope.activeScopePrefix()
+        if (account == null || scope == null) { promise.resolve("[]"); return }
         libraryScope.launch {
             try {
-                val result = context.contentResolver.call(Uri.parse("content://${context.packageName}.medialab-library"), method, query, null)
+                val extras = android.os.Bundle().apply { putString("historyPrefix", scope) }
+                val result = context.contentResolver.call(Uri.parse("content://${context.packageName}.medialab-library"), method, query, extras)
                 promise.resolve(result?.getString("items") ?: "[]")
             } catch (error: Exception) { promise.reject("E_LIBRARY", "Your movie and series library is unavailable. Try again.", error) }
+        }
+    }
+
+    @ReactMethod
+    fun setHistoryAccount(account: String?, promise: Promise) {
+        try {
+            historyAccount = null
+            com.streamflixreborn.streamflix.charm.CharmVodAccountScope.activate(context, account)
+            historyAccount = account?.takeIf { it.isNotBlank() }
+            promise.resolve(true)
+        } catch (failure: Exception) {
+            promise.reject("VOD_ACCOUNT_SCOPE", "Could not activate private VOD history for this account.", failure)
         }
     }
 
