@@ -6,7 +6,7 @@ import ts from 'typescript';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function harness(release=async()=>{}) {
  const effects=[],states=[],calls=[];
- const React={createElement:(...args)=>args,useCallback:fn=>fn,useEffect:fn=>effects.push(fn),useState:initial=>{
+ const React={createElement:(...args)=>args,useCallback:fn=>fn,useRef:v=>({current:v}),useEffect:fn=>effects.push(fn),useState:initial=>{
   const i=states.length;const value=typeof initial==='function'?initial():initial;states.push(value);return [value,next=>{states[i]=next;}];
  }};
  const modules={
@@ -17,21 +17,24 @@ function harness(release=async()=>{}) {
   '@/src/store':{useStore:()=>({deviceLayoutMode:'tv'})},'@/src/utils/tvLayout':{shouldUseTvLayout:()=>true},
   '@/src/core/playbackSession':{stopAllPlaybackSessions:async()=>{calls.push(['release']);await release();}},
   '@/src/core/mediaLibrary':{mediaLibraryPreferences:async()=>({audio:'en'})},'@/src/theme':{tvColors:{}},
+  '@/src/auth/AuthContext':{useAuth:()=>({user:{id:'test-account'}})},
+  '@/src/core/vodRecentSnapshot':{captureNativeVodSnapshot:async()=>{}},
+  './UnifiedVodOverview':{UnifiedVodOverview:'UnifiedOverview'},
   './PurpleTvShell':{usePurpleTvDrawer:()=>({openDrawer(){},closeDrawer(){}})},'./DonationDialog':{useDonation:()=>()=>{}},'./MediaLabBrand':{MediaLabArt:'Brand'},'./XtreamProviderBrowser':{XtreamProviderBrowser:'ProviderBrowser'},
  };
  const exports={};
  const code=ts.transpileModule(readFileSync(new URL('../src/components/MediaLabVodContent.tsx',import.meta.url),'utf8'),
   {compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React}}).outputText;
  vm.runInNewContext(code,{exports,require:name=>{assert.ok(modules[name],name);return modules[name];}});
- const tree=exports.MediaLabVodContent({});
+ const tree=exports.MediaLabVodContent({initialSection:'movies'});
  return {states,calls,tree,enter:()=>effects[1]()};
 }
 test('shared VOD surface waits for Live TV decoder release and keeps all catalog entry controls',async()=>{
  let resolve;const h=harness(()=>new Promise(done=>{resolve=done;}));h.enter();await tick();
  assert.equal(h.states[1],false);assert.equal(h.calls.length,1);
  resolve();await tick();assert.equal(h.states[1],true);assert.equal(h.calls[1][0],'configure');
- for(const label of ['Browse','Movies','Series','My list','Search','Playlist VOD']) assert.ok(JSON.stringify(h.tree).includes(label));
- assert.equal(h.states[0],'home');
+ for(const label of ['All VOD','Streamflix','Movies','Series','My list','Search','Xtream','Stalker']) assert.ok(JSON.stringify(h.tree).includes(label));
+ assert.equal(h.states[0],'movies');
  assert.doesNotMatch(JSON.stringify(h.tree),/"Sources"|Open Video OnDemand/);
  assert.match(JSON.stringify(h.tree),/Opening Video On Demand/);
 });

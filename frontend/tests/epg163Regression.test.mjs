@@ -23,7 +23,8 @@ function schedulerHarness({ forceOnStart = false, holdPreferences = null } = {})
       assert.equal(deps.length, 0, "navigation must not restart the scheduler");
       if (!mounted) { cleanup = effect(); mounted = true; }
     } },
-    "react-native": { AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) } },
+    "react-native": { AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) }, NativeModules: {}, Platform: { OS: "android" } },
+    "@/src/auth/AuthContext": { useAuth: () => ({ user: null }) },
     "expo-router": { usePathname: () => pathname },
     "@/src/source": { refreshEpgOnly: async () => calls.push("forced-guide"), refreshSourcesIfDue: async () => calls.push("due-guide") },
     "@/src/nativeEpg": { consumeNativeScheduledEpgRefresh: async () => false, refreshNativeSourceGuide: async () => { throw Error("no custom source expected"); } },

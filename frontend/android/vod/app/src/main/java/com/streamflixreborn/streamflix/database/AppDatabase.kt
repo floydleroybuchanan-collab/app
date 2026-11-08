@@ -59,7 +59,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         fun databaseNameFor(providerName: String): String =
-            "${sanitizeProviderName(providerName)}.db"
+            com.streamflixreborn.streamflix.charm.CharmVodAccountScope.databaseFileName(sanitizeProviderName(providerName))
 
         fun setup(context: Context) {
             if (UserPreferences.currentProvider == null) return
@@ -73,8 +73,10 @@ abstract class AppDatabase : RoomDatabase() {
             return getSharedInstanceForProvider(providerName, context)
         }
 
-        fun getSharedInstanceForProvider(providerName: String, context: Context): AppDatabase =
-            instances.get(providerName) { buildDatabase(providerName, context) }
+        fun getSharedInstanceForProvider(providerName: String, context: Context): AppDatabase {
+            val scopedFile = databaseNameFor(providerName)
+            return instances.get(scopedFile) { buildDatabase(providerName, context, scopedFile) }
+        }
 
         // Only destructive restore uses this. Ordinary source selection must never
         // close a database still owned by a retained ViewModel or query.
@@ -83,16 +85,15 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         fun getInstanceForProvider(providerName: String, context: Context): AppDatabase {
-            return buildDatabase(providerName, context)
+            return buildDatabase(providerName, context, databaseNameFor(providerName))
         }
 
         @OptIn(androidx.room.ExperimentalRoomApi::class)
-        private fun buildDatabase(providerName: String, context: Context): AppDatabase {
-            val sanitizedName = sanitizeProviderName(providerName)
+        private fun buildDatabase(providerName: String, context: Context, scopedFile: String): AppDatabase {
             return Room.databaseBuilder(
                 context = context.applicationContext,
                 klass = AppDatabase::class.java,
-                name = "$sanitizedName.db"
+                name = scopedFile
             )
                 .allowMainThreadQueries()
                 .setAutoCloseTimeout(15, TimeUnit.SECONDS)

@@ -1423,6 +1423,9 @@ class PlayerTvFragment : Fragment() {
                     )
                 }
             }
+            // Room commit has completed; the embedded MediaLab home snapshot
+            // can now read the updated history while the VOD screen is open.
+            com.streamflixreborn.streamflix.charm.CharmHostSession.libraryUpdated(requireActivity())
         }
 
         private fun ExoPlayer.hasFinished(): Boolean {

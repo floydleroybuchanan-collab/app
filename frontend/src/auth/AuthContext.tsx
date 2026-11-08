@@ -18,6 +18,9 @@ import { clearManagedContentAccess, configureManagedContentAccess } from "@/src/
 import { storage } from "@/src/utils/storage";
 import { forgetRememberedLogin, saveRememberedLogin } from "./rememberedLogin";
 import { clearProviderMedia } from "@/src/core/providerMediaSession";
+import { setProviderLibraryAccount } from "@/src/core/providerLibrary";
+import { clearVodSearchCache } from "@/src/core/vodUnifiedSearch";
+import { clearVodProviderCatalogCache } from "@/src/core/vodProviderCatalogCache";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
 const SESSION_RECHECK_MS = 5 * 60_000;
@@ -61,8 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearLocalSession = useCallback(async (message?: string, forgetLogin = false) => {
     sessionEpoch.current += 1;
     clearProviderMedia();
+    setProviderLibraryAccount(null);
+    clearVodSearchCache();
+    clearVodProviderCatalogCache();
+    void NativeModules.CharmVod?.setHistoryAccount?.(null)?.catch?.(() => undefined);
     tokenRef.current = null;
     NativeModules.CharmVod?.setUsageSession?.(null);
+    void NativeModules.CharmPlaylistSchedule?.setAccount?.(null)?.catch?.(() => undefined);
     clearManagedContentAccess();
     lastValidatedAtRef.current = 0;
     setUser(null);
@@ -88,6 +96,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const message = result.data.error || "Unable to verify your account right now.";
       if (restoring) {
         tokenRef.current = token;
+        setProviderLibraryAccount(null);
+    clearVodSearchCache();
+    clearVodProviderCatalogCache();
+    void NativeModules.CharmVod?.setHistoryAccount?.(null)?.catch?.(() => undefined);
         setUser(null);
         setNotice(message);
         setStatus("unavailable");
@@ -112,7 +124,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     tokenRef.current = token;
     NativeModules.CharmVod?.setUsageSession?.(token);
+    try { await NativeModules.CharmVod?.setHistoryAccount?.(result.data.user.id); }
+    catch { sourceNotice = "VOD history isolation is unavailable. Live TV is still accessible."; }
+    if (!current()) return;
+    clearVodSearchCache();
+    clearVodProviderCatalogCache();
+    void NativeModules.CharmPlaylistSchedule?.setAccount?.(result.data.user.id)?.catch?.(() => undefined);
     lastValidatedAtRef.current = Date.now();
+    setProviderLibraryAccount(result.data.user.id);
     setUser(result.data.user);
     setNotice(sourceNotice);
     setStatus("signed_in");
@@ -128,6 +147,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (sessionEpoch.current !== epoch) return;
     if (!stored) {
       tokenRef.current = null;
+      setProviderLibraryAccount(null);
+    clearVodSearchCache();
+    clearVodProviderCatalogCache();
+    void NativeModules.CharmVod?.setHistoryAccount?.(null)?.catch?.(() => undefined);
       setUser(null);
       setStatus("signed_out");
       return;
@@ -218,7 +241,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!remembered) setNotice("Signed in, but this device could not update the saved login. Your session is still saved.");
     tokenRef.current = result.data.token;
     NativeModules.CharmVod?.setUsageSession?.(result.data.token);
+    try { await NativeModules.CharmVod?.setHistoryAccount?.(result.data.user.id); }
+    catch { setNotice("VOD history isolation is unavailable. Live TV is still accessible."); }
+    if (!current()) return superseded();
+    clearVodSearchCache();
+    clearVodProviderCatalogCache();
+    void NativeModules.CharmPlaylistSchedule?.setAccount?.(result.data.user.id)?.catch?.(() => undefined);
     lastValidatedAtRef.current = Date.now();
+    setProviderLibraryAccount(result.data.user.id);
     setUser(result.data.user);
     setStatus("signed_in");
     return null;

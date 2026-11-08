@@ -44,6 +44,11 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
         (list.parent as? ViewGroup)?.removeView(list)
         list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = false
         list.setPadding(0,0,0,0); list.itemAnimator = null
+        // RecyclerView is inside a wrapping NestedScrollView. It must have a
+        // LayoutManager *before* its first measure or the list measures empty
+        // and the parent never gives the settings rows usable height.
+        // Upgrade to the actual host-width column count after first layout.
+        list.layoutManager = GridLayoutManager(context, 1)
         content.addView(title); content.addView(subtitle); content.addView(row)
         row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
         // React's compact navigation rail is 52dp and animates into place.
@@ -67,7 +72,12 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
         })
     }
     private fun updateGridColumns() {
-        val measuredWidth = root.width.takeIf { it > 0 } ?: return
+        // show() runs before first measure on TV. Use window metrics as the
+        // initial width so RecyclerView has its final grid manager *before*
+        // Android measures the content. Replacing it in onLayout detaches the
+        // first set of row views and can leave the grid empty for that frame.
+        val measuredWidth = root.width.takeIf { it > 0 }
+            ?: context.resources.displayMetrics.widthPixels
         val available = (measuredWidth - content.paddingLeft - content.paddingRight).coerceAtLeast(dp(240))
         val columns = if (overview) (available / dp(250)).coerceIn(1, 4) else if (available >= dp(760)) 2 else 1
         if (columns == appliedColumns) return

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { AppState } from "react-native";
+import { AppState, NativeModules, Platform } from "react-native";
+import { useAuth } from "@/src/auth/AuthContext";
 import { usePathname } from "expo-router";
 import { refreshEpgOnly, refreshSourcesIfDue } from "@/src/source";
 import { consumeNativeScheduledEpgRefresh, refreshNativeSourceGuide } from "@/src/nativeEpg";
@@ -20,6 +21,9 @@ let schedulerGeneration = 0;
  */
 export function SourceRefreshScheduler() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const accountIdRef = useRef<string | null>(user?.id || null);
+  accountIdRef.current = user?.id || null;
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
@@ -56,10 +60,15 @@ export function SourceRefreshScheduler() {
         await syncNativeCustomEpgPolicy(prefs.epgHours, prefs.epgPastDays);
         if (!screenIsSafe()) return;
 
+        const dueAccountId = accountIdRef.current;
+        const nativePlaylistDue = dueAccountId && Platform.OS === "android"
+          ? await Promise.resolve(NativeModules.CharmPlaylistSchedule?.consumeDue?.(dueAccountId)).catch(() => false)
+          : false;
+        if (!screenIsSafe()) return;
         const isInitialCheck = initialCheckPending;
         initialCheckPending = false;
 
-        if (isInitialCheck && prefs.updateEpgOnAppStart) {
+        if (isInitialCheck && prefs.updateEpgOnAppStart && !nativePlaylistDue) {
           await refreshEpgOnly(true, screenIsSafe);
         } else {
           // Playlist jobs complete before dependent EPG association/import work.

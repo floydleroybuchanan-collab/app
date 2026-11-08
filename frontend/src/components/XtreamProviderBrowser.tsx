@@ -9,6 +9,8 @@ import { listStalkerCatalog, loadStalkerDetails, resolveStalkerMedia } from "@/s
 import { providerStreamAddress, stageProviderMedia } from "@/src/core/providerMediaSession";
 import { updateProviderLibrary, useProviderLibrary } from "@/src/core/providerLibrary";
 import { providerPlaybackId } from "@/src/core/providerLibraryCore";
+import { readVodProviderCatalogCache, writeVodProviderCatalogCache } from "@/src/core/vodProviderCatalogCache";
+import { useAuth } from "@/src/auth/AuthContext";
 import { tvColors } from "@/src/theme";
 
 type ProviderLogin = { protocol: "xtream"; value: XtreamLogin } | { protocol: "stalker"; value: StalkerLogin };
@@ -23,6 +25,8 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   allowedProtocol?: "xtream" | "stalker";
 }) {
   const router = useRouter(), playlists = usePlaylists();
+  const { user } = useAuth();
+  const accountId = user?.id || "";
   const focused = useIsFocused();
   // The unified VOD landing is lazy: only the source the user selects loads a catalog.
   const providers = playlists.filter(row => row.enabled && (row.kind === "xtream" || row.kind === "stalker") &&
@@ -69,7 +73,12 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
       const credentials: ProviderLogin | null = xtream ? { protocol: "xtream", value: xtream } : stalker ? { protocol: "stalker", value: stalker } : null;
       if (!credentials) throw Error();
       if (controller.signal.aborted) return;
-      const rows = credentials.protocol === "xtream" ? await loadXtreamCatalog(credentials.value, kind, controller.signal) : await listStalkerCatalog(credentials.value, kind, controller.signal);
+      const cacheKey = [accountId, row.id, row.revision, row.refreshedAt || 0, kind].join(":");
+      const cached = readVodProviderCatalogCache(cacheKey);
+      const rows = cached || (credentials.protocol === "xtream"
+        ? await loadXtreamCatalog(credentials.value, kind, controller.signal)
+        : await listStalkerCatalog(credentials.value, kind, controller.signal));
+      if (!cached && !controller.signal.aborted) writeVodProviderCatalogCache(cacheKey, rows);
       if (!alive) return;
       const result = { source: activeSource, kind, login: credentials, rows };
       retainedCatalog.current = result;
@@ -84,7 +93,7 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
     })().catch(() => { if (alive) setError("Could not load this provider library. Check the account in Settings → Playlists."); })
       .finally(() => { if (alive) setLoadingCatalog(false); });
     return () => { alive = false; controller.abort(); };
-  }, [activeSource, focused, kind, owner]);
+  }, [accountId, activeSource, focused, kind, owner]);
   useEffect(() => {
     if (!focused || !selected || !login || !activeSource) {
       setLoadingDetails(false);

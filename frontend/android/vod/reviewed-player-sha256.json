@@ -11,8 +11,8 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-      "sha256": "36c884399e6c6b6110b78216c22866a4d1c38e1b82ac6bdf7bba016979603398",
-      "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume. RC8: report playback state for authorized admin usage totals; no stream URLs or titles reported, no playback behavior changed. RC9 playback patch: bind the VOD Menu visibility to Media3 controller visibility and release that binding with the player view.; build-200 rebuild: apply explicitly handed-off shared audio/subtitle preferences, retaining source selection, Nova, decoders and existing transport. Post-RC20: integrate Stop into the native auto-hiding TV controller and pause before returning."
+    "sha256": "9088b7396216318f998d0b4b720a90b566101ca97545c7ab25dbea0194bb0939",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection.; approved detail Sources action opens the existing picker for this navigation without changing the saved Quick Play preference RC6: visible nested Back/Home navigation, episode source selection, and explicit persisted-account discovery status; retain playback cleanup and resume. RC8: report playback state for authorized admin usage totals; no stream URLs or titles reported, no playback behavior changed. RC9 playback patch: bind the VOD Menu visibility to Media3 controller visibility and release that binding with the player view.; build-200 rebuild: apply explicitly handed-off shared audio/subtitle preferences, retaining source selection, Nova, decoders and existing transport. Post-RC20: integrate Stop into the native auto-hiding TV controller and pause before returning. RC20 recent-history bridge: notify embedded MediaLab shell immediately after a real Media3 playback-start event has committed watched title to account-scoped Room database."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
@@ -61,12 +61,12 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/database/AppDatabase.kt": {
     "upstream": "e96ecb3eba49cf5f3931a8a466242843c19a302f97ea66fd04fcd45d93e08228",
-    "sha256": "dfda006b4b06030fded6a56b5803a851b4c466ceb705f098818075cd36d79a43",
-    "reason": "RC17 provider ownership audit: weak source-keyed Room wrappers with idle auto-close; ordinary selection never closes retained backstack databases; preserve separate caller-owned database and destructive restore APIs."
+    "sha256": "9642e459aba713695cdca46f11273b0a39eaa8f2f4c9ffe9a8e30b1ba2e44f0a",
+    "reason": "RC20 account boundary: preserve source-specific Room/SQLite, weak source registry and idle auto-close, but further segregate history and favorites by authenticated Charming MediaLab account. Keep pre-upgrade DB owned by first verified account; later accounts receive separate databases."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/providers/Provider.kt": {
     "upstream": "c07d5f56b97c88ef09f4fd541fb557929106c2606332e78e581408aafb8a84c5",
-      "sha256": "a801a053469a2a65a6b8a121793642f83791cb92dd8a88901be7eb6fae8f42dc",
+    "sha256": "a801a053469a2a65a6b8a121793642f83791cb92dd8a88901be7eb6fae8f42dc",
     "reason": "RC20 reviewed provider expansion: expose English through the existing Vavoo provider implementation without changing database names, cache ownership, extractors or settings."
   }
 }

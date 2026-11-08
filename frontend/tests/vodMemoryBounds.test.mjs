@@ -59,7 +59,8 @@ test('embedded provider choice returns through shared routing and trim hooks cle
 
 test('provider changes preserve retained source-owned databases and backstack actions',()=>{
  const db=source('database/AppDatabase.kt'), prefs=source('utils/UserPreferences.kt');
- assert.match(db,/instances.get\(providerName\) \{ buildDatabase\(providerName, context\) \}/);
+ assert.match(db,/instances.get\(scopedFile\) \{ buildDatabase\(providerName, context, scopedFile\) \}/);
+ assert.match(db,/CharmVodAccountScope.databaseFileName/);
  assert.match(db,/setAutoCloseTimeout\(15, TimeUnit.SECONDS\)/);
  assert.doesNotMatch(prefs,/AppDatabase.resetInstance\(/);
  const identity=source('utils/CatalogSource.kt');

@@ -210,7 +210,8 @@ test('navigation during a playlist job defers following guide jobs and resumes c
   const custom = { id: 'extra', enabled: true, url: 'https://example.invalid/epg', refreshHours: 1, lastRefreshAt: 0, overrides: {} };
   const api = load('src/components/SourceRefreshScheduler.tsx', {
     react: { useRef: v => refs[refAt++] ||= { current: v }, useEffect: fn => { if (!mounted) { fn(); mounted = true; } } },
-    'react-native': { AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
+    'react-native': { AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) }, NativeModules: {}, Platform: { OS: 'android' } },
+    '@/src/auth/AuthContext': { useAuth: () => ({ user: null }) },
     'expo-router': { usePathname: () => pathname },
     '@/src/source': { refreshEpgOnly: async () => calls.push(['primary', pathname]), refreshSourcesIfDue: async () => calls.push(['due-guide', pathname]) },
     '@/src/nativeEpg': { consumeNativeScheduledEpgRefresh: async () => false, refreshNativeSourceGuide: async () => { calls.push(['custom-import', pathname]); return { count: 1, programmeSwapSucceeded: true }; } },

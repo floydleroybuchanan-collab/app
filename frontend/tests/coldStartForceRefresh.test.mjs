@@ -18,12 +18,12 @@ test("cold-start forced refresh is opt-in", () => {
   );
   assert.match(
     scheduler,
-    /if \(isInitialCheck && prefs\.updateEpgOnAppStart\)/,
+    /if \(isInitialCheck && prefs\.updateEpgOnAppStart && !nativePlaylistDue\)/,
     "forcing a startup update requires opt-in; ordinary due-only checks still run",
   );
   assert.match(
     scheduler,
-    /if \(isInitialCheck && prefs\.updateEpgOnAppStart\) \{\s*await refreshEpgOnly\(true, screenIsSafe\);/s,
+    /if \(isInitialCheck && prefs\.updateEpgOnAppStart && !nativePlaylistDue\) \{\s*await refreshEpgOnly\(true, screenIsSafe\);/s,
     "the EPG startup option refreshes guides without also forcing playlist downloads",
   );
 });
