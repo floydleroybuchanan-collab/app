@@ -453,7 +453,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
       if (file.parentFile != root || !file.name.matches(Regex("stalker-user-[a-z0-9-]+\\.[a-z0-9-]+\\.xml")) || !file.isFile) throw IllegalArgumentException("Generated Guide file is outside the private provider directory")
       if (file.length() > MAX_COMPRESSED_EPG_BYTES) throw IllegalStateException("Generated Guide exceeds size safety limit")
       targetDatabase.assertRefreshStorageAvailable(file.length())
-      return BoundedInputStream(BufferedInputStream(java.io.FileInputStream(file), NETWORK_BUFFER_SIZE), MAX_DECOMPRESSED_EPG_BYTES)
+      return BoundedInputStream(EpgCompressedStreams.decode(BufferedInputStream(java.io.FileInputStream(file), NETWORK_BUFFER_SIZE)), MAX_DECOMPRESSED_EPG_BYTES)
     }
     var currentUrl = URL(urlString); var redirects = 0
     while (true) {
@@ -466,7 +466,7 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
       try {
         targetDatabase.assertRefreshStorageAvailable(declaredLength)
         val connectionStream = object : FilterInputStream(connection.inputStream) { override fun close() { try { super.close() } finally { connection.disconnect() } } }
-        val compressed = BoundedInputStream(connectionStream, MAX_COMPRESSED_EPG_BYTES); val buffered = BufferedInputStream(compressed, NETWORK_BUFFER_SIZE); buffered.mark(2); val b1 = buffered.read(); val b2 = buffered.read(); buffered.reset(); val decoded = if (b1 == 0x1f && b2 == 0x8b) GZIPInputStream(buffered, NETWORK_BUFFER_SIZE) else buffered
+        val compressed = BoundedInputStream(connectionStream, MAX_COMPRESSED_EPG_BYTES); val buffered = BufferedInputStream(compressed, NETWORK_BUFFER_SIZE); buffered.mark(2); val b1 = buffered.read(); val b2 = buffered.read(); buffered.reset(); val decoded = EpgCompressedStreams.decode(buffered)
         return BoundedInputStream(decoded, MAX_DECOMPRESSED_EPG_BYTES)
       } catch (t: Throwable) { connection.disconnect(); throw t }
     }
@@ -486,5 +486,5 @@ class CustomEpgNativeModule(private val reactContext: ReactApplicationContext) :
 
   override fun invalidate() { executor.shutdownNow(); queryExecutor.shutdownNow(); CustomEpgStoreRegistry.closeAll(); super.invalidate() }
   private class BoundedInputStream(input: InputStream, private val maxBytes: Long) : FilterInputStream(input) { private var bytesRead=0L; private fun account(count:Int):Int { if(count<=0)return count; bytesRead+=count.toLong(); if(bytesRead>maxBytes)throw IllegalStateException("Custom EPG exceeds size safety limit"); return count }; override fun read():Int { val value=super.read(); if(value>=0)account(1); return value }; override fun read(buffer:ByteArray,offset:Int,length:Int):Int=account(super.read(buffer,offset,length)) }
-  companion object { private const val USER_SOURCE_ID="user"; private const val POLICY_PREFS="charm_epg_custom_policy"; private const val POLICY_PAST_DAYS="past_days"; private const val BATCH_SIZE=1000; private const val NETWORK_BUFFER_SIZE=64*1024; private const val MAX_HTTP_REDIRECTS=6; private const val MAX_COMPRESSED_EPG_BYTES=256L*1024L*1024L; private const val MAX_DECOMPRESSED_EPG_BYTES=1024L*1024L*1024L; private const val MAX_PROGRAMME_COUNT=2_000_000L; private const val DAY_MS=24L*60L*60L*1000L; private const val GUIDE_WINDOW_MS=72L*60L*60L*1000L; private const val DEFAULT_PROGRAMME_DURATION_MS=30L*60L*1000L; private const val MAX_PROGRAMME_DURATION_MS=24L*60L*60L*1000L }
+  companion object { private const val USER_SOURCE_ID="user"; private const val POLICY_PREFS="charm_epg_custom_policy"; private const val POLICY_PAST_DAYS="past_days"; private const val BATCH_SIZE=1000; private const val NETWORK_BUFFER_SIZE=64*1024; private const val MAX_HTTP_REDIRECTS=6; private const val MAX_COMPRESSED_EPG_BYTES=256L*1024L*1024L; private const val MAX_DECOMPRESSED_EPG_BYTES=1024L*1024L*1024L; private const val MAX_PROGRAMME_COUNT=2_000_000L; private const val DAY_MS=24L*60L*60L*1000L; private const val GUIDE_WINDOW_MS=EpgWindowPolicy.FUTURE_MS; private const val DEFAULT_PROGRAMME_DURATION_MS=30L*60L*1000L; private const val MAX_PROGRAMME_DURATION_MS=24L*60L*60L*1000L }
 }
