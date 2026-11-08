@@ -254,8 +254,8 @@ test("cancelling a portal catalogue stops paging and skips the series fallback",
   assert.equal(p.calls.filter(row => row.action === "get_categories").length, 1);
 });
 
-test("a stale provider-library initial read cannot overwrite a newer saved result", async () => {
-  let initial, reads = 0;
+test("a stale account-scoped provider-library read cannot overwrite newer saved viewing activity", async () => {
+  let initial, libraryReads = 0;
   const shown = [];
   const exports = {};
   const source = readFileSync(new URL("../src/core/providerLibrary.ts", import.meta.url), "utf8");
@@ -263,17 +263,26 @@ test("a stale provider-library initial read cannot overwrite a newer saved resul
   const mocks = {
     react: { useState: () => [[], value => shown.push(value)], useEffect: effect => effect() },
     "@/src/utils/storage": { storage: {
-      getItem: () => ++reads === 1 ? new Promise(resolve => { initial = resolve; }) : Promise.resolve([]),
+      getItem: key => {
+        if (key === "gs_provider_library_legacy_owner_v1") return Promise.resolve("viewer");
+        if (String(key).startsWith("gs_provider_library_v2:"))
+          return ++libraryReads === 1 ? new Promise(resolve => { initial = resolve; }) : Promise.resolve([]);
+        return Promise.resolve([]);
+      },
       setItem: async () => true,
     } },
     "./providerLibraryCore": { normalizeProviderLibrary: rows => rows, mergeProviderLibrary: (_rows, patch) => [patch] },
   };
   vm.runInNewContext(code, { exports, require: name => mocks[name] });
+  exports.setProviderLibraryAccount("viewer");
   exports.useProviderLibrary();
   const fresh = { owner: "one", kind: "movie", catalogId: "7", favorite: true };
   await exports.updateProviderLibrary(fresh);
   initial([]);
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(shown.length, 1);
-  assert.equal(shown[0][0], fresh);
+  assert.equal(shown.at(-1)[0], fresh);
+  await assert.rejects((async () => {
+    exports.setProviderLibraryAccount(null);
+    await exports.updateProviderLibrary(fresh);
+  })(), /Sign in to save/);
 });
