@@ -65,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProviderLibraryAccount(null);
     tokenRef.current = null;
     NativeModules.CharmVod?.setUsageSession?.(null);
+    void NativeModules.CharmPlaylistSchedule?.setAccount?.(null)?.catch?.(() => undefined);
     clearManagedContentAccess();
     lastValidatedAtRef.current = 0;
     setUser(null);
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     tokenRef.current = token;
     NativeModules.CharmVod?.setUsageSession?.(token);
+    void NativeModules.CharmPlaylistSchedule?.setAccount?.(result.data.user.id)?.catch?.(() => undefined);
     lastValidatedAtRef.current = Date.now();
     setProviderLibraryAccount(result.data.user.id);
     setUser(result.data.user);
@@ -223,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!remembered) setNotice("Signed in, but this device could not update the saved login. Your session is still saved.");
     tokenRef.current = result.data.token;
     NativeModules.CharmVod?.setUsageSession?.(result.data.token);
+    void NativeModules.CharmPlaylistSchedule?.setAccount?.(result.data.user.id)?.catch?.(() => undefined);
     lastValidatedAtRef.current = Date.now();
     setProviderLibraryAccount(result.data.user.id);
     setUser(result.data.user);
