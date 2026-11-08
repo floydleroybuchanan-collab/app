@@ -36,12 +36,12 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureShelf = useCallback(() => {
     // Called only from the actual native VOD route, never from Live TV home.
-    if (!accountId || Platform.OS !== "android") return;
+    if (!accountId || Platform.OS !== "android" || !focused || !ready || providerMode) return;
     void Promise.all([
       captureNativeVodSnapshot(accountId, "continue"),
       captureNativeVodSnapshot(accountId, "favorites"),
     ]).catch(() => undefined);
-  }, [accountId]);
+  }, [accountId, focused, ready, providerMode]);
   const [section, setSection] = useState(() => entrySection(initialSection, settings));
   const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
   const providerMode = section === "provider" || !!providerParts;
@@ -73,6 +73,13 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     const timer = setTimeout(captureShelf, 450);
     return () => clearTimeout(timer);
   }, [captureShelf, focused, providerMode, ready]);
+  useEffect(() => {
+    if (!focused || providerMode) {
+      // A timer must never wake the native :vod process after Live TV resumes.
+      if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
+      snapshotTimer.current = null;
+    }
+  }, [focused, providerMode]);
   useEffect(() => () => { if (snapshotTimer.current) clearTimeout(snapshotTimer.current); }, []);
   const back = useCallback(() => {
     if (providerMode) { setSection("home"); return; }
@@ -126,6 +133,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
           if (snapshotTimer.current) clearTimeout(snapshotTimer.current);
           // Start history is recorded during playback; stop/progress may commit
           // slightly after the fragment destination changes.
+          if (!value) captureShelf();
           snapshotTimer.current = setTimeout(captureShelf, value ? 2400 : 650);
         }
         if (nativeEvent.kind === "route") {
