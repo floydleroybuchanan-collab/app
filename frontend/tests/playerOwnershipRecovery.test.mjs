@@ -22,8 +22,8 @@ test("fullscreen guide overlays the existing decoder and BACK returns to that ow
   assert.match(guidePanel, /<NativeGuideCanvas/);
   assert.match(guidePanel, /overlayMode=\{mode === "overlay"\}/);
   assert.match(player, /style=\{showPlayerGuidePreview \?/);
-  assert.equal((player.match(/<StreamPlayer\\b/g) || []).length, 1);
-  assert.doesNotMatch(guidePanel, /<StreamPlayer\\b/);
+  assert.equal((player.match(/<StreamPlayer\b/g) || []).length, 1);
+  assert.doesNotMatch(guidePanel, /<StreamPlayer\b/);
   assert.match(player, /!hasPin \|\| !isGroupLocked\(providerGroupIdentity\(item\.group\)\)/);
   assert.match(player, /void patchProgramsForChannelIds\(ids, priorityIds\)/);
   assert.match(player, /resetRemoteContextIfOwned\("guide", "player"\)/);
