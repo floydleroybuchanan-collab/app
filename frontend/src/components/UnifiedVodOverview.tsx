@@ -9,13 +9,12 @@ import { usePlaylists } from "@/src/core/playlistRegistry";
 import { tvColors } from "@/src/theme";
 import type { VodSnapshotItem } from "@/src/core/vodRecentSnapshotCore";
 import { normalizeVodQuery, searchOneVodSource, searchStreamflixTitles, vodSearchCandidates, VOD_SEARCH_RESULTS_TOTAL, VOD_SEARCH_SOURCES_PER_BATCH, type VodSearchResult } from "@/src/core/vodUnifiedSearch";
+import { PLAYLIST_VOD_ENABLED } from "@/src/core/vodFeatureFlags";
 
 type Preview = { id: string; title: string; poster?: string; section: string; source: string };
 
 const SOURCE_ACTIONS = [
-  { id: "home", label: "Streamflix", detail: "Movies, series, and linked debrid playback" },
-  { id: "provider-xtream", label: "Xtream", detail: "Movies and series from your Xtream playlists" },
-  { id: "provider-stalker", label: "Stalker", detail: "Movies and series from your Stalker portals" },
+  { id: "home", label: "Browse VOD", detail: "Movies, series, trailers and saved titles" },
 ] as const;
 
 /**
@@ -36,7 +35,7 @@ export function UnifiedVodOverview({ onOpen }: { onOpen: (section: string) => vo
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const searchRequest = useRef<AbortController | null>(null);
-  const candidates = useMemo(() => vodSearchCandidates(playlists), [playlists]);
+  const candidates = useMemo(() => PLAYLIST_VOD_ENABLED ? vodSearchCandidates(playlists) : [], [playlists]);
 
   useEffect(() => {
     let current = true, updated = false;
@@ -91,12 +90,12 @@ export function UnifiedVodOverview({ onOpen }: { onOpen: (section: string) => vo
     }
   };
 
-  const enabled = useMemo(() => new Map(playlists.filter(row =>
+  const enabled = useMemo(() => new Map((PLAYLIST_VOD_ENABLED ? playlists : []).filter(row =>
     row.enabled && (row.kind === "xtream" || row.kind === "stalker")).map(row => [row.id, row])), [playlists]);
   const previews = useMemo((): Preview[] => {
     const fromNative = nativeRecent.map(row => ({
       id: "streamflix:" + row.section, title: row.title, poster: row.poster,
-      section: row.section, source: "Streamflix",
+      section: row.section, source: "Charming MediaLab",
     }));
     const fromProvider = library
       .filter(row => enabled.has(row.owner) && row.mediaId && row.updatedAt > 0)
@@ -110,7 +109,7 @@ export function UnifiedVodOverview({ onOpen }: { onOpen: (section: string) => vo
 
   return <View style={styles.root}>
     <Text style={styles.heading}>Your VOD library</Text>
-    <Text style={styles.secondary}>All three sources in one place. Open a source when you want its full catalog.</Text>
+    <Text style={styles.secondary}>Movies and series, all in your Charming MediaLab library.</Text>
     <View style={styles.sources}>
       {SOURCE_ACTIONS.map((source, index) =>
         <Pressable key={source.id} hasTVPreferredFocus={index === 0} accessibilityRole="button"
@@ -122,7 +121,7 @@ export function UnifiedVodOverview({ onOpen }: { onOpen: (section: string) => vo
     <View style={styles.searchRow}>
       <TextInput accessibilityLabel="Search VOD across all sources" value={searchText}
         onChangeText={setSearchText} onSubmitEditing={() => void runSearch()}
-        returnKeyType="search" placeholder="Search Streamflix, Xtream and Stalker"
+        returnKeyType="search" placeholder="Search movies and TV series"
         placeholderTextColor={tvColors.textMuted} style={styles.searchField} />
       <Pressable accessibilityRole="button" onPress={() => void runSearch()}
         style={({ focused: f }: any) => [styles.searchAction, f && styles.focused]}>
