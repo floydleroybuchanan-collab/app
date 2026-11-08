@@ -49,6 +49,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
             historyAccount = account?.takeIf { it.isNotBlank() }
             promise.resolve(true)
         } catch (failure: Exception) {
+            com.streamflixreborn.streamflix.charm.CharmVodAccountScope.activate(context, null)
             promise.reject("VOD_ACCOUNT_SCOPE", "Could not activate private VOD history for this account.", failure)
         }
     }
