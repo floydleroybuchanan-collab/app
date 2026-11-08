@@ -129,6 +129,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
               setSection(value);
             }}
             style={({ focused: hasFocus, pressed }: any) => [styles.button,
+              settings && styles.settingsBackButton,
               value === section && styles.selected,
               hasFocus && styles.focused, pressed && styles.pressed]}>
             <Text style={styles.label} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82}>{label}</Text>
@@ -180,6 +181,7 @@ const styles = StyleSheet.create({
   banner: { alignItems: "center", paddingTop: 4 },
   toolbar: { flexDirection: "column", gap: 4, paddingHorizontal: 10, paddingVertical: 4 },
   toolbarRow: { flexDirection: "row", alignItems: "stretch", gap: 4 },
+  settingsBackButton: { flex: 0, minWidth: 0, width: 186, maxWidth: 186, minHeight: 40 },
   toolbarSpacer: { flex: 1, minWidth: 0 },
   button: {
     flex: 1, minWidth: 0, minHeight: 44, alignItems: "center", justifyContent: "center",
