@@ -11,6 +11,7 @@ type Props = {
   clock24h?: boolean;
   overlayMode?: boolean;
   transparencyLevel?: number;
+  enableUpBoundary?: boolean;
   showLogos?: boolean;
   pauseLogos?: boolean;
   channelNumberById: Record<string, number>;
@@ -37,6 +38,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   clock24h = false,
   overlayMode = false,
   transparencyLevel = 50,
+  enableUpBoundary = false,
   showLogos = true,
   pauseLogos = false,
   channelNumberById,
@@ -151,6 +153,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       channels={nativeChannels}
       overlayMode={overlayMode}
       transparencyLevel={transparencyLevel}
+      enableUpBoundary={enableUpBoundary}
       showLogos={showLogos}
       onLogoViewport={handleLogoViewport}
       rightBoundaryEnabled={!!onRightBoundary}
