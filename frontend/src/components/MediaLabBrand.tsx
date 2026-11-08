@@ -14,7 +14,7 @@ export function MediaLabArt({ kind = "banner", width = 320, height }: {
   kind?: keyof typeof art; width?: number; height?: number;
 }) {
   const ratio = kind === "banner" || kind === "wordmark" ? 3 : 1;
-  return <Image accessible accessibilityLabel="Charming MediaLab" source={art[kind]}
+  return <Image accessible={false} focusable={false} importantForAccessibility="no" source={art[kind]}
     resizeMode="contain" style={{ width, height: height ?? width / ratio, maxWidth: "100%" }} />;
 }
 
