@@ -229,6 +229,18 @@ class SettingsTvFragment : PreferenceFragmentCompat() {
         return true
     }
 
+    private fun focusFirstSettingsControl() {
+        // A RecyclerView parent can own focus while no preference card does,
+        // leaving DPAD movement trapped near the React toolbar/rail.
+        val list = listView ?: return
+        list.post {
+            if (!isResumed || listView !== list || !list.isShown) return@post
+            val candidate = list.findViewHolderForAdapterPosition(0)?.itemView
+                ?: list.getChildAt(0)
+            if (candidate?.isShown == true && candidate.isEnabled) candidate.requestFocus()
+        }
+    }
+
     private fun renderCurrentScreen() {
         setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey)
         if (::backupRestoreManager.isInitialized) {
@@ -237,7 +249,7 @@ class SettingsTvFragment : PreferenceFragmentCompat() {
         com.streamflixreborn.streamflix.charm.CharmSettingsNavigation.attach(this)
         applyScreenTitle()
         charmSettings?.show(currentScreenState.rootKey, currentScreenState.title)
-        view?.post { listView?.requestFocus() }
+        focusFirstSettingsControl()
     }
 
     override fun onCreateRecyclerView(inflater: LayoutInflater, parent: ViewGroup, savedInstanceState: Bundle?): RecyclerView = RecyclerView(requireContext()).apply {
@@ -272,7 +284,7 @@ class SettingsTvFragment : PreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
         setDivider(null)
         charmSettings?.show(currentScreenState.rootKey, currentScreenState.title)
-        view.post { listView?.requestFocus() }
+        focusFirstSettingsControl()
     }
 
     private fun displaySettings() {
