@@ -237,7 +237,7 @@ class SettingsTvFragment : PreferenceFragmentCompat() {
             if (!isResumed || listView !== list || !list.isShown) return@post
             val candidate = list.findViewHolderForAdapterPosition(0)?.itemView
                 ?: list.getChildAt(0)
-            if (candidate?.isShown == true && candidate.isEnabled) candidate.requestFocus()
+            if (candidate != null && candidate.isShown && candidate.isEnabled) candidate.requestFocus()
         }
     }
 
