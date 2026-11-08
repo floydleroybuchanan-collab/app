@@ -17,6 +17,7 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   @ReactProp(name = "windowEndMs") fun end(view: NativeGuideView, value: Double) = view.setWindowEnd(value)
   @ReactProp(name = "active", defaultBoolean = true) fun active(view: NativeGuideView, value: Boolean) = view.setActive(value)
   @ReactProp(name = "overlayMode", defaultBoolean = false) fun overlayMode(view: NativeGuideView, value: Boolean) = view.setOverlayMode(value)
+  @ReactProp(name = "transparencyLevel", defaultInt = 50) fun transparencyLevel(view: NativeGuideView, value: Int) = view.setTransparencyLevel(value)
   @ReactProp(name = "rightBoundaryEnabled", defaultBoolean = false) fun rightBoundaryEnabled(view: NativeGuideView, value: Boolean) { view.rightBoundaryEnabled = value }
   @ReactProp(name = "showLogos", defaultBoolean = true) fun showLogos(view: NativeGuideView, value: Boolean) = view.setShowLogos(value)
   @ReactProp(name = "clock24h", defaultBoolean = false) fun clock24h(view: NativeGuideView, value: Boolean) = view.setClock24h(value)
