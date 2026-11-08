@@ -209,6 +209,7 @@ internal class BackgroundEpgUpdater(private val context: Context) {
           val location = connection.getHeaderField("Location") ?: error("Guide redirect had no destination")
           check(++redirects <= 8) { "Too many Guide redirects" }
           current = URL(current, location)
+          connection.disconnect()
           continue
         }
         check(code in 200..299) { "Guide HTTP $code" }
@@ -230,8 +231,9 @@ internal class BackgroundEpgUpdater(private val context: Context) {
         val buffered = BufferedInputStream(counting, 64 * 1024)
         buffered.mark(2)
         val first = buffered.read(); val second = buffered.read(); buffered.reset()
-        val gzipped = connection.contentEncoding.equals("gzip", true) || current.path.endsWith(".gz", true) || (first == 0x1f && second == 0x8b)
-        return if (gzipped) GZIPInputStream(buffered, 64 * 1024) else buffered
+        // Shared XML/GZIP/ZIP/XZ decoder enforces the same decoded-size and
+        // total decoding deadline as foreground and custom guide imports.
+        return EpgCompressedStreams.decode(buffered)
       } catch (t: Throwable) {
         connection.disconnect()
         throw t
@@ -262,11 +264,11 @@ internal class BackgroundEpgUpdater(private val context: Context) {
     private const val PRIMARY_SOURCE = "default"
     private const val BATCH_SIZE = 1000
     private const val MAX_PROGRAMMES = 2_000_000L
-    private const val MAX_COMPRESSED_BYTES = 256L * 1024L * 1024L
+    private const val MAX_COMPRESSED_BYTES = EpgWindowPolicy.MAX_COMPRESSED_BYTES
     private const val MINUTE_MS = 60_000L
     private const val DAY_MS = 24L * 60L * MINUTE_MS
-    private const val DEFAULT_PAST_DAYS = 7L
-    private const val GUIDE_WINDOW_MS = 14L * DAY_MS
+    private const val DEFAULT_PAST_DAYS = EpgWindowPolicy.DEFAULT_PAST_DAYS
+    private const val GUIDE_WINDOW_MS = EpgWindowPolicy.FUTURE_MS
     private const val DEFAULT_DURATION_MS = 30L * MINUTE_MS
   }
 }
