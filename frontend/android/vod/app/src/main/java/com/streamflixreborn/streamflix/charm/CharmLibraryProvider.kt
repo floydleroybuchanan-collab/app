@@ -20,7 +20,7 @@ import org.json.JSONObject
 /** Private, read-only IPC: provider selection and Room stay in the VOD process. */
 class CharmLibraryProvider : ContentProvider() {
     override fun onCreate() = true
-    override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
+    @Synchronized override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
         check(android.os.Binder.getCallingUid() == android.os.Process.myUid())
         // A newly authenticated account must never see another account's
         // native Room recently-watched and favorites data across processes.
