@@ -40,7 +40,7 @@ internal object EpgCompressedStreams {
     val isZip = count >= 4 && magic[0].toInt() == 0x50 && magic[1].toInt() == 0x4b &&
       magic[2].toInt() == 0x03 && magic[3].toInt() == 0x04
     val isXz = count >= 6 &&
-      magic[0].toInt() and 255 == 0xfd && magic[1].toInt() == 0x37 &&
+      (magic[0].toInt() and 255) == 0xfd && magic[1].toInt() == 0x37 &&
       magic[2].toInt() == 0x7a && magic[3].toInt() == 0x58 &&
       magic[4].toInt() == 0x5a && magic[5].toInt() == 0
 
@@ -83,7 +83,10 @@ internal object EpgCompressedStreams {
         if (name.startsWith('/') || name.split('/').any { it == ".." } || '\u0000' in name)
           throw IOException("EPG ZIP contains an unsafe entry name")
         if (entry.isDirectory) continue
-        if (!name.endsWith(".xml", true) && !name.endsWith(".xmltv", true)) continue
+        // Do not silently inflate arbitrary non-XML entries to reach a later
+        // file. That creates a ZIP-bomb bypass before the decoded-byte guard.
+        if (!name.endsWith(".xml", true) && !name.endsWith(".xmltv", true))
+          throw IOException("EPG ZIP first file is not XMLTV")
         if (entry.size > maxBytes)
           throw IOException("EPG ZIP XML entry exceeds the decompressed size limit")
         return zip
