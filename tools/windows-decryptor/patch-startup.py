@@ -11,7 +11,7 @@ if s.count(wrong)!=1: raise SystemExit('Expected exactly one CreateFontW USER32 
 s=s.replace(wrong,correct,1)
 probe='dllKernel                                                                                 = syscall.NewLazyDLL("kernel32.dll")'
 if s.count(probe)!=1: raise SystemExit('Expected one kernel32 DLL binding')
-s=s.replace(probe,probe+'\\n\\tdllGdi                                                                                    = syscall.NewLazyDLL("gdi32.dll")',1)
+s=s.replace(probe,probe+'\n\tdllGdi                                                                                    = syscall.NewLazyDLL("gdi32.dll")',1)
 marker='func main() {\n'
 replacement='''func main() {
 	defer func() {
