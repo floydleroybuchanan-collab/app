@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { BackHandler, FlatList, LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Channel, Program } from "@/src/api";
 import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
@@ -60,6 +60,16 @@ export function PlayerGuidePanel({
   const focusRetry = useRef<(() => void) | null>(null);
   const tuneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const channel of channels) {
+      const name = channel.group?.trim();
+      if (name) counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    counts.set("All", channels.length);
+    counts.set("Favorites", channels.reduce((count, channel) => count + Number(favoriteSet.has(channel.id)), 0));
+    return counts;
+  }, [channels, favoriteSet]);
   const groups = useMemo(() => {
     const distinct = new Set<string>();
     for (const channel of channels) if (channel.group?.trim()) distinct.add(channel.group.trim());
@@ -147,13 +157,13 @@ export function PlayerGuidePanel({
         : { left: safeLeft + 14, right: safeRight + 14, top: safeTop + 20, bottom: safeBottom + 10 }]}
     >
       {mode === "preview" ? (
-        <View style={[styles.previewHeader, { height: previewHeight, backgroundColor: "#0C0E12" }]}>
+        <View style={[styles.previewHeader, { height: previewHeight, backgroundColor: "transparent" }]}>
           {/* This transparent slot shows the already-mounted fullscreen player,
               repositioned by player.tsx. No second Media3 decoder is created. */}
           <View pointerEvents="none" style={{ width: previewWidth, height: previewHeight, backgroundColor: "transparent", borderColor: tvColors.silverEdge, borderWidth: 1 }}>
             <View style={styles.liveBadge}><Text style={styles.badgeText}>LIVE PREVIEW</Text></View>
           </View>
-          <View style={styles.previewInfo}>
+          <View style={[styles.previewInfo, { backgroundColor: "#0C0E12" }]}>
             <Text numberOfLines={1} style={styles.infoChannel}>{visibleChannel?.name || "Live TV"}</Text>
             <Text numberOfLines={2} style={styles.infoTitle}>{visibleProgram?.title || "No program information"}</Text>
             <Text numberOfLines={1} style={styles.infoTime}>{visibleProgram
@@ -172,7 +182,10 @@ export function PlayerGuidePanel({
           style={({ focused }: any) => [styles.action, focused && styles.focused]}>
           <Ionicons name="calendar-outline" color="#fff" size={14}/><Text style={styles.actionText}>{dayLabel} ▾</Text>
         </Pressable>
-        <Pressable testID="player-guide-mode-toggle" onPress={() => onModeChange(mode === "overlay" ? "preview" : "overlay")}
+        <Pressable testID="player-guide-mode-toggle" onPress={() => {
+          if (animationEnabled) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          onModeChange(mode === "overlay" ? "preview" : "overlay");
+        }}
           style={({ focused }: any) => [styles.action, focused && styles.focused]}>
           <Text style={styles.actionText}>{mode === "overlay" ? "Preview mode" : "Overlay mode"}</Text>
         </Pressable>
@@ -229,9 +242,7 @@ export function PlayerGuidePanel({
               renderItem={({ item }) => <Pressable testID={`player-guide-group-${item}`} onPress={() => selectGroup(item)}
                 style={({ focused }: any) => [styles.listEntry, group === item && styles.current, focused && styles.focused]}>
                 <Text style={styles.entryText}>{item}</Text>
-                <Text style={styles.count}>{item === "All" ? channels.length : item === "Favorites"
-                  ? channels.filter((x) => favoriteSet.has(x.id)).length
-                  : channels.filter((x) => x.group?.trim() === item).length}</Text>
+                <Text style={styles.count}>{groupCounts.get(item) || 0}</Text>
               </Pressable>}
             />
             <Pressable onPress={() => setGroupsOpen(false)} style={({ focused }: any) => [styles.action, focused && styles.focused]}>
