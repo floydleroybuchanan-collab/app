@@ -7,6 +7,7 @@ on:
       - feature/multiple-playlists-test-1
       - codex/charming-medialab-complete-redesign
       - release/medialab-rc20-provider-source-fixes-20261107
+      - feat/rc20-account-safe-vod-search-20261108
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
