@@ -8,6 +8,7 @@ replacement='''func main() {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			if len(os.Args) > 1 && os.Args[1] == "--smoke-test" {
+				_ = os.WriteFile("gui-startup-smoke-error.txt", []byte(fmt.Sprintf("GUI panic: %v\n", recovered)), 0600)
 				os.Exit(2)
 			}
 			messageBox.Call(0, u(fmt.Sprintf("The Windows interface could not start.\\r\\n\\r\\n%v", recovered)), u("Charming MediaLab - Startup Error"), MB_OK|MB_ICONERROR)
