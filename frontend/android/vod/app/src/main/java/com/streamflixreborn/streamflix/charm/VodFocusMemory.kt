@@ -104,6 +104,7 @@ class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager
         val lists = saved?.getParcelableArrayList<Bundle>("lists").orEmpty().toMutableList()
         pendingRestore.remove(f)?.invoke()
         val entryEpoch = userNavigationEpoch
+        var focusRestoreAttempts = 0
         val listener = object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 if (!f.isResumed || f.view !== root || userNavigationEpoch != entryEpoch) {
@@ -124,11 +125,33 @@ class VodFocusMemory(private val restoreFocus: Boolean = true) : FragmentManager
                     if (lists.isEmpty()) root.viewTreeObserver.removeOnPreDrawListener(this)
                     return true
                 }
-                val target = if (steps != null) resolve(root, steps, true) else
-                    root.findViewById<View>(com.streamflixreborn.streamflix.R.id.et_search)
-                        ?: root.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== root && it !is RecyclerView && it.isShown && it.isEnabled }
-                if (target != null && target.isShown && target.requestFocus()) {
+                val savedTarget = steps?.let { resolve(root, it, true) }
+                    ?.takeIf { it.isShown && it.isFocusable && it.isEnabled }
+                if (steps != null && savedTarget == null && focusRestoreAttempts < 3) {
+                    // RecyclerView may need another layout after scrolling the
+                    // bookmarked item into view. Retry only a bounded number
+                    // of frames before falling back to a visible control.
+                    focusRestoreAttempts++
+                    root.postInvalidateOnAnimation()
+                    return true
+                }
+                val target = savedTarget
+                    ?: root.findViewById<View>(com.streamflixreborn.streamflix.R.id.et_search)
+                        ?.takeIf { it.isShown && it.isFocusable && it.isEnabled }
+                    ?: root.getFocusables(View.FOCUS_FORWARD).firstOrNull {
+                        it !== root && it !is RecyclerView && it.isShown && it.isFocusable && it.isEnabled
+                    }
+                    ?: root.getFocusables(View.FOCUS_FORWARD).firstOrNull {
+                        it !== root && it.isShown && it.isFocusable && it.isEnabled
+                    }
+                if (target != null && target.requestFocus()) {
                     root.viewTreeObserver.removeOnPreDrawListener(this)
+                } else if (++focusRestoreAttempts >= 8) {
+                    // A page with no enabled buttons must not keep a permanent
+                    // pre-draw listener alive waiting for a removed focus path.
+                    root.viewTreeObserver.removeOnPreDrawListener(this)
+                } else {
+                    root.postInvalidateOnAnimation()
                 }
                 return true
             }

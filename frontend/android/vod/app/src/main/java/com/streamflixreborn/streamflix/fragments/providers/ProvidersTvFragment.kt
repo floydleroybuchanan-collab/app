@@ -72,6 +72,10 @@ class ProvidersTvFragment : Fragment() {
                                 viewModel.getProviders()
                             }
                             binding.rvProviders.visibility = View.GONE
+                            btnIsLoadingRetry.post {
+                                if (_binding != null && btnIsLoadingRetry.isShown)
+                                    btnIsLoadingRetry.requestFocus()
+                            }
                         }
                     }
                 }
