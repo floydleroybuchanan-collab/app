@@ -179,6 +179,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
     refreshExecutor.execute {
       try {
         guideHistoryMs = pastDays.toInt().coerceIn(1, 14) * 24L * 60L * 60L * 1000L
+        EpgWindowPolicy.setPrimaryPastDays(reactContext, pastDays.toInt())
         val id = playlistId.trim().ifEmpty { DEFAULT_PLAYLIST_ID }
         controlDao.putSource(
           EpgSourceEntity(
