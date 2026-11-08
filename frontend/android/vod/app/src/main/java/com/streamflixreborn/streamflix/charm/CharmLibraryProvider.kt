@@ -22,6 +22,10 @@ class CharmLibraryProvider : ContentProvider() {
     override fun onCreate() = true
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
         check(android.os.Binder.getCallingUid() == android.os.Process.myUid())
+        // A newly authenticated account must never see another account's
+        // native Room recently-watched and favorites data across processes.
+        if (!CharmVodAccountScope.activateVerifiedPrefix(extras?.getString("historyPrefix")))
+            return Bundle().apply { putString("items", "[]") }
         return runBlocking(Dispatchers.IO) {
             withTimeout(20_000) {
                 val provider = UserPreferences.currentProvider
