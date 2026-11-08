@@ -8,6 +8,7 @@ const LEGACY_OWNER_KEY = "gs_provider_library_legacy_owner_v1";
 let activeAccount: string | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 let legacyClaim: Promise<void> | null = null;
+let accountEpoch = 0;
 const listeners = new Set<(rows: ProviderLibraryEntry[]) => void>();
 
 function scopedKey(account: string) {
@@ -18,9 +19,14 @@ export function setProviderLibraryAccount(account: string | null | undefined) {
   const next = typeof account === "string" && account.length > 0 && account.length <= 128 ? account : null;
   if (next === activeAccount) return;
   activeAccount = next;
+  const epoch = ++accountEpoch;
   // Do not leave the previous account's titles visible while the new account
   // is being restored from disk, even for one render.
   listeners.forEach(listener => listener([]));
+  if (next) void readForAccount(next).then(rows => {
+    if (epoch === accountEpoch && activeAccount === next)
+      listeners.forEach(listener => listener(rows));
+  }).catch(() => undefined);
 }
 
 async function migrateLegacyFor(account: string) {
