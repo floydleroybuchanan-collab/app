@@ -20,6 +20,7 @@ import { forgetRememberedLogin, saveRememberedLogin } from "./rememberedLogin";
 import { clearProviderMedia } from "@/src/core/providerMediaSession";
 import { setProviderLibraryAccount } from "@/src/core/providerLibrary";
 import { clearVodSearchCache } from "@/src/core/vodUnifiedSearch";
+import { clearVodProviderCatalogCache } from "@/src/core/vodProviderCatalogCache";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
 const SESSION_RECHECK_MS = 5 * 60_000;
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearProviderMedia();
     setProviderLibraryAccount(null);
     clearVodSearchCache();
+    clearVodProviderCatalogCache();
     void NativeModules.CharmVod?.setHistoryAccount?.(null)?.catch?.(() => undefined);
     tokenRef.current = null;
     NativeModules.CharmVod?.setUsageSession?.(null);
@@ -96,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tokenRef.current = token;
         setProviderLibraryAccount(null);
     clearVodSearchCache();
+    clearVodProviderCatalogCache();
     void NativeModules.CharmVod?.setHistoryAccount?.(null)?.catch?.(() => undefined);
         setUser(null);
         setNotice(message);
@@ -125,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     catch { sourceNotice = "VOD history isolation is unavailable. Live TV is still accessible."; }
     if (!current()) return;
     clearVodSearchCache();
+    clearVodProviderCatalogCache();
     void NativeModules.CharmPlaylistSchedule?.setAccount?.(result.data.user.id)?.catch?.(() => undefined);
     lastValidatedAtRef.current = Date.now();
     setProviderLibraryAccount(result.data.user.id);
@@ -145,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tokenRef.current = null;
       setProviderLibraryAccount(null);
     clearVodSearchCache();
+    clearVodProviderCatalogCache();
     void NativeModules.CharmVod?.setHistoryAccount?.(null)?.catch?.(() => undefined);
       setUser(null);
       setStatus("signed_out");
@@ -240,6 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     catch { setNotice("VOD history isolation is unavailable. Live TV is still accessible."); }
     if (!current()) return superseded();
     clearVodSearchCache();
+    clearVodProviderCatalogCache();
     void NativeModules.CharmPlaylistSchedule?.setAccount?.(result.data.user.id)?.catch?.(() => undefined);
     lastValidatedAtRef.current = Date.now();
     setProviderLibraryAccount(result.data.user.id);
