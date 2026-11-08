@@ -39,3 +39,12 @@ test("both M3U parsers recognize EXTGRP metadata", () => {
   assert.match(java("NativePlaylistParser"), /#EXTGRP:/);
   assert.match(source("src/core/sourceParsing.ts"), /#EXTGRP:/);
 });
+
+test("one global import gate protects RAM across source databases", () => {
+  const coordinator = java("EpgImportCoordinator");
+  assert.match(coordinator, /globalImportGate = ReentrantLock\(true\)/);
+  assert.match(coordinator, /globalImportGate\.lock\(\)/);
+  assert.match(coordinator, /globalImportGate\.unlock\(\)/);
+  const scheduler = java("EpgUpdateScheduler");
+  assert.match(scheduler, /Guide background update deferred for TV interaction/);
+});
