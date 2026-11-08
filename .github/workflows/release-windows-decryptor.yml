@@ -33,6 +33,17 @@ jobs:
           python tools/windows-decryptor/patch-startup.py
           if ($LASTEXITCODE -ne 0) { throw 'GUI startup patch failed' }
 
+      - name: Improve encrypted artifact ZIP detection
+        shell: pwsh
+        run: |
+          Copy-Item tools/windows-decryptor/artifact_match.go windows-decryptor-build/artifact_match.go
+          Copy-Item tools/windows-decryptor/artifact_match_test.go windows-decryptor-build/artifact_match_test.go
+          $source = 'windows-decryptor-build/decrypt.go'
+          $before = [System.IO.File]::ReadAllText($source)
+          $after = $before.Replace('archiveItem(&outer.Reader,', 'archiveItemFlexible(&outer.Reader,')
+          if ($before -eq $after) { throw 'Unable to patch artifact selection in source' }
+          [System.IO.File]::WriteAllText($source, $after)
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -83,11 +94,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'windows-decryptor-v1.0.1'
+          $tag = 'windows-decryptor-v1.0.2'
           $assets = @('CharmingMediaLab-APK-Decryptor.exe', 'CharmingMediaLab-APK-Decryptor-Windows11.zip', 'CharmingMediaLab-APK-Decryptor-Source.zip', 'SHA256.txt')
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
           } else {
-            gh release create $tag @assets --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Charming MediaLab APK Decryptor for Windows 11' --notes 'Windows 11 launch fix: native UI thread pinning, startup error dialogs, and Windows GUI launch smoke test. Three PEM formats remain supported. No private keys included. The EXE is not publisher-signed.' --latest=false
+            gh release create $tag @assets --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Charming MediaLab APK Decryptor for Windows 11' --notes 'Windows 11 ZIP selection fix: recognizes protected artifacts inside nested folders, explains when the wrong ZIP was selected, includes full RSA/AES decryption and native GUI launch tests. Three PEM formats supported. No private keys included. The EXE is not publisher-signed.' --latest=false
           }
