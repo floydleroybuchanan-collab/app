@@ -72,7 +72,12 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
         })
     }
     private fun updateGridColumns() {
-        val measuredWidth = root.width.takeIf { it > 0 } ?: return
+        // show() runs before first measure on TV. Use window metrics as the
+        // initial width so RecyclerView has its final grid manager *before*
+        // Android measures the content. Replacing it in onLayout detaches the
+        // first set of row views and can leave the grid empty for that frame.
+        val measuredWidth = root.width.takeIf { it > 0 }
+            ?: context.resources.displayMetrics.widthPixels
         val available = (measuredWidth - content.paddingLeft - content.paddingRight).coerceAtLeast(dp(240))
         val columns = if (overview) (available / dp(250)).coerceIn(1, 4) else if (available >= dp(760)) 2 else 1
         if (columns == appliedColumns) return
