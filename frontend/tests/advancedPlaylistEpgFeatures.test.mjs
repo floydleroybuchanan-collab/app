@@ -24,7 +24,7 @@ test("durable Guide updates keep manual sources visible and unscheduled", async 
   assert.match(control, /epg_update_history/);
   assert.match(control, /nextRetrySeconds/);
   assert.match(background, /replaceBatches\(batches, ::checkCurrentSource\)/);
-  assert.match(background, /GZIPInputStream/);
+  assert.match(background, /EpgCompressedStreams\.decode\(buffered\)/);
   assert.match(background, /scheme == "http" \|\| scheme == "https"/);
 });
 
