@@ -34,6 +34,10 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const { user } = useAuth();
   const accountId = user?.id || null;
   const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [section, setSection] = useState(() => entrySection(initialSection, settings));
+  const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
+  const providerMode = section === "provider" || !!providerParts;
+  const [ready, setReady] = useState(false);
   const captureShelf = useCallback(() => {
     // Called only from the actual native VOD route, never from Live TV home.
     if (!accountId || Platform.OS !== "android" || !focused || !ready || providerMode) return;
@@ -42,10 +46,6 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
       captureNativeVodSnapshot(accountId, "favorites"),
     ]).catch(() => undefined);
   }, [accountId, focused, ready, providerMode]);
-  const [section, setSection] = useState(() => entrySection(initialSection, settings));
-  const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
-  const providerMode = section === "provider" || !!providerParts;
-  const [ready, setReady] = useState(false);
   const [player, setPlayer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toolbarFocusTag, setToolbarFocusTag] = useState<number | null>(null);
