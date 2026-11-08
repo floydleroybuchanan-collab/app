@@ -190,9 +190,27 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
             graph.setStartDestination(if (section in setOf("settings", "accounts")) VodR.id.settings else VodR.id.home)
             com.streamflixreborn.streamflix.utils.CatalogSource.install(fragment.navController)
             fragment.navController.graph = graph
+            var lastDestinationWasPlayer = false
             fragment.navController.addOnDestinationChangedListener { _, destination, _ ->
                 scheduleNativeLayout()
-                event("player", if (destination.id == VodR.id.player) "true" else "false")
+                val nowPlayer = destination.id == VodR.id.player
+                if (lastDestinationWasPlayer && !nowPlayer) {
+                    // Fullscreen playback requests sensor landscape. Reset the
+                    // host orientation and system bars after exiting the player;
+                    // leaving the React activity locked in player mode can
+                    // relaunch the TV shell or strand it at the splash screen.
+                    post {
+                        if (!disposed && owner === activity && !activity.isFinishing) {
+                            if (activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+                                activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            androidx.core.view.WindowCompat.getInsetsController(
+                                activity.window, activity.window.decorView
+                            ).show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                        }
+                    }
+                }
+                lastDestinationWasPlayer = nowPlayer
+                event("player", if (nowPlayer) "true" else "false")
             }
             navigate(fragment, section)
             scheduleNativeLayout()
