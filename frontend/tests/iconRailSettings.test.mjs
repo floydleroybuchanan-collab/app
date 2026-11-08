@@ -6,12 +6,12 @@ import ts from "typescript";
 import * as policy from "../src/core/iconRailPolicy.ts";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("rail offers every requested minute plus Never Leaves and defaults to three minutes", () => {
+test("rail offers every requested minute plus Never Leaves and defaults to one minute", () => {
   assert.deepEqual(policy.ICON_RAIL_TIMEOUT_OPTIONS.map(option => option.value), [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]);
   assert.equal(policy.ICON_RAIL_TIMEOUT_OPTIONS.at(-1).label, "Never Leaves");
-  assert.deepEqual(policy.normalizeIconRailPreferences(null), { enabled: true, timeoutMinutes: 3 });
+  assert.deepEqual(policy.normalizeIconRailPreferences(null), { enabled: true, timeoutMinutes: 1 });
   assert.deepEqual(policy.normalizeIconRailPreferences({ enabled: false, timeoutMinutes: 0 }), { enabled: false, timeoutMinutes: 0 });
-  assert.equal(policy.normalizeIconRailPreferences({ timeoutMinutes: 200 }).timeoutMinutes, 3);
+  assert.equal(policy.normalizeIconRailPreferences({ timeoutMinutes: 200 }).timeoutMinutes, 1);
 });
 
 test("idle timeout restarts after interaction, clamps clock changes and never expires in Never Leaves mode", () => {
