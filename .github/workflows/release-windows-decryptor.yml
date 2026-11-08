@@ -1,0 +1,67 @@
+name: Release Charming MediaLab Windows APK Decryptor
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/windows-decryptor/**'
+      - '.github/workflows/release-windows-decryptor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Test, build and publish Windows EXE
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Extract Windows app source
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath 'tools/windows-decryptor/CharmingMediaLab-APK-Decryptor-Source.zip' -DestinationPath 'windows-decryptor-build' -Force
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: windows-decryptor-build/go.mod
+          cache: false
+
+      - name: Run tests and compile native Windows application
+        shell: pwsh
+        run: |
+          Set-Location windows-decryptor-build
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
+          $env:CGO_ENABLED = '0'
+          go build -trimpath -ldflags="-H=windowsgui -s -w" -o '../CharmingMediaLab-APK-Decryptor.exe' .
+          if ($LASTEXITCODE -ne 0) { throw 'Windows executable build failed' }
+
+      - name: Package downloadable artifacts
+        shell: pwsh
+        run: |
+          $binary = 'CharmingMediaLab-APK-Decryptor.exe'
+          $hash = (Get-FileHash -Algorithm SHA256 $binary).Hash.ToLowerInvariant()
+          "$hash  $binary" | Set-Content -Encoding ascii SHA256.txt
+          Copy-Item windows-decryptor-build/README.md README.md
+          Compress-Archive -Path $binary, README.md, SHA256.txt -DestinationPath 'CharmingMediaLab-APK-Decryptor-Windows11.zip' -Force
+          Copy-Item tools/windows-decryptor/CharmingMediaLab-APK-Decryptor-Source.zip 'CharmingMediaLab-APK-Decryptor-Source.zip'
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'windows-decryptor-v1.0.0'
+          $assets = @('CharmingMediaLab-APK-Decryptor.exe', 'CharmingMediaLab-APK-Decryptor-Windows11.zip', 'CharmingMediaLab-APK-Decryptor-Source.zip', 'SHA256.txt')
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag @assets --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Charming MediaLab APK Decryptor for Windows 11' --notes 'Standalone Windows APK decryptor with RSA PKCS#8, RSA PKCS#1, and password-encrypted PKCS#8 PEM support. No private keys included. See README.md in the ZIP.' --latest=false
+          }
