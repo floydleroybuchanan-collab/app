@@ -32,6 +32,22 @@ export default function ProviderPlayer() {
   const lastTimeline = useRef<NativeTimeline | null>(null);
   const resume = useRef<ProviderLibraryEntry | null | undefined>(null), resumeApplied = useRef(false), exitInFlight = useRef(false);
   const lastSaved = useRef(0);
+  const recentStartRecorded = useRef(false);
+  // Record playback start even if the viewer stops before the first 5-second
+  // progress checkpoint; do not overwrite a saved resume position.
+  useEffect(() => {
+    if (!media || !ready || status !== "playing" || recentStartRecorded.current ||
+        !media.catalogKind || !media.catalogId) return;
+    recentStartRecorded.current = true;
+    void updateProviderLibrary({
+      owner: media.owner,
+      kind: media.catalogKind,
+      catalogId: media.catalogId,
+      title: media.title,
+      mediaId: media.id,
+      updatedAt: Date.now(),
+    }).catch(() => { recentStartRecorded.current = false; });
+  }, [media, ready, status]);
   const key = media ? `provider:${media.owner}:${media.id}` : "";
   const saveTimeline = useCallback((value: NativeTimeline) => {
     if (!media?.catalogKind || !media.catalogId || value.durationMs <= 0) return;
