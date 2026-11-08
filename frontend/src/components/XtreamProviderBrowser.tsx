@@ -16,14 +16,17 @@ type ProviderTitle = XtreamTitle & { command?: string };
 type ProviderDetails = Omit<XtreamDetails, "episodes"> & { command?: string; episodes: (XtreamDetails["episodes"][number] & { command?: string; seriesNumber?: number })[] };
 
 /** Clone-derived provider categories, movies, title details, seasons and episodes. */
-export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialTitle }: {
+export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialTitle, allowedProtocol }: {
   onClose: () => void;
   initialKind?: "movie" | "series";
   initialTitle?: { owner: string; kind: "movie" | "series"; catalogId: string };
+  allowedProtocol?: "xtream" | "stalker";
 }) {
   const router = useRouter(), playlists = usePlaylists();
   const focused = useIsFocused();
-  const providers = playlists.filter(row => row.enabled && (row.kind === "xtream" || row.kind === "stalker"));
+  // The unified VOD landing is lazy: only the source the user selects loads a catalog.
+  const providers = playlists.filter(row => row.enabled && (row.kind === "xtream" || row.kind === "stalker") &&
+    (!allowedProtocol || row.kind === allowedProtocol));
   const [owner, setOwner] = useState(initialTitle?.owner || ""), [kind, setKind] = useState(initialTitle?.kind || initialKind);
   const requestedTitle = useRef(initialTitle);
   const [catalog, setCatalog] = useState<{ source: (typeof playlists)[number]; kind: typeof kind; login: ProviderLogin; rows: ProviderTitle[] } | null>(null);
@@ -32,6 +35,8 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   const [category, setCategory] = useState(""), [query, setQuery] = useState(""), [season, setSeason] = useState("");
   const library = useProviderLibrary();
   const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [renderLimit, setRenderLimit] = useState(96);
+  const [returnFocusId, setReturnFocusId] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +103,7 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   }, [activeSource, focused, login, selected]);
   useEffect(() => {
     if (!focused) return;
-    const back = BackHandler.addEventListener("hardwareBackPress", () => { if (selected) setSelected(null); else onClose(); return true; });
+    const back = BackHandler.addEventListener("hardwareBackPress", () => { if (selected) { setReturnFocusId(selected.id); setSelected(null); } else onClose(); return true; });
     return () => back.remove();
   }, [focused, onClose, selected]);
   const categories = useMemo(() => Array.from(new Set(rows.map(row => row.category))).sort(), [rows]);
@@ -107,6 +112,9 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   const savedTitle = selected && library.find(row => row.owner === owner && row.kind === selected.kind && row.catalogId === selected.id);
   const resumeEpisode = savedTitle && savedTitle.positionMs > 0 ? details?.episodes.find(row => providerPlaybackId("series", row.id, row.seriesNumber) === savedTitle.mediaId) : undefined;
   const visible = useMemo(() => rows.filter(row => (!category || row.category === category) && (!query || row.name.toLowerCase().includes(query.toLowerCase())) && (!onlyFavorites || favorites.includes(`${owner}:${row.kind}:${row.id}`))), [category, favorites, onlyFavorites, owner, query, rows]);
+  useEffect(() => { setRenderLimit(96); setReturnFocusId(null); }, [owner, kind, category, query, onlyFavorites]);
+  // Rendering is windowed; provider catalog fetching remains source-specific.
+  const displayed = useMemo(() => visible.slice(0, renderLimit), [visible, renderLimit]);
   const play = (id: string, title: string, format: string, image?: string, command?: string, seriesNumber?: number) => {
     if (!focused || !activeSource || !login || !selected || playRequest.current) return;
     const request = new AbortController();
@@ -126,7 +134,7 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
   };
   const button = (label: string, press: () => void, active = false, key = label) => <Pressable key={key} onPress={press} style={({ focused }: any) => ({ padding: 10, margin: 3, borderRadius: 6, borderWidth: 2, borderColor: focused ? "#fff" : "transparent", backgroundColor: active ? tvColors.purpleDeep : tvColors.panelRaised })}><Text style={{ color: "#fff" }}>{label}</Text></Pressable>;
   return <View style={{ flex: 1, padding: 12, gap: 8, backgroundColor: tvColors.canvas }}>
-    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>{button(selected ? "Back to titles" : "Back to library", () => selected ? setSelected(null) : onClose())}
+    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>{button(selected ? "Back to titles" : "Back to library", () => { if (selected) { setReturnFocusId(selected.id); setSelected(null); } else onClose(); })}
       {!selected && <>{button("Movies", () => setKind("movie"), kind === "movie")}{button("Series", () => setKind("series"), kind === "series")}{button("My list", () => setOnlyFavorites(value => !value), onlyFavorites)}</>}
     </View>
     {!selected ? <>
@@ -134,7 +142,12 @@ export function XtreamProviderBrowser({ onClose, initialKind = "movie", initialT
       {!providers.length ? <Text style={{ color: "#fff" }}>Add an Xtream account or Stalker portal in Settings → Playlists to browse its movies and series.</Text> : null}
       <TextInput value={query} onChangeText={setQuery} placeholder="Search provider titles" placeholderTextColor={tvColors.textMuted} style={{ color: "#fff", padding: 10, backgroundColor: tvColors.panelRaised, borderRadius: 6 }} />
       <ScrollView horizontal style={{ maxHeight: 50 }}>{button("All categories", () => setCategory(""), !category)}{categories.map(name => button(name, () => setCategory(name), category === name))}</ScrollView>
-      <FlatList data={visible} keyExtractor={item => item.id} numColumns={4} initialNumToRender={12} windowSize={5} maxToRenderPerBatch={12} renderItem={({ item }) => <Pressable onPress={() => setSelected(item)} style={({ focused }: any) => ({ width: "24%", margin: "0.5%", padding: 8, borderWidth: 2, borderColor: focused ? "#fff" : "transparent", backgroundColor: tvColors.panelRaised, borderRadius: 6 })}>
+      <FlatList data={displayed} keyExtractor={item => item.id} numColumns={4} initialNumToRender={12} windowSize={5} maxToRenderPerBatch={12}
+        onEndReachedThreshold={0.5} onEndReached={() => setRenderLimit(current => Math.min(visible.length, current + 96))}
+        renderItem={({ item }) => <Pressable hasTVPreferredFocus={item.id === returnFocusId}
+          onFocus={() => { if (returnFocusId === item.id) setReturnFocusId(null); }}
+          onPress={() => { setReturnFocusId(item.id); setSelected(item); }}
+          style={({ focused }: any) => ({ width: "24%", margin: "0.5%", padding: 8, borderWidth: 2, borderColor: focused ? "#fff" : "transparent", backgroundColor: tvColors.panelRaised, borderRadius: 6 })}>
         {item.image ? <Image source={{ uri: item.image }} style={{ width: "100%", aspectRatio: 2 / 3 }} resizeMode="contain" /> : null}<Text numberOfLines={2} style={{ color: "#fff", paddingTop: 6 }}>{item.name}</Text>
       </Pressable>} />
     </> : <ScrollView><Text style={{ color: "#fff", fontSize: 24 }}>{selected.name}</Text>
