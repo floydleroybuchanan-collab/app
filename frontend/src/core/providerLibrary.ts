@@ -9,6 +9,7 @@ let activeAccount: string | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 let legacyClaim: Promise<void> | null = null;
 let accountEpoch = 0;
+const dataRevisions = new Map<string, number>();
 const listeners = new Set<(rows: ProviderLibraryEntry[]) => void>();
 
 function scopedKey(account: string) {
@@ -20,11 +21,12 @@ export function setProviderLibraryAccount(account: string | null | undefined) {
   if (next === activeAccount) return;
   activeAccount = next;
   const epoch = ++accountEpoch;
+  const beforeRead = dataRevisions.get(next || "") || 0;
   // Do not leave the previous account's titles visible while the new account
   // is being restored from disk, even for one render.
   listeners.forEach(listener => listener([]));
   if (next) void readForAccount(next).then(rows => {
-    if (epoch === accountEpoch && activeAccount === next)
+    if (epoch === accountEpoch && activeAccount === next && beforeRead === (dataRevisions.get(next) || 0))
       listeners.forEach(listener => listener(rows));
   }).catch(() => undefined);
 }
@@ -64,6 +66,7 @@ export function updateProviderLibrary(patch: Partial<ProviderLibraryEntry> & Pic
   const next = queue.then(async () => {
     const rows = mergeProviderLibrary(await readForAccount(owner), patch);
     if (!await storage.setItem(scopedKey(owner), rows)) throw new Error("Could not save provider library.");
+    dataRevisions.set(owner, (dataRevisions.get(owner) || 0) + 1);
     if (activeAccount === owner) listeners.forEach(listener => listener(rows));
   });
   queue = next.catch(() => undefined);
