@@ -73,7 +73,6 @@ export function UnifiedVodOverview({ onOpen }: { onOpen: (section: string) => vo
     <Text style={styles.sectionTitle}>Recently Watched Video On Demand</Text>
     <FlatList data={previews} horizontal keyExtractor={item => item.id}
       initialNumToRender={8} maxToRenderPerBatch={8} windowSize={3}
-      removeClippedSubviews
       contentContainerStyle={styles.row}
       showsHorizontalScrollIndicator={false}
       ListEmptyComponent={<Text style={styles.secondary}>Your recently watched movies and shows will appear here.</Text>}
