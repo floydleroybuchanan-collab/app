@@ -71,7 +71,7 @@ internal class BackgroundEpgUpdater(private val context: Context) {
     }
     val baseOffsetMs = (source.serverOffsetMinutes + source.playlistOffsetMinutes + GuideTimingPolicy.globalOffsetMinutes(context)).toLong() * MINUTE_MS
     val now = System.currentTimeMillis()
-    val minStop = now - DEFAULT_PAST_DAYS * DAY_MS
+    val minStop = now - EpgWindowPolicy.pastDays(context, sourceId) * DAY_MS
     val maxStart = now + GUIDE_WINDOW_MS
     val names = LinkedHashMap<String, String>()
     val icons = LinkedHashMap<String, String>()
