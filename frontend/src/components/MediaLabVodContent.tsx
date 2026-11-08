@@ -85,7 +85,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   useEffect(() => () => { if (snapshotTimer.current) clearTimeout(snapshotTimer.current); }, []);
   const back = useCallback(() => {
     if (providerMode) { setSection("all"); return; }
-    const fallback = () => { if (settings) router.replace("/settings"); else openDrawer({ focusTop: true }); };
+    const fallback = () => { if (settings) router.replace("/settings"); else if (nativeMode) setSection("all"); else openDrawer({ focusTop: true }); };
     if (!nativeMode) { fallback(); return; }
     void Promise.resolve(NativeModules.CharmVod?.surfaceBack()).then(handled => {
       if (!handled) fallback();
