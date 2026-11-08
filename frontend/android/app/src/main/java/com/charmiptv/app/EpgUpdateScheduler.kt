@@ -34,10 +34,21 @@ internal object EpgUpdateScheduler {
       .setConstraints(constraints)
       .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
       .build()
-    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+    val manager = WorkManager.getInstance(context)
+    manager.enqueueUniquePeriodicWork(
       UNIQUE_WORK,
       ExistingPeriodicWorkPolicy.UPDATE,
       request,
+    )
+    // Local database hygiene uses a separate unique job, never one work item
+    // per channel. It will skip work while the TV UI or playback is active.
+    val maintenance = PeriodicWorkRequestBuilder<EpgMaintenanceWorker>(12, TimeUnit.HOURS)
+      .setConstraints(Constraints.Builder().setRequiresStorageNotLow(true).build())
+      .build()
+    manager.enqueueUniquePeriodicWork(
+      "charm-epg-maintenance-v1",
+      ExistingPeriodicWorkPolicy.KEEP,
+      maintenance,
     )
   }
 
