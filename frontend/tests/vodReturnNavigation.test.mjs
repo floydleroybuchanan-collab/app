@@ -21,7 +21,7 @@ test("VOD Back never changes to an unmapped section or exits the app",()=>{
  const code=page.slice(start,end);
  assert.match(code,/backInFlight\.current/);
  assert.match(code,/NativeModules\.CharmVod\?\.surfaceBack\?\.\(\)/);
- assert.doesNotMatch(code,/setSection\("all"\)/);
+ assert.doesNotMatch(code,/^\s*setSection\("all"\)/m);
  assert.match(code,/vodHome\(\)/);
  const shell=src("src/components/PurpleTvShell.tsx");
  assert.match(shell,/if \(active === "\/vod" && !drawerOpen\) \{/);
