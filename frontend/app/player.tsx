@@ -92,6 +92,7 @@ export default function PlayerScreen() {
   const appPolicy=useAppPolicy();
   const router = useRouter();
   const [guideOverlayOpen, setGuideOverlayOpen] = useState(false);
+  const [previewGroupsOpen, setPreviewGroupsOpen] = useState(false);
   const guidePresentation = useGuidePresentation();
   const guideOverlayOpenRef = useRef(false);
   guideOverlayOpenRef.current = guideOverlayOpen;
@@ -618,7 +619,7 @@ export default function PlayerScreen() {
             }}
             onStatus={handleStreamStatus}
             style={showPlayerGuidePreview ? {
-              position: "absolute", left: safe.left + 14, top: insets.top + safe.top + 20,
+              position: "absolute", left: safe.left + 14 + (previewGroupsOpen ? 252 : 0), top: insets.top + safe.top + 20,
               width: guidePreviewWidth, height: guidePreviewHeight,
             } : StyleSheet.absoluteFill}
           />
@@ -757,6 +758,7 @@ export default function PlayerScreen() {
           onTransparencyChange={(transparency) => guidePresentation.change({ transparency })}
           onAutoplayChange={(autoplayOnFocus) => guidePresentation.change({ autoplayOnFocus })}
           onStayChange={(stayInGuide) => guidePresentation.change({ stayInGuide })}
+          onGroupsVisibleChange={setPreviewGroupsOpen}
           onRunway={(ids, priorityIds) => {
             setViewportGuideChannelIds(ids);
             setPriorityMatchChannelIds(priorityIds);
