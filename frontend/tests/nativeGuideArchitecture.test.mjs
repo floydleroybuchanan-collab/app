@@ -192,7 +192,7 @@ test("native Guide renders selectable no-information cells instead of black rows
 test("held directions cannot repeatedly transfer Guide ownership at a boundary", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   const keys = view.match(/override fun onKeyDown[\s\S]*?override fun onKeyUp/)?.[0] || "";
-  assert.match(keys, /if \(selectedRow > 0\) moveVertical\(-1\)\s*else if \(overlayMode && event\.repeatCount == 0\) emit\("upBoundary", null\)/);
+  assert.match(keys, /if \(selectedRow > 0\) moveVertical\(-1\)\s*else if \(\(overlayMode \|\| enableUpBoundary\) && event\.repeatCount == 0\) emit\("upBoundary", null\)/);
   assert.match(keys, /if \(channelRailSelected\) \{\s*if \(event\.repeatCount == 0\) emit\("topLeftBoundary", null\)/);
   assert.match(view, /fun setActive\(value: Boolean\)[\s\S]{0,180}isFocusableInTouchMode = value\s*isFocusable = value/);
 });

@@ -6,12 +6,12 @@ import ts from "typescript";
 import * as policy from "../src/core/iconRailPolicy.ts";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("rail offers every requested minute plus Never Leaves and defaults to three minutes", () => {
+test("rail offers every requested minute plus Never Leaves and defaults to one minute", () => {
   assert.deepEqual(policy.ICON_RAIL_TIMEOUT_OPTIONS.map(option => option.value), [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]);
   assert.equal(policy.ICON_RAIL_TIMEOUT_OPTIONS.at(-1).label, "Never Leaves");
-  assert.deepEqual(policy.normalizeIconRailPreferences(null), { enabled: true, timeoutMinutes: 3 });
+  assert.deepEqual(policy.normalizeIconRailPreferences(null), { enabled: true, timeoutMinutes: 1 });
   assert.deepEqual(policy.normalizeIconRailPreferences({ enabled: false, timeoutMinutes: 0 }), { enabled: false, timeoutMinutes: 0 });
-  assert.equal(policy.normalizeIconRailPreferences({ timeoutMinutes: 200 }).timeoutMinutes, 3);
+  assert.equal(policy.normalizeIconRailPreferences({ timeoutMinutes: 200 }).timeoutMinutes, 1);
 });
 
 test("idle timeout restarts after interaction, clamps clock changes and never expires in Never Leaves mode", () => {
@@ -28,7 +28,7 @@ test("rail preferences serialize rapid edits, preserve startup hydration and do 
   const mocks = {
     react: { useEffect() {}, useState() {} }, "./iconRailPolicy": policy,
     "@/src/utils/storage": { storage: { getItem: () => hydrated, setItem: async (key, value) => {
-      assert.equal(key, "gs_icon_rail_preferences_v1"); if (fail) return false; saved.push(value); return true;
+      assert.equal(key, "gs_icon_rail_preferences_v2"); if (fail) return false; saved.push(value); return true;
     } } },
   };
   const code = ts.transpileModule(read("src/core/iconRailPreferences.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -128,3 +128,30 @@ test("secondary pages do not expire initial focus on an arbitrary timer and Remi
   assert.match(groups, /focusConfirmedRef.current = true;\s*setPreferActiveFocus\(false\)/);
 });
 
+
+test("upgrading RC23 migrates a saved three-minute rail once and preserves later custom choices", async () => {
+  const exports = {};
+  const oldValue = { enabled: true, timeoutMinutes: 3 };
+  const disk = new Map([["gs_icon_rail_preferences_v1", oldValue]]);
+  const writes = [];
+  const storage = {
+    getItem: async (key, fallback) => disk.has(key) ? disk.get(key) : fallback,
+    setItem: async (key, value) => { disk.set(key, value); writes.push([key, value]); return true; },
+  };
+  const code = ts.transpileModule(read("src/core/iconRailPreferences.ts"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(code, {
+    exports,
+    require: name => ({
+      react: { useEffect() {}, useState() {} },
+      "./iconRailPolicy": policy,
+      "@/src/utils/storage": { storage },
+    })[name],
+  });
+  assert.deepEqual({ ...await exports.getIconRailPreferences() }, { enabled: true, timeoutMinutes: 1 });
+  assert.equal(writes[0][0], "gs_icon_rail_preferences_v2");
+  await exports.saveIconRailPreferences({ timeoutMinutes: 3 });
+  assert.equal((await exports.getIconRailPreferences()).timeoutMinutes, 3);
+  assert.equal(disk.get("gs_icon_rail_preferences_v2").timeoutMinutes, 3);
+});

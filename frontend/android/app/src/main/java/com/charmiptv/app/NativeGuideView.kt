@@ -242,13 +242,33 @@ class NativeGuideView(context: Context) : View(context) {
     if (h != oldh) loadPrograms()
   }
   private var overlayMode = false
+  // The guide's original transparency setting of 50 translates to 25%
+  // see-through backgrounds, not 50%. Preview mode remains fully opaque.
+  private var transparencyLevel = 50
   var rightBoundaryEnabled = false
+  var enableUpBoundary = false
+  fun setTransparencyLevel(value: Int) {
+    val next = value.coerceIn(0, 100)
+    if (next == transparencyLevel) return
+    transparencyLevel = next
+    applyGuideOpacity()
+  }
   fun setOverlayMode(value: Boolean) {
+    if (overlayMode == value) return
     overlayMode = value
-    background.alpha = if (value) 0 else 255
-    header.alpha = if (value) 205 else 255
-    rowSurface.alpha = if (value) 100 else 255
-    cell.alpha = if (value) 130 else 255
+    applyGuideOpacity()
+  }
+  private fun applyGuideOpacity() {
+    val opacity = if (overlayMode) (255f * (1f - 0.005f * transparencyLevel))
+      .toInt().coerceIn(0, 255) else 255
+    // Do not stack two 75%-opaque rectangles on top of each other: that would
+    // make programme cells 94% opaque and hide the video. Only the *visible*
+    // cell/channel surface gets the configured alpha.
+    setBackgroundColor(if (overlayMode) Color.TRANSPARENT else Color.rgb(12, 14, 18))
+    background.alpha = if (overlayMode) 0 else 255
+    header.alpha = opacity
+    rowSurface.alpha = if (overlayMode) 0 else 255
+    cell.alpha = opacity
     invalidate()
   }
 
@@ -530,7 +550,7 @@ class NativeGuideView(context: Context) : View(context) {
     when (keyCode) {
       KeyEvent.KEYCODE_DPAD_UP -> {
         if (selectedRow > 0) moveVertical(-1)
-        else if (overlayMode && event.repeatCount == 0) emit("upBoundary", null)
+        else if ((overlayMode || enableUpBoundary) && event.repeatCount == 0) emit("upBoundary", null)
       }
       KeyEvent.KEYCODE_DPAD_DOWN -> moveVertical(1)
       KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -742,7 +762,8 @@ class NativeGuideView(context: Context) : View(context) {
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
       channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(168, 44, 255) else Color.rgb(27, 30, 37)
-      channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected)) 205 else 255
+      channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected))
+        (255f * (1f - 0.005f * transparencyLevel)).toInt().coerceIn(0, 255) else 255
       canvas.drawRect(0f, top, channelWidth, top + rowHeight - density, channel)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       if (showLogos) {
