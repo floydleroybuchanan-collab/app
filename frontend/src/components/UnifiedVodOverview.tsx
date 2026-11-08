@@ -78,7 +78,7 @@ export function UnifiedVodOverview({ onOpen }: { onOpen: (section: string) => vo
         try { found.push(...await searchOneVodSource(accountId, candidates[index], query, controller.signal)); }
         catch { if (!controller.signal.aborted) failures++; }
         if (!controller.signal.aborted) {
-          setResults(previous => [...(start ? previous : []), ...found].slice(0, VOD_SEARCH_RESULTS_TOTAL));
+          setResults(previous => [...previous, ...found].slice(0, VOD_SEARCH_RESULTS_TOTAL));
           found = [];
         }
       }
