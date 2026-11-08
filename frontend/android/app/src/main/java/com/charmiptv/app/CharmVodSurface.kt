@@ -84,7 +84,9 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     }
     fun television(value: Boolean) { television = value }
     private fun handoffUpToToolbar(): Boolean {
-        if (host?.navController?.currentDestination?.id == VodR.id.player) return false
+        // Details and player own their D-pad focus. Up must not escape from
+        // Watch/Trailer/My List to the React toolbar or compact icon rail.
+        if (host?.navController?.currentDestination?.id in setOf(VodR.id.player, VodR.id.movie, VodR.id.tv_show)) return false
         val focused = findFocus() ?: return false
         val target = owner?.findViewById<View>(toolbarFocusTag) ?: return false
         if (!target.isShown || !target.isFocusable) return false
@@ -118,7 +120,19 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
         }
         return target.requestFocus(View.FOCUS_UP)
     }
+    private fun retainDetailFocusOnLeft(): Boolean {
+        val destination = host?.navController?.currentDestination?.id
+        if (destination != VodR.id.movie && destination != VodR.id.tv_show) return false
+        val focused = findFocus() ?: return false
+        val candidate = android.view.FocusFinder.getInstance().findNextFocus(root, focused, View.FOCUS_LEFT)
+        if (candidate != null && candidate !== focused && candidate.isShown && candidate.isEnabled && candidate.isFocusable) return false
+        val watchId = if (destination == VodR.id.movie) VodR.id.btn_movie_watch_now else VodR.id.btn_tv_show_watch_now
+        val watch = root.findViewById<View>(watchId)?.takeIf { it.isShown && it.isFocusable && it.isEnabled }
+        return (watch?.requestFocus() == true) || focused.requestFocus()
+    }
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT &&
+            event.action == android.view.KeyEvent.ACTION_DOWN && retainDetailFocusOnLeft()) return true
         if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
             event.action == android.view.KeyEvent.ACTION_DOWN && handoffUpToToolbar()) return true
         owner?.let { if (CharmPageDrawer.dispatch(it, event)) return true }

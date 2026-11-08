@@ -788,7 +788,7 @@ export function PurpleTvShell({
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
-        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod"}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
         trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}

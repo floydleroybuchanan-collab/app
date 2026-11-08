@@ -134,7 +134,25 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
             dialog = null
             playbackControls?.showController()
             val prior = origin
-            root.post { if (dialog == null) { if (prior?.isAttachedToWindow == true && prior.isShown && prior.isFocusable) prior.requestFocus() else if (CharmHostSession.hasSurface(activity)) activeView()?.requestFocus() else menu.requestFocus() } }
+            root.post {
+                if (dialog != null) return@post
+                val validOrigin = prior?.takeIf { it.isAttachedToWindow && it.isShown && it.isEnabled && it.isFocusable }
+                if (validOrigin?.requestFocus() == true) return@post
+                // Restore a real selectable child, not the fragment root;
+                // the latter can send the next DPAD to the icon rail.
+                val pageView = activeView()
+                val actionId = when (nav?.navController?.currentDestination?.id) {
+                    R.id.movie -> R.id.btn_movie_watch_now
+                    R.id.tv_show -> R.id.btn_tv_show_watch_now
+                    else -> View.NO_ID
+                }
+                val action = pageView?.findViewById<View>(actionId)
+                    ?.takeIf { it.isShown && it.isEnabled && it.isFocusable }
+                val fallback = pageView?.getFocusables(View.FOCUS_FORWARD)
+                    ?.firstOrNull { it !== pageView && it.isShown && it.isEnabled && it.isFocusable }
+                if (action?.requestFocus() != true && fallback?.requestFocus() != true && !CharmHostSession.hasSurface(activity))
+                    menu.requestFocus()
+            }
         }
         d.setOnKeyListener { _, key, event ->
             if (key == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN && d.currentFocus !is EditText) { d.dismiss(); true }
@@ -148,6 +166,10 @@ class CharmPageDrawer(private val activity: FragmentActivity, private val root: 
         d.show()
     }
     fun dispatch(event: KeyEvent): Boolean {
+        // In embedded MediaLab the React rail owns menus. A D-pad RIGHT at a
+        // shelf edge must never summon the native modal and strand focus.
+        // An explicit Options/Menu button can still call open().
+        if (CharmHostSession.hasSurface(activity)) return false
         if (event.keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return false
         if (event.action == KeyEvent.ACTION_UP) {
             rightHeld = false
