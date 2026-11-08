@@ -36,6 +36,7 @@ type Props = {
   onTransparencyChange: (value: number) => void;
   onAutoplayChange: (enabled: boolean) => void;
   onStayChange: (enabled: boolean) => void;
+  onGroupsVisibleChange?: (open: boolean) => void;
   onRunway: (ids: string[], priorityIds: string[]) => void;
 };
 
@@ -45,9 +46,12 @@ export function PlayerGuidePanel({
   safeLeft, safeRight, safeTop, safeBottom, previewWidth, previewHeight,
   channels, favoriteIds, playingChannel, playingCurrent, playingNext,
   windowStart, windowEnd, channelNumbers, showLogos,
-  onTune, onDismiss, onModeChange, onTransparencyChange, onAutoplayChange, onStayChange, onRunway,
+  onTune, onDismiss, onModeChange, onTransparencyChange, onAutoplayChange, onStayChange, onGroupsVisibleChange, onRunway,
 }: Props) {
   const [group, setGroup] = useState("All");
+  // The original preview keeps the group selector alongside the live window.
+  // The 252dp column corresponds to the decompiled groups-panel geometry.
+  const previewGroupsWidth = 252;
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
   const [detail, setDetail] = useState<{ channel: Channel; program: Program } | null>(null);
@@ -93,6 +97,10 @@ export function PlayerGuidePanel({
     focusRetry.current?.();
     if (tuneTimer.current) clearTimeout(tuneTimer.current);
   }, []);
+  useEffect(() => {
+    onGroupsVisibleChange?.(mode === "preview" && groupsOpen);
+    return () => onGroupsVisibleChange?.(false);
+  }, [groupsOpen, mode, onGroupsVisibleChange]);
 
   useEffect(() => {
     if (active) requestGridFocus();
@@ -159,6 +167,7 @@ export function PlayerGuidePanel({
     >
       {mode === "preview" ? (
         <View style={[styles.previewHeader, { height: previewHeight, backgroundColor: "transparent" }]}>
+          {groupsOpen ? <View pointerEvents="none" style={{ width: previewGroupsWidth, height: previewHeight }} /> : null}
           {/* This transparent slot shows the already-mounted fullscreen player,
               repositioned by player.tsx. No second Media3 decoder is created. */}
           <View pointerEvents="none" style={{ width: previewWidth, height: previewHeight, backgroundColor: "transparent", borderColor: tvColors.silverEdge, borderWidth: 1 }}>
@@ -242,7 +251,8 @@ export function PlayerGuidePanel({
         />
       </View>
       {groupsOpen ? (
-        <View style={[styles.layer, { backgroundColor: mode === "preview" ? "#171B23" : panelBackground }]}>
+        <View style={[mode === "preview" ? styles.previewGroupsLayer : styles.layer,
+          { backgroundColor: mode === "preview" ? "#171B23" : panelBackground }]}>
           <Text style={styles.layerTitle}>CHANNEL GROUPS</Text>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.layerContent}>
             <FlatList data={groups} keyExtractor={(item) => item} style={{ flex: 1 }} initialNumToRender={18}
@@ -254,7 +264,7 @@ export function PlayerGuidePanel({
               </Pressable>}
             />
             <Pressable onPress={() => setGroupsOpen(false)} style={({ focused }: any) => [styles.action, focused && styles.focused]}>
-              <Text style={styles.actionText}>Back to guide</Text>
+              <Text style={styles.actionText}>Guide →</Text>
             </Pressable>
           </FocusGuide>
         </View>
@@ -318,6 +328,7 @@ const styles = StyleSheet.create({
   grid: { flex: 1, minHeight: 0, backgroundColor: "transparent" },
   opaqueGrid: { backgroundColor: "#0C0E12" },
   layer: { ...StyleSheet.absoluteFillObject, zIndex: 50, padding: 13 },
+  previewGroupsLayer: { position: "absolute", left: 0, top: 0, bottom: 0, width: 252, zIndex: 50, padding: 13 },
   layerTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 17, marginBottom: 10 },
   layerContent: { flex: 1, minHeight: 0, gap: 8 },
   listEntry: { minHeight: 42, paddingHorizontal: 10, marginVertical: 2, flexDirection: "row", alignItems: "center", borderColor: "transparent", borderWidth: 2, borderRadius: 6, backgroundColor: "rgba(75,68,96,0.45)" },

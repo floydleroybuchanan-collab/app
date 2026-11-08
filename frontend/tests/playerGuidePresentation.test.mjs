@@ -58,3 +58,15 @@ test("original protected signing and public-encryption key are unchanged", () =>
   assert.match(gradle, /applicationIdSuffix '\.sideload'/);
   assert.match(pem, /MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAyC9n4e9tqbE3Tn9AgICb/);
 });
+
+test("preview groups retain live video and move the existing Media3 surface, not create another player", () => {
+  const player = source("app/player.tsx");
+  const panel = source("src/components/PlayerGuidePanel.tsx");
+  assert.match(player, /previewGroupsOpen \? 252 : 0/);
+  assert.match(player, /onGroupsVisibleChange=\{setPreviewGroupsOpen\}/);
+  assert.match(panel, /previewGroupsLayer: \{ position: "absolute", left: 0, top: 0, bottom: 0, width: 252/);
+  assert.match(panel, /groupsOpen \? <View pointerEvents="none" style=\{\{ width: previewGroupsWidth, height: previewHeight \}\} \/>/);
+  assert.match(panel, /onGroupsVisibleChange\?\.\(mode === "preview" && groupsOpen\)/);
+  assert.equal((player.match(/<StreamPlayer\b/g) || []).length, 1);
+  assert.doesNotMatch(panel, /<StreamPlayer\b/);
+});
