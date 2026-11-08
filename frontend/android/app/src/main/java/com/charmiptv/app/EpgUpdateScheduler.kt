@@ -71,6 +71,10 @@ internal class EpgUpdateWorker(
     val checkRunning = {
       workerContext.ensureActive()
       if (isStopped) throw CancellationException("Guide worker stopped")
+      // The active TV UI/player outranks periodic background imports.
+      // Parsing checks this callback every 256 XML events.
+      if (!EpgImportCoordinator.canStartBackground())
+        throw CancellationException("Guide background update deferred for TV interaction")
     }
     val nowSeconds = System.currentTimeMillis() / 1000L
     val dao = EpgControlDatabase.get(applicationContext).dao()
