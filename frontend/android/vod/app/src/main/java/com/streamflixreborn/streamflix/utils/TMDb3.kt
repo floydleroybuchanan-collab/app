@@ -945,20 +945,14 @@ object TMDb3 {
 
         companion object {
             fun build(): ApiService {
-                val apiKey = UserPreferences.tmdbApiKey.ifEmpty { BuildConfig.TMDB_API_KEY }
-
-                val client = OkHttpClient.Builder().addInterceptor { chain ->
-                    val original = chain.request()
-
-                    val requestBuilder = original.newBuilder()
-                        .url(
-                            original.url.newBuilder()
-                                .addQueryParameter("api_key", apiKey)
-                                .build()
-                        )
-
-                    chain.proceed(requestBuilder.build())
-                }.build()
+                // Keep the owner-supplied key preference, but recover from a stale
+                // on-device override using the key verified when the APK was built.
+                val client = OkHttpClient.Builder()
+                    .addInterceptor(CharmTmdbAuthInterceptor(
+                        customKey = UserPreferences.tmdbApiKey,
+                        bundledKey = BuildConfig.TMDB_API_KEY,
+                    ))
+                    .build()
 
                 val retrofit = Retrofit.Builder()
                     .baseUrl(URL)
