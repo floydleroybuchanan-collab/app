@@ -13,13 +13,14 @@ import { usePurpleTvDrawer } from "./PurpleTvShell";
 import { useDonation } from "./DonationDialog";
 import { MediaLabArt } from "./MediaLabBrand";
 import { XtreamProviderBrowser } from "./XtreamProviderBrowser";
+import { UnifiedVodOverview } from "./UnifiedVodOverview";
 
 const Surface = Platform.OS === "android" ? requireNativeComponent<any>("CharmVodSurface") : View;
-const sections = [["home", "Browse"], ["movies", "Movies"], ["series", "Series"], ["favorites", "My list"], ["search", "Search"], ["provider", "Playlist VOD"]] as const;
+const sections = [["all", "All VOD"], ["home", "Streamflix"], ["movies", "Movies"], ["series", "Series"], ["favorites", "My list"], ["search", "Search"], ["provider-xtream", "Xtream"], ["provider-stalker", "Stalker"]] as const;
 
 function entrySection(value: string, settings: boolean) {
   if (settings) return value;
-  return value === "sources" || value === "accounts" || value === "settings" ? "home" : value;
+  return value === "sources" || value === "accounts" || value === "settings" || value === "home" ? "all" : value;
 }
 
 /** One app shell; existing native destinations retain their actual controls and providers. */
@@ -44,7 +45,8 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   }, [accountId, focused, ready, providerMode]);
   const [section, setSection] = useState(() => entrySection(initialSection, settings));
   const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
-  const providerMode = section === "provider" || !!providerParts;
+  const providerMode = section === "provider" || section === "provider-xtream" || section === "provider-stalker" || !!providerParts;
+  const nativeMode = !providerMode && section !== "all";
   const [ready, setReady] = useState(false);
   const [player, setPlayer] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     let current = true;
     setReady(false);
     setError(null);
-    if (focused) void (async () => {
+    if (focused && nativeMode) void (async () => {
       await stopAllPlaybackSessions("superseded");
       if (!current) return;
       const preferences = await mediaLibraryPreferences();
@@ -66,7 +68,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
       if (current) setReady(true);
     })().catch(() => { if (current) setError("Unable to release playback. Return and try again."); });
     return () => { current = false; onPlayerChange?.(false); };
-  }, [focused, onPlayerChange]);
+  }, [focused, nativeMode, onPlayerChange]);
   useEffect(() => {
     if (!focused || !ready || providerMode) return;
     // The native catalog is already mounted. Refresh the tiny display snapshot.
@@ -82,17 +84,18 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   }, [focused, providerMode]);
   useEffect(() => () => { if (snapshotTimer.current) clearTimeout(snapshotTimer.current); }, []);
   const back = useCallback(() => {
-    if (providerMode) { setSection("home"); return; }
+    if (providerMode) { setSection("all"); return; }
     const fallback = () => { if (settings) router.replace("/settings"); else openDrawer({ focusTop: true }); };
+    if (!nativeMode) { fallback(); return; }
     void Promise.resolve(NativeModules.CharmVod?.surfaceBack()).then(handled => {
       if (!handled) fallback();
     }).catch(fallback);
-  }, [openDrawer, providerMode, router, settings]);
+  }, [nativeMode, openDrawer, providerMode, router, settings]);
   useEffect(() => {
-    if (!focused || providerMode) return;
+    if (!focused || providerMode || !nativeMode) return;
     const listener = BackHandler.addEventListener("hardwareBackPress", () => { back(); return true; });
     return () => listener.remove();
-  }, [back, focused, providerMode]);
+  }, [back, focused, nativeMode, providerMode]);
   return <View style={{ flex: 1, backgroundColor: tvColors.canvas }}>
     {!player && !settings && <View pointerEvents="none" style={styles.banner}><MediaLabArt kind="banner" width={240} height={72} /></View>}
     {!player && <View style={styles.toolbar}>
@@ -119,10 +122,11 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
       </Pressable> : null}
     </View>}
     {error ? <Text accessibilityRole="alert" style={{ color: "#FB7185", padding: 20 }}>{error}</Text> : null}
-    {focused && !providerMode && !ready && !error && Platform.OS === "android" ? <View style={styles.status}><ActivityIndicator color={tvColors.focus} /><Text style={styles.label}>Opening Video On Demand…</Text></View> : null}
-    {focused && !providerMode && Platform.OS !== "android" ? <Text style={styles.status}>The built-in video catalog is available on Android.</Text> : null}
-    {providerMode ? <XtreamProviderBrowser initialTitle={providerParts ? { owner: providerParts[1], kind: providerParts[2] as "movie" | "series", catalogId: providerParts[3] } : undefined} onClose={() => setSection("home")} /> : null}
-    {focused && ready && !providerMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} toolbarFocusTag={toolbarFocusTag || 0} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
+    {focused && nativeMode && !ready && !error && Platform.OS === "android" ? <View style={styles.status}><ActivityIndicator color={tvColors.focus} /><Text style={styles.label}>Opening Video On Demand…</Text></View> : null}
+    {focused && nativeMode && Platform.OS !== "android" ? <Text style={styles.status}>The built-in video catalog is available on Android.</Text> : null}
+    {focused && section === "all" && !settings ? <UnifiedVodOverview onOpen={setSection} /> : null}
+    {providerMode ? <XtreamProviderBrowser allowedProtocol={section === "provider-xtream" ? "xtream" : section === "provider-stalker" ? "stalker" : undefined} initialTitle={providerParts ? { owner: providerParts[1], kind: providerParts[2] as "movie" | "series", catalogId: providerParts[3] } : undefined} onClose={() => setSection("all")} /> : null}
+    {focused && ready && nativeMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} toolbarFocusTag={toolbarFocusTag || 0} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
       onVodEvent={({ nativeEvent }: any) => {
         if (nativeEvent.kind === "error") setError(nativeEvent.value);
         if (nativeEvent.kind === "player") {
