@@ -17,10 +17,11 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.charm.CharmDesign
+import com.streamflixreborn.streamflix.charm.CharmHostSession
 import com.streamflixreborn.streamflix.charm.CharmVodPageLayout
 
 /** The native preference model still owns values, actions and dynamic visibility. */
-internal class CharmSettingsLayout(private val list: RecyclerView, private val embedded: Boolean, private val open: (String?, String?) -> Unit) {
+internal class CharmSettingsLayout(private val list: RecyclerView, private val embedded: Boolean = (list.context as? androidx.fragment.app.FragmentActivity)?.let { CharmHostSession.hasSurface(it) } == true, private val open: (String?, String?) -> Unit) {
     private val context = list.context
     private fun dp(n: Int) = (n * context.resources.displayMetrics.density).toInt()
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
