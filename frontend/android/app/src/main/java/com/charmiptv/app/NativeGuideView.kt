@@ -246,6 +246,7 @@ class NativeGuideView(context: Context) : View(context) {
   // see-through backgrounds, not 50%. Preview mode remains fully opaque.
   private var transparencyLevel = 50
   var rightBoundaryEnabled = false
+  var enableUpBoundary = false
   fun setTransparencyLevel(value: Int) {
     val next = value.coerceIn(0, 100)
     if (next == transparencyLevel) return
@@ -549,7 +550,7 @@ class NativeGuideView(context: Context) : View(context) {
     when (keyCode) {
       KeyEvent.KEYCODE_DPAD_UP -> {
         if (selectedRow > 0) moveVertical(-1)
-        else if (overlayMode && event.repeatCount == 0) emit("upBoundary", null)
+        else if ((overlayMode || enableUpBoundary) && event.repeatCount == 0) emit("upBoundary", null)
       }
       KeyEvent.KEYCODE_DPAD_DOWN -> moveVertical(1)
       KeyEvent.KEYCODE_DPAD_LEFT -> {
