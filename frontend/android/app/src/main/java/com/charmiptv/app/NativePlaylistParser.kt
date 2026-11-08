@@ -52,7 +52,7 @@ internal object NativePlaylistParser {
   private data class Pending(
     val tvgId: String,
     val name: String,
-    val group: String,
+    var group: String,
     val logo: String,
     val headers: LinkedHashMap<String, String> = LinkedHashMap(),
   )
@@ -104,6 +104,10 @@ internal object NativePlaylistParser {
           }
 
           val meta = pending ?: continue
+          if (line.startsWith("#EXTGRP:", ignoreCase = true)) {
+            if (meta.group.isBlank()) meta.group = line.substringAfter(':').trim().take(250)
+            continue
+          }
           if (line.startsWith("#EXTVLCOPT:", ignoreCase = true) || line.startsWith("#EXTHTTP:", ignoreCase = true)) {
             applyExtHttpOption(meta.headers, line)
             continue

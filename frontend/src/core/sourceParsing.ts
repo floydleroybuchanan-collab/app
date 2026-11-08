@@ -268,6 +268,10 @@ export function parseM3UWithStats(
     }
 
     if (!pending) continue;
+    if (line.toUpperCase().startsWith("#EXTGRP:")) {
+      if (!pending.attrs["group-title"]) pending.attrs["group-title"] = line.slice(line.indexOf(":") + 1).trim().slice(0, 250);
+      continue;
+    }
     if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:")) {
       applyExtHttpOption(pending.headers, line);
       continue;

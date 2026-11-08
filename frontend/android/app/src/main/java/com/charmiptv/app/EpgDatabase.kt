@@ -510,8 +510,23 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     try { db.delete(STAGING_TABLE, null, null); db.setTransactionSuccessful() } finally { db.endTransaction() }
     try {
       var batchNumber = 0
+      val contentDigest = MessageDigest.getInstance("SHA-256")
+      fun fingerprintField(value: String?) {
+        contentDigest.update((value ?: "").toByteArray(Charsets.UTF_8))
+        contentDigest.update(0.toByte())
+      }
       for (batch in batches) {
         if (interactiveTvOwnsPriority()) Thread.yield()
+        // Hash only the already-accepted, bounded program batches. We do not
+        // build an additional in-memory guide to detect an identical import.
+        for (program in batch) {
+          fingerprintField(program.channelId)
+          fingerprintField(program.title)
+          fingerprintField(program.description)
+          fingerprintField(program.category)
+          fingerprintField(program.startMs.toString())
+          fingerprintField(program.endMs.toString())
+        }
         insertBatch(db, STAGING_TABLE, batch)
         batchNumber += 1
         if (batchNumber % STORAGE_RECHECK_BATCHES == 0) assertRefreshStorageAvailable()
@@ -523,12 +538,25 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
       if (stagingCount <= 0L) throw IllegalStateException("Refusing to replace live EPG with an empty feed")
       inferMissingStopsFromNextProgram(DEFAULT_PROGRAMME_DURATION_MS, MAX_PROGRAMME_DURATION_MS)
       beforeSwap?.invoke()
+      val contentSignature = contentDigest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+      if (countTable(LIVE_TABLE) == stagingCount && getMeta(GUIDE_CONTENT_FINGERPRINT_KEY) == contentSignature) {
+        // The last-good guide and FTS index are already identical. No need to
+        // delete/reinsert all live rows, invalidate IDs or rebuild search.
+        db.beginTransactionNonExclusive()
+        try {
+          db.delete(STAGING_TABLE, null, null)
+          db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return@use
+      }
       if (interactiveTvOwnsPriority()) Thread.yield()
       db.beginTransactionNonExclusive()
       try {
         db.delete(LIVE_TABLE, null, null)
         db.execSQL("INSERT INTO $LIVE_TABLE(channel_id,title,description,category,start_time,end_time) SELECT channel_id,title,description,category,start_time,end_time FROM $STAGING_TABLE")
         rebuildProgrammeSearch(db)
+        db.execSQL("INSERT OR REPLACE INTO $META_TABLE(key,value) VALUES (?, ?)",
+          arrayOf(GUIDE_CONTENT_FINGERPRINT_KEY, contentSignature))
         db.delete(STAGING_TABLE, null, null)
         db.setTransactionSuccessful()
       } finally { db.endTransaction() }
@@ -571,10 +599,21 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     }
   }
 
-  fun deleteExpired(beforeMs: Long): Int {
-    val deleted = writableDatabase.delete(LIVE_TABLE, "end_time < ?", arrayOf(toEpochSeconds(beforeMs).toString()))
-    try { runPragma(writableDatabase, "PRAGMA wal_checkpoint(PASSIVE)") } catch (_: Throwable) {}
-    return deleted
+  fun deleteExpired(beforeMs: Long): Int = acquireImport().use {
+    val db = writableDatabase
+    val cutoff = toEpochSeconds(beforeMs).toString()
+    db.beginTransactionNonExclusive()
+    val deleted: Int
+    try {
+      // FTS4 is not automatically linked to the programme table. Purge both
+      // in one transaction, or expired search tokens accumulate indefinitely.
+      db.execSQL("DELETE FROM $FTS_TABLE WHERE programme_id IN (SELECT id FROM $LIVE_TABLE WHERE end_time < ?)",
+        arrayOf(cutoff))
+      deleted = db.delete(LIVE_TABLE, "end_time < ?", arrayOf(cutoff))
+      db.setTransactionSuccessful()
+    } finally { db.endTransaction() }
+    try { runPragma(db, "PRAGMA wal_checkpoint(PASSIVE)") } catch (_: Throwable) {}
+    deleted
   }
 
   fun maybeIncrementalVacuum(minDeletedRows: Int, deletedRows: Int) {
@@ -656,6 +695,7 @@ internal class EpgDatabase(context: Context, private val databaseName: String = 
     private const val FTS_TABLE = "epg_programmes_fts"
     private const val PLAYLIST_CONTENT_FINGERPRINT_KEY = "playlist_content_fingerprint"
     private const val MATCH_CONTENT_FINGERPRINT_KEY = "match_content_fingerprint"
+    private const val GUIDE_CONTENT_FINGERPRINT_KEY = "guide_content_fingerprint_v1"
     private const val IN_CLAUSE_CHUNK = 400
     private const val DEFAULT_PROGRAMME_DURATION_MS = 30L * 60L * 1000L
     private const val MAX_PROGRAMME_DURATION_MS = 24L * 60L * 60L * 1000L
