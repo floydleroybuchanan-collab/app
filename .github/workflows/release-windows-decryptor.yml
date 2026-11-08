@@ -45,7 +45,7 @@ jobs:
           [System.IO.File]::WriteAllText($source, $after)
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: windows-decryptor-build/go.mod
           cache: false
