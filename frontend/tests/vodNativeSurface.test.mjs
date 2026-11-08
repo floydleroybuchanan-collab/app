@@ -117,12 +117,20 @@ test('VOD settings grid measures the host width and uses fixed safe-area padding
  assert.doesNotMatch(s,/root\.width\*\.135f/);
  assert.doesNotMatch(s,/row\.addView\(sections/);
  assert.match(s,/sections\.visibility = View\.GONE/);
+ assert.match(s,/val root = LinearLayout\(context\)/);
+ assert.doesNotMatch(s,/val root = NestedScrollView/);
+ assert.match(s,/row.addView\(list, LinearLayout.LayoutParams\(0, -1, 1f\)\)/);
 });
-test('VOD detail pages expose only the unified action row on TV',()=>{
- const movie=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/adapters/viewholders/MovieViewHolder.kt');
- const show=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/adapters/viewholders/TvShowViewHolder.kt');
- assert.match(movie,/btnMovieTrailer\.visibility = View\.GONE[\s\S]*btnMovieFavorite\.visibility = View\.GONE[\s\S]*charmDetailMyList\.setOnClickListener/);
- assert.match(show,/btnTvShowTrailer\.visibility = View\.GONE[\s\S]*btnTvShowFavorite\.visibility = View\.GONE[\s\S]*charmDetailMyList\.setOnClickListener/);
+test('VOD detail actions form a non-overlapping Watch-Sources-Trailer-My List row on TV',()=>{
+ for (const kind of ['movie', 'tv_show']) {
+   const xml=source('android/vod/app/src/main/res/layout/content_'+kind+'_tv.xml');
+   const list=xml.slice(xml.indexOf('android:id="@+id/charm_detail_my_list"'));
+   assert.match(list,/app:layout_constraintStart_toEndOf="@id\/btn_(?:movie|tv_show)_trailer"/);
+   const trailer=xml.slice(xml.indexOf('android:id="@+id/btn_'+kind+'_trailer"'));
+   assert.match(trailer,/app:layout_constraintStart_toEndOf="@id\/charm_detail_sources"/);
+   assert.match(trailer,/app:layout_constraintTop_toTopOf="@id\/btn_(?:movie|tv_show)_watch_now"/);
+   assert.match(list,/app:layout_goneMarginStart="6dp"/);
+ }
 });
 test('Live home places the refreshable VOD history shelf after recent channels',()=>{
  const home=source('app/(tabs)/index.tsx');
