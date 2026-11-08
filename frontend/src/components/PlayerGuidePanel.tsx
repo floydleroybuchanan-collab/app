@@ -167,7 +167,7 @@ export function PlayerGuidePanel({
             <Text numberOfLines={1} style={styles.infoChannel}>{visibleChannel?.name || "Live TV"}</Text>
             <Text numberOfLines={2} style={styles.infoTitle}>{visibleProgram?.title || "No program information"}</Text>
             <Text numberOfLines={1} style={styles.infoTime}>{visibleProgram
-              ? `${fmtTime(visibleProgram.start)} – ${fmtTime(visibleProgram.stop)}`
+              ? `${fmtTime(visibleProgram.start)} – ${fmtTime(visibleProgram.stop || visibleProgram.start)}`
               : "Browse the channels below"}</Text>
             <Text numberOfLines={3} style={styles.infoDescription}>{visibleProgram?.desc || playingNext?.title || "Use the D-pad to browse the guide."}</Text>
           </View>
@@ -269,7 +269,7 @@ export function PlayerGuidePanel({
         <View style={[styles.layer, { backgroundColor: "#171B23" }]}>
           <Text style={styles.layerTitle}>{detail.program.title || "Program information"}</Text>
           <Text style={styles.detailDescription}>{detail.channel.name}</Text>
-          <Text style={styles.detailDescription}>{fmtTime(detail.program.start)} – {fmtTime(detail.program.stop)}</Text>
+          <Text style={styles.detailDescription}>{fmtTime(detail.program.start)} – {fmtTime(detail.program.stop || detail.program.start)}</Text>
           <Text style={styles.detailDescription} numberOfLines={6}>{detail.program.desc || "No description available."}</Text>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.detailActions}>
             <Pressable onPress={() => { const tuned = detail.channel; setDetail(null); tuneChannel(tuned); }}
