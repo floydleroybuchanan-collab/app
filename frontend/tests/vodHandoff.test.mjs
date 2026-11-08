@@ -19,7 +19,7 @@ function harness(release=async()=>{}) {
   '@/src/core/mediaLibrary':{mediaLibraryPreferences:async()=>({audio:'en'})},'@/src/theme':{tvColors:{}},
   '@/src/auth/AuthContext':{useAuth:()=>({user:{id:'test-account'}})},
   '@/src/core/vodRecentSnapshot':{captureNativeVodSnapshot:async()=>{}},
-  './UnifiedVodOverview':{UnifiedVodOverview:'UnifiedOverview'},
+  '@/src/core/vodFeatureFlags':{PLAYLIST_VOD_ENABLED:false},
   './PurpleTvShell':{usePurpleTvDrawer:()=>({openDrawer(){},closeDrawer(){}})},'./DonationDialog':{useDonation:()=>()=>{}},'./MediaLabBrand':{MediaLabArt:'Brand'},'./XtreamProviderBrowser':{XtreamProviderBrowser:'ProviderBrowser'},
  };
  const exports={};
@@ -33,7 +33,8 @@ test('shared VOD surface waits for Live TV decoder release and keeps all catalog
  let resolve;const h=harness(()=>new Promise(done=>{resolve=done;}));h.enter();await tick();
  assert.equal(h.states[1],false);assert.equal(h.calls.length,1);
  resolve();await tick();assert.equal(h.states[1],true);assert.equal(h.calls[1][0],'configure');
- for(const label of ['All VOD','Streamflix','Movies','Series','My list','Search','Xtream','Stalker']) assert.ok(JSON.stringify(h.tree).includes(label));
+ for(const label of ['Back','Home','Movies','Series','My List','Search']) assert.ok(JSON.stringify(h.tree).includes(label));
+ assert.doesNotMatch(JSON.stringify(h.tree),/Streamflix|Xtream|Stalker|All VOD/);
  assert.equal(h.states[0],'movies');
  assert.doesNotMatch(JSON.stringify(h.tree),/"Sources"|Open Video OnDemand/);
  assert.match(JSON.stringify(h.tree),/Opening Video On Demand/);
