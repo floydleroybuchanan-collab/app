@@ -8,22 +8,30 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
 test("fullscreen guide overlays the existing decoder and BACK returns to that owner", async () => {
-  const [player, native, manager] = await Promise.all([
+  const [player, native, manager, guidePanel] = await Promise.all([
     source("app/player.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt"),
     source("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"),
+    source("src/components/PlayerGuidePanel.tsx"),
   ]);
   const open = player.slice(player.indexOf("const goGuide ="), player.indexOf("const runRemoteAction ="));
   assert.match(open, /setGuideOverlayOpen\(true\)/);
   assert.doesNotMatch(open, /stopFullscreenSession|stopAllPlaybackSessions|generationRef|router\./);
   assert.match(player, /guideOverlayOpenRef\.current\) \{ setGuideOverlayOpen\(false\); return true; \}/);
-  assert.match(player, /NativeGuideCanvas channels=\{overlayGuideChannels\}[\s\S]*?active overlayMode/);
+  assert.match(player, /<PlayerGuidePanel/);
+  assert.match(guidePanel, /<NativeGuideCanvas/);
+  assert.match(guidePanel, /overlayMode=\{mode === "overlay"\}/);
+  assert.match(player, /style=\{showPlayerGuidePreview \?/);
+  assert.equal((player.match(/<StreamPlayer\\b/g) || []).length, 1);
+  assert.doesNotMatch(guidePanel, /<StreamPlayer\\b/);
   assert.match(player, /!hasPin \|\| !isGroupLocked\(providerGroupIdentity\(item\.group\)\)/);
   assert.match(player, /void patchProgramsForChannelIds\(ids, priorityIds\)/);
   assert.match(player, /resetRemoteContextIfOwned\("guide", "player"\)/);
   assert.match(manager, /ReactProp\(name = "overlayMode"/);
   const paints = native.slice(native.indexOf("fun setOverlayMode"), native.indexOf("fun setClock24h"));
-  assert.match(paints, /background\.alpha = if \(value\) 0 else 255/);
+  assert.match(paints, /background\.alpha = if \(overlayMode\) 0 else 255/);
+  assert.match(paints, /rowSurface\.alpha = if \(overlayMode\) 0 else 255/);
+  assert.match(paints, /setBackgroundColor\(if \(overlayMode\) Color\.TRANSPARENT/);
   assert.doesNotMatch(paints, /title\.alpha|muted\.alpha/);
 });
 
