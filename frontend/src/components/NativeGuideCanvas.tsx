@@ -10,6 +10,8 @@ type Props = {
   channels: Channel[]; windowStart: string; windowEnd: string; active: boolean; restoreChannelId?: string | null; restoreTimeMs?: number | null; reloadGeneration?: number;
   clock24h?: boolean;
   overlayMode?: boolean;
+  transparencyLevel?: number;
+  enableUpBoundary?: boolean;
   showLogos?: boolean;
   pauseLogos?: boolean;
   channelNumberById: Record<string, number>;
@@ -35,6 +37,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   reloadGeneration = 0,
   clock24h = false,
   overlayMode = false,
+  transparencyLevel = 50,
+  enableUpBoundary = false,
   showLogos = true,
   pauseLogos = false,
   channelNumberById,
@@ -148,6 +152,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       style={{ flex: 1 }}
       channels={nativeChannels}
       overlayMode={overlayMode}
+      transparencyLevel={transparencyLevel}
+      enableUpBoundary={enableUpBoundary}
       showLogos={showLogos}
       onLogoViewport={handleLogoViewport}
       rightBoundaryEnabled={!!onRightBoundary}

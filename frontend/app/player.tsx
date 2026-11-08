@@ -51,7 +51,9 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { Channel } from "@/src/api";
 import { multiview } from "@/src/multiview";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
-import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
+import { PlayerGuidePanel } from "@/src/components/PlayerGuidePanel";
+import { guidePreviewLayout } from "@/src/core/guidePreviewLayout";
+import { useGuidePresentation } from "@/src/core/guidePresentation";
 import { setGuideScreenActive } from "@/src/utils/guideSurfGate";
 import { setViewportGuideChannelIds, setPriorityMatchChannelIds } from "@/src/source";
 import { useParentalPin } from "@/src/core/parentalPin";
@@ -90,6 +92,7 @@ export default function PlayerScreen() {
   const appPolicy=useAppPolicy();
   const router = useRouter();
   const [guideOverlayOpen, setGuideOverlayOpen] = useState(false);
+  const guidePresentation = useGuidePresentation();
   const guideOverlayOpenRef = useRef(false);
   guideOverlayOpenRef.current = guideOverlayOpen;
   const { windowStart: guideWindowStart, windowEnd: guideWindowEnd, patchProgramsForChannelIds } = useStore();
@@ -113,6 +116,7 @@ export default function PlayerScreen() {
   const {
     channels,
     recent,
+    favorites,
     channelById,
     addRecent,
     toggleFavorite,
@@ -193,6 +197,12 @@ export default function PlayerScreen() {
   overlayOpenRef.current = playerOverlay !== null;
   keepControlsRef.current = status === "error" || !channelById(channelId)?.url;
   const safe = useMemo(() => getTvSafeInsets(width, height, deviceLayoutMode), [deviceLayoutMode, height, width]);
+  const guidePreviewWidth = useMemo(() => guidePreviewLayout(width - safe.left - safe.right - 28).previewWidth,
+    [safe.left, safe.right, width]);
+  const guidePreviewHeight = guidePreviewWidth * 9 / 16;
+  // The SAME fullscreen Media3 surface is resized for the small preview window.
+  // Do not mount a second player: duplicate codecs caused prior low-RAM crashes.
+  const showPlayerGuidePreview = guideOverlayOpen && isTV && guidePresentation.mode === "preview";
   const channelMeta = useMemo(() => channelById(channelId), [channelById, channelId]);
   const channelPrograms = useGuidePrograms(channelId);
   const channel = useMemo(() => (channelMeta ? { ...channelMeta, programs: channelPrograms } : undefined), [channelMeta, channelPrograms]);
@@ -607,7 +617,10 @@ export default function PlayerScreen() {
               }
             }}
             onStatus={handleStreamStatus}
-            style={StyleSheet.absoluteFill}
+            style={showPlayerGuidePreview ? {
+              position: "absolute", left: safe.left + 14, top: insets.top + safe.top + 20,
+              width: guidePreviewWidth, height: guidePreviewHeight,
+            } : StyleSheet.absoluteFill}
           />
         </ErrorBoundary>
       ) : null}
@@ -717,18 +730,39 @@ export default function PlayerScreen() {
         </>
       ) : null}
       {guideOverlayOpen ? (
-        <View style={{ position: "absolute", left: safe.left + 14, right: safe.right + 14, bottom: safe.bottom + 12, height: "62%", zIndex: 40 }} testID="player-transparent-guide">
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(12,7,26,0.8)", padding: 8 }}>
-            <Text style={{ flex: 1, color: "#fff", fontFamily: fonts.semibold }}>TV Guide · {channel?.name || "Live TV"}</Text>
-            <Pressable onPress={() => setGuideOverlayOpen(false)} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Text style={styles.controlLabel}>Close guide</Text></Pressable>
-          </View>
-          <NativeGuideCanvas channels={overlayGuideChannels} windowStart={guideWindowStart} windowEnd={guideWindowEnd} active overlayMode showLogos={channelLogos} restoreChannelId={channelId} channelNumberById={numberById}
-            onChannelFocus={() => undefined} onProgramFocus={() => undefined}
-            onChannelPress={(next) => { changeChannel(next.id, true); setGuideOverlayOpen(false); }}
-            onProgramPress={(_program, next) => { changeChannel(next.id, true); setGuideOverlayOpen(false); }}
-            onViewportChannelIds={(ids, priorityIds) => { setViewportGuideChannelIds(ids); setPriorityMatchChannelIds(priorityIds); void patchProgramsForChannelIds(ids, priorityIds); }}
-            onLeftBoundary={() => undefined} onUpBoundary={() => setGuideOverlayOpen(false)} />
-        </View>
+        <PlayerGuidePanel
+          mode={guidePresentation.mode}
+          transparency={guidePresentation.transparency}
+          animationEnabled={guidePresentation.animate}
+          autoplayOnFocus={guidePresentation.autoplayOnFocus}
+          stayInGuide={guidePresentation.stayInGuide}
+          safeLeft={safe.left}
+          safeRight={safe.right}
+          safeTop={insets.top + safe.top}
+          safeBottom={insets.bottom + safe.bottom}
+          previewWidth={guidePreviewWidth}
+          previewHeight={guidePreviewHeight}
+          channels={overlayGuideChannels}
+          favoriteIds={favorites}
+          playingChannel={channel}
+          playingCurrent={current}
+          playingNext={next}
+          windowStart={guideWindowStart}
+          windowEnd={guideWindowEnd}
+          channelNumbers={numberById}
+          showLogos={channelLogos}
+          onTune={(nextChannel) => changeChannel(nextChannel.id, true)}
+          onDismiss={() => setGuideOverlayOpen(false)}
+          onModeChange={(mode) => guidePresentation.change({ mode })}
+          onTransparencyChange={(transparency) => guidePresentation.change({ transparency })}
+          onAutoplayChange={(autoplayOnFocus) => guidePresentation.change({ autoplayOnFocus })}
+          onStayChange={(stayInGuide) => guidePresentation.change({ stayInGuide })}
+          onRunway={(ids, priorityIds) => {
+            setViewportGuideChannelIds(ids);
+            setPriorityMatchChannelIds(priorityIds);
+            void patchProgramsForChannelIds(ids, priorityIds);
+          }}
+        />
       ) : null}
     </View>
   );
