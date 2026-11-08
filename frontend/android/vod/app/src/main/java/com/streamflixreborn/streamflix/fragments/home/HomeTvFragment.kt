@@ -111,6 +111,13 @@ class HomeTvFragment : Fragment() {
                                 LoggingUtils.showErrorDialog(requireContext(), state.error)
                             }
                             binding.vgvHome.visibility = View.GONE
+                            // The previous poster may still own DPAD focus while
+                            // its entire grid is hidden. Focus a visible Retry
+                            // action after the new error state is laid out.
+                            btnIsLoadingRetry.post {
+                                if (_binding != null && btnIsLoadingRetry.isShown)
+                                    btnIsLoadingRetry.requestFocus()
+                            }
                         }
                     }
                 }
