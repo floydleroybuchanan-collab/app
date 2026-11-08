@@ -3,6 +3,15 @@ p=Path('windows-decryptor-build/main_windows.go')
 s=p.read_text(encoding='utf-8')
 if '\t"os"\n' not in s:
     s=s.replace('import (\n', 'import (\n\t"os"\n',1)
+# CreateFontW is exported by GDI32, not USER32. The earlier executable
+# panicked on startup before a window appeared because the DLL was wrong.
+wrong='createFont                                                                                = dllUser.NewProc("CreateFontW")'
+correct='createFont                                                                                = dllGdi.NewProc("CreateFontW")'
+if s.count(wrong)!=1: raise SystemExit('Expected exactly one CreateFontW USER32 binding')
+s=s.replace(wrong,correct,1)
+probe='dllKernel                                                                                 = syscall.NewLazyDLL("kernel32.dll")'
+if s.count(probe)!=1: raise SystemExit('Expected one kernel32 DLL binding')
+s=s.replace(probe,probe+'\\n\\tdllGdi                                                                                    = syscall.NewLazyDLL("gdi32.dll")',1)
 marker='func main() {\n'
 replacement='''func main() {
 	defer func() {
