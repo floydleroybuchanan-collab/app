@@ -135,6 +135,10 @@ class CharmVodSurface(private val react: ThemedReactContext) : FrameLayout(react
     private fun mount() {
         if (disposed || host != null || !isAttachedToWindow) return
         val activity = react.currentActivity as? FragmentActivity ?: return
+        if (CharmVodAccountScope.activeScopePrefix() == null) {
+            event("error", "Sign in before opening your private Video On Demand library.")
+            return
+        }
         if (activity.supportFragmentManager.isStateSaved) { event("error", "Return to this screen to open the library."); return }
         try {
         // RN route transitions may overlap old/new surfaces in one activity.
