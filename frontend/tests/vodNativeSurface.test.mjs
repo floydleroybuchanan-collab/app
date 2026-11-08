@@ -110,7 +110,8 @@ test('VOD settings grid measures the host width and uses fixed safe-area padding
  const s=source('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/CharmSettingsLayout.kt');
  assert.match(s,/clipToPadding = true/);
  assert.match(s,/val leftInset = dp\(if \(embedded\) 76 else 24\)/);
- assert.match(s,/root.width.takeIf \{ it > 0 \} \?: return/);
+ assert.match(s,/root.width.takeIf \{ it > 0 \}/);
+ assert.match(s,/context.resources.displayMetrics.widthPixels/);
  assert.match(s,/coerceIn\(1, 4\)/);
  assert.match(s,/root.addOnLayoutChangeListener/);
  assert.doesNotMatch(s,/root\.width\*\.135f/);
