@@ -26,6 +26,13 @@ jobs:
         run: |
           Expand-Archive -LiteralPath 'tools/windows-decryptor/CharmingMediaLab-APK-Decryptor-Source.zip' -DestinationPath 'windows-decryptor-build' -Force
 
+      - name: Repair Windows 11 GUI startup
+        shell: pwsh
+        run: |
+          Copy-Item tools/windows-decryptor/startup_windows.go windows-decryptor-build/startup_windows.go
+          python tools/windows-decryptor/patch-startup.py
+          if ($LASTEXITCODE -ne 0) { throw 'GUI startup patch failed' }
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -39,8 +46,23 @@ jobs:
           go test ./...
           if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
           $env:CGO_ENABLED = '0'
-          go build -trimpath -ldflags="-H=windowsgui -s -w" -o '../CharmingMediaLab-APK-Decryptor.exe' .
+          go build -trimpath -ldflags="-H=windowsgui" -o '../CharmingMediaLab-APK-Decryptor.exe' .
           if ($LASTEXITCODE -ne 0) { throw 'Windows executable build failed' }
+
+      - name: Launch-test actual Windows EXE
+        shell: pwsh
+        run: |
+          $exe = Join-Path (Get-Location) 'CharmingMediaLab-APK-Decryptor.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
+          try {
+            Wait-Process -Id $process.Id -Timeout 20 -ErrorAction Stop
+          } catch {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Windows GUI startup smoke test timed out'
+          }
+          $process.Refresh()
+          if ($process.ExitCode -ne 0) { throw "Windows GUI startup smoke test failed (exit code $($process.ExitCode))" }
+          Write-Host 'Windows GUI successfully launched, initialized all controls, and exited cleanly.'
 
       - name: Package downloadable artifacts
         shell: pwsh
@@ -50,18 +72,18 @@ jobs:
           "$hash  $binary" | Set-Content -Encoding ascii SHA256.txt
           Copy-Item windows-decryptor-build/README.md README.md
           Compress-Archive -Path $binary, README.md, SHA256.txt -DestinationPath 'CharmingMediaLab-APK-Decryptor-Windows11.zip' -Force
-          Copy-Item tools/windows-decryptor/CharmingMediaLab-APK-Decryptor-Source.zip 'CharmingMediaLab-APK-Decryptor-Source.zip'
+          Compress-Archive -Path 'windows-decryptor-build/*' -DestinationPath 'CharmingMediaLab-APK-Decryptor-Source.zip' -Force
 
       - name: Publish GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'windows-decryptor-v1.0.0'
+          $tag = 'windows-decryptor-v1.0.1'
           $assets = @('CharmingMediaLab-APK-Decryptor.exe', 'CharmingMediaLab-APK-Decryptor-Windows11.zip', 'CharmingMediaLab-APK-Decryptor-Source.zip', 'SHA256.txt')
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
           } else {
-            gh release create $tag @assets --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Charming MediaLab APK Decryptor for Windows 11' --notes 'Standalone Windows APK decryptor with RSA PKCS#8, RSA PKCS#1, and password-encrypted PKCS#8 PEM support. No private keys included. See README.md in the ZIP.' --latest=false
+            gh release create $tag @assets --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Charming MediaLab APK Decryptor for Windows 11' --notes 'Windows 11 launch fix: native UI thread pinning, startup error dialogs, and Windows GUI launch smoke test. Three PEM formats remain supported. No private keys included. The EXE is not publisher-signed.' --latest=false
           }
