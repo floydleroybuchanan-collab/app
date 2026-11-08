@@ -44,6 +44,11 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
         (list.parent as? ViewGroup)?.removeView(list)
         list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = false
         list.setPadding(0,0,0,0); list.itemAnimator = null
+        // RecyclerView is inside a wrapping NestedScrollView. It must have a
+        // LayoutManager *before* its first measure or the list measures empty
+        // and the parent never gives the settings rows usable height.
+        // Upgrade to the actual host-width column count after first layout.
+        list.layoutManager = GridLayoutManager(context, 1)
         content.addView(title); content.addView(subtitle); content.addView(row)
         row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
         // React's compact navigation rail is 52dp and animates into place.
