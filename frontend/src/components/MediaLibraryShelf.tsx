@@ -5,6 +5,8 @@ import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { usePurpleTvDrawer } from "./PurpleTvShell";
 import { openMediaLibrary } from "@/src/core/mediaLibrary";
+import { readVodSnapshot, subscribeVodSnapshot } from "@/src/core/vodRecentSnapshot";
+import { useAuth } from "@/src/auth/AuthContext";
 import { useProviderLibrary } from "@/src/core/providerLibrary";
 import { usePlaylists } from "@/src/core/playlistRegistry";
 
@@ -12,6 +14,8 @@ type Item = { id: string; title: string; poster?: string; section: string };
 /** Uses the same native catalog, account, and watch database as the VOD screens. */
 export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "continue" | "favorites"; query?: string }) {
   const focused = useIsFocused(), router = useRouter();
+  const { user } = useAuth();
+  const accountId = user?.id || null;
   const providerLibrary = useProviderLibrary(), playlists = usePlaylists();
   const { openDrawer } = usePurpleTvDrawer();
   const [items, setItems] = useState<Item[]>([]), [error, setError] = useState("");
@@ -25,15 +29,33 @@ export function MediaLibraryShelf({ kind = "continue", query }: { kind?: "contin
     return () => subscription.remove();
   }, [kind, query]);
   useEffect(() => {
+    // Account changes must not display the previous account's stored history.
+    setItems([]);
+  }, [accountId, kind, query]);
+
+  useEffect(() => {
     if (!focused || Platform.OS !== "android") return;
     let active = true;
+    let updated = false;
+    const unsubscribe = query === undefined
+      ? subscribeVodSnapshot(accountId, kind, next => { if (active) { updated = true; setItems(next); setError(""); } })
+      : () => undefined;
     const timer = setTimeout(() => {
       setError("");
-      const request = query !== undefined ? NativeModules.CharmVod?.searchLibrary(query) : NativeModules.CharmVod?.libraryItems(kind);
-      Promise.resolve(request).then(value => { if (active) setItems(value ? JSON.parse(value) : []); }).catch(() => { if (active) { setItems([]); setError("Catalog unavailable. You can still open your library."); } });
+      if (query !== undefined) {
+        // An explicit user search is allowed to request fresh VOD data.
+        Promise.resolve(NativeModules.CharmVod?.searchLibrary(query))
+          .then(value => { if (active) setItems(value ? JSON.parse(value) : []); })
+          .catch(() => { if (active) { setItems([]); setError("Search unavailable. Open VOD to retry."); } });
+      } else {
+        // Live TV NEVER calls CharmVod.libraryItems: that IPC can spawn :vod.
+        void readVodSnapshot(accountId, kind)
+          .then(value => { if (active && !updated) setItems(value); })
+          .catch(() => { if (active && !updated) setItems([]); });
+      }
     }, query !== undefined ? 350 : 0);
-    return () => { active = false; clearTimeout(timer); };
-  }, [focused, kind, query, revision]);
+    return () => { active = false; clearTimeout(timer); unsubscribe(); };
+  }, [accountId, focused, kind, query, revision]);
   const open = async (section: string) => {
     if (busy.current) return;
     busy.current = true; setOpening(true);
