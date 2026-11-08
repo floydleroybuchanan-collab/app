@@ -57,6 +57,10 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     @ReactMethod fun libraryItems(kind: String, promise: Promise) = readLibrary(if (kind == "favorites") "favorites" else "continue", null, promise)
     @ReactMethod fun searchLibrary(query: String, promise: Promise) = readLibrary("search", query.take(200), promise)
     @ReactMethod fun configureSurface(settings: String, promise: Promise) {
+        if (com.streamflixreborn.streamflix.charm.CharmVodAccountScope.activeScopePrefix() == null) {
+            promise.reject("E_VOD_ACCOUNT_SCOPE", "Sign in to open your private Video On Demand library.")
+            return
+        }
         context.runOnUiQueueThread {
             // JS cleanup intentionally tolerates release errors. VOD must not
             // acquire a second decoder when native ownership is still uncertain.
