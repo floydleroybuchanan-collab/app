@@ -41,6 +41,17 @@ object CharmVodAccountScope {
         dbPrefix = if (originalOwner == accountHash) "" else "acct_" + accountHash.take(24) + "_"
     }
 
+    /** The private :vod ContentProvider receives only this opaque file prefix. */
+    fun activeScopePrefix(): String? = dbPrefix.takeUnless { it == "not_signed_in" }
+
+    /** Only same-UID callers can enter the content provider; reject other prefixes. */
+    fun activateVerifiedPrefix(prefix: String?): Boolean {
+        if (prefix == null || (prefix.isNotEmpty() && !prefix.matches(Regex("acct_[a-f0-9]{24}_"))))
+            return false
+        dbPrefix = prefix
+        return true
+    }
+
     /** Stable for the lifetime of each Room wrapper; no directory traversal. */
     fun databaseFileName(sanitizedProvider: String): String = dbPrefix + sanitizedProvider + ".db"
 }
