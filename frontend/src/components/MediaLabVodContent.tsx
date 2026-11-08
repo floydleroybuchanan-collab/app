@@ -14,12 +14,14 @@ import { useDonation } from "./DonationDialog";
 import { MediaLabArt } from "./MediaLabBrand";
 import { XtreamProviderBrowser } from "./XtreamProviderBrowser";
 import { UnifiedVodOverview } from "./UnifiedVodOverview";
+import { PLAYLIST_VOD_ENABLED } from "@/src/core/vodFeatureFlags";
 
 const Surface = Platform.OS === "android" ? requireNativeComponent<any>("CharmVodSurface") : View;
-const sections = [["all", "All VOD"], ["home", "Streamflix"], ["movies", "Movies"], ["series", "Series"], ["favorites", "My list"], ["search", "Search"], ["provider-xtream", "Xtream"], ["provider-stalker", "Stalker"]] as const;
+const sections = [["all", "All VOD"], ["home", "Streamflix"], ["movies", "Movies"], ["series", "Series"], ["favorites", "My list"], ["search", "Search"], ...(PLAYLIST_VOD_ENABLED ? [["provider-xtream", "Xtream"], ["provider-stalker", "Stalker"]] : [])] as const;
 
 function entrySection(value: string, settings: boolean) {
   if (settings) return value;
+  if (!PLAYLIST_VOD_ENABLED && (value.startsWith("provider:") || value === "provider" || value === "provider-xtream" || value === "provider-stalker")) return "all";
   return value === "sources" || value === "accounts" || value === "settings" || value === "home" ? "all" : value;
 }
 
@@ -37,7 +39,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [section, setSection] = useState(() => entrySection(initialSection, settings));
   const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
-  const providerMode = section === "provider" || section === "provider-xtream" || section === "provider-stalker" || !!providerParts;
+  const providerMode = PLAYLIST_VOD_ENABLED && (section === "provider" || section === "provider-xtream" || section === "provider-stalker" || !!providerParts);
   const nativeMode = !providerMode && section !== "all";
   const [ready, setReady] = useState(false);
   const captureShelf = useCallback(() => {
@@ -125,7 +127,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     {focused && nativeMode && !ready && !error && Platform.OS === "android" ? <View style={styles.status}><ActivityIndicator color={tvColors.focus} /><Text style={styles.label}>Opening Video On Demand…</Text></View> : null}
     {focused && nativeMode && Platform.OS !== "android" ? <Text style={styles.status}>The built-in video catalog is available on Android.</Text> : null}
     {focused && section === "all" && !settings ? <UnifiedVodOverview onOpen={setSection} /> : null}
-    {providerMode ? <XtreamProviderBrowser allowedProtocol={section === "provider-xtream" ? "xtream" : section === "provider-stalker" ? "stalker" : undefined} initialTitle={providerParts ? { owner: providerParts[1], kind: providerParts[2] as "movie" | "series", catalogId: providerParts[3] } : undefined} onClose={() => setSection("all")} /> : null}
+    {PLAYLIST_VOD_ENABLED && providerMode ? <XtreamProviderBrowser allowedProtocol={section === "provider-xtream" ? "xtream" : section === "provider-stalker" ? "stalker" : undefined} initialTitle={providerParts ? { owner: providerParts[1], kind: providerParts[2] as "movie" | "series", catalogId: providerParts[3] } : undefined} onClose={() => setSection("all")} /> : null}
     {focused && ready && nativeMode && Platform.OS === "android" ? <Surface style={{ flex: 1 }} toolbarFocusTag={toolbarFocusTag || 0} section={section} television={shouldUseTvLayout(deviceLayoutMode)}
       onVodEvent={({ nativeEvent }: any) => {
         if (nativeEvent.kind === "error") setError(nativeEvent.value);
@@ -141,14 +143,20 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
           snapshotTimer.current = setTimeout(captureShelf, value ? 2400 : 650);
         }
         if (nativeEvent.kind === "route") {
-          // Capture before leaving the native screen; future Live TV display
-          // consumes the saved snapshot without launching the :vod process.
+          // A playback-start Room commit sends this notification. It is data,
+          // NEVER a navigation request: routing it to "/" ejects the player
+          // straight back to Live TV as the first movie starts buffering.
+          if (nativeEvent.value === "medialab:library-updated") {
+            captureShelf();
+            return;
+          }
           captureShelf();
           if (nativeEvent.value === "medialab:provider-changed") { router.replace("/vod"); return; }
           if (nativeEvent.value === "medialab:donate") { showDonation(); return; }
-          if (nativeEvent.value === "/settings") router.replace("/settings");
-          else if (nativeEvent.value === "medialab:drawer") openDrawer({ focusTop: true });
-          else router.replace("/");
+          if (nativeEvent.value === "/settings") { router.replace("/settings"); return; }
+          if (nativeEvent.value === "medialab:drawer") { openDrawer({ focusTop: true }); return; }
+          if (nativeEvent.value === "/") { router.replace("/"); return; }
+          // Unknown native events must never destroy the active player.
         }
       }} /> : null}
   </View>;
