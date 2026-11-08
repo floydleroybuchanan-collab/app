@@ -36,6 +36,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
   const { user } = useAuth();
   const accountId = user?.id || null;
   const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backInFlight = useRef(false);
   const [section, setSection] = useState(() => entrySection(initialSection, settings));
   const providerParts = /^provider:([a-z0-9-]+):(movie|series):([A-Za-z0-9_-]{1,64})$/.exec(section);
   const providerMode = PLAYLIST_VOD_ENABLED && (section === "provider" || section === "provider-xtream" || section === "provider-stalker" || !!providerParts);
@@ -85,14 +86,30 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
     }
   }, [focused, providerMode]);
   useEffect(() => () => { if (snapshotTimer.current) clearTimeout(snapshotTimer.current); }, []);
+  const vodHome = useCallback(() => {
+    setError(null);
+    // React can still say section="home" while the native stack contains
+    // Home > Movie > Player. Explicit native Home always resets that stack.
+    setSection("home");
+    if (Platform.OS === "android") {
+      void Promise.resolve(NativeModules.CharmVod?.surfaceHome?.())
+        .then(ok => { if (ok === false) setError("Could not return to VOD Home. Try again."); })
+        .catch(() => setError("Could not return to VOD Home. Try again."));
+    }
+  }, []);
   const back = useCallback(() => {
-    if (providerMode) { setSection("all"); return; }
-    const fallback = () => { if (settings) router.replace("/settings"); else if (nativeMode) setSection("all"); else openDrawer({ focusTop: true }); };
-    if (!nativeMode) { fallback(); return; }
-    void Promise.resolve(NativeModules.CharmVod?.surfaceBack()).then(handled => {
-      if (!handled) fallback();
-    }).catch(fallback);
-  }, [nativeMode, openDrawer, providerMode, router, settings]);
+    if (backInFlight.current) return;
+    if (providerMode) { vodHome(); return; }
+    if (settings) { router.replace("/settings"); return; }
+    if (!nativeMode) { vodHome(); return; }
+    backInFlight.current = true;
+    // A failed/pop-at-root Back may return to native Home, but it must never
+    // setSection("all") (which unmounts the native player/catalog surface).
+    void Promise.resolve(NativeModules.CharmVod?.surfaceBack?.())
+      .then(handled => { if (handled === false) vodHome(); })
+      .catch(() => vodHome())
+      .finally(() => { backInFlight.current = false; });
+  }, [nativeMode, providerMode, router, settings, vodHome]);
   useEffect(() => {
     if (!focused || providerMode || !nativeMode) return;
     const listener = BackHandler.addEventListener("hardwareBackPress", () => { back(); return true; });
@@ -121,6 +138,7 @@ export function MediaLabVodContent({ initialSection = "home", settings = false, 
             accessibilityRole="button" accessibilityState={{ selected: value === section }}
             onPress={() => {
               if (value === "back") { if (settings) router.replace("/settings"); else back(); return; }
+              if (value === "home") { vodHome(); return; }
               if (value === "menu") {
                 void Promise.resolve(NativeModules.CharmVod?.surfaceMenu?.()).catch(() => setError("Could not open VOD options. Try again."));
                 return;
