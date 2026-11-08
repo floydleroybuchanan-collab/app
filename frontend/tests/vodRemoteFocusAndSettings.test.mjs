@@ -35,7 +35,7 @@ test("VOD content retains remote focus, artwork is decorative", () => {
   assert.match(native, /retainDetailFocusOnLeft\(\)/);
   assert.match(native, /VodR\.id\.movie, VodR\.id\.tv_show/);
   assert.match(shell, /active !== "\/vod"/);
-  assert.match(art, /accessible=\{false\} focusable=\{false\}/);
+  assert.match(art, /accessible=\{false\} importantForAccessibility="no"/);
 });
 test("VOD settings begin below Back and back control is compact", () => {
   const page = source("src/components/MediaLabVodContent.tsx");
