@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.doOnLayout
-import androidx.core.widget.NestedScrollView
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceGroup
@@ -29,9 +28,15 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
     private val subtitle = TextView(context).apply { textSize = 13f; setTextColor(0xFFC1B9D1.toInt()); setPadding(0,0,0,dp(22)) }
     private val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
     private val sections = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    val root = NestedScrollView(context).apply {
-        setBackgroundColor(Color.TRANSPARENT); clipToPadding = true; isFillViewport = true
-        addView(content, ViewGroup.LayoutParams(-1,-2))
+    // The settings page itself owns the entire VOD content viewport.
+    // There is NO second clipped NestedScrollView framing the cards.
+    // RecyclerView scrolls the native preference controls directly.
+    val root = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(Color.TRANSPARENT)
+        clipToPadding = true
+        clipChildren = true
+        addView(content, LinearLayout.LayoutParams(-1, -1))
     }
     private var overview = true
     private var appliedColumns = -1
@@ -42,26 +47,31 @@ internal class CharmSettingsLayout(private val list: RecyclerView, private val e
     )
     init {
         (list.parent as? ViewGroup)?.removeView(list)
-        list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = false
+        list.setBackgroundColor(Color.TRANSPARENT); list.isNestedScrollingEnabled = true
         list.setPadding(0,0,0,0); list.itemAnimator = null
         // RecyclerView is inside a wrapping NestedScrollView. It must have a
         // LayoutManager *before* its first measure or the list measures empty
         // and the parent never gives the settings rows usable height.
         // Upgrade to the actual host-width column count after first layout.
         list.layoutManager = GridLayoutManager(context, 1)
-        content.addView(title); content.addView(subtitle); content.addView(row)
-        row.addView(list, LinearLayout.LayoutParams(0,-2,1f))
-        // React's compact navigation rail is 52dp and animates into place.
-        // Protect the first column even if the native fragment measures before
-        // that rail finishes resizing its host. Standalone VOD stays unchanged.
+        content.addView(title)
+        content.addView(subtitle)
+        // Fill the space below the native artwork/settings title, not the
+        // full height of every preference row (which caused clipped cards).
+        content.addView(row, LinearLayout.LayoutParams(-1, 0, 1f))
+        row.addView(list, LinearLayout.LayoutParams(0, -1, 1f))
+        // Preserve a left safety inset beside the 52dp React navigation rail,
+        // even while the embedded native VOD surface finishes resizing.
         val leftInset = dp(if (embedded) 76 else 24)
         val rightInset = dp(24)
         content.setPadding(leftInset, 0, rightInset, dp(36))
         root.clipToPadding = true
         root.clipChildren = true
         list.clipToPadding = true
+        list.clipChildren = true
+        list.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         root.doOnLayout {
-            root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, dp(24))
+            root.setPadding(0, CharmVodPageLayout.contentTop(root), 0, dp(12))
             updateGridColumns()
         }
         root.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
