@@ -2,7 +2,7 @@ name: Build Charming MediaLab RC.25.1 Update Sideload APK
 
 on:
   workflow_dispatch:
-  # Test a signed owner-only build for this same-repository focus repair PR.
+  # Test a signed owner-only build for the unified single-Activity VOD PR.
   # Fork PRs never receive signing or provider secrets.
   pull_request:
     branches: [main]
@@ -48,7 +48,7 @@ concurrency:
 jobs:
   build:
     name: Build Charming MediaLab RC.25.1 updateable universal sideload APK
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'fix/tv-focus-vod-guide-20261109' || github.head_ref == 'feature/vod-ux-platforms-rc25-20261109') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/feature/multiple-playlists-test-1') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'fix/tv-focus-vod-guide-20261109' || github.head_ref == 'feature/vod-ux-platforms-rc25-20261109' || github.head_ref == 'fix/unified-vod-one-activity-20261109') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/feature/multiple-playlists-test-1') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
