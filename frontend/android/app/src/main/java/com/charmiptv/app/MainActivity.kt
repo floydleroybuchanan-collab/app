@@ -174,7 +174,47 @@ class MainActivity : ReactActivity() {
     }
   }
 
+  // The only Android Activity owns native VOD and host remote input together.
+  // The callback belongs to the mounted RN native view and is detached with it.
+  private var vodInputOwner: Any? = null
+  private var vodKeyHandler: ((android.view.KeyEvent) -> Boolean)? = null
+  private var vodBackHandler: (() -> Boolean)? = null
+  private var vodBackKeyDownConsumed = false
+
+  fun attachVodInput(
+    owner: Any,
+    onKey: (android.view.KeyEvent) -> Boolean,
+    onBack: () -> Boolean,
+  ) {
+    vodInputOwner = owner
+    vodKeyHandler = onKey
+    vodBackHandler = onBack
+  }
+
+  fun detachVodInput(owner: Any) {
+    if (vodInputOwner !== owner) return
+    vodInputOwner = null
+    vodKeyHandler = null
+    vodBackHandler = null
+    vodBackKeyDownConsumed = false
+  }
+
+  override fun onBackPressed() {
+    if (vodBackHandler?.invoke() == true) return
+    super.onBackPressed()
+  }
+
   override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    if (vodBackKeyDownConsumed && event.action == android.view.KeyEvent.ACTION_UP &&
+        event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+      vodBackKeyDownConsumed = false
+      return true
+    }
+    if (vodKeyHandler?.invoke(event) == true) {
+      if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_BACK)
+        vodBackKeyDownConsumed = true
+      return true
+    }
     if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == shellBoundaryKeyDown) {
       shellBoundaryKeyDown = -1
       return true
@@ -505,6 +545,10 @@ class MainActivity : ReactActivity() {
     TvRemoteModule.pointerActive = false
     TvRemoteModule.guideNavigationActive = false
     TvRemoteModule.remoteContext = "default"
+    vodInputOwner = null
+    vodKeyHandler = null
+    vodBackHandler = null
+    vodBackKeyDownConsumed = false
     super.onDestroy()
   }
 
