@@ -34,7 +34,7 @@ class VodPlatformBadgeView(
     }
     fun glass(focused: Boolean): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TL_BR,
-        if (focused) intArrayOf(0x9A9F63CF.toInt(), 0xAB231A43.toInt(), 0x803B1854)
+        if (focused) intArrayOf(0x9A9F63CF.toInt(), 0xAB231A43.toInt(), 0x803B1854.toInt())
         else intArrayOf(0x6BFFFFFF, 0x85331D54.toInt(), 0x633A225E)
     ).apply {
         cornerRadius = dp(if (small) 12 else 17).toFloat()
