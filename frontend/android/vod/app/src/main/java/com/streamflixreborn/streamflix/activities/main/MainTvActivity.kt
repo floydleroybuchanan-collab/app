@@ -80,8 +80,10 @@ class MainTvActivity : FragmentActivity() {
         }
 
         if (savedInstanceState == null) {
-            UserPreferences.currentProvider?.let {
-                navController.navigate(R.id.home)
+            if (intent.getBooleanExtra("openVodSettings", false)) {
+                navController.navigate(R.id.settings)
+            } else {
+                UserPreferences.currentProvider?.let { navController.navigate(R.id.home) }
             }
         }
 
