@@ -104,7 +104,7 @@ class VodRootFragment : Fragment() {
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (isVisible && view != null && view?.isShown == true) {
+                    if (isVisible && _binding?.root?.hasFocus() == true) {
                         navigateBack()
                     } else {
                         isEnabled = false
