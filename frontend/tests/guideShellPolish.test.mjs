@@ -126,7 +126,7 @@ test("drawer shell boots closed with an icon rail outside the Guide grid", async
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
   assert.match(shell, /testID="purple-icon-rail"/);
   assert.match(shell, /showIconRail \? \(/);
-  assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
+  assert.match(shell, /!drawerOpen && !suppressIconRail && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(shell, /onPress=\{\(\) => navigate\(item\.route, "rail"\)\}/);
   assert.match(shell, /setRemoteContext\("icon_rail"\)/);
   assert.match(shell, /isGuideSurfing/);
