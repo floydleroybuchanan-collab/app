@@ -147,7 +147,9 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
 
   const closeDrawer = useCallback((options?: { force?: boolean }) => {
     if (!drawerOpenRef.current) return;
-    if (!options?.force && Date.now() - openedAtRef.current < PURPLE_DRAWER_ANIMATION_MS + 70) return;
+    // Allow an intentional close while the native-driver animation is running.
+    // Animated.timing cancels/reverses cleanly; ignoring the key causes lag and
+    // lets a second D-pad event travel into a different focus tree.
     drawerOpenRef.current = false;
     setFocusDrawerTop(false);
     setDrawerOpen(false);
@@ -275,6 +277,9 @@ export function PurpleTvShell({
   const onIconRailNavigateRef = useRef(onIconRailNavigate);
   const onIconRailOpenMainDrawerRef = useRef(onIconRailOpenMainDrawer);
   const guideGroupRefs = useRef(new Map<string, unknown>());
+  const lastDrawerRouteRef = useRef<Route | null>(null);
+  const lastDrawerGroupRef = useRef<string | null>(null);
+  const lastGuideDrawerTransferRef = useRef(0);
   const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
@@ -398,6 +403,10 @@ export function PurpleTvShell({
     const off = active === "/guide"
       ? addTvKeyListener((key) => {
           if (key !== "RIGHT") return;
+          // A held key must transfer focus only once per animation window.
+          const now = Date.now();
+          if (now - lastGuideDrawerTransferRef.current < PURPLE_DRAWER_ANIMATION_MS + 60) return;
+          lastGuideDrawerTransferRef.current = now;
           // This is an intentional drawer-to-drawer boundary transition, not an
           // accidental close during animation. Main must be gone before Groups
           // becomes remote owner or both focus trees can be live at once.
@@ -428,9 +437,12 @@ export function PurpleTvShell({
       return;
     }
 
-    const preferredGuideGroupName =
-      !focusDrawerTop && active === "/guide" ? activeGuideGroupName : null;
-    const preferredRoute: Route | null = preferredGuideGroupName ? null : focusDrawerTop ? NAV[0].route : active;
+    const preferredGuideGroupName = !focusDrawerTop && active === "/guide"
+      ? (guideGroups?.some((item) => item.name === lastDrawerGroupRef.current)
+          ? lastDrawerGroupRef.current : activeGuideGroupName)
+      : null;
+    const preferredRoute: Route | null = preferredGuideGroupName
+      ? null : focusDrawerTop ? NAV[0].route : (lastDrawerRouteRef.current || active);
     if (focusDrawerTop) consumeFocusDrawerTop();
     setDrawerPreferredRoute(preferredRoute);
     setDrawerAutoFocus(true);
@@ -444,7 +456,7 @@ export function PurpleTvShell({
     return () => {
       cancelFocus?.();
     };
-  }, [active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
+  }, [active, isFocused, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
 
   const reopenArmedAtRef = useRef(0);
   useFocusEffect(
@@ -563,6 +575,7 @@ export function PurpleTvShell({
         }}
         focusable={drawerOpen}
         hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === item.route}
+        onFocus={() => { if (drawerOpen) lastDrawerRouteRef.current = item.route; }}
         onPress={() => navigate(item.route)}
         style={({ focused }: any) => [
           styles.navRow,
@@ -655,7 +668,8 @@ export function PurpleTvShell({
                       else guideGroupRefs.current.delete(item.name);
                     }}
                     focusable={drawerOpen}
-                    hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === null && !!item.active}
+                    hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === null && item.name === (lastDrawerGroupRef.current || activeGuideGroupName)}
+                    onFocus={() => { if (drawerOpen) lastDrawerGroupRef.current = item.name; }}
                     onPress={item.onPress}
                     onLongPress={item.onLongPress}
                     delayLongPress={420}
