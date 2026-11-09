@@ -218,7 +218,10 @@ class VodPlatformsFragment : Fragment() {
             Glide.with(holder.poster).load(imageUrl).override(dp(126), dp(172)).centerCrop().into(holder.poster)
             holder.frame.setOnClickListener {
                 val id = if (show is Movie) R.id.movie else R.id.tv_show
-                findNavController().navigate(id, Bundle().apply { putString("id", show.id) })
+                findNavController().navigate(id, Bundle().apply { putString("id", when(show) {
+                    is Movie -> show.id
+                    is TvShow -> show.id
+                }) })
             }
         }
         override fun onViewRecycled(holder: PosterHolder) {
