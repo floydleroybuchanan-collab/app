@@ -14,7 +14,7 @@ test("VOD root BACK opens the single Charming MediaLab drawer; nested pages navi
     source("android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt"),
   ]);
   assert.match(embedded, /private fun handleBack\(\)/);
-  assert.match(embedded, /if \(!playerHandled && !nav\.navigateUp\(\)\) event\("topRequestMainDrawer"\)/);
+  assert.match(embedded, /fragment is PlayerTvFragment &&/);\n  assert.match(embedded, /fragment\.view != null/);\n  assert.match(embedded, /if \(!playerHandled && !nav\.navigateUp\(\)\) event\("topRequestMainDrawer"\)/);
   assert.match(embedded, /event\("topRequestMainDrawer"\)/);
   assert.match(host, /openDrawer\(\{ force: true \}\)/);
   assert.match(host, /onRequestMainDrawer=\{openMainDrawer\}/);
