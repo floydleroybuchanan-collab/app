@@ -109,7 +109,7 @@ internal object SettingsListStyler {
             view.setTag(R.id.settings_row_defaults, it)
         }
         val titleText = title.text?.toString().orEmpty()
-        val hasChevron = view.findViewById<View>(R.id.settings_chevron) != null
+        val hasChevron = view.isFocusable || view.findViewById<View>(R.id.settings_chevron) != null
         if (!hasChevron) {
             layoutParams?.setMargins(
                 defaults.marginLeft,
@@ -146,9 +146,9 @@ internal object SettingsListStyler {
         val titleColor = palette.tvHeaderPrimary
         val summaryColor = palette.tvHeaderSecondary
         val accentColor = palette.mobileNavActive
-        val rowBackgroundColor = ColorUtils.blendARGB(surfaceColor, titleColor, if (isTv) 0.09f else 0.07f)
+        val rowBackgroundColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, titleColor, 0.22f), if (isTv) 128 else 160)
         val rowBorderColor = ColorUtils.blendARGB(surfaceColor, summaryColor, 0.42f)
-        val rowHighlightColor = ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.22f else 0.18f)
+        val rowHighlightColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.34f else 0.25f), 196)
         val rowHighlightBorderColor = ColorUtils.blendARGB(surfaceColor, accentColor, 0.62f)
 
         layoutParams?.setMargins(
