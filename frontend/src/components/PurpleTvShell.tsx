@@ -230,6 +230,7 @@ export function PurpleTvShell({
   guideGroups,
   watchingChannelId,
   secondaryDrawer,
+  immersiveContent = false,
   onIconRailNavigate,
   onIconRailOpenMainDrawer,
 }: {
@@ -242,6 +243,8 @@ export function PurpleTvShell({
   guideGroups?: PurpleGuideGroup[];
   watchingChannelId?: string | null;
   secondaryDrawer?: React.ReactNode;
+  /** Native VOD player temporarily occupies the full 10-foot canvas. */
+  immersiveContent?: boolean;
   onIconRailNavigate?: () => void;
   onIconRailOpenMainDrawer?: () => void;
 }) {
@@ -267,7 +270,7 @@ export function PurpleTvShell({
   const { deviceLayoutMode, activeProgram } = useStore();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && !immersiveContent && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -807,10 +810,10 @@ export function PurpleTvShell({
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
-        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
+        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
+        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
+        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
         onFocusCapture={(event: any) => {
           const tag = Number(event?.nativeEvent?.target || event?.target || 0);
           if (tag > 0) setContentReturnTag((current) => current === tag ? current : tag);
@@ -818,7 +821,7 @@ export function PurpleTvShell({
       >
         {children}
       </FocusGuide>
-      {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
+      {!immersiveContent && headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
     </View>
   );
 }
