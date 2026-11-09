@@ -22,6 +22,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.BuildConfig
+import com.streamflixreborn.streamflix.providers.TmdbProvider
+import com.streamflixreborn.streamflix.utils.TMDb3
 import com.streamflixreborn.streamflix.models.Movie
 import com.streamflixreborn.streamflix.models.Show
 import com.streamflixreborn.streamflix.models.TvShow
@@ -29,6 +32,10 @@ import com.streamflixreborn.streamflix.utils.HomeCacheStore
 import com.streamflixreborn.streamflix.utils.ParentalControlUtils
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -68,46 +75,109 @@ class VodPlatformsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val column = body ?: return
-        column.addView(label(if (platformId == null) "Platform Originals" else
-            VodPlatformCatalog.byId(platformId)?.label ?: "Platform Originals", 29f))
-        column.addView(label("Only verified originals and exclusives already present in your VOD library", 14f).apply {
+        column.addView(label(if (platformId == null) "Platforms" else
+            VodPlatformCatalog.byId(platformId)?.label?.substringBefore(" Originals") ?: "Platforms", 29f))
+        column.addView(label("Verified originals plus metadata-based network series in your own VOD catalog. Network does not mean original or available on that service.", 14f).apply {
             setTextColor(0xFFC7B3D8.toInt())
         })
         val loading = ProgressBar(requireContext()).apply { isIndeterminate = true }
         column.addView(loading, LinearLayout.LayoutParams(dp(42), dp(42)).apply { topMargin = dp(22) })
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val grouped = withContext(Dispatchers.IO) {
-                val provider = UserPreferences.currentProvider ?: return@withContext emptyMap<String, List<Show>>()
-                // Consume a bounded projection; only the selected source's Home catalog,
-                // never fetch 4000+ channel records or hold another full database.
-                val categories = HomeCacheStore.read(requireContext().applicationContext, provider)
-                    ?: runCatching { provider.getHome() }.getOrDefault(emptyList())
-                val shows = categories.asSequence().flatMap { it.list.asSequence() }
-                    .filterIsInstance<Show>()
-                    .take(1600).toList()
-                VodPlatformCatalog.match(
-                    ParentalControlUtils.filterItems(shows).filterIsInstance<Show>().asSequence(),
-                    maxPerPlatform = 60
-                )
+            val (originals, networkSeries) = withContext(Dispatchers.IO) {
+                val provider = UserPreferences.currentProvider
+                if (provider == null) {
+                    emptyMap<String, List<Show>>() to emptyMap<String, List<Show>>()
+                } else {
+                    // Scan only the user's selected provider's VOD catalog.
+                    // Never duplicate the much larger Live TV channel/EPG database.
+                    val categories = HomeCacheStore.read(requireContext().applicationContext, provider)
+                        ?: runCatching { provider.getHome() }.getOrDefault(emptyList())
+                    val shows = categories.asSequence().flatMap { it.list.asSequence() }
+                        .filterIsInstance<Show>().take(5000).toList()
+                    val allowed = ParentalControlUtils.filterItems(shows).filterIsInstance<Show>()
+                    val verified = VodPlatformCatalog.match(allowed.asSequence(), maxPerPlatform = 60)
+                    // TMDb IDs are trustworthy only with the TMDb provider.
+                    // Network association is explicitly NOT an originals badge.
+                    val networks = if (provider is TmdbProvider &&
+                        UserPreferences.enableTmdb &&
+                        (BuildConfig.TMDB_API_KEY.isNotBlank() || UserPreferences.tmdbApiKey.isNotBlank())
+                    ) loadNetworkSeries(allowed) else emptyMap()
+                    verified to networks
+                }
             }
             val current = body ?: return@launch
             current.removeView(loading)
             var shown = 0
             VodPlatformCatalog.platforms.filter { platformId == null || it.id == platformId }
                 .forEach { platform ->
-                    val items = grouped[platform.id].orEmpty()
-                    if (items.isEmpty()) return@forEach
-                    shown++
-                    addPlatformRow(current, platform, if (platformId == null) items.take(14) else items, platformId == null)
+                    val items = originals[platform.id].orEmpty()
+                    if (items.isNotEmpty()) {
+                        shown++
+                        addPlatformRow(current, platform, if (platformId == null) items.take(14) else items, platformId == null)
+                    }
+                    val associated = networkSeries[platform.id].orEmpty()
+                    if (associated.isNotEmpty()) {
+                        shown++
+                        addPlatformRow(current, platform, if (platformId == null) associated.take(14) else associated,
+                            platformId == null, platform.label.substringBefore(" Originals") + " • Network series")
+                    }
                 }
             if (shown == 0) {
-                current.addView(label("No verified platform originals found in the loaded catalog yet.", 17f).apply {
+                current.addView(label("No matching originals or network series found in the loaded VOD catalog.", 17f).apply {
                     setTextColor(0xFFC7B3D8.toInt())
                     setPadding(dp(10), dp(30), dp(10), dp(10))
                 })
             }
         }
+    }
+
+    /**
+     * Bounded TMDb network discovery for titles already present in the user's
+     * selected TMDb VOD source. Network credits must never be called Originals.
+     * Results are intentionally not stored in a new long-lived memory cache.
+     */
+    private suspend fun loadNetworkSeries(allowed: List<Show>): Map<String, List<Show>> = coroutineScope {
+        val library = allowed.filterIsInstance<TvShow>()
+            .mapNotNull { show -> show.id.toIntOrNull()?.let { it to show } }.toMap()
+        if (library.isEmpty()) return@coroutineScope emptyMap()
+
+        val networkIds = mapOf(
+            "netflix" to TMDb3.Network.NetworkId.NETFLIX.id,
+            "disney" to TMDb3.Network.NetworkId.DISNEY_PLUS.id,
+            "apple" to TMDb3.Network.NetworkId.APPLE_TV.id,
+            "hulu" to TMDb3.Network.NetworkId.HULU.id,
+            "max" to TMDb3.Network.NetworkId.HBO.id,
+            "prime" to TMDb3.Network.NetworkId.AMAZON.id,
+            "paramount" to TMDb3.Network.NetworkId.PARAMOUNT_PLUS.id,
+            "peacock" to TMDb3.Network.NetworkId.PEACOCK.id,
+        )
+        networkIds.map { (platform, networkId) ->
+            async {
+                val series = mutableListOf<Show>()
+                // Up to three pages per service, five seconds max per query.
+                // Auth/API errors degrade to the curated originals list.
+                for (page in 1..3) {
+                    val response = withTimeoutOrNull(5_000L) {
+                        runCatching {
+                            TMDb3.Discover.tv(mapOf(
+                                TMDb3.Params.Key.WITH_NETWORKS to networkId.toString(),
+                                TMDb3.Params.Key.PAGE to page.toString(),
+                                TMDb3.Params.Key.LANGUAGE to "en-US",
+                            )).results
+                        }.getOrNull()
+                    } ?: break
+                    response.forEach { remote ->
+                        val local = library[remote.id] ?: return@forEach
+                        if (VodPlatformCatalog.find(local) == null && series.none { (it as TvShow).id == local.id }) {
+                            series += local
+                        }
+                    }
+                    if (series.size >= 40) break
+                }
+                platform to series.take(40)
+            }
+        }.awaitAll().toMap()
     }
 
     private fun label(value: String, size: Float): TextView = TextView(requireContext()).apply {
@@ -118,7 +188,7 @@ class VodPlatformsFragment : Fragment() {
         setPadding(dp(6), dp(7), dp(4), dp(8))
     }
 
-    private fun addPlatformRow(column: LinearLayout, platform: VodPlatformCatalog.Platform, items: List<Show>, viewAll: Boolean) {
+    private fun addPlatformRow(column: LinearLayout, platform: VodPlatformCatalog.Platform, items: List<Show>, viewAll: Boolean, rowLabel: String = platform.label) {
         val header = LinearLayout(requireContext()).apply {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
@@ -127,7 +197,7 @@ class VodPlatformsFragment : Fragment() {
         }
         val badge = VodPlatformBadgeView(requireContext(), platform, small = true)
         header.addView(badge, LinearLayout.LayoutParams(dp(116), dp(50)))
-        header.addView(label(platform.label, 20f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+        header.addView(label(rowLabel, 20f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             leftMargin = dp(14)
         })
         if (viewAll) {
