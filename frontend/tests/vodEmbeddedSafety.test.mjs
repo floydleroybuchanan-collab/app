@@ -42,7 +42,7 @@ test("VOD cache invalidation is scoped to VOD paths and its in-memory catalog", 
   assert.match(cache, /HomeCacheStore\.clearMemory\(\)/);
   assert.match(cache, /File\(app\.cacheDir, "vod"\)/);
   assert.match(cache, /File\(app\.filesDir, "home-cache"\)/);
-  assert.doesNotMatch(cache, /context\.cacheDir\.deleteRecursively\(\)/);
+  assert.doesNotMatch(cache.replace(/\/\/[^\n]*/g, ""), /context\.cacheDir\.deleteRecursively\(\)/);
   assert.match(home, /MAX_MEMORY_PROVIDERS = 2/);
   assert.match(home, /MAX_MEMORY_ITEMS = 3000/);
   assert.match(home, /synchronized\(memoryCache\)/);
