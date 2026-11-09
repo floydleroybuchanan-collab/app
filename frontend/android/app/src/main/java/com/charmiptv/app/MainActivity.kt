@@ -199,8 +199,14 @@ class MainActivity : ReactActivity() {
     vodBackKeyDownConsumed = false
   }
 
+  private fun nativeVodOwnsFocus(): Boolean =
+    (vodInputOwner as? View)?.let { container ->
+      val focused = currentFocus
+      focused != null && within(focused, container)
+    } == true
+
   override fun onBackPressed() {
-    if (vodBackHandler?.invoke() == true) return
+    if (nativeVodOwnsFocus() && vodBackHandler?.invoke() == true) return
     super.onBackPressed()
   }
 
@@ -210,7 +216,7 @@ class MainActivity : ReactActivity() {
       vodBackKeyDownConsumed = false
       return true
     }
-    if (vodKeyHandler?.invoke(event) == true) {
+    if (nativeVodOwnsFocus() && vodKeyHandler?.invoke(event) == true) {
       if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_BACK)
         vodBackKeyDownConsumed = true
       return true
