@@ -191,6 +191,10 @@ dependencies {
     implementation 'com.github.bumptech.glide:avif-integration:4.16.0'
     implementation 'com.github.penfeizhou.android.animation:glide-plugin:3.0.5'
     implementation project(':vod')
+    // Host owns the NavHostFragment when VOD content is embedded inside the
+    // ReactActivity; library-only implementation deps are not a compile API.
+    implementation 'androidx.fragment:fragment-ktx:1.8.6'
+    implementation 'androidx.navigation:navigation-fragment-ktx:2.8.8'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation("com.facebook.react:react-android")
     // Explicit adaptive-streaming modules keep extensionless provider URLs
