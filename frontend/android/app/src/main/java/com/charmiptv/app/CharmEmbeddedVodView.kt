@@ -25,6 +25,7 @@ import com.streamflixreborn.streamflix.providers.FilmyOnlineCcProvider
 import com.streamflixreborn.streamflix.providers.GuardaSerieProvider
 import com.streamflixreborn.streamflix.providers.Provider
 import com.streamflixreborn.streamflix.providers.ZaluknijProvider
+import com.streamflixreborn.streamflix.utils.CacheUtils
 import com.streamflixreborn.streamflix.utils.UserPreferences
 
 /**
@@ -296,11 +297,18 @@ class CharmEmbeddedVodView(
             lastPlayback = false
             event("topPlaybackChanged", false)
         }
-        // Fully disconnect fragment/player references on route exit. Glide's
-        // bounded cache and on-disk provider metadata remain reusable.
+        // Fully disconnect fragment/player references on route exit. Decoded
+        // image RAM can be shed, while SQLite, EPG and last-good sources stay
+        // intact. Disk pruning runs off the UI thread AFTER player teardown,
+        // touches the private VOD namespace only, and is guarded against races.
         focusMemory = VodFocusMemory()
         lastZoneWasBar.clear()
         CharmMemoryCoordinator.trim(CharmTrimLevel.BACKGROUND)
+        if (oldHost != null) {
+            val budgetMb = (CharmMemoryCoordinator.budgets().vodCacheBytes / (1024L * 1024L))
+                .coerceAtLeast(8L)
+            CacheUtils.pruneInBackground(reactContext.applicationContext, budgetMb)
+        }
     }
 
     fun release() {
