@@ -18,6 +18,9 @@ object CacheUtils {
     private const val TAG = "VodCache"
     private const val MAX_DELETE_DEPTH = 12
     private val pruning = AtomicBoolean(false)
+    private val sessionActive = AtomicBoolean(false)
+
+    fun setSessionActive(active: Boolean) { sessionActive.set(active) }
 
     private fun internalVodCache(context: Context): File {
         val base = context.applicationContext.cacheDir
@@ -38,12 +41,16 @@ object CacheUtils {
         return root.listFiles()?.sumOf { sizeOf(it, depth + 1) } ?: 0L
     }
 
-    private fun clearDirectory(root: File?) {
+    private fun clearDirectory(root: File?, background: Boolean = false) {
         if (root == null || !root.isDirectory) return
+        // Background cleanup stops if a new VOD session opens mid-prune.
+        if (background && sessionActive.get()) return
         // Only clear children of the VOD-owned namespace. Never delete the
         // namespace itself, host cache root, guide, or app databases.
         root.listFiles()?.forEach { entry ->
-            if (!entry.deleteRecursively()) Log.w(TAG, "Unable to delete VOD cache entry: ${entry.name}")
+            if (!background || !sessionActive.get()) {
+                if (!entry.deleteRecursively()) Log.w(TAG, "Unable to delete VOD cache entry: ${entry.name}")
+            }
         }
     }
 
@@ -68,11 +75,17 @@ object CacheUtils {
 
     /** Run bounded VOD-disk maintenance only after native VOD has been unmounted. */
     fun pruneInBackground(context: Context, thresholdMb: Long = 50) {
-        if (!pruning.compareAndSet(false, true)) return
+        if (sessionActive.get() || !pruning.compareAndSet(false, true)) return
         val app = context.applicationContext
         thread(name = "charm-vod-cache-prune", isDaemon = true) {
             try {
-                autoClearIfNeeded(app, thresholdMb)
+                if (!sessionActive.get()) {
+                    val threshold = thresholdMb.coerceAtLeast(1L) * 1024L * 1024L
+                    if (getCacheSize(app) > threshold && !sessionActive.get()) {
+                        clearDirectory(internalVodCache(app), background = true)
+                        clearDirectory(externalVodCache(app), background = true)
+                    }
+                }
             } catch (error: Exception) {
                 Log.w(TAG, "VOD cache pruning failed", error)
             } finally {
