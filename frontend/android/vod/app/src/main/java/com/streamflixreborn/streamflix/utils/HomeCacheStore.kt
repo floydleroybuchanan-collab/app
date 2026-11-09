@@ -13,7 +13,6 @@ import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.models.WatchItem
 import com.streamflixreborn.streamflix.providers.Provider
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 object HomeCacheStore {
     private val gson = Gson()
@@ -83,7 +82,7 @@ object HomeCacheStore {
 
     fun clear(context: Context, provider: Provider) {
         val cacheKey = cacheKey(provider)
-        memoryCache.remove(cacheKey)
+        forget(cacheKey)
         cacheFile(context, cacheKey).delete()
     }
 
