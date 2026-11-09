@@ -107,12 +107,12 @@ class VodFocusCoordinator(
         // BACK never uses this path and does not touch the icon rail.
         if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
             if (inBar && binding.vodGlassActions.isFirstActionFocused(current)) {
-                return binding.navMain.requestFocus()
+                return binding.navMain.focusLastAction()
             }
             if (inContent && content != null) {
                 val next = current.focusSearch(View.FOCUS_LEFT)
                 if (next == null || !VodFocusMemory.isWithin(content, next)) {
-                    return binding.navMain.requestFocus()
+                    return binding.navMain.focusLastAction()
                 }
             }
         }
