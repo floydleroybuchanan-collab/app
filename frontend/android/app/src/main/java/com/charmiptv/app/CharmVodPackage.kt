@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 /**
  * VOD is a native *view* inside the single Charming MediaLab MainActivity.
- * No startActivityForResult(), no independent :vod process and no extra APK.
+ * No secondary Android Activity or process, no extra APK or launcher.
  */
 class CharmVodPackage : ReactPackage {
     override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = emptyList()
