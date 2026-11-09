@@ -103,6 +103,10 @@ class VodGlassActionBar @JvmOverloads constructor(
         }
     }
 
+    /** LEFT on the first visible VOD button enters the icon rail exactly once. */
+    fun isFirstActionFocused(view: View): Boolean =
+        buttons.values.firstOrNull { it.visibility == View.VISIBLE } === view
+
     fun focusLastAction(): Boolean {
         val view = buttons[lastFocusedId]?.takeIf { it.visibility == View.VISIBLE }
             ?: buttons.values.firstOrNull { it.visibility == View.VISIBLE }
