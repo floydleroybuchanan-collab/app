@@ -15,12 +15,10 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.navOptions
-import com.tanasi.navigation.widget.setupWithNavController
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.ActivityMainTvBinding
-import com.streamflixreborn.streamflix.databinding.ContentHeaderMenuMainTvBinding
 import com.streamflixreborn.streamflix.fragments.player.PlayerTvFragment
 import com.streamflixreborn.streamflix.charm.VodFocusCoordinator
 import com.streamflixreborn.streamflix.ui.UpdateAppTvDialog
@@ -87,7 +85,14 @@ class MainTvActivity : FragmentActivity() {
             }
         }
 
-        binding.navMain.setupWithNavController(navController)
+        binding.navMain.onNavigate = { destination ->
+            if (navController.currentDestination?.id != destination) {
+                navController.navigate(destination, null, navOptions {
+                    launchSingleTop = true
+                    popUpTo(R.id.home) { inclusive = false }
+                })
+            }
+        }
         vodFocusCoordinator = VodFocusCoordinator(binding, navHostFragment, navController).also { it.install() }
         updateNavigationVisibility()
 
@@ -96,37 +101,9 @@ class MainTvActivity : FragmentActivity() {
         }
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
-            binding.navMain.headerView?.apply {
-                val header = ContentHeaderMenuMainTvBinding.bind(this)
-
-                // Header-specific transparent artwork avoids the old opaque
-                // square and preserves the circular mark at a true aspect fit.
-                header.ivNavigationHeaderIcon.setImageResource(R.drawable.medialab_rail)
-                header.tvNavigationHeaderTitle.text = getString(R.string.app_name)
-                contentDescription = getString(R.string.charm_vod_provider_access)
-                header.tvNavigationHeaderSubtitle.text = getString(R.string.main_menu_change_provider)
-                val palette = ThemeManager.palette(UserPreferences.selectedTheme)
-                header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
-                header.tvNavigationHeaderSubtitle.setTextColor(palette.tvHeaderSecondary)
-                setBackgroundColor(palette.tvNavBackground)
-
-                setOnOpenListener {
-                    header.tvNavigationHeaderTitle.visibility = View.VISIBLE
-                    header.tvNavigationHeaderSubtitle.visibility = View.VISIBLE
-                }
-                setOnCloseListener {
-                    header.tvNavigationHeaderTitle.visibility = View.GONE
-                    header.tvNavigationHeaderSubtitle.visibility = View.GONE
-                }
-
-                setOnClickListener {
-                    // Navigazione manuale per evitare dipendenza da Safe Args Directions non generate
-                    navController.navigate(R.id.providers)
-                }
-            }
-
             when (destination.id) {
-                R.id.search, R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.settings -> {
+                R.id.search, R.id.home, R.id.movies, R.id.tv_shows,
+                R.id.favorites, R.id.genre_hub, R.id.platforms, R.id.settings -> {
                     binding.navMain.visibility = View.VISIBLE
                     updateNavigationVisibility()
                 }
@@ -181,13 +158,11 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
         })
-        if (savedInstanceState == null) {
-            binding.ivSplashOverlay.play {
-                binding.navMainFragment.requestFocus()
-            }
-        } else {
-            binding.ivSplashOverlay.visibility = View.GONE
-        }
+        // Native VOD opens directly. Do not block its catalog with a second
+        // fullscreen welcome/loading screen after the host navigation.
+        binding.ivSplashOverlay.dismiss()
+        binding.ivSplashOverlay.visibility = View.GONE
+        if (savedInstanceState == null) binding.navMainFragment.post { binding.navMainFragment.requestFocus() }
     }
 
     /** A root VOD BACK returns to the host main navigation drawer, not the icon rail. */
@@ -222,22 +197,14 @@ class MainTvActivity : FragmentActivity() {
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
         binding.navMain.setBackgroundColor(palette.tvNavBackground)
-        binding.navMain.headerView?.let { headerView ->
-            headerView.setBackgroundColor(palette.tvNavBackground)
-            val header = ContentHeaderMenuMainTvBinding.bind(headerView)
-            header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
-            header.tvNavigationHeaderSubtitle.setTextColor(palette.tvHeaderSecondary)
-        }
     }
     
     private fun updateNavigationVisibility() {
-        UserPreferences.currentProvider?.let { provider ->
-            binding.navMain.menu.findItem(R.id.movies)?.isVisible = Provider.supportsMovies(provider)
-            val tvShowsItem = binding.navMain.menu.findItem(R.id.tv_shows)
-            tvShowsItem?.isVisible = Provider.supportsTvShows(provider)
-            tvShowsItem?.title = if (provider is IptvProvider)
-                getString(R.string.main_menu_all_channels) else getString(R.string.main_menu_tv_shows)
-        }
+        val provider = UserPreferences.currentProvider
+        binding.navMain.setAvailable(
+            provider?.let { Provider.supportsMovies(it) } ?: true,
+            provider?.let { Provider.supportsTvShows(it) } ?: true,
+        )
     }
 
     fun adjustLayoutDelta(deltaX: Int?, deltaY: Int?) {
