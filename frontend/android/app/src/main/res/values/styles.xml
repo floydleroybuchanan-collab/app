@@ -4,6 +4,18 @@
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#000000</item>
+    <!-- Embedded VOD fragments inherit the host Activity theme. Provide their
+         resource attributes here as a safe fallback for child navigation screens. -->
+    <item name="app_background_color">#070711</item>
+    <item name="home_gradient_drawable">@drawable/bg_home_gradient_default</item>
+    <item name="movie_banner_gradient_drawable">@drawable/bg_movie_banner_gradient_default</item>
+    <item name="tv_show_banner_gradient_drawable">@drawable/bg_tv_show_banner_gradient_default</item>
+    <item name="category_swiper_gradient_drawable">@drawable/fg_category_swiper_default</item>
+    <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
+    <item name="colorAccent">@color/charm_vod_focus</item>
+    <item name="colorControlActivated">@color/charm_vod_focus</item>
+    <item name="android:textColorPrimary">#FFFFFFFF</item>
+    <item name="android:textColorSecondary">#FFAAA7BB</item>
   </style>
   <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
     <item name="windowSplashScreenBackground">@color/splashscreen_background</item>
