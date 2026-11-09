@@ -66,7 +66,10 @@ object VodPlatformCatalog {
         val seen = hashSetOf<String>()
         for (show in items) {
             val p = find(show) ?: continue
-            val key = p.id + "/" + show.javaClass.simpleName + "/" + show.id
+            val key = p.id + "/" + show.javaClass.simpleName + "/" + when(show) {
+                is Movie -> show.id
+                is TvShow -> show.id
+            }
             if (!seen.add(key)) continue
             val row = rows.getOrPut(p.id) { mutableListOf() }
             if (row.size < maxPerPlatform) row += show
