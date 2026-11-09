@@ -50,8 +50,8 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
 
   override fun onCreate() {
     super.onCreate()
-    // The native VOD page is in this APK but does not start React or Live TV decoders.
-    if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
+    // VOD is a child Fragment in MainActivity: one process, one application
+    // lifecycle, one shared cache/trim coordinator and one React runtime.
     // Install before React Native constructs the JS fetch client. The provider's
     // playlist/redirect cookies must also be available to native Media3.
     OkHttpClientProvider.setOkHttpClientFactory {
@@ -71,13 +71,11 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
     ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
   }
 
   override fun onTrimMemory(level: Int) {
     super.onTrimMemory(level)
-    if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
     val trimLevel = when {
       level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
         level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> CharmTrimLevel.CRITICAL
