@@ -1,0 +1,11 @@
+{
+  "lastConfirmedInstallableRelease": {
+    "githubBuildNumber": 267,
+    "versionCode": 2400,
+    "versionName": "2.2.0-rc.24-sideload",
+    "packageId": "com.charmiptv.app.purple.next.vodtest1.sideload",
+    "githubRunId": 42515140850
+  },
+  "ownerEncryptionPublicKeyGitBlobSha1": "08f1f9e2ee8f84ca7b7f2733a05b6971a8562c6c",
+  "versioningPolicy": "Each new release uses a higher RC number and versionCode within that RC's 100-code range (e.g., RC25 2500-2599); update this baseline after publishing a new release."
+}
