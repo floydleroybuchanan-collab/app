@@ -1,5 +1,6 @@
 package com.charmiptv.app
 
+import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
 import androidx.fragment.app.FragmentContainerView
@@ -18,6 +19,21 @@ import com.streamflixreborn.streamflix.charm.VodRootFragment
  */
 class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) :
     SimpleViewManager<CharmVodSurfaceManager.Surface>() {
+
+    private companion object {
+        const val TAG = "CharmVodSurface"
+    }
+
+    /** Keep useful root causes in the UI without silently losing the full stack. */
+    private fun failureSummary(error: Throwable): String {
+        val chain = generateSequence(error) { it.cause }
+            .take(8)
+            .map { cause ->
+                cause.javaClass.simpleName + ": " + (cause.message ?: "(no details)")
+            }
+            .joinToString(" Caused by: ")
+        return chain.take(1800)
+    }
 
     override fun getName() = "CharmVodSurface"
 
@@ -78,13 +94,14 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 fm.beginTransaction().replace(container.id, screen, "charm_unified_vod_" + container.id)
                     .commitNowAllowingStateLoss()
             } catch (e: RuntimeException) {
+                Log.e(TAG, "Embedded VOD failed to inflate/mount", e)
                 // The bridge must not leave stale activity-level key routing
                 // installed if native fragment inflation failed.
                 host.detachVodInput(this)
                 activity = null
                 fragment = null
                 manager = null
-                emit("CharmVodMountError", e.message ?: "Native VOD could not mount")
+                emit("CharmVodMountError", failureSummary(e))
             }
         }
 
