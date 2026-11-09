@@ -14,7 +14,7 @@ test("BACK from VOD root pages returns the Charming main drawer, never native ic
     source("app/(tabs)/vod.tsx"),
   ]);
   assert.match(activity, /R\.id\.home -> finishToMainDrawer\(\)/);
-  assert.match(activity, /R\.id\.settings, R\.id\.search, R\.id\.movies, R\.id\.tv_shows, R\.id\.favorites -> \{\s*\/\/[^\n]*[\s\S]*?finishToMainDrawer\(\)/);
+  assert.match(activity, /R\.id\.favorites,[\s\S]*?R\.id\.genre_hub, R\.id\.platforms -> \{[\s\S]*?finishToMainDrawer\(\)/);
   assert.match(activity, /putExtra\("openMainDrawer", true\)/);
   assert.match(activity, /!handled && !navController\.navigateUp\(\)\) finishToMainDrawer\(\)/);
   assert.match(bridge, /putBoolean\("openMainDrawer"/);
@@ -30,7 +30,7 @@ test("VOD LEFT reaches icon rail only at content or first action boundary", asyn
   assert.match(focus, /isFirstActionFocused\(current\)/);
   assert.match(focus, /if \(inContent && content != null\)/);
   assert.match(focus, /findNextFocus|focusSearch\(View\.FOCUS_LEFT\)/);
-  assert.match(focus, /binding\.navMain\.requestFocus\(\)/);
+  assert.match(focus, /binding\.navMain\.focusLastAction\(\)/);
   assert.match(focus, /KEYCODE_DPAD_DOWN/);
   assert.match(focus, /KEYCODE_DPAD_UP/);
   assert.match(glass, /scaleX\(if \(hasFocus\) 1\.10f else 1f\)/);
