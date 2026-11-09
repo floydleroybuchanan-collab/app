@@ -133,7 +133,7 @@ test("RC.6 drawer layout pushes content beside a main icon rail and playlist lis
   assert.match(shell, /PURPLE_SIDEBAR_WIDTH = 192/);
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
   assert.match(shell, /showIconRail \? \(/);
-  assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
+  assert.match(shell, /!drawerOpen && !suppressIconRail && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(guide, /secondaryDrawer=\{groupDrawerOpen \?/);
   assert.doesNotMatch(guide, /Open playlists & groups/);
   assert.match(drawer, /GUIDE_GROUP_DRAWER_WIDTH = 232/);

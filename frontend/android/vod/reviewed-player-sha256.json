@@ -11,8 +11,8 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "42eeef238432583436750f41df24a6eb78d627c9227ce879e67030ce9faa3878",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
+    "sha256": "d66955b207f8be46dce6673218f0ca5d7b44acad2e0cdab31583b7af565e93a0",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection. RC focus pass: dedicated Stop control, Down navigation, and return-to-origin cleanup without changing source resolution."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",

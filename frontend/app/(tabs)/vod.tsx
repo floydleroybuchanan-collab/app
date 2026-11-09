@@ -1,75 +1,110 @@
-import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
-import React, { useCallback, useRef, useState } from "react";
-import { NativeModules, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useState } from "react";
+import { Platform, Pressable, requireNativeComponent, StyleSheet, Text, View, type NativeSyntheticEvent } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { tvColors } from "@/src/theme";
 
-/** The host route blurs Live TV before launching the internal native VOD screen. */
-export default function VideoOnDemandScreen() {
-  const { width, height } = useWindowDimensions();
-  const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const launching = useRef(false);
-  const entered = useRef(false);
-  const { closeDrawer, openDrawer } = usePurpleTvDrawer();
+type NativePlaybackEvent = NativeSyntheticEvent<{ playing: boolean }>;
+type NativeVodProps = {
+  active: boolean;
+  drawerOpen: boolean;
+  style: { flex: number };
+  onRequestMainDrawer?: () => void;
+  onRequestIconRail?: () => void;
+  onPlaybackChanged?: (event: NativePlaybackEvent) => void;
+  onVodError?: () => void;
+};
 
-  const openVod = useCallback(async () => {
-    if (launching.current) return;
-    launching.current = true;
-    setOpening(true);
-    setError(null);
-    try {
-      closeDrawer({ force: true });
-      // Acknowledge decoder release instead of racing a second player against Live TV.
-      await stopAllPlaybackSessions("superseded");
-      if (Platform.OS !== "android" || !NativeModules.CharmVod?.open) {
-        throw new Error("Video OnDemand is available in the experimental Android APK.");
-      }
-      await NativeModules.CharmVod.open();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
-    } finally {
-      launching.current = false;
-      setOpening(false);
-    }
-  }, [closeDrawer]);
+// This is a content view inside the same ReactActivity and PurpleTvShell,
+// NOT a second VOD activity with its own icon rail and main navigation drawer.
+const NativeVodView = Platform.OS === "android"
+  ? requireNativeComponent<NativeVodProps>("CharmNativeVod")
+  : null;
+
+/** One shared app shell owns the rail timeout, drawers, and navigation across VOD and Live TV. */
+export default function VideoOnDemandScreen() {
+  const isFocused = useIsFocused();
+  const [ready, setReady] = useState(false);
+  const [playback, setPlayback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const { drawerOpen, openDrawer, focusIconRail } = usePurpleTvDrawer();
 
   useFocusEffect(useCallback(() => {
-    if (!entered.current) {
-      entered.current = true;
-      void openVod();
-    }
-    return () => { entered.current = false; };
-  }, [openVod]));
+    let live = true;
+    setReady(false);
+    setPlayback(false);
+    setError(null);
+
+    // Release the Live TV decoder before mounting the native VOD fragment and
+    // its potential Media3 player. This prevents two large video pipelines from
+    // competing for decoder slots and RAM on low-memory TV boxes.
+    void stopAllPlaybackSessions("superseded")
+      .then(() => { if (live) setReady(true); })
+      .catch(() => {
+        // Failure to release the previous player must not start a second one.
+        if (live) setError("Could not release the previous player. Return to Live TV and try again.");
+      });
+
+    return () => {
+      live = false;
+      setReady(false);
+      setPlayback(false);
+    };
+  }, [retry]));
+
+  const handlePlayback = useCallback((event: NativePlaybackEvent) => {
+    setPlayback(event.nativeEvent.playing === true);
+  }, []);
+  const openMainDrawer = useCallback(() => {
+    setPlayback(false);
+    openDrawer({ force: true });
+  }, [openDrawer]);
+  const openSharedRail = useCallback(() => focusIconRail(), [focusIconRail]);
+  const handleError = useCallback(() => {
+    setError("The VOD catalog could not open. Please try again.");
+    setReady(false);
+  }, []);
 
   return (
-    <PurpleTvShell active="/vod">
-      <View style={styles.content}><MediaLabBackdrop />
-        <MediaLabArt width={Math.min(width - 56, height * .75, 600)} />
-        <Text style={styles.title}>Video OnDemand</Text>
-        <Text style={styles.subtitle}>{opening ? "Opening your VOD library…" : "Movies, series, search, favorites and continue watching."}</Text>
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        <View style={{ flexDirection: width > 800 ? "row" : "column", gap: 12 }}>
-        <Pressable disabled={opening} hasTVPreferredFocus={!opening} onPress={() => void openVod()} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
-          <Text style={styles.label}>{opening ? "Opening…" : "Open Video OnDemand"}</Text>
-        </Pressable>
-        <Pressable onPress={() => openDrawer({ focusTop: true })} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
-          <Text style={styles.label}>Charming MediaLab TV</Text>
-        </Pressable></View>
+    <PurpleTvShell active="/vod" suppressIconRail={playback}>
+      <View style={styles.content} testID="charming-embedded-vod-page">
+        {Platform.OS === "android" && NativeVodView && ready && !error ? (
+          <NativeVodView
+            key={retry}
+            style={styles.native}
+            active={isFocused}
+            drawerOpen={drawerOpen}
+            onRequestMainDrawer={openMainDrawer}
+            onRequestIconRail={openSharedRail}
+            onPlaybackChanged={handlePlayback}
+            onVodError={handleError}
+          />
+        ) : (
+          <View style={styles.placeholder}>
+            <Text style={styles.heading}>Video OnDemand</Text>
+            <Text style={styles.details}>{error || (ready ? "VOD requires the Android TV app." : "Preparing your VOD library…")}</Text>
+            {error ? (
+              <Pressable onPress={() => setRetry(value => value + 1)} style={({ focused }: any) => [styles.retry, focused && styles.retryFocused]}>
+                <Text style={styles.retryLabel}>Try Again</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
       </View>
     </PurpleTvShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, justifyContent: "center", alignItems: "center", padding: 28, gap: 12 },
-  eyebrow: { color: tvColors.purpleSoft, fontSize: 14, letterSpacing: 3 },
-  title: { color: tvColors.text, fontSize: 36, fontWeight: "700" },
-  subtitle: { color: tvColors.textMuted, fontSize: 17 },
-  error: { color: "#FB7185", fontSize: 16, maxWidth: 600 },
-  button: { backgroundColor: tvColors.panelRaised, borderColor: "transparent", borderWidth: 3, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, minWidth: 280 },
-  focused: { borderColor: tvColors.focus, backgroundColor: tvColors.purpleDeep },
-  label: { color: tvColors.text, fontSize: 17, fontWeight: "600" },
+  content: { flex: 1, minHeight: 0, backgroundColor: tvColors.canvas },
+  native: { flex: 1 },
+  placeholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
+  heading: { color: tvColors.text, fontSize: 26, fontWeight: "700" },
+  details: { color: tvColors.textMuted, fontSize: 16, textAlign: "center" },
+  retry: { borderWidth: 2, borderColor: tvColors.lineStrong, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
+  retryFocused: { borderColor: tvColors.focus, backgroundColor: tvColors.purpleDeep },
+  retryLabel: { fontSize: 17, fontWeight: "700", color: tvColors.text },
 });

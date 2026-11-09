@@ -793,7 +793,12 @@ class PlayerTvFragment : Fragment() {
                 ).show()
             }
 
-            binding.pvPlayer.controller.binding.exoReplay.setOnClickListener {
+            binding.pvPlayer.controller.binding.btnExoStop.setOnClickListener {
+            // navigateUp destroys the player fragment and runs its established
+            // releasePlayer()/prefetch cleanup. Do not keep a decoder alive.
+            findNavController().navigateUp()
+        }
+        binding.pvPlayer.controller.binding.exoReplay.setOnClickListener {
                 player.seekTo(0)
             }
 
@@ -1186,7 +1191,7 @@ class PlayerTvFragment : Fragment() {
                     super.onPlaybackStateChanged(playbackState)
 
                     if (playbackState == Player.STATE_READY) {
-                        binding.pvPlayer.controller.binding.exoPlayPause.nextFocusDownId = -1
+                        binding.pvPlayer.controller.binding.exoPlayPause.nextFocusDownId = R.id.btn_exo_stop
                         val videoFormat = player.videoFormat
                         updatePlayerScale()
                     }

@@ -114,8 +114,10 @@ open class StreamFlixApp : Application(), androidx.work.Configuration.Provider {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod && level >= TRIM_MEMORY_RUNNING_LOW) {
-            CacheUtils.clearAppCache(this)
+        // VOD now runs inside the primary Activity. On pressure, release disposable
+        // bitmap RAM; never erase the host guide, logo or disk caches.
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            CacheUtils.trimMemory(this, level)
         }
     }
 }
