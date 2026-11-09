@@ -153,7 +153,8 @@ test("drawer route changes release drawer focus ownership before mounting the ne
 test("main drawer focus retries ignore EPG group-count and programme churn", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   assert.match(shell, /const activeGuideGroupName = useMemo/);
-  assert.match(shell, /\[active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop\]/);
+  assert.match(shell, /\[active, isFocused, consumeFocusDrawerTop, drawerOpen, focusDrawerTop\]/);
+  assert.match(shell, /lastDrawerGroupRef\.current/);
   assert.doesNotMatch(shell, /\[active, activeProgram, consumeFocusDrawerTop, drawerOpen, focusDrawerTop, guideGroups\]/);
 });
 
