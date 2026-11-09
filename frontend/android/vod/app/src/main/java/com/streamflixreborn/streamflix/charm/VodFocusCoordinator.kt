@@ -33,7 +33,9 @@ class VodFocusCoordinator(
     private var layoutListenerAttached = false
 
     private val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, new ->
-        if (disposed || restoring || new == null) return@OnGlobalFocusChangeListener
+        // Default Android focus on a newly mounted fragment is not the
+        // user's previous selection. Never overwrite a pending bookmark.
+        if (disposed || restoring || pendingDestination != null || new == null) return@OnGlobalFocusChangeListener
         val destination = navigation.currentDestination?.id ?: return@OnGlobalFocusChangeListener
         val content = currentContentRoot()
         when {
@@ -117,8 +119,9 @@ class VodFocusCoordinator(
         val content = currentContentRoot() ?: return false
         val destination = navigation.currentDestination?.id ?: return false
         if (focusMemory.restore(destination, content)) return true
+        val focused = binding.root.findFocus() ?: return content.requestFocus(View.FOCUS_DOWN)
         val next = FocusFinder.getInstance().findNextFocus(
-            binding.root, binding.root.findFocus(), View.FOCUS_DOWN,
+            binding.root, focused, View.FOCUS_DOWN,
         )
         if (next != null && VodFocusMemory.isWithin(content, next) && next.requestFocus()) return true
         return content.requestFocus(View.FOCUS_DOWN)
@@ -148,11 +151,16 @@ class VodFocusCoordinator(
             cancelPendingRestore()
             return
         }
-        val restored = if (lastZoneWasBar[destination] == true) {
-            focusBar()
-        } else {
-            val content = currentContentRoot()
-            content != null && focusMemory.restore(destination, content)
+        restoring = true
+        val restored = try {
+            if (lastZoneWasBar[destination] == true) {
+                focusBar()
+            } else {
+                val content = currentContentRoot()
+                content != null && focusMemory.restore(destination, content)
+            }
+        } finally {
+            restoring = false
         }
         if (restored) cancelPendingRestore()
     }
