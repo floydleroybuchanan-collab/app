@@ -7,32 +7,32 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (name) => readFile(join(root, name), "utf8");
 
-test("BACK from VOD root pages returns the Charming main drawer, never native icon rail", async () => {
-  const [activity, bridge, host] = await Promise.all([
-    source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/activities/main/MainTvActivity.kt"),
-    source("android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt"),
+test("VOD root BACK opens the single Charming MediaLab drawer; nested pages navigate up", async () => {
+  const [embedded, host, bridge] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/CharmEmbeddedVodView.kt"),
     source("app/(tabs)/vod.tsx"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt"),
   ]);
-  assert.match(activity, /R\.id\.home -> finishToMainDrawer\(\)/);
-  assert.match(activity, /R\.id\.settings, R\.id\.search, R\.id\.movies, R\.id\.tv_shows, R\.id\.favorites -> \{\s*\/\/[^\n]*[\s\S]*?finishToMainDrawer\(\)/);
-  assert.match(activity, /putExtra\("openMainDrawer", true\)/);
-  assert.match(activity, /!handled && !navController\.navigateUp\(\)\) finishToMainDrawer\(\)/);
-  assert.match(bridge, /putBoolean\("openMainDrawer"/);
-  assert.match(host, /if \(result\?\.openMainDrawer\) openDrawer\(\)/);
+  assert.match(embedded, /private fun handleBack\(\)/);
+  assert.match(embedded, /if \(!playerHandled && !nav\.navigateUp\(\)\) event\("topRequestMainDrawer"\)/);
+  assert.match(embedded, /event\("topRequestMainDrawer"\)/);
+  assert.match(host, /openDrawer\(\{ force: true \}\)/);
+  assert.match(host, /onRequestMainDrawer=\{openMainDrawer\}/);
+  assert.match(bridge, /CharmVodViewManager/);
+  assert.doesNotMatch(host, /NativeModules\.CharmVod|startActivityForResult/);
 });
 
-test("VOD LEFT reaches icon rail only at content or first action boundary", async () => {
-  const [focus, glass] = await Promise.all([
-    source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodFocusCoordinator.kt"),
+test("VOD LEFT uses the same app rail and preserved focus, never a private VOD rail", async () => {
+  const [embedded, host, glass] = await Promise.all([
+    source("android/app/src/main/java/com/charmiptv/app/CharmEmbeddedVodView.kt"),
+    source("app/(tabs)/vod.tsx"),
     source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodGlassActionBar.kt"),
   ]);
-  assert.match(focus, /if \(key == KeyEvent\.KEYCODE_DPAD_LEFT\)/);
-  assert.match(focus, /isFirstActionFocused\(current\)/);
-  assert.match(focus, /if \(inContent && content != null\)/);
-  assert.match(focus, /findNextFocus|focusSearch\(View\.FOCUS_LEFT\)/);
-  assert.match(focus, /binding\.navMain\.requestFocus\(\)/);
-  assert.match(focus, /KEYCODE_DPAD_DOWN/);
-  assert.match(focus, /KEYCODE_DPAD_UP/);
+  assert.match(embedded, /focus\.focusSearch\(View\.FOCUS_LEFT\)/);
+  assert.match(embedded, /event\("topRequestIconRail"\)/);
+  assert.match(embedded, /focusMemory\.restore\(destination, fragmentContainer\)/);
+  assert.match(host, /focusIconRail\(\)/);
+  assert.match(host, /onRequestIconRail=\{openSharedRail\}/);
   assert.match(glass, /scaleX\(if \(hasFocus\) 1\.10f else 1f\)/);
 });
 
