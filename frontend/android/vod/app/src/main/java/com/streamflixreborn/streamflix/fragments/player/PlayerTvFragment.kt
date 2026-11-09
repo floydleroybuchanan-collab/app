@@ -115,6 +115,8 @@ import org.json.JSONObject
 import java.util.Locale
 import java.util.UUID
 import com.streamflixreborn.streamflix.extractors.TokenManager
+import com.streamflixreborn.streamflix.charm.VodPlatformCatalog
+import com.streamflixreborn.streamflix.charm.VodPlatformBadgeView
 
 class PlayerTvFragment : Fragment() {
     companion object {
@@ -161,6 +163,7 @@ class PlayerTvFragment : Fragment() {
     private var wsServer: BypassWebSocketServer? = null
     private var nextEpisodePrefetchTargetId: String? = null
     private var nextEpisodePrefetchJob: Job? = null
+    private var platformBadgeJob: Job? = null
     private var nextEpisodeOverlayDismissed = false
     private val chooserReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -261,6 +264,7 @@ class PlayerTvFragment : Fragment() {
 
         initializePlayer(false)
         initializeVideo()
+        showTimedPlatformBadgeIfOriginal()
         binding.pvPlayer.onMediaPreviousClicked = ::handleMediaPrevious
         binding.pvPlayer.onMediaNextClicked = ::handleMediaNext
         gestureHelper = PlayerGestureHelper(
@@ -592,6 +596,9 @@ class PlayerTvFragment : Fragment() {
     override fun onDestroyView() {
             super.onDestroyView()
             nextEpisodePrefetchJob?.cancel()
+            platformBadgeJob?.cancel()
+            binding.tvPlatformOriginBadge.animate().cancel()
+            binding.tvPlatformOriginBadge.visibility = View.GONE
             clearBypassSession(dismissDialog = true)
             releasePlayer()
             try {
@@ -601,6 +608,41 @@ class PlayerTvFragment : Fragment() {
             _binding = null
             isSetupDone = false
         }
+
+    /**
+     * The service badge is informational, never focusable and never permanent:
+     * show only after actual Media3 playback starts; fade it out 60 seconds later.
+     * The view-lifecycle coroutine is canceled on navigation/decoder release.
+     */
+    private fun showTimedPlatformBadgeIfOriginal() {
+        val platform = when (val type = args.videoType) {
+            is Video.Type.Movie ->
+                VodPlatformCatalog.find(type.title, type.releaseDate.take(4).toIntOrNull())
+            is Video.Type.Episode ->
+                VodPlatformCatalog.find(type.tvShow.title, type.tvShow.releaseDate?.take(4)?.toIntOrNull())
+        } ?: return
+        val badge = binding.tvPlatformOriginBadge
+        badge.visibility = View.GONE
+        badge.text = platform.mark + "  Original"
+        badge.background = VodPlatformBadgeView(requireContext(), platform, small = true).glass(false)
+        badge.alpha = 1f
+        platformBadgeJob?.cancel()
+        platformBadgeJob = viewLifecycleOwner.lifecycleScope.launch {
+            var remainingChecks = 120 // no permanent polling if source never starts
+            while (remainingChecks-- > 0 && (!::player.isInitialized || !player.isPlaying)) {
+                delay(1000L)
+            }
+            if (!::player.isInitialized || !player.isPlaying) return@launch
+            badge.visibility = View.VISIBLE
+            badge.alpha = 1f
+            delay(60_000L)
+            if (badge.isAttachedToWindow) {
+                badge.animate().alpha(0f).setDuration(700L).withEndAction {
+                    badge.visibility = View.GONE
+                }.start()
+            }
+        }
+    }
 
     fun onBackPressed(): Boolean = when {
 
