@@ -289,7 +289,7 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   ]);
   assert.match(guide, /GuidePreviewRail/);
   assert.match(preview, /onOpenDrawer/);
-  assert.match(guide, /openDrawer\(\)/);
+  assert.match(guide, /openDrawer\(\{ force: true \}\)/);
   assert.match(guide, /focusGuidePreviewSurface\(\)/);
   assert.doesNotMatch(guide, /const onGuideUpBoundary = useCallback\([\s\S]{0,520}setPreviewActionsFocused\(true\)/);
   assert.match(guide, /!previewActionsFocused/);
