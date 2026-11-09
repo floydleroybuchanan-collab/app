@@ -121,7 +121,8 @@ test("main drawer cleanup cannot steal the Guide Groups drawer owner", async () 
   assert.match(shell, /resetRemoteContextIfOwned\("main_drawer", "guide"\)/);
   assert.doesNotMatch(shell, /if \(active === "\/guide"\) \{\s*setRemoteContext\("guide"\)/);
   assert.match(groups, /setRemoteContext\("guide_groups"\)/);
-  assert.match(groups, /hasTVPreferredFocus=\{preferActiveFocus && item\.name === activeNameRef\.current\}/);
+  assert.match(groups, /hasTVPreferredFocus=\{preferActiveFocus && item\.name === focusTargetNameRef\.current\}/);
+  assert.match(groups, /focusedNameRef\.current = item\.name/);
 });
 
 test("fullscreen remote mappings use one native semantic router and remain player-scoped", async () => {

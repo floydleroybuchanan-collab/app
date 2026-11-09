@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -21,6 +22,7 @@ import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.ActivityMainTvBinding
 import com.streamflixreborn.streamflix.databinding.ContentHeaderMenuMainTvBinding
 import com.streamflixreborn.streamflix.fragments.player.PlayerTvFragment
+import com.streamflixreborn.streamflix.charm.VodFocusCoordinator
 import com.streamflixreborn.streamflix.ui.UpdateAppTvDialog
 import com.streamflixreborn.streamflix.providers.IptvProvider
 import com.streamflixreborn.streamflix.providers.Provider
@@ -43,6 +45,7 @@ class MainTvActivity : FragmentActivity() {
     private val viewModel by viewModels<MainViewModel>()
 
     private lateinit var updateAppDialog: UpdateAppTvDialog
+    private var vodFocusCoordinator: VodFocusCoordinator? = null
 
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
@@ -85,6 +88,7 @@ class MainTvActivity : FragmentActivity() {
         }
 
         binding.navMain.setupWithNavController(navController)
+        vodFocusCoordinator = VodFocusCoordinator(binding, navHostFragment, navController).also { it.install() }
         updateNavigationVisibility()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -162,14 +166,17 @@ class MainTvActivity : FragmentActivity() {
                     return
                 }
                 when (navController.currentDestination?.id) {
-                    R.id.home -> if (binding.navMain.hasFocus()) finish() else binding.navMain.requestFocus()
+                    R.id.home -> finishToMainDrawer()
                     R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
-                        navigateToProviderHome(navController)
-                        binding.navMain.requestFocus()
+                        // These are VOD top-level destinations. BACK exits to
+                        // Charming MediaLab's main drawer, never the icon rail.
+                        // Movie/episode/season/player details below continue to
+                        // use navigateUp() and their saved content focus anchor.
+                        finishToMainDrawer()
                     }
                     else -> {
                         val handled = (getCurrentFragment() as? PlayerTvFragment)?.onBackPressed() ?: false
-                        if (!handled && !navController.navigateUp()) finish()
+                        if (!handled && !navController.navigateUp()) finishToMainDrawer()
                     }
                 }
             }
@@ -181,6 +188,23 @@ class MainTvActivity : FragmentActivity() {
         } else {
             binding.ivSplashOverlay.visibility = View.GONE
         }
+    }
+
+    /** A root VOD BACK returns to the host main navigation drawer, not the icon rail. */
+    private fun finishToMainDrawer() {
+        setResult(RESULT_OK, Intent().putExtra("openMainDrawer", true))
+        finish()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (vodFocusCoordinator?.onKey(event) == true) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onDestroy() {
+        vodFocusCoordinator?.dispose()
+        vodFocusCoordinator = null
+        super.onDestroy()
     }
 
     override fun onStop() {

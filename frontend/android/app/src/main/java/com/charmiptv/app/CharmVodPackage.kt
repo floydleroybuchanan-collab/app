@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.BaseActivityEventListener
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -20,7 +21,10 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
         context.addActivityEventListener(object : BaseActivityEventListener() {
             override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
                 if (requestCode != REQUEST_VOD) return
-                pending?.resolve(null)
+                pending?.resolve(Arguments.createMap().apply {
+                    putBoolean("openMainDrawer", resultCode == Activity.RESULT_OK &&
+                        data?.getBooleanExtra("openMainDrawer", false) == true)
+                })
                 pending = null
             }
         })

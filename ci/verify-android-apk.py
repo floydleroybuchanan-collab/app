@@ -98,6 +98,12 @@ def main() -> None:
     config = json.loads((Path(__file__).resolve().parents[1] / "frontend/app.json").read_text(encoding="utf-8"))["expo"]
     expected_package = config["android"]["package"] + ".sideload"
     expected_version = config["version"] + "-sideload"
+    baseline = json.loads((Path(__file__).resolve().parent / "release-update-baseline.json").read_text(encoding="utf-8"))
+    previous = baseline["lastConfirmedInstallableRelease"]
+    if expected_package != previous["packageId"]:
+        raise ValueError("Package ID differs from last installable release; update in place impossible")
+    if config["android"]["versionCode"] <= previous["versionCode"]:
+        raise ValueError("Android versionCode would downgrade or repeat Build 267")
 
     def run(name: str, *arguments: str) -> str:
         suffix = (".bat" if name == "apksigner" else ".exe") if os.name == "nt" else ""
@@ -106,6 +112,9 @@ def main() -> None:
 
     apk = str(args.apk.resolve())
     signature = run("apksigner", "verify", "--verbose", "--print-certs", apk)
+    signer = re.search(r"Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]{64})", signature)
+    if not signer:
+        raise ValueError("Cannot verify APK signing certificate fingerprint")
     alignment = run("zipalign", "-c", "-P", "16", "-v", "4", apk)
     badging = run("aapt", "dump", "badging", apk)
     manifest = run("aapt", "dump", "xmltree", apk, "AndroidManifest.xml")
@@ -139,7 +148,9 @@ def main() -> None:
     report = {
         "apk": args.apk.name, "bytes": args.apk.stat().st_size, "sha256": checksum,
         "package": package.group(1), "versionCode": int(package.group(2)), "versionName": package.group(3),
-        "signatureVerified": True, "zipAlignment16KiBVerified": True,
+        "signatureVerified": True, "signerCertificateSha256": signer.group(1).lower(),
+        "updatesPreviousBuild": previous["githubBuildNumber"],
+        "previousVersionCode": previous["versionCode"], "zipAlignment16KiBVerified": True,
         "minSdk": int(minimum.group(1)), "targetSdk": int(target.group(1)),
         "nativeAndroidApiNotesChecked": True,
         "playbackEngine": "Media3", "vlcAbsent": True,

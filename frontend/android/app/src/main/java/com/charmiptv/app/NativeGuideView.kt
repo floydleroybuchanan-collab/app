@@ -645,10 +645,16 @@ class NativeGuideView(context: Context) : View(context) {
 
     val visibleStartMs = viewportStartMs
     val visibleEndMs = viewportEndMs()
-    drawHeader(canvas, visibleStartMs, visibleEndMs)
-
+    // The last physical channel is also the bottom of the EPG grid.
+    // Clipping both cells and time markers prevents phantom partial rows below it.
     val visibleRows = max(1, ceil((height - headerHeight) / rowHeight).toInt())
-    for (slot in 0 until visibleRows) {
+    val drawnRows = min(visibleRows, (rows.size - firstVisibleRow).coerceAtLeast(0))
+    val gridBottom = min(height.toFloat(), headerHeight + drawnRows * rowHeight)
+    drawHeader(canvas, visibleStartMs, visibleEndMs, gridBottom)
+
+    canvas.save()
+    canvas.clipRect(0f, headerHeight, width.toFloat(), gridBottom)
+    for (slot in 0 until drawnRows) {
       val rowIndex = firstVisibleRow + slot
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
@@ -690,14 +696,15 @@ class NativeGuideView(context: Context) : View(context) {
       }
       canvas.drawLine(0f, top + rowHeight, width.toFloat(), top + rowHeight, divider)
     }
+    canvas.restore()
 
-    if (wallClockNow in visibleStartMs..visibleEndMs) {
+    if (drawnRows > 0 && wallClockNow in visibleStartMs..visibleEndMs) {
       val x = timeToX(wallClockNow, visibleStartMs, visibleEndMs)
-      canvas.drawLine(x, headerHeight, x, height.toFloat(), nowPaint)
+      canvas.drawLine(x, headerHeight, x, gridBottom, nowPaint)
     }
   }
 
-  private fun drawHeader(canvas: Canvas, start: Long, end: Long) {
+  private fun drawHeader(canvas: Canvas, start: Long, end: Long, gridBottom: Float) {
     canvas.drawText("CHANNEL", pad, headerHeight * .66f, muted)
     var tick = ((start / 1_800_000L) + 1) * 1_800_000L
     while (tick < end) {
@@ -705,7 +712,7 @@ class NativeGuideView(context: Context) : View(context) {
       tickDate.time = tick
       val timeLabel = timeFormatter.format(tickDate)
       canvas.drawText(timeLabel, x + pad, headerHeight * .66f, muted)
-      canvas.drawLine(x, headerHeight, x, height.toFloat(), divider)
+      canvas.drawLine(x, headerHeight, x, gridBottom, divider)
       tick += 1_800_000L
     }
   }

@@ -27,14 +27,17 @@ export default function VideoOnDemandScreen() {
       if (Platform.OS !== "android" || !NativeModules.CharmVod?.open) {
         throw new Error("Video OnDemand is available in the experimental Android APK.");
       }
-      await NativeModules.CharmVod.open();
+      const result: { openMainDrawer?: boolean } | null = await NativeModules.CharmVod.open();
+      // Android's VOD root BACK requests the main TV drawer on the host route.
+      // It never requests an icon-rail focus jump.
+      if (result?.openMainDrawer) openDrawer();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
     } finally {
       launching.current = false;
       setOpening(false);
     }
-  }, [closeDrawer]);
+  }, [closeDrawer, openDrawer]);
 
   useFocusEffect(useCallback(() => {
     if (!entered.current) {
