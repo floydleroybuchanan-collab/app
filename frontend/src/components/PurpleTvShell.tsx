@@ -88,6 +88,11 @@ const NAV: NavItem[] = [
   { route: "/settings", label: "Settings", icon: "settings-outline" },
 ];
 
+// Each route renders its own PurpleTvShell. Keep focus identity outside that
+// short-lived component so returning from VOD/Guide preserves the cursor.
+let lastMainDrawerRoute: Route | null = null;
+let lastMainDrawerGroupName: string | null = null;
+
 export const PURPLE_SIDEBAR_WIDTH = 192;
 export const PURPLE_ICON_RAIL_WIDTH = 52;
 export const PURPLE_DRAWER_ANIMATION_MS = 180;
@@ -277,8 +282,6 @@ export function PurpleTvShell({
   const onIconRailNavigateRef = useRef(onIconRailNavigate);
   const onIconRailOpenMainDrawerRef = useRef(onIconRailOpenMainDrawer);
   const guideGroupRefs = useRef(new Map<string, unknown>());
-  const lastDrawerRouteRef = useRef<Route | null>(null);
-  const lastDrawerGroupRef = useRef<string | null>(null);
   const lastGuideDrawerTransferRef = useRef(0);
   const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
@@ -438,11 +441,11 @@ export function PurpleTvShell({
     }
 
     const preferredGuideGroupName = !focusDrawerTop && active === "/guide"
-      ? (guideGroups?.some((item) => item.name === lastDrawerGroupRef.current)
-          ? lastDrawerGroupRef.current : activeGuideGroupName)
+      ? (guideGroups?.some((item) => item.name === lastMainDrawerGroupName)
+          ? lastMainDrawerGroupName : activeGuideGroupName)
       : null;
     const preferredRoute: Route | null = preferredGuideGroupName
-      ? null : focusDrawerTop ? NAV[0].route : (lastDrawerRouteRef.current || active);
+      ? null : focusDrawerTop ? NAV[0].route : (lastMainDrawerRoute || active);
     if (focusDrawerTop) consumeFocusDrawerTop();
     setDrawerPreferredRoute(preferredRoute);
     setDrawerAutoFocus(true);
@@ -575,7 +578,7 @@ export function PurpleTvShell({
         }}
         focusable={drawerOpen}
         hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === item.route}
-        onFocus={() => { if (drawerOpen) lastDrawerRouteRef.current = item.route; }}
+        onFocus={() => { if (drawerOpen) lastMainDrawerRoute = item.route; }}
         onPress={() => navigate(item.route)}
         style={({ focused }: any) => [
           styles.navRow,
@@ -668,8 +671,8 @@ export function PurpleTvShell({
                       else guideGroupRefs.current.delete(item.name);
                     }}
                     focusable={drawerOpen}
-                    hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === null && item.name === (lastDrawerGroupRef.current || activeGuideGroupName)}
-                    onFocus={() => { if (drawerOpen) lastDrawerGroupRef.current = item.name; }}
+                    hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === null && item.name === (lastMainDrawerGroupName || activeGuideGroupName)}
+                    onFocus={() => { if (drawerOpen) lastMainDrawerGroupName = item.name; }}
                     onPress={item.onPress}
                     onLongPress={item.onLongPress}
                     delayLongPress={420}
