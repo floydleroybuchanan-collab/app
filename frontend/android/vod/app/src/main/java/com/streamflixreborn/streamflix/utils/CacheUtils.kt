@@ -6,6 +6,8 @@ import android.util.Log
 import com.bumptech.glide.Glide
 import com.streamflixreborn.streamflix.charm.CharmVodProcess
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /**
  * A VOD-only cache policy. Never recursively delete applicationContext.cacheDir
@@ -15,6 +17,7 @@ import java.io.File
 object CacheUtils {
     private const val TAG = "VodCache"
     private const val MAX_DELETE_DEPTH = 12
+    private val pruning = AtomicBoolean(false)
 
     private fun internalVodCache(context: Context): File {
         val base = context.applicationContext.cacheDir
@@ -60,6 +63,21 @@ object CacheUtils {
             Glide.get(context.applicationContext).trimMemory(level)
         } catch (error: Exception) {
             Log.w(TAG, "Image cache trim failed", error)
+        }
+    }
+
+    /** Run bounded VOD-disk maintenance only after native VOD has been unmounted. */
+    fun pruneInBackground(context: Context, thresholdMb: Long = 50) {
+        if (!pruning.compareAndSet(false, true)) return
+        val app = context.applicationContext
+        thread(name = "charm-vod-cache-prune", isDaemon = true) {
+            try {
+                autoClearIfNeeded(app, thresholdMb)
+            } catch (error: Exception) {
+                Log.w(TAG, "VOD cache pruning failed", error)
+            } finally {
+                pruning.set(false)
+            }
         }
     }
 
