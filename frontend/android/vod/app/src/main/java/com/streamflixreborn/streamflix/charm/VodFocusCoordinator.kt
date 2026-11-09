@@ -24,6 +24,7 @@ class VodFocusCoordinator(
     private val navHost: NavHostFragment,
     private val navigation: NavController,
 ) {
+    var onHostRailFocus: (() -> Boolean)? = null
     private val focusMemory = VodFocusMemory()
     private val lastZoneWasBar = mutableMapOf<Int, Boolean>()
     private var pendingDestination: Int? = null
@@ -107,12 +108,12 @@ class VodFocusCoordinator(
         // BACK never uses this path and does not touch the icon rail.
         if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
             if (inBar && binding.vodGlassActions.isFirstActionFocused(current)) {
-                return binding.navMain.focusLastAction()
+                return (onHostRailFocus?.invoke() == true) || binding.navMain.focusLastAction()
             }
             if (inContent && content != null) {
                 val next = current.focusSearch(View.FOCUS_LEFT)
                 if (next == null || !VodFocusMemory.isWithin(content, next)) {
-                    return binding.navMain.focusLastAction()
+                    return (onHostRailFocus?.invoke() == true) || binding.navMain.focusLastAction()
                 }
             }
         }
@@ -194,6 +195,7 @@ class VodFocusCoordinator(
         disposed = true
         cancelPendingRestore()
         binding.vodGlassActions.onNavigate = null
+        onHostRailFocus = null
         navigation.removeOnDestinationChangedListener(destinationListener)
         binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(focusListener)
     }
