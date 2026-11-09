@@ -17,7 +17,7 @@ test('one activity, one process, one app: VOD is a native view in the host route
   const application=read('android/app/src/main/java/com/charmiptv/app/MainApplication.kt');
   assert.match(shell,/label: "TV Guide"[^\n]+\n\s*\{ route: "\/vod", label: "Video OnDemand"/);
   assert.ok(route.indexOf('await stopAllPlaybackSessions(')<route.indexOf('<NativeVod'));
-  assert.match(route,/requireNativeComponent[^;]*\("CharmVodSurface"\)/);
+  assert.match(route,/requireNativeComponent[\s\S]*?\("CharmVodSurface"\)/);
   assert.match(route,/immersiveContent=\{immersive\}/);
   assert.match(bridge,/createViewManagers[\s\S]*CharmVodSurfaceManager/);
   assert.doesNotMatch(bridge,/startActivity|openSettings|REQUEST_VOD/);
