@@ -47,7 +47,11 @@ test("memory pressure must never wipe host guide and logo disk caches", () => {
   assert.match(cache, /File\(base, "vod"\)/);
   assert.match(cache, /root\.listFiles\(\)\?\.forEach/);
   assert.match(cache, /AtomicBoolean\(false\)/);
+  assert.match(cache, /AtomicInteger\(0\)/);
+  assert.match(cache, /hasActiveSession\(\)/);
   assert.match(cache, /fun pruneInBackground/);
+  assert.match(bridge, /beginCacheSession\(\)/);
+  assert.match(bridge, /endCacheSession\(\)/);
   assert.match(cache, /Glide\.get\(context\.applicationContext\)\.trimMemory\(level\)/);
   assert.doesNotMatch(cache, /applicationContext\.cacheDir\?\.deleteRecursively|Glide\.get\(context\)\.clearDiskCache\(\)|WebView\(context\)/);
   assert.match(app, /CacheUtils\.trimMemory\(this, level\)/);
