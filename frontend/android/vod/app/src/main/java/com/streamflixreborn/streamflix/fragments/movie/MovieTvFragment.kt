@@ -98,6 +98,16 @@ class MovieTvFragment : Fragment() {
     }
 
     private fun displayMovie(movie: Movie) {
+        val platform = com.streamflixreborn.streamflix.charm.VodPlatformCatalog.find(movie)
+        binding.tvPlatformInfoBadge.apply {
+            visibility = if (platform == null) View.GONE else View.VISIBLE
+            if (platform != null) {
+                text = platform.mark + "  Original"
+                background = com.streamflixreborn.streamflix.charm.VodPlatformBadgeView(
+                    requireContext(), platform, small = true
+                ).glass(false)
+            }
+        }
         binding.ivMovieBanner.loadMovieBanner(movie) {
             transition(DrawableTransitionOptions.withCrossFade())
         }
