@@ -232,6 +232,7 @@ export function PurpleTvShell({
   secondaryDrawer,
   onIconRailNavigate,
   onIconRailOpenMainDrawer,
+  suppressIconRail = false,
 }: {
   active: Route;
   children: React.ReactNode;
@@ -244,6 +245,8 @@ export function PurpleTvShell({
   secondaryDrawer?: React.ReactNode;
   onIconRailNavigate?: () => void;
   onIconRailOpenMainDrawer?: () => void;
+  /** Hide shared chrome during fullscreen native VOD playback only. */
+  suppressIconRail?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -267,7 +270,7 @@ export function PurpleTvShell({
   const { deviceLayoutMode, activeProgram } = useStore();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && !suppressIconRail && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
