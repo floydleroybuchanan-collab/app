@@ -36,7 +36,7 @@ import com.streamflixreborn.streamflix.utils.UserPreferences
  * and all main navigation drawers. Fragment state is released on route exit,
  * so inactive VOD players and views do not retain decoders or RAM.
  */
-internal class CharmEmbeddedVodView(
+class CharmEmbeddedVodView(
     private val reactContext: ThemedReactContext,
 ) : LinearLayout(reactContext) {
 
@@ -174,8 +174,8 @@ internal class CharmEmbeddedVodView(
         val isPlayer = dest.id == VodR.id.player
         topActions.visibility = if (isPlayer || dest.id == VodR.id.providers) View.GONE else View.VISIBLE
         topActions.setAvailable(
-            UserPreferences.currentProvider?.let(Provider::supportsMovies) ?: true,
-            UserPreferences.currentProvider?.let(Provider::supportsTvShows) ?: true,
+            UserPreferences.currentProvider?.let { Provider.supportsMovies(it) } ?: true,
+            UserPreferences.currentProvider?.let { Provider.supportsTvShows(it) } ?: true,
         )
         if (isPlayer != lastPlayback) {
             lastPlayback = isPlayer
