@@ -166,12 +166,7 @@ class MainTvActivity : FragmentActivity() {
                     return
                 }
                 when (navController.currentDestination?.id) {
-                    R.id.home -> {
-                        // Back from content enters the glass actions; a second
-                        // Back exits VOD. Never redirect to the icon rail.
-                        if (binding.navMain.hasFocus() || binding.vodGlassActions.hasFocus()) finish()
-                        else if (vodFocusCoordinator?.focusBar() != true) finish()
-                    }
+                    R.id.home -> finishToMainDrawer()
                     R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
                         if (!navController.navigateUp()) navigateToProviderHome(navController)
                         // Destination restoration owns the focus after navigation.
@@ -190,6 +185,12 @@ class MainTvActivity : FragmentActivity() {
         } else {
             binding.ivSplashOverlay.visibility = View.GONE
         }
+    }
+
+    /** A root VOD BACK returns to the host main navigation drawer, not the icon rail. */
+    private fun finishToMainDrawer() {
+        setResult(RESULT_OK, Intent().putExtra("openMainDrawer", true))
+        finish()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
