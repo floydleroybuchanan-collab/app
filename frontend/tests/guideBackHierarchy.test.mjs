@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("Guide BACK moves from groups to the icon rail, then expands the main drawer", async () => {
+test("Guide BACK returns from groups to the main drawer without skipping the icon rail", async () => {
   const [hook, guide, groups, activity] = await Promise.all([
     source("src/hooks/use-tv-back-to-guide.ts"),
     source("app/(tabs)/guide.tsx"),
@@ -21,7 +21,7 @@ test("Guide BACK moves from groups to the icon rail, then expands the main drawe
   assert.match(guide, /onFocusIconRail=\{focusIconRail\}/);
   assert.match(guide, /onIconRailOpenMainDrawer=\{\(\) => setGroupDrawerOpen\(false\)\}/);
   assert.match(guide, /setGroupDrawerOpen\(true\);\s*return true/);
-  assert.match(groups, /if \(key === "BACK"\) \{\s*focusIconRailRef\.current\(\)/);
+  assert.match(groups, /if \(key === "BACK"\) \{\s*openMainDrawerRef\.current\(\)/);
   assert.match(groups, /if \(key === "LEFT"\)/);
   assert.match(activity, /context == "guide_groups" && \(boundaryKey == "LEFT" \|\| boundaryKey == "RIGHT" \|\| boundaryKey == "BACK"\)/);
   assert.match(activity, /context == "icon_rail" && \(boundaryKey == "LEFT" \|\| boundaryKey == "BACK"\)/);
