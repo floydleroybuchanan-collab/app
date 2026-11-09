@@ -99,6 +99,8 @@ export const PURPLE_DRAWER_ANIMATION_MS = 180;
 
 export type OpenDrawerOptions = {
   focusTop?: boolean;
+  /** Explicit remote/back intent must not be delayed by the Guide surf gate. */
+  force?: boolean;
 };
 
 type DrawerContextValue = {
@@ -142,7 +144,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   const openedAtRef = useRef(0);
 
   const openDrawer = useCallback((options?: OpenDrawerOptions) => {
-    if (isGuideScreenActive() && isGuideSurfing()) return;
+    if (isGuideScreenActive() && isGuideSurfing() && !options?.force) return;
     if (drawerOpenRef.current) return;
     drawerOpenRef.current = true;
     openedAtRef.current = Date.now();
