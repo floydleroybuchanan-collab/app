@@ -2,6 +2,13 @@ name: Build Charming MediaLab RC.10 Sideload APK
 
 on:
   workflow_dispatch:
+  # Test a signed owner-only build for this same-repository focus repair PR.
+  # Fork PRs never receive signing or provider secrets.
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-media3-sideload-now.yml"
+      - "frontend/**"
   push:
     branches:
       - feature/multiple-playlists-test-1
@@ -34,6 +41,7 @@ concurrency:
 jobs:
   build:
     name: Build Charming MediaLab RC.10 universal sideload APK
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'fix/tv-focus-vod-guide-20261109' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/feature/multiple-playlists-test-1') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
