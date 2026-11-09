@@ -82,7 +82,7 @@
             android:focusableInTouchMode="true"
             android:nextFocusRight="@id/exo_replay"
             android:nextFocusUp="@id/tv_exo_subtitle"
-            android:nextFocusDown="@id/exo_bottom_bar"
+            android:nextFocusDown="@id/btn_exo_stop"
             android:padding="10dp"
             android:src="@drawable/ic_previous"
             app:tint="#FFFFFF" />
@@ -97,7 +97,7 @@
             android:nextFocusLeft="@id/btn_custom_prev"
             android:nextFocusRight="@id/exo_play_pause"
             android:nextFocusUp="@id/tv_exo_subtitle"
-            android:nextFocusDown="@id/exo_bottom_bar"
+            android:nextFocusDown="@id/btn_exo_stop"
             android:padding="10dp"
             android:src="@drawable/ic_refresh"
             app:tint="#FFFFFF" />
@@ -111,7 +111,7 @@
             android:focusableInTouchMode="true"
             android:nextFocusLeft="@id/exo_replay"
             android:nextFocusRight="@id/btn_custom_next"
-            android:nextFocusDown="@id/exo_settings"
+            android:nextFocusDown="@id/btn_exo_stop"
             android:padding="2dp"
             android:src="@drawable/exo_styled_controls_play"
             android:tint="#FFFFFF"
@@ -126,7 +126,7 @@
             android:focusableInTouchMode="true"
             android:nextFocusLeft="@id/exo_play_pause"
             android:nextFocusUp="@id/tv_exo_subtitle"
-            android:nextFocusDown="@id/exo_bottom_bar"
+            android:nextFocusDown="@id/btn_exo_stop"
             android:padding="10dp"
             android:src="@drawable/ic_next"
             app:tint="#FFFFFF" />
@@ -142,7 +142,7 @@
         android:layout_marginBottom="4dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
-        android:nextFocusDown="@id/exo_settings"
+        android:nextFocusDown="@id/btn_exo_stop"
         app:layout_constraintBottom_toTopOf="@id/exo_bottom_bar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
@@ -195,6 +195,30 @@
             app:layout_constraintStart_toEndOf="@id/tv_time_separator"
             app:layout_constraintTop_toTopOf="parent"
             tools:text="00:00:00" />
+
+        <!-- Explicit Stop is reachable with a single DOWN press from
+             playback controls and progress; never force a RIGHT detour. -->
+        <TextView
+            android:id="@+id/btn_exo_stop"
+            android:layout_width="76dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="7dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="7dp"
+            android:background="@drawable/bg_btn_exoplayer_tv"
+            android:text="Stop"
+            android:textColor="#FFFFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:contentDescription="Stop playback"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/exo_play_pause"
+            android:nextFocusRight="@id/btn_exo_aspect_ratio"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btn_exo_aspect_ratio"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <ImageView
             android:id="@id/btn_exo_aspect_ratio"
