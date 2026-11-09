@@ -22,6 +22,9 @@ object CacheUtils {
     }
 
     fun clearAppCache(context: Context) {
+        // Clear the same metadata from memory BEFORE deleting the backing JSON.
+        // Do not evict shared Live TV, logo, EPG or WebView caches.
+        HomeCacheStore.clearMemory()
         ownedDirs(context).forEach { directory ->
             try {
                 if (directory.exists() && !directory.deleteRecursively()) {
