@@ -294,6 +294,12 @@ export function PurpleTvShell({
     () => guideGroups?.find((item) => item.active)?.name || null,
     [guideGroups],
   );
+  // Keep latest group identities for the next drawer entry without restarting
+  // an in-flight focus restoration when the EPG refreshes or groups rerender.
+  const guideDrawerFocusSnapshotRef = useRef({ guideGroups, activeGuideGroupName });
+  useEffect(() => {
+    guideDrawerFocusSnapshotRef.current = { guideGroups, activeGuideGroupName };
+  }, [guideGroups, activeGuideGroupName]);
   onIconRailNavigateRef.current = onIconRailNavigate;
   onIconRailOpenMainDrawerRef.current = onIconRailOpenMainDrawer;
 
@@ -442,9 +448,11 @@ export function PurpleTvShell({
       return;
     }
 
+    const { guideGroups: availableGuideGroups, activeGuideGroupName: currentGuideGroupName } =
+      guideDrawerFocusSnapshotRef.current;
     const preferredGuideGroupName = !focusDrawerTop && active === "/guide"
-      ? (guideGroups?.some((item) => item.name === lastMainDrawerGroupName)
-          ? lastMainDrawerGroupName : activeGuideGroupName)
+      ? (availableGuideGroups?.some((item) => item.name === lastMainDrawerGroupName)
+          ? lastMainDrawerGroupName : currentGuideGroupName)
       : null;
     const preferredRoute: Route | null = preferredGuideGroupName
       ? null : focusDrawerTop ? NAV[0].route : (lastMainDrawerRoute || active);
