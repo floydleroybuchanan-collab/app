@@ -84,6 +84,9 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
       else -> null
     } ?: return
     CharmMemoryCoordinator.trim(trimLevel)
+    // The independent VOD home catalog is the first large allocation that
+    // can safely be discarded without touching Live TV/EPG decoder state.
+    com.streamflixreborn.streamflix.utils.HomeCacheStore.clearMemory()
     val pressure = trimLevel.name.lowercase()
     try {
       reactNativeHost.reactInstanceManager.currentReactContext
