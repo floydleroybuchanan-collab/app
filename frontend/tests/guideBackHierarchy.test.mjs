@@ -17,7 +17,7 @@ test("Guide BACK opens remembered groups and then main drawer in one press", asy
   assert.match(hook, /hardwareBackPress", onBack/);
   assert.doesNotMatch(hook, /GUIDE_DOUBLE_BACK_WINDOW_MS|lastGuideBackAtRef/);
   // Every BACK press must move exactly one layer: Guide -> groups -> main.
-  assert.match(guide, /if \(groupDrawerOpen\) \{[\s\S]*?setGroupDrawerOpen\(false\);[\s\S]*?openDrawer\(\)/);
+  assert.match(guide, /if \(groupDrawerOpen\) \{[\s\S]*?setGroupDrawerOpen\(false\);[\s\S]*?openDrawer\(\{ force: true \}\)/);
   assert.match(guide, /onFocusIconRail=\{focusIconRail\}/);
   assert.match(guide, /onIconRailOpenMainDrawer=\{\(\) => setGroupDrawerOpen\(false\)\}/);
   assert.match(guide, /setGroupDrawerOpen\(true\);\s*return true/);
