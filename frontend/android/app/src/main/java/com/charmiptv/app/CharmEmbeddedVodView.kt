@@ -55,6 +55,7 @@ class CharmEmbeddedVodView(
     private var active = false
     private var drawerOpen = false
     private var released = false
+    private var cacheSessionRegistered = false
     private var focusMemory = VodFocusMemory()
     private val lastZoneWasBar = mutableMapOf<Int, Boolean>()
     private var pendingRestore: Runnable? = null
@@ -92,10 +93,25 @@ class CharmEmbeddedVodView(
         }
     }
 
+    private fun beginCacheSession() {
+        if (cacheSessionRegistered) return
+        CacheUtils.beginSession()
+        cacheSessionRegistered = true
+    }
+
+    private fun endCacheSession() {
+        if (!cacheSessionRegistered) return
+        cacheSessionRegistered = false
+        CacheUtils.endSession()
+    }
+
     fun setActive(value: Boolean) {
         if (released || active == value) return
         active = value
-        if (value) post { mountIfActive() } else unmount()
+        if (value) {
+            beginCacheSession()
+            post { mountIfActive() }
+        } else unmount()
         refreshBackCallback()
     }
 
@@ -110,7 +126,10 @@ class CharmEmbeddedVodView(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (active) post { mountIfActive() }
+        if (active) {
+            beginCacheSession()
+            post { mountIfActive() }
+        }
         refreshBackCallback()
     }
 
@@ -281,6 +300,8 @@ class CharmEmbeddedVodView(
     }
 
     private fun unmount() {
+        // First release the native fragment/player, then retire the cache
+        // session and allow low-priority disk maintenance in the background.
         cancelFocusRestore()
         backCallback?.remove()
         backCallback = null
@@ -310,6 +331,7 @@ class CharmEmbeddedVodView(
         focusMemory = VodFocusMemory()
         lastZoneWasBar.clear()
         CharmMemoryCoordinator.trim(CharmTrimLevel.BACKGROUND)
+        endCacheSession()
         if (oldHost != null) {
             val budgetMb = (CharmMemoryCoordinator.budgets().vodCacheBytes / (1024L * 1024L))
                 .coerceAtLeast(8L)
