@@ -144,7 +144,8 @@ class MainTvActivity : FragmentActivity() {
                 }
                 when (navController.currentDestination?.id) {
                     R.id.home -> finishToMainDrawer()
-                    R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
+                    R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites,
+                    R.id.genre_hub, R.id.platforms -> {
                         // These are VOD top-level destinations. BACK exits to
                         // Charming MediaLab's main drawer, never the icon rail.
                         // Movie/episode/season/player details below continue to
