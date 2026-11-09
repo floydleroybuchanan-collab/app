@@ -7,18 +7,21 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (name) => readFile(join(root, name), "utf8");
 
-test("BACK from VOD root pages returns the Charming main drawer, never native icon rail", async () => {
-  const [activity, bridge, host] = await Promise.all([
-    source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/activities/main/MainTvActivity.kt"),
-    source("android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt"),
+test("BACK from VOD roots opens the existing Charming main drawer without leaving MainActivity", async () => {
+  const [root, manager, host, main] = await Promise.all([
+    source("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt"),
+    source("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt"),
     source("app/(tabs)/vod.tsx"),
+    source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
   ]);
-  assert.match(activity, /R\.id\.home -> finishToMainDrawer\(\)/);
-  assert.match(activity, /R\.id\.favorites,[\s\S]*?R\.id\.genre_hub, R\.id\.platforms -> \{[\s\S]*?finishToMainDrawer\(\)/);
-  assert.match(activity, /putExtra\("openMainDrawer", true\)/);
-  assert.match(activity, /!handled && !navController\.navigateUp\(\)\) finishToMainDrawer\(\)/);
-  assert.match(bridge, /putBoolean\("openMainDrawer"/);
-  assert.match(host, /if \(result\?\.openMainDrawer\) openDrawer\(\)/);
+  assert.match(root, /fun navigateBack\(\): Boolean/);
+  assert.match(root, /R\.id\.genre_hub, R\.id\.platforms -> \{/);
+  assert.match(root, /onHostBack\?\.invoke\(\)/);
+  assert.match(root, /player\?\.onBackPressed\(\) == true/);
+  assert.match(root, /controller\.navigateUp\(\)/);
+  assert.match(manager, /CharmVodRootBack/);
+  assert.match(host, /DeviceEventEmitter\.addListener\("CharmVodRootBack", \(\) => openDrawer/);
+  assert.match(main, /nativeVodOwnsFocus\(\)/);
 });
 
 test("VOD LEFT reaches icon rail only at content or first action boundary", async () => {
