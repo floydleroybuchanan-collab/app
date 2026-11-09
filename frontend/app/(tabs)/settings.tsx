@@ -1,7 +1,7 @@
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { Alert, Share, DeviceEventEmitter, Linking, NativeModules, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { supportReport } from "@/src/core/supportReport";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -594,15 +594,8 @@ function SettingsScreenContent() {
             {section === "vod" ? (
               <SettingsCard title="Video OnDemand Settings" icon="film-outline">
                 <Text style={styles.help}>Manage VOD source selection, Real-Debrid connections, playback, content, appearance and provider settings in the restored native VOD Settings screen. No preferences are reset.</Text>
-                <Action label="Open VOD Settings" icon="settings-outline" onPress={() => {
-                  if (Platform.OS !== "android" || !NativeModules.CharmVod?.openSettings) {
-                    Alert.alert("VOD Settings", "This section requires the Android TV application.");
-                    return;
-                  }
-                  void NativeModules.CharmVod.openSettings().catch(() => {
-                    Alert.alert("VOD Settings", "Couldn't open the native VOD settings. Try again.");
-                  });
-                }} />
+                <Action label="Open VOD Settings" icon="settings-outline"
+                  onPress={() => router.push("/vod?section=settings" as any)} />
               </SettingsCard>
             ) : null}
             {section === "general" ? (
