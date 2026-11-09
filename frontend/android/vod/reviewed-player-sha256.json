@@ -11,8 +11,8 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "427a35cd2b8d07cde422cdafad2b0536ff7d9654abf572d1ef3e1f7f16b4dfb9",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection. RC focus pass: dedicated Stop control, Down navigation, and return-to-origin cleanup without changing source resolution. RC26: temporary verified platform-Original upper-left player badge, automatically canceled with player view and faded after 60 seconds."
+    "sha256": "dad1503f98a6f2acde8c0f6c30fa9b12f4a2e0813921393c6776c6985bba275b",
+    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection. RC focus pass: dedicated Stop control, Down navigation, and return-to-origin cleanup without changing source resolution. RC26: temporary verified platform-Original upper-left player badge, automatically canceled with player view and faded after 60 seconds. RC25.2 embedded host safety: preserve orientation and system bars on exit and share authenticated provider cookie jar with Media3."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",
