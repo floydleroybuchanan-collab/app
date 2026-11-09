@@ -1,6 +1,7 @@
 package com.charmiptv.app
 
 import android.view.View
+import android.widget.FrameLayout
 import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentManager
 import com.facebook.react.bridge.ReactApplicationContext
@@ -27,7 +28,11 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         }
     }
 
-    inner class Surface(context: ThemedReactContext) : FragmentContainerView(context) {
+    inner class Surface(context: ThemedReactContext) : FrameLayout(context) {
+        private val container = FragmentContainerView(context).apply {
+            id = View.generateViewId()
+            isFocusable = false
+        }
         private var activity: MainActivity? = null
         private var fragment: VodRootFragment? = null
         private var manager: FragmentManager? = null
@@ -41,6 +46,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             id = View.generateViewId()
             isFocusable = false
             descendantFocusability = FOCUS_AFTER_DESCENDANTS
+            addView(container, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         }
 
         override fun onAttachedToWindow() {
@@ -69,7 +75,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             fragment = screen
             host.attachVodInput(this, screen::onRemoteKey, screen::navigateBack)
             try {
-                fm.beginTransaction().replace(id, screen, "charm_unified_vod_" + id)
+                fm.beginTransaction().replace(container.id, screen, "charm_unified_vod_" + container.id)
                     .commitNowAllowingStateLoss()
             } catch (e: RuntimeException) {
                 // The bridge must not leave stale activity-level key routing
