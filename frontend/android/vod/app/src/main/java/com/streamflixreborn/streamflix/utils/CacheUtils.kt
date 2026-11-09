@@ -7,6 +7,7 @@ import com.bumptech.glide.Glide
 import com.streamflixreborn.streamflix.charm.CharmVodProcess
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
@@ -18,9 +19,13 @@ object CacheUtils {
     private const val TAG = "VodCache"
     private const val MAX_DELETE_DEPTH = 12
     private val pruning = AtomicBoolean(false)
-    private val sessionActive = AtomicBoolean(false)
+    private val activeSessions = AtomicInteger(0)
 
-    fun setSessionActive(active: Boolean) { sessionActive.set(active) }
+    // Count active native surfaces, not a global boolean: an outgoing React
+    // view must not authorize deletion while a replacement has mounted.
+    fun beginSession() { activeSessions.incrementAndGet() }
+    fun endSession() { activeSessions.updateAndGet { if (it > 0) it - 1 else 0 } }
+    private fun hasActiveSession() = activeSessions.get() > 0
 
     private fun internalVodCache(context: Context): File {
         val base = context.applicationContext.cacheDir
@@ -44,11 +49,11 @@ object CacheUtils {
     private fun clearDirectory(root: File?, background: Boolean = false) {
         if (root == null || !root.isDirectory) return
         // Background cleanup stops if a new VOD session opens mid-prune.
-        if (background && sessionActive.get()) return
+        if (background && hasActiveSession()) return
         // Only clear children of the VOD-owned namespace. Never delete the
         // namespace itself, host cache root, guide, or app databases.
         root.listFiles()?.forEach { entry ->
-            if (!background || !sessionActive.get()) {
+            if (!background || !hasActiveSession()) {
                 if (!entry.deleteRecursively()) Log.w(TAG, "Unable to delete VOD cache entry: ${entry.name}")
             }
         }
@@ -75,13 +80,13 @@ object CacheUtils {
 
     /** Run bounded VOD-disk maintenance only after native VOD has been unmounted. */
     fun pruneInBackground(context: Context, thresholdMb: Long = 50) {
-        if (sessionActive.get() || !pruning.compareAndSet(false, true)) return
+        if (hasActiveSession() || !pruning.compareAndSet(false, true)) return
         val app = context.applicationContext
         thread(name = "charm-vod-cache-prune", isDaemon = true) {
             try {
-                if (!sessionActive.get()) {
+                if (!hasActiveSession()) {
                     val threshold = thresholdMb.coerceAtLeast(1L) * 1024L * 1024L
-                    if (getCacheSize(app) > threshold && !sessionActive.get()) {
+                    if (getCacheSize(app) > threshold && !hasActiveSession()) {
                         clearDirectory(internalVodCache(app), background = true)
                         clearDirectory(externalVodCache(app), background = true)
                     }
