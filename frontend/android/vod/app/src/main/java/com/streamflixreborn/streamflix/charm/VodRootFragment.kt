@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.charm
 
 import android.os.Bundle
+import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -20,6 +21,7 @@ import com.streamflixreborn.streamflix.providers.FilmyOnlineCcProvider
 import com.streamflixreborn.streamflix.providers.GuardaSerieProvider
 import com.streamflixreborn.streamflix.providers.ZaluknijProvider
 import com.streamflixreborn.streamflix.utils.UserPreferences
+import com.streamflixreborn.streamflix.utils.ThemeManager
 import com.streamflixreborn.streamflix.providers.Provider
 
 /**
@@ -48,7 +50,14 @@ class VodRootFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, saved: Bundle?): View {
-        _binding = ActivityMainTvBinding.inflate(inflater, parent, false)
+        // The original TV layout was built for Theme.Leanback. Keep that theme
+        // scoped to VOD views; never change the shared React Native Activity.
+        // Host AppTheme supplies VOD attribute fallbacks for nested fragments.
+        val themedContext = ContextThemeWrapper(
+            inflater.context, ThemeManager.tvThemeRes(UserPreferences.selectedTheme)
+        )
+        val vodInflater = inflater.cloneInContext(themedContext)
+        _binding = ActivityMainTvBinding.inflate(vodInflater, parent, false)
         return binding.root
     }
 
