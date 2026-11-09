@@ -62,6 +62,7 @@ import androidx.navigation.fragment.navArgs
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.fragments.player.settings.PlayerSettingsView
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.ContentExoControllerTvBinding
@@ -226,12 +227,24 @@ class PlayerTvFragment : Fragment() {
         player.play()
     }
 
+    // The VOD player is a child of Charming MainActivity: it must not mutate
+    // the Activity's orientation. For standalone VOD only, restore old behavior.
+    private var hostBarsBeforePlayback: Pair<Boolean, Boolean>? = null
+
     override fun onResume() {
         super.onResume()
         if (!isSetupDone) {
-            requireActivity().requestedOrientation =
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = requireActivity().window
+            if (!BuildConfig.CHARM_VOD_EMBEDDED) {
+                requireActivity().requestedOrientation =
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)
+                hostBarsBeforePlayback = if (insets != null) Pair(
+                    insets.isVisible(WindowInsetsCompat.Type.statusBars()),
+                    insets.isVisible(WindowInsetsCompat.Type.navigationBars())
+                ) else null
+            }
             val insetsController = WindowInsetsControllerCompat(window, window.decorView)
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -594,6 +607,19 @@ class PlayerTvFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+            // Restore the embedded host's pre-player system bars. No orientation
+            // change is ever requested while using Charming's MainActivity.
+            if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                hostBarsBeforePlayback?.let { (statusWasVisible, navigationWasVisible) ->
+                    val window = requireActivity().window
+                    val bars = WindowInsetsControllerCompat(window, window.decorView)
+                    if (statusWasVisible) bars.show(WindowInsetsCompat.Type.statusBars())
+                    else bars.hide(WindowInsetsCompat.Type.statusBars())
+                    if (navigationWasVisible) bars.show(WindowInsetsCompat.Type.navigationBars())
+                    else bars.hide(WindowInsetsCompat.Type.navigationBars())
+                }
+                hostBarsBeforePlayback = null
+            }
             super.onDestroyView()
             nextEpisodePrefetchJob?.cancel()
             platformBadgeJob?.cancel()
@@ -1770,6 +1796,9 @@ class PlayerTvFragment : Fragment() {
             var tokenLogged = false
             val okHttpClient = OkHttpClient.Builder()
                 .dns(DnsResolver.doh)
+                // WebView/provider clearance cookies must accompany Media3 HLS
+                // playlists, segment and redirect requests as well.
+                .cookieJar(NetworkClient.cookieJar)
                 .addInterceptor { chain ->
                     var request = chain.request()
                     
