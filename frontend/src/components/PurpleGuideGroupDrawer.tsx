@@ -9,6 +9,10 @@ import { addTvKeyListener, addTvLongPressListener, resetRemoteContextIfOwned, se
 
 export const GUIDE_GROUP_DRAWER_WIDTH = 232;
 
+// This drawer is conditionally mounted and unmounted on every guide handoff.
+// Keep only its last small identity token across mounts, never a View reference.
+let lastFocusedGuideGroupName: string | null = null;
+
 export function PurpleGuideGroupDrawer({
   open,
   groups,
@@ -73,7 +77,7 @@ export function PurpleGuideGroupDrawer({
 
     // Claim focus once per drawer entry. After this, Android owns vertical focus
     // movement until the drawer closes; active-group/count updates cannot yank it.
-    const lastName = focusedNameRef.current;
+    const lastName = focusedNameRef.current || lastFocusedGuideGroupName;
     const targetName = lastName && groupsRef.current.some((item) => item.name === lastName)
       ? lastName : activeNameRef.current;
     focusTargetNameRef.current = targetName;
@@ -124,6 +128,7 @@ export function PurpleGuideGroupDrawer({
                 focusConfirmedRef.current = true;
                 setPreferActiveFocus(false);
                 focusedNameRef.current = item.name;
+                lastFocusedGuideGroupName = item.name;
                 setGuideNavigationActive(false);
                 setRemoteContext("guide_groups");
               }}
