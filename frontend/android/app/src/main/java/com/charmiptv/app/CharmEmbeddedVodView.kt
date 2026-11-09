@@ -203,7 +203,13 @@ class CharmEmbeddedVodView(
                 event("topRequestMainDrawer")
             else -> {
                 val fragment = navHost?.childFragmentManager?.primaryNavigationFragment
-                val playerHandled = (fragment as? PlayerTvFragment)?.onBackPressed() ?: false
+                // A fragment transaction can leave a player object in the
+                // NavHost briefly after its view is gone; never query a dead
+                // controller binding during rapid BACK/route transitions.
+                val playerHandled = if (fragment is PlayerTvFragment &&
+                    fragment.isAdded && fragment.view != null) {
+                    fragment.onBackPressed()
+                } else false
                 if (!playerHandled && !nav.navigateUp()) event("topRequestMainDrawer")
             }
         }
