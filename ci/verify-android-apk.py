@@ -115,6 +115,9 @@ def main() -> None:
     signer = re.search(r"Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]{64})", signature)
     if not signer:
         raise ValueError("Cannot verify APK signing certificate fingerprint")
+    expected_signer = baseline.get("androidSignerCertificateSha256")
+    if expected_signer and signer.group(1).lower() != expected_signer.lower():
+        raise ValueError("APK Android signer differs from published Build 284; update would fail")
     alignment = run("zipalign", "-c", "-P", "16", "-v", "4", apk)
     badging = run("aapt", "dump", "badging", apk)
     manifest = run("aapt", "dump", "xmltree", apk, "AndroidManifest.xml")
