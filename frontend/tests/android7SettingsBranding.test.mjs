@@ -92,7 +92,7 @@ test('host and VOD support API 24 without dropping current framework or HTTP sou
   assert.match(read('android/app/src/main/AndroidManifest.xml'), /usesCleartextTraffic="\$\{allowCleartextStreams\}"/);
 });
 
-test('launcher uses RGBA circle artwork while VOD has a finite skippable cinematic entrance', () => {
+test('launcher uses RGBA circle artwork without an extra VOD interstitial', () => {
   const asset = readFileSync(new URL('../assets/medialab/medialab_launcher.png', import.meta.url));
   const native = readFileSync(new URL('../android/app/src/main/res/drawable-nodpi/medialab_launcher.png', import.meta.url));
   assert.equal(createHash('sha256').update(asset).digest('hex'), createHash('sha256').update(native).digest('hex'));

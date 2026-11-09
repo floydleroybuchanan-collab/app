@@ -61,7 +61,7 @@ test("all Settings tiles resolve to a focus-owned section or a reviewed independ
   const settings = read("app/(tabs)/settings.tsx");
   const tiles = settings.match(/const TILES: Tile\[\] = \[([\s\S]*?)\n\];/)?.[1] || "";
   const sections = Array.from(tiles.matchAll(/id: "([^"]+)"/g), match => match[1]);
-  assert.equal(sections.length, 13);
+  assert.equal(sections.length, 14);
   for (const section of sections) {
     if (section === "epg" || section === "playlists") continue;
     assert.ok(settings.includes(`section === "${section}"`), `${section} must have an in-page destination`);

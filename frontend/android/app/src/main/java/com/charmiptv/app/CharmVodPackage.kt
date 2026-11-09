@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.BaseActivityEventListener
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -20,7 +21,10 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
         context.addActivityEventListener(object : BaseActivityEventListener() {
             override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
                 if (requestCode != REQUEST_VOD) return
-                pending?.resolve(null)
+                pending?.resolve(Arguments.createMap().apply {
+                    putBoolean("openMainDrawer", resultCode == Activity.RESULT_OK &&
+                        data?.getBooleanExtra("openMainDrawer", false) == true)
+                })
                 pending = null
             }
         })
@@ -29,7 +33,13 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     override fun getName() = "CharmVod"
 
     @ReactMethod
-    fun open(promise: Promise) {
+    fun open(promise: Promise) = launch(promise, openSettings = false)
+
+    /** Direct entry to the restored native VOD preferences from host Settings. */
+    @ReactMethod
+    fun openSettings(promise: Promise) = launch(promise, openSettings = true)
+
+    private fun launch(promise: Promise, openSettings: Boolean) {
         context.runOnUiQueueThread {
             val activity = context.currentActivity
             if (activity == null || activity.isFinishing) {
@@ -42,7 +52,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
             }
             try {
                 pending = promise
-                activity.startActivityForResult(Intent(activity, MainTvActivity::class.java), REQUEST_VOD)
+                activity.startActivityForResult(Intent(activity, MainTvActivity::class.java).apply { putExtra("openVodSettings", openSettings) }, REQUEST_VOD)
             } catch (error: Exception) {
                 pending = null
                 promise.reject("E_VOD_LAUNCH", "Could not open Video OnDemand.", error)

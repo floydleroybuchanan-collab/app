@@ -5,24 +5,30 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?attr/app_background_color"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     tools:context=".activities.main.MainTvActivity"
     tools:deviceIds="tv"
     tools:ignore="MergeRootFrame">
 
-    <com.tanasi.navigation.widget.NavigationSlideView
+    <com.streamflixreborn.streamflix.charm.VodIconRail
         android:id="@+id/nav_main"
-        android:layout_width="wrap_content"
+        android:layout_width="72dp"
         android:layout_height="0dp"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:background="?attr/app_background_color"
-        app:headerLayout="@layout/content_header_menu_main_tv"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:menu="@menu/menu_main_activity_tv"
-        app:menuGravity="center"
-        app:menuSpacing="8dp" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- TV-first VOD navigation; the wide top bar never traps vertical focus. -->
+    <com.streamflixreborn.streamflix.charm.VodGlassActionBar
+        android:id="@+id/vod_glass_actions"
+        android:layout_width="0dp"
+        android:layout_height="94dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        app:layout_constraintStart_toEndOf="@id/nav_main"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/nav_main_fragment"
@@ -34,7 +40,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/nav_main"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/vod_glass_actions"
         app:navGraph="@navigation/nav_main_graph_tv" />
 
     <!-- Finite, skippable Charming MediaLab welcome; catalog loads underneath. -->
