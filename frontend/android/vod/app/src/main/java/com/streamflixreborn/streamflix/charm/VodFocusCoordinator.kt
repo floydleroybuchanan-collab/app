@@ -98,6 +98,31 @@ class VodFocusCoordinator(
         }
         if (binding.vodGlassActions.visibility != View.VISIBLE) return false
         val current = binding.root.findFocus() ?: return false
+        val inBar = VodFocusMemory.isWithin(binding.vodGlassActions, current)
+        val content = currentContentRoot()
+        val inContent = content != null && VodFocusMemory.isWithin(content, current)
+
+        // LEFT travels normally across cards and glass buttons. Only after
+        // crossing the very last focusable item does it enter the icon rail.
+        // BACK never uses this path and does not touch the icon rail.
+        if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
+            if (inBar && binding.vodGlassActions.isFirstActionFocused(current)) {
+                return binding.navMain.requestFocus()
+            }
+            if (inContent && content != null) {
+                val next = current.focusSearch(View.FOCUS_LEFT)
+                if (next == null || !VodFocusMemory.isWithin(content, next)) {
+                    return binding.navMain.requestFocus()
+                }
+            }
+        }
+        // Moving RIGHT from the icon rail resumes the last content region,
+        // rather than arbitrarily selecting Watch Now again.
+        if (key == KeyEvent.KEYCODE_DPAD_RIGHT && binding.navMain.hasFocus()) {
+            return if (lastZoneWasBar[navigation.currentDestination?.id] == true)
+                focusBar() else (focusContent() || focusBar())
+        }
+
         if (key == KeyEvent.KEYCODE_DPAD_DOWN &&
             VodFocusMemory.isWithin(binding.vodGlassActions, current)) {
             return focusContent()
