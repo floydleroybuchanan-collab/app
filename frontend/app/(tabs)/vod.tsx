@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { Platform, Pressable, requireNativeComponent, StyleSheet, Text, View, type NativeSyntheticEvent } from "react-native";
-import { useFocusEffect, useIsFocused } from "expo-router";
+import { useFocusEffect } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { tvColors } from "@/src/theme";
