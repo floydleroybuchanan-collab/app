@@ -33,14 +33,15 @@ class VodGlassActionBar @JvmOverloads constructor(
         Action(R.id.movies, "Movies", R.drawable.ic_menu_movie),
         Action(R.id.tv_shows, "TV Shows", R.drawable.ic_menu_tv),
         Action(R.id.favorites, "My List", R.drawable.ic_favorite_enable),
-        Action(R.id.settings, "Settings", R.drawable.ic_menu_settings),
+        Action(R.id.genre_hub, "Genres", R.drawable.ic_menu_movie),
+        Action(R.id.platforms, "Platforms", R.drawable.ic_menu_tv),
     )
     private val strip = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         clipChildren = false
         clipToPadding = false
-        setPadding(dp(40), dp(20), dp(40), dp(20))
+        setPadding(dp(25), dp(13), dp(35), dp(13))
     }
     private val buttons = LinkedHashMap<Int, TextView>()
     private var lastFocusedId = R.id.home
@@ -60,7 +61,7 @@ class VodGlassActionBar @JvmOverloads constructor(
                 id = View.generateViewId()
                 text = action.title
                 gravity = Gravity.CENTER
-                textSize = 16f
+                textSize = 15.5f
                 setTextColor(Color.rgb(239, 226, 255))
                 setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(15), 0, dp(15), 0)
@@ -69,14 +70,20 @@ class VodGlassActionBar @JvmOverloads constructor(
                 isClickable = true
                 background = glassBackground(false)
                 elevation = dp(5).toFloat()
-                val icon = ContextCompat.getDrawable(context, action.icon)?.mutate()
-                if (icon != null) {
-                    val tinted = DrawableCompat.wrap(icon)
-                    DrawableCompat.setTint(tinted, Color.WHITE)
-                    tinted.setBounds(0, 0, dp(21), dp(21))
-                    setCompoundDrawables(tinted, null, null, null)
-                    compoundDrawablePadding = dp(10)
+                val colors = when(action.id) {
+                    R.id.home -> intArrayOf(0xFF10BCE9.toInt(),0xFFFC7C37.toInt())
+                    R.id.search -> intArrayOf(0xFF16C3F4.toInt(),0xFFD54CFB.toInt())
+                    R.id.movies -> intArrayOf(0xFFF76A39.toInt(),0xFFDB3DCC.toInt())
+                    R.id.tv_shows -> intArrayOf(0xFF25D4E6.toInt(),0xFFF659CB.toInt())
+                    R.id.favorites -> intArrayOf(0xFFF83E88.toInt(),0xFFF69D30.toInt())
+                    R.id.genre_hub -> intArrayOf(0xFFFFA13C.toInt(),0xFFD84BF2.toInt())
+                    else -> intArrayOf(0xFF25C4F8.toInt(),0xFF9B4CFF.toInt())
                 }
+                val icon = GlassGlyphDrawable(context,action.icon,colors[0],colors[1]).apply {
+                    setBounds(0,0,dp(35),dp(35))
+                }
+                setCompoundDrawables(icon, null, null, null)
+                compoundDrawablePadding = dp(9)
                 setOnClickListener { onNavigate?.invoke(action.id) }
                 onFocusChangeListener = OnFocusChangeListener { view, hasFocus ->
                     if (hasFocus) lastFocusedId = action.id
@@ -96,8 +103,8 @@ class VodGlassActionBar @JvmOverloads constructor(
                     }
                 }
             }
-            strip.addView(button, LinearLayout.LayoutParams(dp(158), dp(60)).apply {
-                rightMargin = if (index == actions.lastIndex) 0 else dp(16)
+            strip.addView(button, LinearLayout.LayoutParams(dp(150), dp(50)).apply {
+                rightMargin = if (index == actions.lastIndex) 0 else dp(12)
             })
             buttons[action.id] = button
         }
@@ -121,10 +128,10 @@ class VodGlassActionBar @JvmOverloads constructor(
 
     private fun glassBackground(focused: Boolean) = GradientDrawable(
         GradientDrawable.Orientation.TL_BR,
-        if (focused) intArrayOf(0xC69F61E9.toInt(), 0xC1783CB7.toInt(), 0xD35A248D.toInt())
-        else intArrayOf(0x5CFFFFFF, 0x6C7F429E, 0x80421E62.toInt()),
+        if (focused) intArrayOf(0x95BE8BD9.toInt(), 0x9B703A9D.toInt(), 0xA343207D.toInt())
+        else intArrayOf(0x3EFFFFFF, 0x517B429A, 0x5E421D61),
     ).apply {
-        cornerRadius = dp(14).toFloat()
+        cornerRadius = dp(16).toFloat()
         setStroke(dp(if (focused) 2 else 1), if (focused) Color.rgb(245, 215, 255) else 0x8FCFA6E6.toInt())
     }
 
