@@ -7,17 +7,17 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (path) => readFile(join(root, path), "utf8");
 
-test("Guide BACK returns from groups to the main drawer without skipping the icon rail", async () => {
+test("Guide BACK opens remembered groups and then main drawer in one press", async () => {
   const [hook, guide, groups, activity] = await Promise.all([
     source("src/hooks/use-tv-back-to-guide.ts"),
     source("app/(tabs)/guide.tsx"),
     source("src/components/PurpleGuideGroupDrawer.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
   ]);
-  assert.match(hook, /GUIDE_DOUBLE_BACK_WINDOW_MS = 650/);
-  assert.match(hook, /pathname\?\.startsWith\("\/guide"\)/);
-  assert.match(hook, /lastGuideBackAtRef\.current = now;\s*return true/);
-  assert.match(hook, /lastGuideBackAtRef\.current = 0;\s*}\s*return onBack\(\)/);
+  assert.match(hook, /hardwareBackPress", onBack/);
+  assert.doesNotMatch(hook, /GUIDE_DOUBLE_BACK_WINDOW_MS|lastGuideBackAtRef/);
+  // Every BACK press must move exactly one layer: Guide -> groups -> main.
+  assert.match(guide, /if \(groupDrawerOpen\) \{[\s\S]*?setGroupDrawerOpen\(false\);[\s\S]*?openDrawer\(\)/);
   assert.match(guide, /onFocusIconRail=\{focusIconRail\}/);
   assert.match(guide, /onIconRailOpenMainDrawer=\{\(\) => setGroupDrawerOpen\(false\)\}/);
   assert.match(guide, /setGroupDrawerOpen\(true\);\s*return true/);
