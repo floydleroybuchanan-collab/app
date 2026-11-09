@@ -61,9 +61,17 @@ test("one launcher remains, and Android update identity is not changed by VOD in
   const embedded = read("android/vod/app/src/main/embedded/AndroidManifest.xml");
   const config = JSON.parse(read("app.json")).expo;
   const gradle = read("android/app/build.gradle");
+  const styles = read("android/app/src/main/res/values/styles.xml");
   assert.match(hostManifest, /android:name="\.MainActivity"/);
   assert.doesNotMatch(embedded, /category\.LAUNCHER|category\.LEANBACK_LAUNCHER/);
   assert.equal(config.android.versionCode, 2500);
   assert.equal(config.android.package + ".sideload", "com.charmiptv.app.purple.next.vodtest1.sideload");
   assert.match(gradle, /versionCode 2500/);
+  // AppCompat remains the ReactActivity base while VOD's resources resolve.
+  assert.match(styles, /parent="Theme.AppCompat.DayNight.NoActionBar"/);
+  for (const attr of ["app_background_color", "home_gradient_drawable",
+    "movie_banner_gradient_drawable", "tv_show_banner_gradient_drawable",
+    "category_swiper_gradient_drawable"]) {
+    assert.match(styles, new RegExp(`<item name="${attr}">`));
+  }
 });
