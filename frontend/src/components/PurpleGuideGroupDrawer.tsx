@@ -77,9 +77,12 @@ export function PurpleGuideGroupDrawer({
 
     // Claim focus once per drawer entry. After this, Android owns vertical focus
     // movement until the drawer closes; active-group/count updates cannot yank it.
-    const lastName = focusedNameRef.current || lastFocusedGuideGroupName;
-    const targetName = lastName && groupsRef.current.some((item) => item.name === lastName)
-      ? lastName : activeNameRef.current;
+    // BACK and guide-edge LEFT both reopen onto the group that actually
+    // entered the active Guide, not a neighboring row merely browsed in
+    // the drawer before closing it.
+    const selectedName = activeNameRef.current;
+    const targetName = selectedName && groupsRef.current.some((item) => item.name === selectedName)
+      ? selectedName : (lastFocusedGuideGroupName || groupsRef.current[0]?.name || null);
     focusTargetNameRef.current = targetName;
     const node = targetName ? refs.current.get(targetName) : emptyRef.current;
     const cancelFocus = requestNativeFocusWithRetry(node, [0, 80, 160, 260, 560], () => focusConfirmedRef.current);
