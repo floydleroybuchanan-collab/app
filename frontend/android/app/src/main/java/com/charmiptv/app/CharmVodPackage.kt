@@ -33,7 +33,13 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
     override fun getName() = "CharmVod"
 
     @ReactMethod
-    fun open(promise: Promise) {
+    fun open(promise: Promise) = launch(promise, openSettings = false)
+
+    /** Direct entry to the restored native VOD preferences from host Settings. */
+    @ReactMethod
+    fun openSettings(promise: Promise) = launch(promise, openSettings = true)
+
+    private fun launch(promise: Promise, openSettings: Boolean) {
         context.runOnUiQueueThread {
             val activity = context.currentActivity
             if (activity == null || activity.isFinishing) {
@@ -46,7 +52,7 @@ class CharmVodModule(private val context: ReactApplicationContext) : ReactContex
             }
             try {
                 pending = promise
-                activity.startActivityForResult(Intent(activity, MainTvActivity::class.java), REQUEST_VOD)
+                activity.startActivityForResult(Intent(activity, MainTvActivity::class.java).apply { putExtra("openVodSettings", openSettings) }, REQUEST_VOD)
             } catch (error: Exception) {
                 pending = null
                 promise.reject("E_VOD_LAUNCH", "Could not open Video OnDemand.", error)
