@@ -135,8 +135,10 @@ function LiveTvHomeScreenContent() {
     useCallback(() => {
       const offKey = addTvKeyListener((key) => {
         if (key !== "LEFT") return;
+        // Android TV may mark Watch Last Channel as preferred focus before
+        // its first onFocus callback. LEFT must work immediately on startup.
         const owner = leftEdgeFocusRef.current;
-        if (!owner) return;
+        if (!owner && !entryFocus.preferredFocus) return;
         focusIconRail();
       });
       return () => {
@@ -144,7 +146,7 @@ function LiveTvHomeScreenContent() {
         leftEdgeFocusRef.current = null;
         resetRemoteContextIfOwned("drawer_edge", "default");
       };
-    }, [focusIconRail]),
+    }, [entryFocus.preferredFocus, focusIconRail]),
   );
 
   const channelNumberById = useMemo(() => {
