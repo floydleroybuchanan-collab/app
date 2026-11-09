@@ -1,4 +1,4 @@
-name: Build Charming MediaLab RC.10 Sideload APK
+name: Build Charming MediaLab RC.25 Update Sideload APK
 
 on:
   workflow_dispatch:
@@ -9,6 +9,11 @@ on:
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/**"
+      - "ci/release-update-baseline.json"
+      - "ci/verify-release-update.py"
+      - "ci/verify-android-apk.py"
+      - "ci/test_release_update_contract.py"
+      - "ci/sideload-artifact-public.pem"
   push:
     branches:
       - feature/multiple-playlists-test-1
@@ -22,6 +27,8 @@ on:
       - "frontend/tests/**"
       - "frontend/package*.json"
       - "ci/verify-android-apk.py"
+      - "ci/verify-release-update.py"
+      - "ci/release-update-baseline.json"
       - "ci/verify-media3-only.py"
       - "ci/media3_source_contract.py"
       - "ci/playlist_source_contract.py"
@@ -35,12 +42,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: medialab-rc10-${{ github.ref }}
+  group: medialab-rc25-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Charming MediaLab RC.10 universal sideload APK
+    name: Build Charming MediaLab RC.25 updateable universal sideload APK
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'fix/tv-focus-vod-guide-20261109' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/feature/multiple-playlists-test-1') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -78,6 +85,10 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Verify upgrade identity and owner decryptor key from Build 267
+        working-directory: .
+        run: python3 ci/verify-release-update.py
 
       - name: Verify live VOD catalog and poster access
         run: node scripts/verify-vod-catalog.mjs
@@ -203,8 +214,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/Charming.MediaLab.RC-10-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/Charming.MediaLab.RC-10-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/Charming.MediaLab-2.2.1-RC25-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/Charming.MediaLab-2.2.1-RC25-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -216,7 +227,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: Charming.MediaLab.RC-10-Sideload-Encrypted-${{ github.run_number }}
+          name: Charming.MediaLab-RC25-Sideload-Encrypted-${{ github.run_number }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json
