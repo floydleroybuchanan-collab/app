@@ -65,6 +65,9 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
       ReleaseLevel.STABLE
     }
     loadReactNative(this)
+    // Prime the last saved VOD catalog and first-screen artwork in background.
+    // Navigation, Live TV and startup never wait for this work.
+    com.streamflixreborn.streamflix.charm.VodHomePrewarm.onAppStart(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
     EpgUpdateScheduler.install(this)
   }
