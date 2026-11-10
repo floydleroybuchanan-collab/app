@@ -271,7 +271,7 @@ export function PurpleTvShell({
   const { deviceLayoutMode, activeProgram } = useStore();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && !immersiveContent && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = isFocused && railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && !immersiveContent && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -643,7 +643,7 @@ export function PurpleTvShell({
         },
       ]}
     >
-      <Animated.View
+      {isFocused && (active !== "/vod" || drawerOpen) ? <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
@@ -758,9 +758,9 @@ export function PurpleTvShell({
             </Pressable>
           </View>
         </FocusGuide>
-      </Animated.View>
+      </Animated.View> : null}
 
-      {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
+      {isFocused && drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
       {showIconRail ? (
         <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
           <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>
@@ -815,7 +815,7 @@ export function PurpleTvShell({
           </Pressable>
         </FocusGuide>
       ) : null}
-      {!drawerOpen && secondaryDrawer ? secondaryDrawer : null}
+      {isFocused && !drawerOpen && secondaryDrawer ? secondaryDrawer : null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
