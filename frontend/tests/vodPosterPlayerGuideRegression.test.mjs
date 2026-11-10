@@ -42,3 +42,11 @@ test("in-player Guide stays inside one decoder and gives remote-focusable two-pa
   assert.match(player, /onPress=\{goGuide\}/); // explicit Full Guide still accessible
   assert.doesNotMatch(player, /onPress=\{goGuide\}[^\n]*>Guide</);
 });
+
+test("DPAD channel browsing previews EPG without spinning up a decoder on focus", () => {
+  const player = read("app/player.tsx");
+  assert.match(player, /onFocus=\{\(\) => setGuidePreviewId\(item.id\)\}/);
+  assert.match(player, /onPress=\{\(\) => \{ changeChannel\(item.id, true\); closeOverlayAndRestoreFocus\(\); \}\}/);
+  assert.doesNotMatch(player, /previewChannel\(item.id\)/);
+  assert.match(player, /const guidePreviewPrograms = useGuidePrograms/);
+});

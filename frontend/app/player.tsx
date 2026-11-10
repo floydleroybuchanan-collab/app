@@ -274,7 +274,6 @@ export default function PlayerScreen() {
     revealControls({ claimChannelsFocus: false });
   }, [channelById, revealControls, showNotice]);
 
-  const previewChannel = useCallback((id: string) => { if (id !== pendingChannelIdRef.current) changeChannel(id); }, [changeChannel]);
   const stepChannel = useCallback((direction: -1 | 1) => {
     if (streamChannels.length < 2 || exitInFlightRef.current) return;
     const currentId = pendingChannelIdRef.current || channelIdRef.current;
@@ -385,7 +384,13 @@ export default function PlayerScreen() {
             () => stopFocusedRef.current,
           );
         }
-      } else scheduleHide();
+      } else {
+        // A fresh key is the user's decision, not a late focus-retry hint.
+        // Cancel queued Stop refocus so it cannot steal the next selection.
+        cancelStopFocusRef.current?.();
+        cancelStopFocusRef.current = null;
+        scheduleHide();
+      }
     });
     return () => {
       unsubscribe();
@@ -679,7 +684,9 @@ export default function PlayerScreen() {
                     style={styles.guideChannelList}
                     renderItem={({ item }) => (
                       <Pressable
-                        onFocus={() => { setGuidePreviewId(item.id); previewChannel(item.id); }}
+                        // Guide focus updates lightweight EPG data only. Never
+                        // rebuild Media3/decoder for every D-pad movement.
+                        onFocus={() => setGuidePreviewId(item.id)}
                         onPress={() => { changeChannel(item.id, true); closeOverlayAndRestoreFocus(); }}
                         style={({ focused }: any) => [styles.guideChannelRow, item.id === channelId && styles.guideCurrentChannel, focused && styles.focused]}
                       >
