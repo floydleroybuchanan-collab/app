@@ -57,7 +57,10 @@ object HomeCacheStore {
 
         return runCatching {
             val type = object : TypeToken<List<CachedCategory>>() {}.type
-            val payload: List<CachedCategory> = gson.fromJson(file.readText(), type)
+            // AtomicFile.openRead restores the previous snapshot if a write
+            // was interrupted before its final rename.
+            val payload: List<CachedCategory> = AtomicFile(file).openRead().bufferedReader()
+                .use { reader -> gson.fromJson(reader, type) }
             remember(cacheKey, payload)
             payload.toCategories()
         }.recoverCatching {
