@@ -71,6 +71,10 @@ test("active-tab focus, navigation, and event-listener owners agree", () => {
   assert.match(read(route), /screenActive=\{isFocused\}/);
   assert.match(read(bridge), /@ReactProp\(name = "screenActive", defaultBoolean = false\)/);
   assert.match(read(bridge), /fragment\?\.setHostActive\(value\)/);
+  assert.match(read(bridge), /activity\?\.attachVodInput\(this, current::onRemoteKey, current::navigateBack\)/);
+  assert.match(read(bridge), /activity\?\.detachVodInput\(this\)/);
+  assert.ok(read(bridge).indexOf("activity?.detachVodInput(this)") <
+    read(bridge).indexOf("private fun showFailure(") || !read(bridge).includes("showFailure("));
   assert.match(read(root), /coordinator\?\.setHostActive\(active\)/);
   assert.match(read(focus), /if \(!active\) cancelPendingRestore\(\)/);
   assert.match(read(host), /container\.screenActive && visible\(container\)/);
