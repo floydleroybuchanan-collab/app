@@ -52,56 +52,56 @@ object VodHomePrewarm {
             // Superseded refreshes must not queue more artwork requests.
             warmJob?.cancel()
             warmJob = scope.launch {
-            val first = categories.firstOrNull { it.name == Category.FEATURED }
-                ?.list?.filterIsInstance<Show>()?.firstOrNull()
-            val hero = when (first) {
-                is Movie -> first.banner ?: first.poster
-                is TvShow -> first.banner ?: first.poster
-                else -> null
-            }
-            // Front-page shelves only: never prefetch thousands of poster images.
-            val posters = categories.asSequence()
-                // Featured is the hero, not the first visible movie shelf.
-                .filter { it.name != Category.FEATURED }
-                .flatMap { it.list.asSequence() }
-                .filterIsInstance<Show>()
-                .mapNotNull {
-                    when (it) {
-                        is Movie -> it.poster ?: it.banner
-                        is TvShow -> it.poster ?: it.banner
-                        else -> null
+                val first = categories.firstOrNull { it.name == Category.FEATURED }
+                    ?.list?.filterIsInstance<Show>()?.firstOrNull()
+                val hero = when (first) {
+                    is Movie -> first.banner ?: first.poster
+                    is TvShow -> first.banner ?: first.poster
+                    else -> null
+                }
+                // Front-page shelves only: never prefetch thousands of poster images.
+                val posters = categories.asSequence()
+                    // Featured is the hero, not the first visible movie shelf.
+                    .filter { it.name != Category.FEATURED }
+                    .flatMap { it.list.asSequence() }
+                    .filterIsInstance<Show>()
+                    .mapNotNull {
+                        when (it) {
+                            is Movie -> it.poster ?: it.banner
+                            is TvShow -> it.poster ?: it.banner
+                            else -> null
+                        }
+                    }
+                    .distinct()
+                    .take(10)
+                    .toList()
+                val requestList = buildList {
+                    if (!hero.isNullOrBlank()) add(Triple(hero, 900, 480))
+                    posters.filter { it.isNotBlank() && it != hero }
+                        .forEach { add(Triple(it, 170, 255)) }
+                }
+                if (requestList.isEmpty()) return@launch
+                val signature = requestList.joinToString(separator = "\u001f") { "${it.first}:${it.second}x${it.third}" }
+                val recent = synchronized(warmLock) {
+                    signature == lastWarmSignature &&
+                        SystemClock.elapsedRealtime() - lastWarmAtMs < REWARM_AFTER_MS
+                }
+                if (recent) return@launch
+                withContext(Dispatchers.Main) {
+                    val images = Glide.with(appContext)
+                    requestList.forEachIndexed { index, (url, width, height) ->
+                        runCatching {
+                            images.load(url)
+                                .priority(if (index == 0 && !hero.isNullOrBlank()) Priority.HIGH else Priority.NORMAL)
+                                .diskCacheStrategy(DiskCacheStrategy.DATA)
+                                .preload(width, height)
+                        }.onFailure { Log.w(TAG, "VOD artwork preload skipped", it) }
                     }
                 }
-                .distinct()
-                .take(10)
-                .toList()
-            val requestList = buildList {
-                if (!hero.isNullOrBlank()) add(Triple(hero, 900, 480))
-                posters.filter { it.isNotBlank() && it != hero }
-                    .forEach { add(Triple(it, 170, 255)) }
-            }
-            if (requestList.isEmpty()) return@launch
-            val signature = requestList.joinToString(separator = "\u001f") { "${it.first}:${it.second}x${it.third}" }
-            val recent = synchronized(warmLock) {
-                signature == lastWarmSignature &&
-                    SystemClock.elapsedRealtime() - lastWarmAtMs < REWARM_AFTER_MS
-            }
-            if (recent) return@launch
-            withContext(Dispatchers.Main) {
-                val images = Glide.with(appContext)
-                requestList.forEachIndexed { index, (url, width, height) ->
-                    runCatching {
-                        images.load(url)
-                            .priority(if (index == 0 && !hero.isNullOrBlank()) Priority.HIGH else Priority.NORMAL)
-                            .diskCacheStrategy(DiskCacheStrategy.DATA)
-                            .preload(width, height)
-                    }.onFailure { Log.w(TAG, "VOD artwork preload skipped", it) }
+                synchronized(warmLock) {
+                    lastWarmSignature = signature
+                    lastWarmAtMs = SystemClock.elapsedRealtime()
                 }
-            }
-            synchronized(warmLock) {
-                lastWarmSignature = signature
-                lastWarmAtMs = SystemClock.elapsedRealtime()
-            }
             }
         }
     }
