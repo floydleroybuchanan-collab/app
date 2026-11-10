@@ -133,7 +133,7 @@ test("RC.6 drawer layout pushes content beside a main icon rail and playlist lis
   assert.match(shell, /PURPLE_SIDEBAR_WIDTH = 192/);
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
   assert.match(shell, /showIconRail \? \(/);
-  assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
+  assert.match(shell, /!drawerOpen && !immersiveContent && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(guide, /secondaryDrawer=\{groupDrawerOpen \?/);
   assert.doesNotMatch(guide, /Open playlists & groups/);
   assert.match(drawer, /GUIDE_GROUP_DRAWER_WIDTH = 232/);
@@ -155,7 +155,7 @@ test("rail focus returns to content and no-information Guide cells remain playab
     source("app/(tabs)/guide.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
   ]);
-  assert.match(shell, /nextFocusRight=\{contentReturnTag\}/);
+  assert.match(shell, /nextFocusRight=\{active === "\/vod" \? undefined : contentReturnTag\}/);
   assert.doesNotMatch(shell, /getIconRailReturnTarget/);
   assert.match(live, /focusIconRail\(\)/);
   assert.match(activity, /onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT/);

@@ -13,15 +13,41 @@ import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.models.WatchItem
 import com.streamflixreborn.streamflix.providers.Provider
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 object HomeCacheStore {
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, List<CachedCategory>>()
+    // Keep a tiny, access-ordered window of complete VOD catalogs. Very large
+    // catalogs remain on disk but are never pinned in RAM beside Live TV/EPG.
+    private const val MAX_MEMORY_PROVIDERS = 2
+    private const val MAX_MEMORY_ITEMS = 3000
+    private val memoryCache = LinkedHashMap<String, List<CachedCategory>>(4, 0.75f, true)
+
+    private fun remember(key: String, payload: List<CachedCategory>) {
+        synchronized(memoryCache) {
+            if (payload.sumOf { it.list.size } > MAX_MEMORY_ITEMS) {
+                memoryCache.remove(key)
+                return
+            }
+            memoryCache[key] = payload
+            while (memoryCache.size > MAX_MEMORY_PROVIDERS) {
+                val oldest = memoryCache.keys.iterator()
+                oldest.next()
+                oldest.remove()
+            }
+        }
+    }
+
+    fun clearMemory() {
+        synchronized(memoryCache) { memoryCache.clear() }
+    }
+
+    private fun forget(key: String) {
+        synchronized(memoryCache) { memoryCache.remove(key) }
+    }
 
     fun read(context: Context, provider: Provider): List<Category>? {
         val cacheKey = cacheKey(provider)
-        memoryCache[cacheKey]?.let { payload ->
+        synchronized(memoryCache) { memoryCache[cacheKey] }?.let { payload ->
             return payload.toCategories()
         }
 
@@ -31,11 +57,11 @@ object HomeCacheStore {
         return runCatching {
             val type = object : TypeToken<List<CachedCategory>>() {}.type
             val payload: List<CachedCategory> = gson.fromJson(file.readText(), type)
-            memoryCache[cacheKey] = payload
+            remember(cacheKey, payload)
             payload.toCategories()
         }.recoverCatching {
             if (it is JsonSyntaxException) {
-                memoryCache.remove(cacheKey)
+                forget(cacheKey)
                 file.delete()
             }
             null
@@ -46,7 +72,7 @@ object HomeCacheStore {
         runCatching {
             val payload = categories.map { CachedCategory.from(it) }
             val cacheKey = cacheKey(provider)
-            memoryCache[cacheKey] = payload
+            remember(cacheKey, payload)
             cacheFile(context, cacheKey).apply {
                 parentFile?.mkdirs()
                 writeText(gson.toJson(payload))
@@ -56,7 +82,7 @@ object HomeCacheStore {
 
     fun clear(context: Context, provider: Provider) {
         val cacheKey = cacheKey(provider)
-        memoryCache.remove(cacheKey)
+        forget(cacheKey)
         cacheFile(context, cacheKey).delete()
     }
 

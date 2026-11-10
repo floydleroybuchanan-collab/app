@@ -43,7 +43,7 @@ import androidx.preference.SwitchPreference
 import androidx.preference.SwitchPreferenceCompat
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.R
-import com.streamflixreborn.streamflix.activities.main.MainTvActivity
+import com.streamflixreborn.streamflix.charm.VodRootFragment
 import com.streamflixreborn.streamflix.backup.BackupRestoreManager
 import com.streamflixreborn.streamflix.backup.ProviderBackupContext
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -769,7 +769,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             value = UserPreferences.paddingX
             setOnPreferenceChangeListener { preference, newValue ->
                 UserPreferences.paddingX = newValue as Int
-                (activity as? MainTvActivity)?.adjustLayoutDelta(UserPreferences.paddingX, null)
+                (parentFragment?.parentFragment as? VodRootFragment)?.adjustLayoutDelta(UserPreferences.paddingX, null)
                 true
             }
         }
@@ -779,7 +779,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             value = UserPreferences.paddingY
             setOnPreferenceChangeListener { preference, newValue ->
                 UserPreferences.paddingY = newValue as Int
-                (activity as? MainTvActivity)?.adjustLayoutDelta(null, UserPreferences.paddingY)
+                (parentFragment?.parentFragment as? VodRootFragment)?.adjustLayoutDelta(null, UserPreferences.paddingY)
                 true
             }
         }
@@ -803,13 +803,8 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                 UserPreferences.selectedTheme = newTheme
 
                 // Apply the theme and restart the activity
-                requireActivity().apply {
-                    finish()
-                    startActivity(Intent(this, MainTvActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                    overridePendingTransition(0, 0) // Disable transition animation
-                }
+                // Preferences stay in the one Charming MediaLab host Activity.
+                requireActivity().recreate()
                 true
             }
         }
@@ -824,13 +819,8 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             setOnPreferenceChangeListener { _, newValue ->
                 val newLanguage = newValue as String
                 AppLanguageManager.setSelectedLanguage(newLanguage)
-                requireActivity().apply {
-                    finish()
-                    startActivity(Intent(this, MainTvActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                    overridePendingTransition(0, 0)
-                }
+                // Preferences stay in the one Charming MediaLab host Activity.
+                requireActivity().recreate()
                 true
             }
         }
