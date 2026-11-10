@@ -30,7 +30,7 @@ object OpenSubtitles {
             ".${File(subtitle.subDownloadLink).extension}"
         )
 
-        URL(subtitle.subDownloadLink).openStream().use { input ->
+        URL(requireNotNull(subtitle.subDownloadLink) { "Subtitle download URL is missing" }).openStream().use { input ->
             FileOutputStream(zip).use { output -> input.copyTo(output) }
         }
 
