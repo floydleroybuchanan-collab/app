@@ -43,6 +43,10 @@ class VodRootFragment : Fragment() {
     private var rootStartedAt = 0L
     private var readyAttempts = 0
     private var rootReadyReported = false
+    private var readyCheckPosted = false
+    private val readinessLayoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        if (!rootReadyReported) notifyWhenDrawn()
+    }
 
     private var _binding: ActivityMainTvBinding? = null
     private val binding get() = requireNotNull(_binding)
@@ -127,6 +131,11 @@ class VodRootFragment : Fragment() {
                 }
             }
         )
+        // Fabric can attach this nested Fragment before the route receives its
+        // first measured viewport. A layout event, not a fixed timer, starts
+        // the destination readiness deadline.
+        b.root.addOnLayoutChangeListener(readinessLayoutListener)
+        b.navMainFragment.addOnLayoutChangeListener(readinessLayoutListener)
         notifyWhenDrawn()
     }
 
@@ -136,8 +145,16 @@ class VodRootFragment : Fragment() {
      */
     private fun notifyWhenDrawn() {
         val b = _binding ?: return
+        if (rootReadyReported || readyCheckPosted) return
+        readyCheckPosted = true
         b.navMainFragment.post {
-            if (!isAdded || _binding == null || rootReadyReported) return@post
+            readyCheckPosted = false
+            if (!isAdded || _binding !== b || rootReadyReported) return@post
+            // An inactive Expo Tabs route can be attached with a 0x0 viewport.
+            // That is a layout lifecycle state, not a failed provider/destination.
+            // Wait for the real measured root before starting the readiness budget.
+            if (b.root.width <= 0 || b.root.height <= 0 || !b.root.isShown) return@post
+
             val navHost = childFragmentManager.findFragmentById(b.navMainFragment.id) as? NavHostFragment
             val destination = navigation?.currentDestination?.id
             val content = navHost?.childFragmentManager?.primaryNavigationFragment?.view
@@ -146,14 +163,22 @@ class VodRootFragment : Fragment() {
             if (b.navMainFragment.width > 0 && b.navMainFragment.height > 0 &&
                 content != null && content.width > 0 && content.height > 0 && homeInflated) {
                 rootReadyReported = true
+                b.root.removeOnLayoutChangeListener(readinessLayoutListener)
+                b.navMainFragment.removeOnLayoutChangeListener(readinessLayoutListener)
                 if (!b.root.hasFocus()) b.vodGlassActions.focusLastAction()
                 Log.i("CharmVodRoot", "VOD actual destination ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
                 onRootReady?.invoke()
             } else if (++readyAttempts <= 45) {
+                if (b.navMainFragment.width <= 0 || b.navMainFragment.height <= 0) {
+                    // Request a genuine native layout pass, not just invalidation.
+                    b.navMainFragment.requestLayout()
+                    b.root.requestLayout()
+                }
                 b.navMainFragment.postDelayed({ notifyWhenDrawn() }, 100L)
             } else {
                 val message = "VOD destination did not draw: destination=$destination, " +
-                    "container=${b.navMainFragment.width}x${b.navMainFragment.height}"
+                    "container=${b.navMainFragment.width}x${b.navMainFragment.height}, " +
+                    "root=${b.root.width}x${b.root.height}"
                 Log.e("CharmVodRoot", message)
                 onRootError?.invoke(message)
             }
@@ -217,6 +242,11 @@ class VodRootFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        _binding?.let { b ->
+            b.root.removeOnLayoutChangeListener(readinessLayoutListener)
+            b.navMainFragment.removeOnLayoutChangeListener(readinessLayoutListener)
+        }
+        readyCheckPosted = false
         coordinator?.dispose()
         coordinator = null
         navigation = null
