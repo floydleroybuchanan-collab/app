@@ -31,7 +31,9 @@ test("VOD LEFT reaches icon rail only at content or first action boundary", asyn
   ]);
   assert.match(focus, /if \(key == KeyEvent\.KEYCODE_DPAD_LEFT\)/);
   assert.match(focus, /isFirstActionFocused\(current\)/);
-  assert.match(focus, /if \(inContent && content != null\)/);
+  // inContent was computed with a non-null content root; no duplicate null guard is needed.
+  assert.match(focus, /if \(inContent\)/);
+  assert.match(focus, /val inContent = content != null && VodFocusMemory\.isWithin\(content, current\)/);
   assert.match(focus, /findNextFocus|focusSearch\(View\.FOCUS_LEFT\)/);
   assert.match(focus, /onHostRailFocus\?\.invoke\(\) == true/);
   assert.doesNotMatch(focus, /binding\.navMain(?!Fragment)/);
