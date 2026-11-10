@@ -45,3 +45,12 @@ test("nested Settings back stack uses the existing VOD/Activity owner rather tha
   assert.match(rootFragment, /settings\?\.navigateBackWithinSettings\(\) == true/);
   assert.match(rootFragment, /R\.id\.home, R\.id\.settings/);
 });
+
+test("VOD startup shows focus-neutral branded loading until actual destination readiness", () => {
+  assert.match(vod, /ActivityIndicator/);
+  assert.match(vod, /const \[nativeReady, setNativeReady\] = useState\(false\)/);
+  assert.match(vod, /setNativeReady\(true\)/);
+  assert.match(vod, /isFocused && !mountError && !nativeReady/);
+  assert.match(vod, /pointerEvents="none"/);
+  assert.match(vod, /setNativeReady\(false\)/);
+});

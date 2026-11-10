@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
@@ -19,6 +19,7 @@ export default function VideoOnDemandScreen() {
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
   const [immersive, setImmersive] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
+  const [nativeReady, setNativeReady] = useState(false);
   const [attempt, setAttempt] = useState(0);
   // Expo Tabs may mount a retained route before it has a real viewport.
   // A FragmentContainerView inserted into a 0x0 Fabric surface cannot draw.
@@ -35,12 +36,14 @@ export default function VideoOnDemandScreen() {
     );
     const failure = DeviceEventEmitter.addListener("CharmVodMountError", (message: string) => {
       console.error("[CharmVodStartup] native mount failed", message);
+      setNativeReady(false);
       setMountError(message || "Unable to open the VOD screen.");
     });
     const mounted = DeviceEventEmitter.addListener("CharmVodRootReady", (elapsed: string) => {
       console.info("[CharmVodStartup] embedded VOD is ready", {
         routeMs: Date.now() - enteredAt.current, nativeMs: elapsed,
       });
+      setNativeReady(true);
       setMountError(null);
     });
     return () => { back.remove(); rail.remove(); mode.remove(); failure.remove(); mounted.remove(); };
@@ -103,12 +106,20 @@ export default function VideoOnDemandScreen() {
                 onBlur={() => { retryFocusedRef.current = false; }}
                 onPress={() => {
                   retryFocusedRef.current = false;
+                  setNativeReady(false);
                   setMountError(null);
                   setAttempt((n) => n + 1);
                 }}
                 style={styles.button}
               ><Text style={styles.buttonText}>Retry VOD</Text></Pressable>
             ) : null}
+          </View>
+        ) : null}
+        {Platform.OS === "android" && isFocused && !mountError && !nativeReady ? (
+          <View style={styles.loadingOverlay} pointerEvents="none" accessibilityElementsHidden>
+            <ActivityIndicator size="large" color="#E58CFF" />
+            <Text style={styles.loadingTitle}>Opening Video OnDemand</Text>
+            <Text style={styles.loadingDetail}>Preparing your Movies, Series and collections</Text>
           </View>
         ) : null}
       </View>
@@ -118,6 +129,11 @@ export default function VideoOnDemandScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, minWidth: 0, minHeight: 0, backgroundColor: "#10091D" },
+  // Only visible before the native destination is measured and drawn.
+  // No extra player/bitmap/cache is created; the VOD Home art is unmodified.
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "#10091D", justifyContent: "center", alignItems: "center", gap: 10, zIndex: 5 },
+  loadingTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "700", marginTop: 12 },
+  loadingDetail: { color: "#D9B9ED", fontSize: 13 },
   // Exact fill avoids conflicting flex and percentage dimensions in Fabric.
   surface: { ...StyleSheet.absoluteFillObject },
   errorBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, padding: 30 },

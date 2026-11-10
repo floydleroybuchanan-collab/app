@@ -270,6 +270,11 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         view.post { listView?.requestFocus() }
     }
 
+    override fun onDestroyView() {
+        view?.let(SettingsListStyler::detach)
+        super.onDestroyView()
+    }
+
     private fun displaySettings() {
         updateOverviewLabels()
         updateProviderVisibilityState()

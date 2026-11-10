@@ -37,13 +37,20 @@ internal object SettingsListStyler {
         val summarySizePx: Float?,
     )
 
+    // Adapter observers/listeners must not retain the destroyed Preference
+    // RecyclerView across VOD tab changes or repeated nested-Settings visits.
+    private data class Attachment(
+        val adapter: RecyclerView.Adapter<*>?,
+        val observer: RecyclerView.AdapterDataObserver,
+        val childListener: RecyclerView.OnChildAttachStateChangeListener,
+    )
+
     fun attach(root: View, isTv: Boolean) {
         val recyclerView = findRecyclerView(root) ?: return
-        if (recyclerView.getTag(R.id.settings_list_styler_tag) == true) return
+        if (recyclerView.getTag(R.id.settings_list_styler_tag) is Attachment) return
 
         val backgroundColor = resolveThemeColor(root, R.attr.app_background_color, 0xFF181818.toInt())
         root.setBackgroundColor(backgroundColor)
-        recyclerView.setTag(R.id.settings_list_styler_tag, true)
         recyclerView.clipToPadding = false
         recyclerView.setBackgroundColor(backgroundColor)
         recyclerView.setPadding(
@@ -53,15 +60,11 @@ internal object SettingsListStyler {
             recyclerView.context.dp(if (isTv) 28 else 18),
         )
 
-        recyclerView.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
-            override fun onChildViewAttachedToWindow(view: View) {
-                styleRow(view, isTv)
-            }
-
+        val childListener = object : RecyclerView.OnChildAttachStateChangeListener {
+            override fun onChildViewAttachedToWindow(view: View) = styleRow(view, isTv)
             override fun onChildViewDetachedFromWindow(view: View) = Unit
-        })
-
-        recyclerView.adapter?.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+        }
+        val observer = object : RecyclerView.AdapterDataObserver() {
             override fun onChanged() = restyle()
             override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = restyle()
             override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) = restyle()
@@ -71,14 +74,27 @@ internal object SettingsListStyler {
 
             private fun restyle() {
                 recyclerView.post {
-                    styleVisibleRows(recyclerView, isTv)
+                    if (recyclerView.getTag(R.id.settings_list_styler_tag) is Attachment)
+                        styleVisibleRows(recyclerView, isTv)
                 }
             }
-        })
-
-        recyclerView.post {
-            styleVisibleRows(recyclerView, isTv)
         }
+        val adapter = recyclerView.adapter
+        recyclerView.addOnChildAttachStateChangeListener(childListener)
+        adapter?.registerAdapterDataObserver(observer)
+        recyclerView.setTag(R.id.settings_list_styler_tag, Attachment(adapter, observer, childListener))
+        recyclerView.post {
+            if (recyclerView.getTag(R.id.settings_list_styler_tag) is Attachment)
+                styleVisibleRows(recyclerView, isTv)
+        }
+    }
+
+    fun detach(root: View) {
+        val recyclerView = findRecyclerView(root) ?: return
+        val attachment = recyclerView.getTag(R.id.settings_list_styler_tag) as? Attachment ?: return
+        recyclerView.setTag(R.id.settings_list_styler_tag, null)
+        attachment.adapter?.unregisterAdapterDataObserver(attachment.observer)
+        recyclerView.removeOnChildAttachStateChangeListener(attachment.childListener)
     }
 
     private fun styleVisibleRows(recyclerView: RecyclerView, isTv: Boolean) {

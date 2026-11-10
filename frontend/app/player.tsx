@@ -29,7 +29,7 @@ import { fonts, radius, tvColors } from "@/src/theme";
 import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
-import { requestNativeFocus } from "@/src/utils/tvFocus";
+import { requestNativeFocus, requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { restartNativePlaybackChannel } from "@/src/nativePlayback";
@@ -131,6 +131,9 @@ export default function PlayerScreen() {
   const generationRef = useRef(0);
   const exitInFlightRef = useRef(false);
   const channelsButtonRef = useRef<any>(null);
+  const stopButtonRef = useRef<any>(null);
+  const stopFocusedRef = useRef(false);
+  const cancelStopFocusRef = useRef<(() => void) | null>(null);
   const overlayOpenerRef = useRef<any>(null);
   const saveAudioReportRef = useRef<() => void>(() => undefined);
   const nextButtonRef = useRef<any>(null);
@@ -368,10 +371,27 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isTV) return;
-    return addTvKeyListener(() => {
-      if (!controlsRef.current) revealControls({ claimChannelsFocus: true });
-      else scheduleHide();
+    const unsubscribe = addTvKeyListener((key) => {
+      if (!controlsRef.current) {
+        revealControls({ claimChannelsFocus: key !== "DOWN" });
+        if (key === "DOWN") {
+          cancelStopFocusRef.current?.();
+          stopFocusedRef.current = false;
+          // Pressable mounts during the React commit after controls are shown.
+          // Retrying a few frames prevents a blank-focus Down on slow TVs.
+          cancelStopFocusRef.current = requestNativeFocusWithRetry(
+            () => stopButtonRef.current,
+            [0, 60, 130, 230],
+            () => stopFocusedRef.current,
+          );
+        }
+      } else scheduleHide();
     });
+    return () => {
+      unsubscribe();
+      cancelStopFocusRef.current?.();
+      cancelStopFocusRef.current = null;
+    };
   }, [isTV, revealControls, scheduleHide]);
 
   useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
@@ -627,7 +647,7 @@ export default function PlayerScreen() {
               <Pressable ref={nextButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-forward" size={18} color="#fff" /></Pressable>
               <View style={styles.controlsSpacer} />
               <Pressable onPress={() => { setChannelsOpen(false); setTracksOpen(false); if (hideTimer.current) clearTimeout(hideTimer.current); emitTvQuickActions("player"); }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="ellipsis-horizontal" size={15} color="#fff" /><Text style={styles.controlLabel}>Quick Actions</Text></Pressable>
-              <Pressable onPress={stopAndExit} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="stop" size={15} color="#fff" /><Text style={styles.controlLabel}>Stop</Text></Pressable>
+              <Pressable ref={stopButtonRef} onFocus={() => { stopFocusedRef.current = true; }} onBlur={() => { stopFocusedRef.current = false; }} onPress={stopAndExit} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="stop" size={15} color="#fff" /><Text style={styles.controlLabel}>Stop</Text></Pressable>
             </View>
 
             {tracksOpen ? (

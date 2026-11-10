@@ -76,3 +76,21 @@ test("VOD cache clear preserves live OkHttp cache journals and Live TV/EPG state
   assert.doesNotMatch(cache.replace(/\/\/[^\n]*/g, ""), /context\.cacheDir\.deleteRecursively\(\)/);
   assert.match(appGlide, /Cache\(File\(context\.cacheDir, "vod\/glide-okhttp-cache"\), 10 \* 1024 \* 1024\)/);
 });
+
+test("nested VOD Settings removes adapter observers and focus listeners on view destruction", () => {
+  const fragment = read(native + "java/com/streamflixreborn/streamflix/fragments/settings/SettingsTvFragment.kt");
+  const styler = read(native + "java/com/streamflixreborn/streamflix/fragments/settings/SettingsListStyler.kt");
+  assert.match(fragment, /override fun onDestroyView\(\)/);
+  assert.match(fragment, /view\?\.let\(SettingsListStyler::detach\)/);
+  assert.match(styler, /fun detach\(root: View\)/);
+  assert.match(styler, /unregisterAdapterDataObserver/);
+  assert.match(styler, /removeOnChildAttachStateChangeListener/);
+});
+test("player Down reveals controls and restores Stop without a second player or focus loop", () => {
+  const player = read("app/player.tsx");
+  assert.match(player, /const stopButtonRef = useRef/);
+  assert.match(player, /revealControls\(\{ claimChannelsFocus: key !== "DOWN" \}\)/);
+  assert.match(player, /requestNativeFocusWithRetry/);
+  assert.match(player, /ref=\{stopButtonRef\}/);
+  assert.match(player, /cancelStopFocusRef.current\?\.\(\)/);
+});
