@@ -427,6 +427,14 @@ export function PurpleTvShell({
           closeDrawer({ force: true });
           requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
         })
+      : active === "/vod"
+      ? addTvKeyListener((key) => {
+          if (key !== "RIGHT") return;
+          // The VOD drawer must release its TV focus guide before the rail
+          // is restored. Trapping RIGHT here strands focus in the old drawer.
+          closeDrawer({ force: true });
+          requestAnimationFrame(() => focusIconRail());
+        })
       : () => undefined;
     return () => {
       off();
@@ -441,7 +449,7 @@ export function PurpleTvShell({
         resetRemoteContextIfOwned("main_drawer", "default");
       }
     };
-  }, [active, isFocused, closeDrawer, drawerOpen]);
+  }, [active, isFocused, closeDrawer, drawerOpen, focusIconRail]);
 
   useEffect(() => {
     if (!isFocused || !drawerOpen) {
@@ -638,7 +646,7 @@ export function PurpleTvShell({
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={() => {
+        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight={active !== "/vod"} onFocusCapture={() => {
           if (!isFocused || !drawerOpen) return;
           // Android can restore a drawer child after Player changes the remote
           // owner. Reconcile real focus, otherwise Right is never sent to JS.
@@ -769,7 +777,7 @@ export function PurpleTvShell({
                   }}
                   focusable
                   accessibilityLabel={item.label}
-                  nextFocusRight={contentReturnTag}
+                  nextFocusRight={active === "/vod" ? undefined : contentReturnTag}
                   onFocus={() => claimIconRail(item.route)}
                   onBlur={() => releaseIconRail(item.route)}
                   onPress={() => navigate(item.route, "rail")}
@@ -793,7 +801,7 @@ export function PurpleTvShell({
           <Pressable
             focusable
             accessibilityLabel="Exit"
-            nextFocusRight={contentReturnTag}
+            nextFocusRight={active === "/vod" ? undefined : contentReturnTag}
             onFocus={() => claimIconRail("power")}
             onBlur={() => releaseIconRail("power")}
             onPress={promptHoldToExit}
@@ -810,10 +818,10 @@ export function PurpleTvShell({
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
-        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
-        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
-        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
-        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide" && !immersiveContent}
+        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         onFocusCapture={(event: any) => {
           const tag = Number(event?.nativeEvent?.target || event?.target || 0);
           if (tag > 0) setContentReturnTag((current) => current === tag ? current : tag);
