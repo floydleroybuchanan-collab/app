@@ -221,9 +221,12 @@ class MainActivity : ReactActivity() {
   }
 
   private fun nativeVodOwnsFocus(): Boolean =
-    (vodInputOwner as? View)?.let { container ->
+    (vodInputOwner as? CharmVodSurfaceManager.Surface)?.let { container ->
+      // Expo retains inactive tabs. A hidden VOD surface must never consume
+      // Back or arrows from Live TV, Guide, or another active route.
       val focused = currentFocus
-      focused != null && within(focused, container)
+      container.screenActive && visible(container) &&
+        focused != null && within(focused, container)
     } == true
 
   override fun onBackPressed() {
