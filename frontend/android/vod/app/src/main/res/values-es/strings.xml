@@ -237,7 +237,6 @@
     <string name="settings_version_mobile">Versión para móviles</string>
     <string name="settings_about_version_name">Versión %s</string>
     <string name="settings_help">Ayuda</string>
-    <string name="settings_telegram">Grupo de Telegram</string>
     <string name="settings_refresh_cache_title">Actualizar caché desde la base de datos</string>
     <string name="settings_refresh_cache_summary">Recargar el historial de visualización y los datos de la app desde la base de datos</string>
     <string name="settings_refresh_cache_confirm">¿Actualizar la caché?</string>

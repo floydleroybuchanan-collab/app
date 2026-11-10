@@ -229,7 +229,6 @@
     <string name="settings_about_version">Version</string>
     <string name="settings_about_version_name">Version %s</string>
     <string name="settings_help">Hilfe</string>
-    <string name="settings_telegram">Telegram‑Gruppe</string>
     <string name="settings_category_streamingcommunity">StreamingCommunity - Einstellungen</string>
     <string name="settings_category_streamingcommunity_domain">StreamingCommunity - Domain-Name</string>
     <string name="settings_streamingcommunity_domain_reset">Domain zurücksetzen</string>

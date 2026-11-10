@@ -3,35 +3,39 @@ import { storage } from "@/src/utils/storage";
 
 /**
  * Original guide behavior, independently implemented for Charming MediaLab.
- * Overlay transparency setting 0..100 maps to 0..50% transparency.
+ * Transparency settings are direct see-through percentages, 0 to 80.
  * Preview backgrounds are always opaque; Media3 video has its own surface.
  */
 export type GuidePresentationMode = "overlay" | "preview";
 export type GuidePresentation = {
   mode: GuidePresentationMode;
   transparency: number;
+  channelTransparency: number;
   animate: boolean;
   autoplayOnFocus: boolean;
   stayInGuide: boolean;
 };
-export const GUIDE_PRESENTATION_KEY = "charm_guide_presentation_v1";
+export const GUIDE_PRESENTATION_KEY = "charm_guide_presentation_v2";
 export const DEFAULT_GUIDE_PRESENTATION: Readonly<GuidePresentation> = Object.freeze({
   mode: "overlay",
-  transparency: 50,
+  transparency: 60,
+  channelTransparency: 75,
   animate: true,
   autoplayOnFocus: false,
   stayInGuide: true,
 });
+export const MAX_GUIDE_TRANSPARENCY = 80;
 export const clampTransparency = (value: unknown) =>
-  Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  Math.max(0, Math.min(MAX_GUIDE_TRANSPARENCY, Math.round(Number(value) || 0)));
 export const overlayOpacity = (level: number) =>
-  1 - clampTransparency(level) * 0.005;
+  1 - clampTransparency(level) * 0.01;
 export const guidePanelOpacity = (mode: GuidePresentationMode, level: number) =>
   mode === "preview" ? 1 : overlayOpacity(level);
 
 const normalize = (value: Partial<GuidePresentation> | null | undefined): GuidePresentation => ({
   mode: value?.mode === "preview" ? "preview" : "overlay",
-  transparency: clampTransparency(value?.transparency ?? 50),
+  transparency: clampTransparency(value?.transparency ?? 60),
+  channelTransparency: clampTransparency(value?.channelTransparency ?? 75),
   animate: value?.animate !== false,
   autoplayOnFocus: value?.autoplayOnFocus === true,
   stayInGuide: value?.stayInGuide !== false,

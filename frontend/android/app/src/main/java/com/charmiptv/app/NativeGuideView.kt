@@ -157,9 +157,9 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   private var overlayMode = false
-  // The guide's original transparency setting of 50 translates to 25%
-  // see-through backgrounds, not 50%. Preview mode remains fully opaque.
-  private var transparencyLevel = 50
+  // Direct see-through percentages. Preview mode remains fully opaque.
+  private var transparencyLevel = 60
+  private var channelTransparencyLevel = 75
   var enableUpBoundary = false
   fun setTransparencyLevel(value: Int) {
     val next = value.coerceIn(0, 100)
@@ -167,13 +167,19 @@ class NativeGuideView(context: Context) : View(context) {
     transparencyLevel = next
     applyGuideOpacity()
   }
+  fun setChannelTransparencyLevel(value: Int) {
+    val next = value.coerceIn(0, 100)
+    if (next == channelTransparencyLevel) return
+    channelTransparencyLevel = next
+    invalidate()
+  }
   fun setOverlayMode(value: Boolean) {
     if (overlayMode == value) return
     overlayMode = value
     applyGuideOpacity()
   }
   private fun guideOpacity(): Int =
-    if (overlayMode) (255f * (1f - 0.005f * transparencyLevel)).toInt().coerceIn(0, 255) else 255
+    if (overlayMode) (255f * (1f - 0.01f * transparencyLevel)).toInt().coerceIn(0, 255) else 255
   private fun applyGuideOpacity() {
     val opacity = guideOpacity()
     // Only the visible cell/channel surface takes the configured alpha, so two
@@ -181,7 +187,6 @@ class NativeGuideView(context: Context) : View(context) {
     setBackgroundColor(if (overlayMode) Color.TRANSPARENT else Color.BLACK)
     background.alpha = if (overlayMode) 0 else 255
     header.alpha = opacity
-    channel.alpha = opacity
     rowSurface.alpha = if (overlayMode) 0 else 255
     cell.alpha = opacity
     invalidate()
@@ -739,6 +744,9 @@ class NativeGuideView(context: Context) : View(context) {
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
       channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(119, 74, 219) else Color.rgb(26, 22, 38)
+      // Setting a color resets alpha, so the channel column's opacity is applied per row.
+      channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected))
+        (255f * (1f - 0.01f * channelTransparencyLevel)).toInt().coerceIn(0, 255) else 255
       canvas.drawRect(0f, top, channelWidth, top + rowHeight - density, channel)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)

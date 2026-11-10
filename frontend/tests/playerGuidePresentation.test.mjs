@@ -17,14 +17,14 @@ test("overlay and preview share the existing Media3 session instead of creating 
   assert.match(panel, /testID=\{mode === "overlay" \? "player-unified-guide-overlay" : "player-unified-guide-preview"\}/);
 });
 
-test("25% transparent overlay at default setting; preview has fully opaque panels", () => {
+test("60% transparent overlay at default setting; preview has fully opaque panels", () => {
   const settings = source("src/core/guidePresentation.ts");
   const native = source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   const panel = source("src/components/PlayerGuidePanel.tsx");
-  assert.match(settings, /transparency: 50/);
-  assert.match(settings, /1 - clampTransparency\(level\) \* 0\.005/);
+  assert.match(settings, /transparency: 60/);
+  assert.match(settings, /1 - clampTransparency\(level\) \* 0\.01/);
   assert.match(settings, /mode === "preview" \? 1 : overlayOpacity\(level\)/);
-  assert.match(native, /private var transparencyLevel = 50/);
+  assert.match(native, /private var transparencyLevel = 60/);
   assert.match(native, /if \(overlayMode\) 0 else 255/);
   assert.match(native, /rowSurface\.alpha = if \(overlayMode\) 0 else 255/);
   assert.match(native, /setBackgroundColor\(if \(overlayMode\) Color\.TRANSPARENT/);

@@ -139,6 +139,17 @@ class MainActivity : ReactActivity() {
     val key = event.keyCode
     if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT &&
         key != android.view.KeyEvent.KEYCODE_DPAD_RIGHT && key != android.view.KeyEvent.KEYCODE_BACK) return false
+    val openDrawer = findTagged(root, "purple-main-drawer")
+    if (openDrawer != null && within(focus, openDrawer) && key != android.view.KeyEvent.KEYCODE_BACK &&
+        TvRemoteModule.remoteContext != "main_drawer") {
+      // Focus is plainly in the drawer even though its remote owner was reset elsewhere.
+      if (event.repeatCount == 0) {
+        val right = key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+        emitRemoteEvent("CharmDrawerEdge", if (right) "RIGHT" else "LEFT")
+        if (right) moveFocusOntoPageAfterDrawer()
+      }
+      return true
+    }
     val rail = findTagged(root, "purple-icon-rail")
     if (rail == null) {
       // NativeGuideView handles its own timeline/channel-column boundary.
@@ -208,6 +219,23 @@ class MainActivity : ReactActivity() {
   private var vodBackHandler: (() -> Boolean)? = null
   private var vodBackKeyDownConsumed = false
   private var vodImmersive = false
+
+  private val drawerFocusWatcher = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
+    if (now != null && TvRemoteModule.remoteContext == "main_drawer") {
+      val drawer = findTagged(window.decorView, "purple-main-drawer")
+      if (drawer != null && !within(now, drawer)) emitRemoteEvent("CharmDrawerFocusLeft", "")
+    }
+  }
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener(drawerFocusWatcher)
+  }
+
+  override fun onDetachedFromWindow() {
+    window.decorView.viewTreeObserver.removeOnGlobalFocusChangeListener(drawerFocusWatcher)
+    super.onDetachedFromWindow()
+  }
 
   fun setVodImmersive(playing: Boolean) { vodImmersive = playing }
 

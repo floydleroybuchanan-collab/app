@@ -730,6 +730,7 @@ export default function PlayerScreen() {
         <PlayerGuidePanel
           mode={guidePresentation.mode}
           transparency={guidePresentation.transparency}
+          channelTransparency={guidePresentation.channelTransparency}
           animationEnabled={guidePresentation.animate}
           autoplayOnFocus={guidePresentation.autoplayOnFocus}
           stayInGuide={guidePresentation.stayInGuide}
@@ -752,6 +753,7 @@ export default function PlayerScreen() {
           onDismiss={() => setGuideOverlayOpen(false)}
           onModeChange={(mode) => guidePresentation.change({ mode })}
           onTransparencyChange={(transparency) => guidePresentation.change({ transparency })}
+          onChannelTransparencyChange={(channelTransparency) => guidePresentation.change({ channelTransparency })}
           onAutoplayChange={(autoplayOnFocus) => guidePresentation.change({ autoplayOnFocus })}
           onStayChange={(stayInGuide) => guidePresentation.change({ stayInGuide })}
           onRunway={(ids, priorityIds) => {

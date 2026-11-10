@@ -7,11 +7,12 @@ import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { fonts, tvColors } from "@/src/theme";
 import { fmtTime, progressPct } from "@/src/utils/time";
-import { availableGuideDays, guidePanelOpacity, type GuidePresentationMode } from "@/src/core/guidePresentation";
+import { availableGuideDays, guidePanelOpacity, MAX_GUIDE_TRANSPARENCY, type GuidePresentationMode } from "@/src/core/guidePresentation";
 
 type Props = {
   mode: GuidePresentationMode;
   transparency: number;
+  channelTransparency: number;
   animationEnabled: boolean;
   autoplayOnFocus: boolean;
   stayInGuide: boolean;
@@ -34,6 +35,7 @@ type Props = {
   onDismiss: () => void;
   onModeChange: (mode: GuidePresentationMode) => void;
   onTransparencyChange: (value: number) => void;
+  onChannelTransparencyChange: (value: number) => void;
   onAutoplayChange: (enabled: boolean) => void;
   onStayChange: (enabled: boolean) => void;
   onRunway: (ids: string[], priorityIds: string[]) => void;
@@ -41,11 +43,11 @@ type Props = {
 
 /** Guide UI only: consumes existing native EPG and the existing fullscreen Media3 session. */
 export function PlayerGuidePanel({
-  mode, transparency, animationEnabled, autoplayOnFocus, stayInGuide,
+  mode, transparency, channelTransparency, animationEnabled, autoplayOnFocus, stayInGuide,
   safeLeft, safeRight, safeTop, safeBottom, previewWidth, previewHeight,
   channels, favoriteIds, playingChannel, playingCurrent, playingNext,
   windowStart, windowEnd, channelNumbers,
-  onTune, onDismiss, onModeChange, onTransparencyChange, onAutoplayChange, onStayChange, onRunway,
+  onTune, onDismiss, onModeChange, onTransparencyChange, onChannelTransparencyChange, onAutoplayChange, onStayChange, onRunway,
 }: Props) {
   const [group, setGroup] = useState("All");
   const [groupsOpen, setGroupsOpen] = useState(false);
@@ -193,11 +195,22 @@ export function PlayerGuidePanel({
         </Pressable>
         {mode === "overlay" ? (
           <View style={styles.transparencyControls}>
-            <Pressable accessibilityLabel="Decrease guide transparency" onPress={() => onTransparencyChange(Math.max(0, transparency - 25))}
-              style={({ focused }: any) => [styles.step, focused && styles.focused]}><Text style={styles.actionText}>−</Text></Pressable>
-            <Text style={styles.opacityText}>{Math.round((1 - panelAlpha) * 100)}% clear</Text>
-            <Pressable accessibilityLabel="Increase guide transparency" onPress={() => onTransparencyChange(Math.min(100, transparency + 25))}
-              style={({ focused }: any) => [styles.step, focused && styles.focused]}><Text style={styles.actionText}>+</Text></Pressable>
+              <View style={styles.adjustRow}>
+                <Text style={styles.adjustLabel}>Guide</Text>
+                <Pressable accessibilityLabel="Decrease guide transparency" onPress={() => onTransparencyChange(Math.max(0, transparency - 10))}
+                  style={({ focused }: any) => [styles.step, focused && styles.focused]}><Text style={styles.actionText}>−</Text></Pressable>
+                <Text style={styles.opacityText}>{transparency}%</Text>
+                <Pressable accessibilityLabel="Increase guide transparency" onPress={() => onTransparencyChange(Math.min(MAX_GUIDE_TRANSPARENCY, transparency + 10))}
+                  style={({ focused }: any) => [styles.step, focused && styles.focused]}><Text style={styles.actionText}>+</Text></Pressable>
+              </View>
+              <View style={styles.adjustRow}>
+                <Text style={styles.adjustLabel}>Channels</Text>
+                <Pressable accessibilityLabel="Decrease channel transparency" onPress={() => onChannelTransparencyChange(Math.max(0, channelTransparency - 10))}
+                  style={({ focused }: any) => [styles.step, focused && styles.focused]}><Text style={styles.actionText}>−</Text></Pressable>
+                <Text style={styles.opacityText}>{channelTransparency}%</Text>
+                <Pressable accessibilityLabel="Increase channel transparency" onPress={() => onChannelTransparencyChange(Math.min(MAX_GUIDE_TRANSPARENCY, channelTransparency + 10))}
+                  style={({ focused }: any) => [styles.step, focused && styles.focused]}><Text style={styles.actionText}>+</Text></Pressable>
+              </View>
           </View>
         ) : null}
         <Pressable accessibilityLabel="Toggle automatic channel preview" onPress={() => onAutoplayChange(!autoplayOnFocus)}
@@ -227,6 +240,7 @@ export function PlayerGuidePanel({
           restoreChannelId={restoreChannelId}
           overlayMode={mode === "overlay"}
           transparencyLevel={transparency}
+          channelTransparencyLevel={channelTransparency}
           enableUpBoundary
           active={active}
           channelNumberById={channelNumbers}
@@ -246,6 +260,7 @@ export function PlayerGuidePanel({
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.layerContent}>
             <FlatList data={groups} keyExtractor={(item) => item} style={{ flex: 1 }} initialNumToRender={18}
               maxToRenderPerBatch={12} windowSize={5} removeClippedSubviews={false}
+              getItemLayout={(_, index) => ({ length: LIST_ROW_HEIGHT, offset: LIST_ROW_HEIGHT * index, index })}
               renderItem={({ item }) => <Pressable testID={`player-guide-group-${item}`} onPress={() => selectGroup(item)}
                 style={({ focused }: any) => [styles.listEntry, group === item && styles.current, focused && styles.focused]}>
                 <Text style={styles.entryText}>{item}</Text>
@@ -262,7 +277,7 @@ export function PlayerGuidePanel({
         <View style={[styles.layer, { backgroundColor: mode === "preview" ? "#171B23" : panelBackground }]}>
           <Text style={styles.layerTitle}>SELECT GUIDE DAY</Text>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.layerContent}>
-            <FlatList data={days} keyExtractor={(item) => item.key} initialNumToRender={10}
+            <FlatList data={days} keyExtractor={(item) => item.key} initialNumToRender={10} removeClippedSubviews={false}
               renderItem={({ item }) => <Pressable onPress={() => selectDay(item.at)} style={({ focused }: any) => [styles.listEntry, focused && styles.focused]}>
                 <Text style={styles.entryText}>{item.label}</Text></Pressable>}
             />
@@ -293,6 +308,8 @@ export function PlayerGuidePanel({
   );
 }
 
+const LIST_ROW_HEIGHT = 46;
+
 const styles = StyleSheet.create({
   frame: { position: "absolute", zIndex: 40, gap: 0, overflow: "hidden" },
   previewHeader: { flexShrink: 0, flexDirection: "row", overflow: "hidden" },
@@ -311,15 +328,17 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5, padding: 5, minHeight: 42 },
   action: { minHeight: 32, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, borderColor: "transparent", borderWidth: 2, borderRadius: 5, backgroundColor: "rgba(45,37,65,0.55)" },
   actionText: { fontFamily: fonts.medium, color: "#fff", fontSize: 11 },
-  transparencyControls: { flexDirection: "row", alignItems: "center", gap: 3 },
-  step: { minHeight: 31, minWidth: 31, borderColor: "transparent", borderWidth: 2, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(45,37,65,0.55)" },
+  transparencyControls: { gap: 2 },
+  adjustRow: { flexDirection: "row", alignItems: "center", gap: 3, height: 20 },
+  adjustLabel: { width: 48, color: "#fff", fontFamily: fonts.medium, fontSize: 9 },
+  step: { height: 20, width: 24, borderColor: "transparent", borderWidth: 2, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(45,37,65,0.55)" },
   opacityText: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
   grid: { flex: 1, minHeight: 0, backgroundColor: "transparent" },
   opaqueGrid: { backgroundColor: "#0C0E12" },
   layer: { ...StyleSheet.absoluteFillObject, zIndex: 50, padding: 13 },
   layerTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 17, marginBottom: 10 },
   layerContent: { flex: 1, minHeight: 0, gap: 8 },
-  listEntry: { minHeight: 42, paddingHorizontal: 10, marginVertical: 2, flexDirection: "row", alignItems: "center", borderColor: "transparent", borderWidth: 2, borderRadius: 6, backgroundColor: "rgba(75,68,96,0.45)" },
+  listEntry: { height: 42, paddingHorizontal: 10, marginVertical: 2, flexDirection: "row", alignItems: "center", borderColor: "transparent", borderWidth: 2, borderRadius: 6, backgroundColor: "rgba(75,68,96,0.45)" },
   current: { backgroundColor: tvColors.purpleDeep },
   entryText: { color: "#fff", flex: 1, fontFamily: fonts.medium, fontSize: 13 },
   count: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 11 },

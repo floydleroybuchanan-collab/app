@@ -455,15 +455,6 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
             setOnPreferenceClickListener(null)
         }
 
-        findPreference<Preference>("p_settings_telegram")?.apply {
-            isEnabled = true
-            isSelectable = true
-            setOnPreferenceClickListener {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.charm_vod_telegram_url))))
-                true
-            }
-        }
-
         findPreference<SwitchPreference>("AUTOPLAY")?.isChecked = UserPreferences.autoplay
         findPreference<SwitchPreference>("AUTOPLAY")?.setOnPreferenceChangeListener { _, newValue ->
             UserPreferences.autoplay = newValue as Boolean

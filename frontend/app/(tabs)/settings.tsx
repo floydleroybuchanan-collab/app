@@ -110,20 +110,20 @@ type Tile = {
 
 
 const TILE_ART: Record<string, number> = {
-  general: require("../../assets/glass/nav_platforms.webp"),
-  player: require("../../assets/glass/settings_playback.webp"),
-  vod: require("../../assets/glass/nav_movies.webp"),
-  remote: require("../../assets/glass/genre_animation.webp"),
-  playlists: require("../../assets/glass/settings_provider.webp"),
-  epg: require("../../assets/glass/settings_epg.webp"),
-  appearance: require("../../assets/glass/settings_appearance.webp"),
-  health: require("../../assets/glass/settings_notifications.webp"),
-  channels: require("../../assets/glass/nav_shows.webp"),
-  parental: require("../../assets/glass/settings_security.webp"),
-  backup: require("../../assets/glass/settings_storage.webp"),
-  invites: require("../../assets/glass/genre_romance.webp"),
-  account: require("../../assets/glass/settings_account.webp"),
-  about: require("../../assets/glass/settings_about.webp"),
+  general: require("../../assets/glass/nav_platforms.png"),
+  player: require("../../assets/glass/settings_playback.png"),
+  vod: require("../../assets/glass/nav_movies.png"),
+  remote: require("../../assets/glass/genre_animation.png"),
+  playlists: require("../../assets/glass/settings_provider.png"),
+  epg: require("../../assets/glass/settings_epg.png"),
+  appearance: require("../../assets/glass/settings_appearance.png"),
+  health: require("../../assets/glass/settings_notifications.png"),
+  channels: require("../../assets/glass/nav_shows.png"),
+  parental: require("../../assets/glass/settings_security.png"),
+  backup: require("../../assets/glass/settings_storage.png"),
+  invites: require("../../assets/glass/genre_romance.png"),
+  account: require("../../assets/glass/settings_account.png"),
+  about: require("../../assets/glass/settings_about.png"),
 };
 /** Picks the glass artwork that fits a control's purpose. */
 function glassArt(icon: string): number {
@@ -421,6 +421,7 @@ function SettingsScreenContent() {
     setBackupStatus(null);
     setClearFavoritesArmed(false);
     if (id === "playlists") { router.push("/playlists" as any); return; }
+    if (id === "vod") { router.push("/vod?section=settings" as any); return; }
     if (id === "epg") {
       router.push("/epg-sources" as any);
       return;

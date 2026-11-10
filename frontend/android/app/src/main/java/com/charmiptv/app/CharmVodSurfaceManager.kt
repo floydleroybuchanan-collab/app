@@ -85,6 +85,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             post {
                 layoutPassPending = false
                 if (isAttachedToWindow && width > 0 && height > 0) {
+                    forceLayout()
                     measure(
                         View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
@@ -101,6 +102,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             val w = if (width > 0) width else host?.width ?: 0
             val h = if (height > 0) height else host?.height ?: 0
             if (w <= 0 || h <= 0) return
+            forceLayout()
             measure(
                 View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY),

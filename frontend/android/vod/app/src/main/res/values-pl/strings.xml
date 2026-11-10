@@ -115,7 +115,6 @@
     <string name="settings_about">O aplikacji</string>
     <string name="settings_about_version">Wersja</string>
     <string name="settings_help">Pomoc</string>
-    <string name="settings_telegram">Grupa Telegram</string>
     <string name="settings_close_app">Zamknij aplikacje</string>
     <string name="settings_category_provider_title">Ustawienia dostawcy</string>
     <string name="settings_provider_connection_title">Ustawienia biezacego dostawcy</string>

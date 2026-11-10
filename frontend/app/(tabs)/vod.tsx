@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
@@ -15,6 +16,10 @@ const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>
 export default function VideoOnDemandScreen() {
   const { section } = useLocalSearchParams<{ section?: string }>();
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
+  const router = useRouter();
+  const isFocused = useIsFocused();
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
   const [immersive, setImmersive] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -30,7 +35,16 @@ export default function VideoOnDemandScreen() {
   }, [mountError]);
 
   useEffect(() => {
-    const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawer({ force: true }));
+    const openDrawerOrReturnToSettings = () => {
+      // VOD Settings was opened from the Settings page, so Back returns there.
+      if (sectionRef.current === "settings") {
+        router.setParams({ section: undefined } as any);
+        router.replace("/settings" as any);
+        return;
+      }
+      openDrawer({ force: true });
+    };
+    const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawerOrReturnToSettings());
     const rail = DeviceEventEmitter.addListener("CharmVodFocusHostRail", () => focusIconRail());
     const mode = DeviceEventEmitter.addListener("CharmVodImmersiveChanged", (value: string) =>
       setImmersive(value === "true")
@@ -46,7 +60,7 @@ export default function VideoOnDemandScreen() {
       setMountError(null);
     });
     return () => { back.remove(); rail.remove(); mode.remove(); failure.remove(); mounted.remove(); };
-  }, [focusIconRail, openDrawer]);
+  }, [focusIconRail, openDrawer, router]);
 
   useFocusEffect(useCallback(() => {
     enteredAt.current = Date.now();
@@ -63,7 +77,7 @@ export default function VideoOnDemandScreen() {
     <PurpleTvShell active="/vod" immersiveContent={immersive}>
       <View style={styles.page}>
         {Platform.OS === "android" && !mountError ? (
-          <NativeVod
+          !isFocused ? null : <NativeVod
             key={attempt}
             style={styles.surface}
             startSection={section === "settings" ? "settings" : "home"}

@@ -10,6 +10,7 @@ type Props = {
   clock24h?: boolean;
   overlayMode?: boolean;
   transparencyLevel?: number;
+  channelTransparencyLevel?: number;
   enableUpBoundary?: boolean;
   channelNumberById: Record<string, number>;
   onChannelFocus: (channel: Channel, settled: boolean) => void;
@@ -33,7 +34,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   reloadGeneration = 0,
   clock24h = false,
   overlayMode = false,
-  transparencyLevel = 50,
+  transparencyLevel = 60,
+  channelTransparencyLevel = 75,
   // The full Guide always routes Up at its top row to its preview actions.
   enableUpBoundary = true,
   channelNumberById,
@@ -158,6 +160,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       reloadGeneration={reloadGeneration}
       overlayMode={overlayMode}
       transparencyLevel={transparencyLevel}
+      channelTransparencyLevel={channelTransparencyLevel}
       enableUpBoundary={enableUpBoundary}
       clock24h={clock24h}
       onSelectionChange={handleSelectionChange}

@@ -34,6 +34,15 @@ internal object SettingsListStyler {
         val summarySizePx: Float?,
     )
 
+    private var sectionGrid = false
+
+    fun setSectionGrid(root: View, grid: Boolean) {
+        sectionGrid = grid
+        val list = findRecyclerView(root) ?: return
+        (list as? androidx.leanback.widget.VerticalGridView)?.setNumColumns(if (grid) 3 else 1)
+        list.post { styleVisibleRows(list, isTv = true) }
+    }
+
     fun attach(root: View, isTv: Boolean) {
         val recyclerView = findRecyclerView(root) ?: return
         if (recyclerView.getTag(R.id.settings_list_styler_tag) == true) return
@@ -152,10 +161,10 @@ internal object SettingsListStyler {
         val rowHighlightBorderColor = android.graphics.Color.WHITE
 
         layoutParams?.setMargins(
-            context.dp(if (isTv) 28 else 16),
-            context.dp(if (isTv) 8 else 6),
-            context.dp(if (isTv) 28 else 16),
-            context.dp(if (isTv) 8 else 6),
+            context.dp(if (!isTv) 16 else if (sectionGrid) 10 else 110),
+            context.dp(if (isTv) 7 else 6),
+            context.dp(if (!isTv) 16 else if (sectionGrid) 10 else 110),
+            context.dp(if (isTv) 7 else 6),
         )
         view.layoutParams = layoutParams
         view.background = createRowBackground(
@@ -166,27 +175,36 @@ internal object SettingsListStyler {
             activeColor = rowHighlightColor,
             activeStrokeColor = rowHighlightBorderColor,
         )
-        view.minimumHeight = context.dp(if (isTv) 88 else 72)
+        view.minimumHeight = context.dp(if (!isTv) 72 else if (sectionGrid) 82 else 56)
         view.setPadding(
-            context.dp(if (isTv) 28 else 20),
-            context.dp(if (isTv) 18 else 16),
-            context.dp(if (isTv) 28 else 20),
-            context.dp(if (isTv) 18 else 16),
+            context.dp(if (!isTv) 20 else 16),
+            context.dp(if (!isTv) 16 else 8),
+            context.dp(if (!isTv) 20 else 16),
+            context.dp(if (!isTv) 16 else 8),
         )
 
         title.setTextColor(titleColor)
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isTv) 20f else 16f)
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isTv) 15f else 16f)
+        title.maxLines = 2
         title.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         title.letterSpacing = 0f
 
         summary?.apply {
             setTextColor(summaryColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isTv) 14f else 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isTv) 11.5f else 13f)
             maxLines = 2
+            visibility = if (sectionGrid || text.isNullOrBlank()) View.GONE else View.VISIBLE
         }
 
-        icon?.drawable?.let {
-            icon.imageTintList = ColorStateList.valueOf(accentColor)
+        icon?.imageTintList = if (sectionGrid || icon?.drawable == null) null else ColorStateList.valueOf(accentColor)
+        if (sectionGrid) icon?.layoutParams = icon?.layoutParams?.apply {
+            width = context.dp(46)
+            height = context.dp(46)
+        }
+        view.findViewById<android.widget.SeekBar>(androidx.preference.R.id.seekbar)?.apply {
+            progressTintList = ColorStateList.valueOf(0xFFD14DFF.toInt())
+            thumbTintList = ColorStateList.valueOf(android.graphics.Color.WHITE)
+            progressBackgroundTintList = ColorStateList.valueOf(0x40FFFFFF)
         }
         if (isTv) {
             view.outlineSpotShadowColorCompat()
@@ -210,7 +228,7 @@ internal object SettingsListStyler {
         activeColor: Int,
         activeStrokeColor: Int,
     ): Drawable {
-        val radiusDp = if (isTv) 22 else 18
+        val radiusDp = if (isTv) 16 else 18
         val defaultStrokeDp = 1
         val activeStrokeDp = if (isTv) 2 else 1
 

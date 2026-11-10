@@ -421,7 +421,7 @@ export function PurpleTvShell({
     if (!isFocused || !drawerOpen) return;
     setRemoteContext("main_drawer");
     if (active === "/guide") setGuideNavigationActive(false);
-    const off = addTvKeyListener((key) => {
+    const handleEdge = (key: string) => {
       if (key === "LEFT") {
         // The Guide has no rail here, and closing onto nothing would strand focus.
         if (!railCanTakeFocusRef.current) return;
@@ -444,7 +444,15 @@ export function PurpleTvShell({
           // becomes remote owner or both focus trees can be live at once.
           closeDrawer({ force: true });
           requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+    };
+    const offKey = addTvKeyListener(handleEdge);
+    const edge = DeviceEventEmitter.addListener("CharmDrawerEdge", handleEdge);
+    // Android can move focus while the rail and drawer swap, so allow that moment.
+    const openedAt = Date.now();
+    const left = DeviceEventEmitter.addListener("CharmDrawerFocusLeft", () => {
+      if (Date.now() - openedAt >= 700) closeDrawer({ force: true });
     });
+    const off = () => { offKey(); edge.remove(); left.remove(); };
     return () => {
       off();
       if (active === "/guide") {
@@ -664,7 +672,7 @@ export function PurpleTvShell({
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight={active !== "/vod"} onBlurCapture={() => {
+        <FocusGuide style={styles.sidebar} testID="purple-main-drawer" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight={active !== "/vod"} onBlurCapture={() => {
           clearDrawerBlurTimer();
           if (!drawerOpen) return;
           drawerBlurTimerRef.current = setTimeout(() => closeDrawer({ force: true }), 160);

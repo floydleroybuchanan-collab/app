@@ -536,15 +536,6 @@
         app:iconSpaceReserved="false">
 
         <Preference
-            android:icon="@drawable/ic_telegram"
-            android:key="p_settings_telegram"
-            android:title="@string/settings_telegram"
-            android:summary="@string/charm_vod_telegram_pending"
-            android:enabled="false"
-            android:selectable="false"
-            app:iconSpaceReserved="false" />
-
-        <Preference
             android:icon="@drawable/ic_settings_about"
             android:key="p_settings_about"
             android:title="@string/settings_about"

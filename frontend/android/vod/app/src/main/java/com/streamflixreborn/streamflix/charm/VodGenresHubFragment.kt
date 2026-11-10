@@ -87,10 +87,14 @@ class VodGenresHubFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val genres = withContext(Dispatchers.IO) {
                 val provider = UserPreferences.currentProvider ?: return@withContext emptyList<Genre>()
-                runCatching {
-                    provider.getHome().asSequence().flatMap { it.list.asSequence() }
-                        .filterIsInstance<Genre>().distinctBy { it.id }.take(120).toList()
-                }.getOrDefault(emptyList())
+                // Providers list their genres from an empty search, not on the home page.
+                val listed = runCatching { provider.search("", 1).filterIsInstance<Genre>() }.getOrDefault(emptyList())
+                listed.ifEmpty {
+                    runCatching {
+                        provider.getHome().asSequence().flatMap { it.list.asSequence() }
+                            .filterIsInstance<Genre>().toList()
+                    }.getOrDefault(emptyList())
+                }.distinctBy { it.id }.take(120)
             }
             val visible = body ?: return@launch
             visible.removeView(progress)

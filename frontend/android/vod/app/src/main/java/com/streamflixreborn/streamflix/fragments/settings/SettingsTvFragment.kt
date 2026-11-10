@@ -220,8 +220,30 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         activity?.title = currentScreenState.title ?: getString(R.string.player_settings_title)
     }
 
+    /** The first screen is a grid of glass section buttons with their own artwork. */
+    private fun applySectionIcons() {
+        if (currentScreenState.rootKey != null) return
+        mapOf(
+            "screen_vod_sources" to R.drawable.vod_set_sources,
+            "screen_content" to R.drawable.vod_set_content,
+            "screen_playback" to R.drawable.vod_set_playback,
+            "screen_appearance" to R.drawable.vod_set_appearance,
+            "screen_network" to R.drawable.vod_set_network,
+            "screen_provider" to R.drawable.vod_set_provider,
+            "screen_cloud_sync" to R.drawable.vod_set_cloud,
+            "screen_backup" to R.drawable.vod_set_backup,
+        ).forEach { (key, art) ->
+            findPreference<Preference>(key)?.apply {
+                setIcon(art)
+                widgetLayoutResource = 0
+            }
+        }
+    }
+
     private fun renderCurrentScreen() {
         setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey)
+        applySectionIcons()
+        view?.let { SettingsListStyler.setSectionGrid(it, currentScreenState.rootKey == null) }
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }
@@ -232,6 +254,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         SettingsListStyler.attach(view, isTv = true)
+        SettingsListStyler.setSectionGrid(view, currentScreenState.rootKey == null)
         view.post { listView?.requestFocus() }
     }
 
@@ -471,31 +494,6 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                     getString(R.string.settings_subdl_api_key_success)
                 }
                 Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
-                true
-            }
-        }
-
-        findPreference<Preference>("p_settings_about")?.apply {
-            val palette = ThemeManager.palette(UserPreferences.selectedTheme)
-            val titleStr = getString(R.string.settings_version_tv)
-            val spannableTitle = SpannableString(titleStr)
-            spannableTitle.setSpan(ForegroundColorSpan(palette.tvHeaderPrimary), 0, titleStr.length, 0)
-            title = spannableTitle
-            
-            val summaryStr = BuildConfig.VERSION_NAME
-            val spannableSummary = SpannableString(summaryStr)
-            spannableSummary.setSpan(ForegroundColorSpan(palette.tvHeaderSecondary), 0, summaryStr.length, 0)
-            summary = spannableSummary
-
-            isSelectable = false
-            setOnPreferenceClickListener(null)
-        }
-
-        findPreference<Preference>("p_settings_telegram")?.apply {
-            isEnabled = true
-            isSelectable = true
-            setOnPreferenceClickListener {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.charm_vod_telegram_url))))
                 true
             }
         }

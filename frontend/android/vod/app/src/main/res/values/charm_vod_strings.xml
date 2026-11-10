@@ -4,6 +4,4 @@
     <string name="charm_vod_welcome_caption">Movies. Series. Your next great watch.</string>
     <string name="charm_vod_skip">Press OK or tap to enter</string>
     <string name="charm_vod_provider_access">Charming MediaLab — choose a provider</string>
-    <string name="charm_vod_telegram_pending">Open the Charming MediaLab community</string>
-    <string name="charm_vod_telegram_url" translatable="false">https://t.me/+f2Pr2-L3WWI4MDJh</string>
 </resources>
