@@ -6,7 +6,7 @@ import kotlin.math.pow
 
 // https://github.com/cylonu87/JsUnpacker
 class JsUnpacker(packedJS: String?) {
-    private var packedJS: String? = null
+    private val packedJS: String? = packedJS
 
     /**
      * Detects whether the javascript is P.A.C.K.E.R. coded.
@@ -14,7 +14,7 @@ class JsUnpacker(packedJS: String?) {
      * @return true if it's P.A.C.K.E.R. coded.
      */
     fun detect(): Boolean {
-        val js = packedJS!!.replace(" ", "")
+        val js = (packedJS ?: return false).replace(" ", "")
         val p = Pattern.compile("eval\\(function\\(p,a,c,k,e,[rd]")
         val m = p.matcher(js)
         return m.find()
@@ -26,7 +26,7 @@ class JsUnpacker(packedJS: String?) {
      * @return the javascript unpacked or null.
      */
     fun unpack(): String? {
-        val js = packedJS
+        val js = packedJS ?: return null
         try {
             var p =
                 Pattern.compile(
@@ -35,11 +35,11 @@ class JsUnpacker(packedJS: String?) {
                 )
             var m = p.matcher(js)
             if (m.find() && m.groupCount() == 4) {
-                val payload = m.group(1).replace("\\'", "'")
-                val radixStr = m.group(2)
+                val payload = (m.group(1) ?: return null).replace("\\'", "'")
+                val radixStr = m.group(2) ?: return null
 
-                val countStr = m.group(3)
-                val symtab = m.group(4).split("\\|".toRegex()).toTypedArray()
+                val countStr = m.group(3) ?: return null
+                val symtab = (m.group(4) ?: return null).split("\\|".toRegex()).toTypedArray()
                 var radix = 36
                 var count = 0
                 try {
@@ -59,7 +59,7 @@ class JsUnpacker(packedJS: String?) {
                 val decoded = StringBuilder(payload)
                 var replaceOffset = 0
                 while (m.find()) {
-                    val word = m.group(0)
+                    val word = m.group(0) ?: continue
                     val x = try {
                         unbase.unbase(word)
                     } catch (_: Exception) {
@@ -128,10 +128,6 @@ class JsUnpacker(packedJS: String?) {
     /**
      * @param  packedJS javascript P.A.C.K.E.R. coded.
      */
-    init {
-        this.packedJS = packedJS
-    }
-
 
     companion object {
         val c =
