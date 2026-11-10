@@ -15,7 +15,7 @@ import com.streamflixreborn.streamflix.providers.Provider
 import com.streamflixreborn.streamflix.utils.UserPreferences
 
 /**
- * One focus owner for the native VOD activity. Back-stack navigation restores
+ * One focus owner for the embedded native VOD surface. Back-stack navigation restores
  * the last real focus (including nested grids); Up/Down only cross a section
  * boundary when the physical focus search has no usable content neighbor.
  * Listeners are removed when the activity is destroyed.
@@ -123,22 +123,15 @@ class VodFocusCoordinator(
         // BACK never uses this path and does not touch the icon rail.
         if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
             if (inBar && binding.vodGlassActions.isFirstActionFocused(current)) {
-                return (onHostRailFocus?.invoke() == true) || binding.navMain.focusLastAction()
+                return onHostRailFocus?.invoke() == true
             }
             if (inContent && content != null) {
                 val next = current.focusSearch(View.FOCUS_LEFT)
                 if (next == null || !VodFocusMemory.isWithin(content, next)) {
-                    return (onHostRailFocus?.invoke() == true) || binding.navMain.focusLastAction()
+                    return onHostRailFocus?.invoke() == true
                 }
             }
         }
-        // Moving RIGHT from the icon rail resumes the last content region,
-        // rather than arbitrarily selecting Watch Now again.
-        if (key == KeyEvent.KEYCODE_DPAD_RIGHT && binding.navMain.hasFocus()) {
-            return if (lastZoneWasBar[navigation.currentDestination?.id] == true)
-                focusBar() else (focusContent() || focusBar())
-        }
-
         if (key == KeyEvent.KEYCODE_DPAD_DOWN &&
             VodFocusMemory.isWithin(binding.vodGlassActions, current)) {
             return focusContent()
