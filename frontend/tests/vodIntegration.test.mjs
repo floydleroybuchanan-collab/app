@@ -33,8 +33,8 @@ test('VOD navigation uses Charming branded glass bars without duplicate native r
   const fragment=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt');
   const layout=read('android/vod/app/src/main/res/layout/activity_main_tv.xml');
   assert.match(layout,/VodGlassActionBar/);
-  assert.doesNotMatch(layout,/VodIconRail|CharmVodWelcomeView|android:id="@\\+id\\/nav_main"/);
-  assert.doesNotMatch(fragment,/navMain|ivSplashOverlay/);
+  assert.doesNotMatch(layout,/VodIconRail|CharmVodWelcomeView/);\n  assert.equal(layout.includes('android:id="@+id/nav_main"'),false);
+  assert.doesNotMatch(fragment,/\bnavMain\b|ivSplashOverlay/);
   assert.match(fragment,/onHostIconRail/);
 });
 test('default provider remains selected and VOD does not install its own app updates',()=>{
