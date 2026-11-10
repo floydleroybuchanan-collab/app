@@ -303,13 +303,19 @@ class VodPlatformsFragment : Fragment() {
             val button = label("View All  ›", 15f).apply {
                 isFocusable = true
                 isClickable = true
-                setTextColor(0xFFE6C4FF.toInt())
-                background = badge.glass(false)
-                setPadding(dp(15), dp(9), dp(15), dp(9))
+                setTextColor(Color.WHITE)
+                setTypeface(typeface, Typeface.BOLD)
+                contentDescription = "View all ${platform.label}"
+                elevation = dp(7).toFloat()
+                background = badge.viewAllGlass(false)
+                setPadding(dp(22), dp(12), dp(22), dp(12))
                 onFocusChangeListener = View.OnFocusChangeListener { v, focused ->
-                    v.background = badge.glass(focused)
+                    // Each button uses its matching platform palette and neon
+                    // glass edge, never a generic purple outline.
+                    v.background = badge.viewAllGlass(focused)
                     v.animate().cancel()
                     v.animate().scaleX(if (focused) 1.08f else 1f).scaleY(if (focused) 1.08f else 1f)
+                        .translationZ(if (focused) dp(10).toFloat() else 0f)
                         .setDuration(140L).start()
                 }
                 setOnClickListener {
