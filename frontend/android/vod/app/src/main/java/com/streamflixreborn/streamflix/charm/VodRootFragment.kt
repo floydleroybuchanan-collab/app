@@ -49,6 +49,15 @@ class VodRootFragment : Fragment() {
     fun setHostActive(active: Boolean) {
         val changed = hostActive != active
         hostActive = active
+        if (!active && changed && navigation?.currentDestination?.id == R.id.player) {
+            // Expo Tabs can keep the VOD Fragment RESUMED while it is hidden.
+            // Leave playback before another tab starts its Live/Guide decoder:
+            // navigateUp destroys PlayerTvFragment's View and releases Media3
+            // (and its nested Nova Dialog) while retaining the last browse page.
+            runCatching {
+                if (navigation?.navigateUp() == false) navigation?.navigate(R.id.home)
+            }.onFailure { Log.e("CharmVodRoot", "Could not release hidden VOD playback", it) }
+        }
         if (active && changed && !rootReadyReported) {
             readyAttempts = 0
             notifyWhenDrawn()
