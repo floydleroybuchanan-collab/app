@@ -17,6 +17,9 @@ export default function VideoOnDemandScreen() {
   const [immersive, setImmersive] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Expo Tabs may mount a retained route before it has a real viewport.
+  // A FragmentContainerView inserted into a 0x0 Fabric surface cannot draw.
+  const [layoutReady, setLayoutReady] = useState(false);
   const enteredAt = useRef(0);
 
   useEffect(() => {
@@ -51,14 +54,20 @@ export default function VideoOnDemandScreen() {
 
   return (
     <PurpleTvShell active="/vod" immersiveContent={immersive}>
-      <View style={styles.page}>
-        {Platform.OS === "android" && !mountError ? (
+      <View
+        style={styles.page}
+        onLayout={({ nativeEvent: { layout } }) => {
+          const ready = layout.width > 0 && layout.height > 0;
+          setLayoutReady((current) => current === ready ? current : ready);
+        }}
+      >
+        {Platform.OS === "android" && !mountError && layoutReady ? (
           <NativeVod
             key={attempt}
             style={styles.surface}
             startSection={section === "settings" ? "settings" : "home"}
           />
-        ) : (
+        ) : mountError || Platform.OS !== "android" ? (
           <View style={styles.errorBox}>
             <Text style={styles.message}>{mountError || "Video OnDemand is available in the Android TV app."}</Text>
             {Platform.OS === "android" ? (
@@ -69,7 +78,7 @@ export default function VideoOnDemandScreen() {
               ><Text style={styles.buttonText}>Retry VOD</Text></Pressable>
             ) : null}
           </View>
-        )}
+        ) : null}
       </View>
     </PurpleTvShell>
   );
@@ -77,7 +86,8 @@ export default function VideoOnDemandScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, minWidth: 0, minHeight: 0, backgroundColor: "#10091D" },
-  surface: { flex: 1, width: "100%", height: "100%" },
+  // Exact fill avoids conflicting flex and percentage dimensions in Fabric.
+  surface: { ...StyleSheet.absoluteFillObject },
   errorBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, padding: 30 },
   message: { color: "#FFE7F5", fontSize: 17, textAlign: "center" },
   button: { backgroundColor: "#60348B", paddingVertical: 14, paddingHorizontal: 22, borderRadius: 13 },
