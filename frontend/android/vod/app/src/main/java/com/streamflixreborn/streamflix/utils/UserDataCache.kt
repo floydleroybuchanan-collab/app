@@ -30,6 +30,11 @@ object UserDataCache {
         }
     )
 
+    // Android memory pressure may evict copies, never the persisted user's data.
+    fun clearMemory() {
+        memoryCache.clear()
+    }
+
     data class UserData(
         val favoritesMovies: List<CachedMovie> = emptyList(),
         val favoritesTvShows: List<CachedTvShow> = emptyList(),
