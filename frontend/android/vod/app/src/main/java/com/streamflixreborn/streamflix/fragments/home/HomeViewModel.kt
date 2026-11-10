@@ -304,21 +304,11 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                     // FAVORITES
                     Category(
                         name = Category.FAVORITE_MOVIES,
-                        list = history.favoritesMovies.sortedByDescending {
-                            when (it) {
-                                is Movie -> it.favoritedAtMillis ?: 0L
-                                else -> 0L
-                            }
-                        },
+                        list = history.favoritesMovies.sortedByDescending { it.favoritedAtMillis ?: 0L },
                     ),
                     Category(
                         name = Category.FAVORITE_TV_SHOWS,
-                        list = history.favoriteTvShows.sortedByDescending {
-                            when (it) {
-                                is TvShow -> it.favoritedAtMillis ?: 0L
-                                else -> 0L
-                            }
-                        },
+                        list = history.favoriteTvShows.sortedByDescending { it.favoritedAtMillis ?: 0L },
                     ),
                 ) + state.categories
                     .filter { it.name != Category.FEATURED }
