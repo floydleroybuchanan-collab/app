@@ -138,6 +138,9 @@ class VodRootFragment : Fragment() {
         }
     }
 
+    /** Native RIGHT from the unified app rail restores focus inside VOD. */
+    fun restoreFocusFromRail(): Boolean = coordinator?.restoreFocusFromHost() == true
+
     fun onRemoteKey(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
             event.keyCode == KeyEvent.KEYCODE_BACK) return navigateBack()
