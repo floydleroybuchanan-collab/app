@@ -292,6 +292,10 @@ export function PurpleTvShell({
   const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
+  // Retain the offscreen drawer only for its closing animation. Previously
+  // every non-VOD route kept an invisible TVFocusGuide mounted indefinitely;
+  // a stale child could continue trapping DPAD while the content was visible.
+  const [drawerRendered, setDrawerRendered] = useState(drawerOpen);
   const drawerFocusConfirmedRef = useRef(false);
   const [drawerPreferredRoute, setDrawerPreferredRoute] = useState<Route | null>(drawerOpen ? active : null);
   const activeGuideGroupName = useMemo(
@@ -572,6 +576,17 @@ export function PurpleTvShell({
     if (exitHintTimer.current) clearTimeout(exitHintTimer.current);
   }, []);
 
+  useEffect(() => {
+    if (drawerOpen) {
+      setDrawerRendered(true);
+      return;
+    }
+    // Wait for the existing 180ms translation; then release the old focus
+    // hierarchy entirely. No extra bitmap/cached drawer view is retained.
+    const remove = setTimeout(() => setDrawerRendered(false), PURPLE_DRAWER_ANIMATION_MS);
+    return () => clearTimeout(remove);
+  }, [drawerOpen]);
+
   const drawerTranslateX = drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-PURPLE_SIDEBAR_WIDTH, 0] });
 
   const claimIconRail = useCallback((owner: Route | "power") => {
@@ -643,11 +658,17 @@ export function PurpleTvShell({
         },
       ]}
     >
-      {isFocused && (active !== "/vod" || drawerOpen) ? <Animated.View
+      {isFocused && drawerRendered ? <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight={active !== "/vod"} onFocusCapture={() => {
+        <FocusGuide
+          style={styles.sidebar}
+          trapFocusUp={drawerOpen}
+          trapFocusDown={drawerOpen}
+          trapFocusLeft={drawerOpen}
+          trapFocusRight={drawerOpen && active !== "/vod"}
+          onFocusCapture={() => {
           if (!isFocused || !drawerOpen) return;
           // Android can restore a drawer child after Player changes the remote
           // owner. Reconcile real focus, otherwise Right is never sent to JS.
