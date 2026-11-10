@@ -82,9 +82,6 @@ test('host and VOD support API 24 without dropping current framework or HTTP sou
   assert.match(audio, /CHARM_FFMPEG_ANDROID_API:-\$APP_MIN_SDK/);
   assert.match(audio, /ANDROID_API > APP_MIN_SDK/);
   assert.doesNotMatch(audio, /CHARM_FFMPEG_ANDROID_API:-26/);
-  const welcome = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodWelcomeView.kt');
-  assert.match(welcome, /SDK_INT >= Build.VERSION_CODES.O\) \{\s*ValueAnimator.areAnimatorsEnabled\(\)/);
-  assert.match(welcome, /Settings.Global.ANIMATOR_DURATION_SCALE/);
   const settings = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/SettingsTvFragment.kt');
   for (const kind of ['Backup', 'DatabaseBackup']) {
     assert.match(settings, new RegExp(`private fun export${kind}ToDownloads[^\\n]+\\{\\s*(?://[^\\n]*\\n\\s*)*if \\(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q\\) \\{\\s*export${kind}ToLocalFile\\(fileName\\)`));
@@ -99,12 +96,6 @@ test('launcher uses RGBA circle artwork without an extra VOD interstitial', () =
   assert.equal(asset.readUInt32BE(16), 1024);
   assert.equal(asset.readUInt32BE(20), 1024);
   assert.equal(asset[25], 6, 'launcher keeps an actual alpha channel');
-  const welcome = read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodWelcomeView.kt');
-  assert.match(welcome, /R.drawable.medialab_vod_entrance/);
-  assert.match(welcome, /duration = 2600L/);
-  assert.match(welcome, /onDetachedFromWindow/);
-  assert.match(welcome, /removeAllUpdateListeners/);
-  assert.match(welcome, /setOnClickListener \{ dismiss\(\) \}/);
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   assert.match(manifest, /android:icon="@drawable\/charm_launcher"/);
   assert.match(manifest, /android:banner="@drawable\/charm_tv_banner"/);
