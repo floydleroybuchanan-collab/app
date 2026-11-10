@@ -261,6 +261,7 @@ export function PurpleTvShell({
     drawerProgress,
     openDrawer,
     closeDrawer,
+    focusIconRail,
     publishIconRailEntryTag,
     iconRailFocusRequest,
     focusDrawerTop,
