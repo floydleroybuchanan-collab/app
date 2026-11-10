@@ -56,6 +56,14 @@ class VodPlatformBadgeView(
             "prime" -> intArrayOf(0xFF21CBF7.toInt(), 0xFF087CE4.toInt(), 0xFF1943AB.toInt())
             "paramount" -> intArrayOf(0xFF40B8FF.toInt(), 0xFF4267E8.toInt(), 0xFF3F3FA8.toInt())
             "peacock" -> intArrayOf(0xFFF67A50.toInt(), 0xFFE034A1.toInt(), 0xFF7D2FB0.toInt())
+            "youtube" -> intArrayOf(0xFFFF3C4C.toInt(), 0xFFC91B50.toInt(), 0xFF78134B.toInt())
+            "youtube_tv" -> intArrayOf(0xFFF92E4D.toInt(), 0xFFA31B71.toInt(), 0xFF411C72.toInt())
+            "plex" -> intArrayOf(0xFFFFD04A.toInt(), 0xFFD79319.toInt(), 0xFF6B4623.toInt())
+            "tubi" -> intArrayOf(0xFFE060FE.toInt(), 0xFF9A3BEB.toInt(), 0xFF4E228C.toInt())
+            "fubo" -> intArrayOf(0xFFFF6C49.toInt(), 0xFFE53677.toInt(), 0xFF8A2192.toInt())
+            "starz" -> intArrayOf(0xFF4CE4F8.toInt(), 0xFF147FCE.toInt(), 0xFF6727C8.toInt())
+            "amc" -> intArrayOf(0xFF09E7E4.toInt(), 0xFF047EAE.toInt(), 0xFF2F348C.toInt())
+            "crunchyroll" -> intArrayOf(0xFFFFB93A.toInt(), 0xFFF66A19.toInt(), 0xFF8B2842.toInt())
             else -> intArrayOf(platform.tint, 0xFF683A9A.toInt(), 0xFF29183C.toInt())
         }
         return GradientDrawable(GradientDrawable.Orientation.TL_BR, tones).apply {
