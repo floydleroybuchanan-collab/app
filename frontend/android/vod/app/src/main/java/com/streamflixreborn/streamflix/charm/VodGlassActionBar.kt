@@ -9,41 +9,40 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.DrawableCompat
 import com.streamflixreborn.streamflix.R
 
 /**
- * GPU-light glass action bar for the existing View/Leanback VOD module.
- * The app does not enable Jetpack Compose in this module. This native View
- * equivalent preserves 10-foot readability, scale/elevation, remote focus,
- * and edge padding without adding an entire Compose runtime to the APK.
+ * Seven focusable glass artwork actions over ONE native VOD NavHost.
+ * A row of big vertically stacked icons and labels matches the TV design;
+ * it is not a second rail or a second navigation activity.
  */
 class VodGlassActionBar @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : HorizontalScrollView(context, attrs) {
-
-    private data class Action(val id: Int, val title: String, val icon: Int)
+    private data class Action(
+        val id: Int, val title: String, val art: String, val first: Int, val second: Int,
+    )
     private val actions = listOf(
-        Action(R.id.home, "Home", R.drawable.ic_menu_home),
-        Action(R.id.search, "Search", R.drawable.ic_menu_search),
-        Action(R.id.movies, "Movies", R.drawable.ic_menu_movie),
-        Action(R.id.tv_shows, "TV Shows", R.drawable.ic_menu_tv),
-        Action(R.id.favorites, "My List", R.drawable.ic_favorite_enable),
-        Action(R.id.genre_hub, "Genres", R.drawable.ic_menu_movie),
-        Action(R.id.platforms, "Platforms", R.drawable.ic_menu_tv),
+        Action(R.id.home, "Home", "home", 0xFF0DCBF9.toInt(), 0xFFFF6B4B.toInt()),
+        Action(R.id.search, "Search", "search", 0xFF18C3FF.toInt(), 0xFFDD35F9.toInt()),
+        Action(R.id.movies, "Movies", "movies", 0xFFFF7835.toInt(), 0xFFDE2ECB.toInt()),
+        Action(R.id.tv_shows, "TV Shows", "shows", 0xFF0DD7F8.toInt(), 0xFFF03BBE.toInt()),
+        Action(R.id.favorites, "My List", "favorites", 0xFFF4379E.toInt(), 0xFFFFAF35.toInt()),
+        Action(R.id.genre_hub, "Genres", "genres", 0xFFFFA136.toInt(), 0xFFC02AF4.toInt()),
+        Action(R.id.platforms, "Platforms", "platforms", 0xFF18C7FB.toInt(), 0xFFA942FA.toInt()),
     )
     private val strip = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         clipChildren = false
         clipToPadding = false
-        setPadding(dp(25), dp(13), dp(35), dp(13))
+        setPadding(dp(8), dp(4), dp(12), dp(4))
     }
-    private val buttons = LinkedHashMap<Int, TextView>()
+    private val buttons = LinkedHashMap<Int, View>()
     private var lastFocusedId = R.id.home
     var onNavigate: ((Int) -> Unit)? = null
 
@@ -57,67 +56,68 @@ class VodGlassActionBar @JvmOverloads constructor(
         setBackgroundColor(Color.TRANSPARENT)
         addView(strip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         actions.forEachIndexed { index, action ->
-            val button = TextView(context).apply {
+            val button = LinearLayout(context).apply {
                 id = View.generateViewId()
-                text = action.title
+                orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                textSize = 15.5f
-                setTextColor(Color.rgb(239, 226, 255))
-                setTypeface(typeface, Typeface.BOLD)
-                setPadding(dp(15), 0, dp(15), 0)
                 isFocusable = true
                 isFocusableInTouchMode = false
                 isClickable = true
-                background = glassBackground(false)
-                elevation = dp(5).toFloat()
-                val colors = when(action.id) {
-                    R.id.home -> intArrayOf(0xFF10BCE9.toInt(),0xFFFC7C37.toInt())
-                    R.id.search -> intArrayOf(0xFF16C3F4.toInt(),0xFFD54CFB.toInt())
-                    R.id.movies -> intArrayOf(0xFFF76A39.toInt(),0xFFDB3DCC.toInt())
-                    R.id.tv_shows -> intArrayOf(0xFF25D4E6.toInt(),0xFFF659CB.toInt())
-                    R.id.favorites -> intArrayOf(0xFFF83E88.toInt(),0xFFF69D30.toInt())
-                    R.id.genre_hub -> intArrayOf(0xFFFFA13C.toInt(),0xFFD84BF2.toInt())
-                    else -> intArrayOf(0xFF25C4F8.toInt(),0xFF9B4CFF.toInt())
+                contentDescription = action.title
+                setPadding(dp(4), dp(3), dp(4), dp(5))
+                clipChildren = false
+                clipToPadding = false
+                background = buttonGlass(false, action.first, action.second)
+                elevation = dp(6).toFloat()
+                val icon = ImageView(context).apply {
+                    setImageDrawable(CharmingVodTopIcon(action.art, action.first, action.second))
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    isFocusable = false
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-                val icon = GlassGlyphDrawable(context,action.icon,colors[0],colors[1]).apply {
-                    setBounds(0,0,dp(35),dp(35))
-                }
-                setCompoundDrawables(icon, null, null, null)
-                compoundDrawablePadding = dp(9)
+                addView(icon, LinearLayout.LayoutParams(dp(72), dp(73)))
+                addView(TextView(context).apply {
+                    text = action.title
+                    gravity = Gravity.CENTER
+                    textSize = 15.5f
+                    setTextColor(Color.WHITE)
+                    setTypeface(typeface, Typeface.BOLD)
+                    isFocusable = false
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    maxLines = 1
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
                 setOnClickListener { onNavigate?.invoke(action.id) }
-                onFocusChangeListener = OnFocusChangeListener { view, hasFocus ->
-                    if (hasFocus) lastFocusedId = action.id
-                    background = glassBackground(hasFocus)
-                    setTextColor(if (hasFocus) Color.WHITE else Color.rgb(239, 226, 255))
+                onFocusChangeListener = View.OnFocusChangeListener { view, focused ->
+                    if (focused) lastFocusedId = action.id
+                    background = buttonGlass(focused, action.first, action.second)
                     view.animate().cancel()
                     view.animate()
-                        .scaleX(if (hasFocus) 1.10f else 1f)
-                        .scaleY(if (hasFocus) 1.10f else 1f)
-                        .translationY(if (hasFocus) -dp(5).toFloat() else 0f)
-                        .translationZ(if (hasFocus) dp(17).toFloat() else 0f)
-                        .setDuration(155L)
+                        .scaleX(if (focused) 1.08f else 1f)
+                        .scaleY(if (focused) 1.08f else 1f)
+                        .translationZ(if (focused) dp(16).toFloat() else 0f)
+                        .setDuration(140L)
                         .start()
-                    if (hasFocus) post {
+                    if (focused) post {
                         val center = view.left + view.width / 2
                         smoothScrollTo((center - width / 2).coerceAtLeast(0), 0)
                     }
                 }
             }
-            strip.addView(button, LinearLayout.LayoutParams(dp(150), dp(50)).apply {
-                rightMargin = if (index == actions.lastIndex) 0 else dp(12)
+            strip.addView(button, LinearLayout.LayoutParams(dp(118), dp(110)).apply {
+                rightMargin = if (index == actions.lastIndex) 0 else dp(5)
             })
             buttons[action.id] = button
         }
     }
 
-    /** LEFT on the first visible VOD button enters the icon rail exactly once. */
+    /** LEFT at the first glass button transfers to the existing host icon rail. */
     fun isFirstActionFocused(view: View): Boolean =
         buttons.values.firstOrNull { it.visibility == View.VISIBLE } === view
 
     fun focusLastAction(): Boolean {
-        val view = buttons[lastFocusedId]?.takeIf { it.visibility == View.VISIBLE }
+        val preferred = buttons[lastFocusedId]?.takeIf { it.visibility == View.VISIBLE }
             ?: buttons.values.firstOrNull { it.visibility == View.VISIBLE }
-        return view?.requestFocus() == true
+        return preferred?.requestFocus() == true
     }
 
     fun setAvailable(showMovies: Boolean, showShows: Boolean) {
@@ -126,14 +126,15 @@ class VodGlassActionBar @JvmOverloads constructor(
         if (buttons[lastFocusedId]?.visibility == View.GONE) lastFocusedId = R.id.home
     }
 
-    private fun glassBackground(focused: Boolean) = GradientDrawable(
-        GradientDrawable.Orientation.TL_BR,
-        if (focused) intArrayOf(0x95BE8BD9.toInt(), 0x9B703A9D.toInt(), 0xA343207D.toInt())
-        else intArrayOf(0x3EFFFFFF, 0x517B429A, 0x5E421D61),
-    ).apply {
-        cornerRadius = dp(16).toFloat()
-        setStroke(dp(if (focused) 2 else 1), if (focused) Color.rgb(245, 215, 255) else 0x8FCFA6E6.toInt())
-    }
+    private fun buttonGlass(focused: Boolean, a: Int, b: Int) =
+        GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            if (focused) intArrayOf(a and 0x00FFFFFF or 0xC1000000.toInt(),
+                b and 0x00FFFFFF or 0x9A000000.toInt(), 0xA72E1056.toInt())
+            else intArrayOf(0x140F0821, 0x1B12072A, 0x1A180A2A)
+        ).apply {
+            cornerRadius = dp(16).toFloat()
+            setStroke(dp(if (focused) 2 else 0), if (focused) 0xFFE6B5FF.toInt() else Color.TRANSPARENT)
+        }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density + .5f).toInt()
 }
