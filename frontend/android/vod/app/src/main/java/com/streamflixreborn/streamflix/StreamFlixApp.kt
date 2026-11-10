@@ -3,7 +3,6 @@ package com.streamflixreborn.streamflix
 import android.app.Activity
 import android.app.Application
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Bundle
 import java.security.Security
 import org.conscrypt.Conscrypt
@@ -14,7 +13,6 @@ import com.streamflixreborn.streamflix.sync.CloudSyncManager
 import com.streamflixreborn.streamflix.sync.SupabaseProvider
 import com.streamflixreborn.streamflix.utils.AppLanguageManager
 import com.streamflixreborn.streamflix.utils.ArtworkRepairScheduler
-import com.streamflixreborn.streamflix.utils.CacheUtils
 import com.streamflixreborn.streamflix.utils.DnsResolver
 import com.streamflixreborn.streamflix.utils.IsrgRootTrustProvider
 import com.streamflixreborn.streamflix.utils.UserPreferences
@@ -88,8 +86,6 @@ open class StreamFlixApp : Application(), androidx.work.Configuration.Provider {
         DnsResolver.setDnsUrl(UserPreferences.dohProviderUrl)
 
         val appContext = applicationContext
-        val isTv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
-        val threshold = if (isTv) 10L else 50L
 
         applicationScope.launch(Dispatchers.IO) {
             AppDatabase.setup(appContext)
@@ -98,7 +94,8 @@ open class StreamFlixApp : Application(), androidx.work.Configuration.Provider {
             SerienStreamProvider.initialize(appContext)
             AniWorldProvider.initialize(appContext)
             ArtworkRepairScheduler.schedule(appContext, UserPreferences.currentProvider)
-            CacheUtils.autoClearIfNeeded(appContext, thresholdMb = threshold)
+            // Glide/OkHttp and HomeCacheStore own their bounded eviction policies.
+            // Never recursively delete their active journals at startup.
         }
     }
 
