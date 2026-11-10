@@ -104,6 +104,20 @@ class MainActivity : ReactActivity() {
     return next != null && next !== focus && visible(next) && sharesRow(focus, next)
   }
 
+  /**
+   * Move LEFT to the same-row neighbour found INSIDE the page. Android's own
+   * window-wide search measures layout boxes, and the closed drawer still lies
+   * under the rail (0-257px), so it beat real neighbours such as the page's own
+   * Drawer button and focus was lost on an invisible list.
+   */
+  private fun focusLeftNeighborInRow(focus: View, page: View): Boolean {
+    if (nativeVodOwnsFocus()) return false
+    val next = FocusFinder.getInstance().findNextFocus(page as? ViewGroup ?: return false, focus, View.FOCUS_LEFT)
+      ?: return false
+    if (next === focus || !visible(next) || !sharesRow(focus, next)) return false
+    return next.requestFocus(View.FOCUS_LEFT)
+  }
+
   private fun hasTaggedAncestor(view: View?, id: String): Boolean {
     var at = view
     while (at != null) {
@@ -184,7 +198,8 @@ class MainActivity : ReactActivity() {
           focus is EditText || TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "main_drawer") return false
       val guidePage = findTagged(root, "purple-tv-guide-page")
       val page = guidePage ?: findTagged(root, "purple-tv-page") ?: return false
-      if (!within(focus, page) || hasLeftNeighborInRow(focus, page)) return false
+      if (!within(focus, page)) return false
+      if (hasLeftNeighborInRow(focus, page)) return focusLeftNeighborInRow(focus, page)
       if (event.repeatCount == 0) {
         if (guidePage != null) emitRemoteEvent("CharmGuideGroupsRequestOpen", "")
         else emitRemoteEvent("CharmIconRailReveal", root.id.toString())
@@ -211,7 +226,8 @@ class MainActivity : ReactActivity() {
     if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT || focus is EditText || focus is NativeGuideView) return false
     if (TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "guide_groups") return false
     val page = findTagged(root, "purple-tv-page") ?: return false
-    if (!within(focus, page) || hasLeftNeighborInRow(focus, page)) return false
+    if (!within(focus, page)) return false
+    if (hasLeftNeighborInRow(focus, page)) return focusLeftNeighborInRow(focus, page)
     // Direct native handoff to the current route's icon: it needs no React
     // state, so it works from the first frame after startup. A page with no icon
     // of its own (a route outside the rail) enters at the rail's first item.

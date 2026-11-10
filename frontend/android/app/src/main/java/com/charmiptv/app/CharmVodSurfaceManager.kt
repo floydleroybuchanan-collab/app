@@ -176,6 +176,19 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 return
             }
             val fm = host.supportFragmentManager
+            // The FragmentManager finds the container with activity.findViewById().
+            // generateViewId() starts at 1 in each process, and React Native names
+            // its views by small tags (its root view is #1), so on a cold start the
+            // VOD page was placed inside an unrelated React view that is never sized
+            // (0x0, blank VOD until Retry). Use an id that resolves only to this container.
+            var idTries = 0
+            while (host.findViewById<View>(container.id) !== container && idTries++ < 64) {
+                container.id = View.generateViewId()
+            }
+            if (host.findViewById<View>(container.id) !== container) {
+                retryHost("VOD container id is not unique yet")
+                return
+            }
             val screen = VodRootFragment.create(startSection)
             screen.onHostBack = { emit("CharmVodRootBack", "") }
             screen.onHostIconRail = {
