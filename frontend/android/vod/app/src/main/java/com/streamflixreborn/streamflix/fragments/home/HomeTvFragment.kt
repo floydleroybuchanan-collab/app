@@ -198,22 +198,18 @@ class HomeTvFragment : Fragment() {
         val destination = when (item) {
             is Movie -> R.id.movie
             is TvShow -> R.id.tv_show
-            else -> return
         }
         val id = when (item) {
             is Movie -> item.id
             is TvShow -> item.id
-            else -> return
         }
         val poster = when (item) {
             is Movie -> item.poster
             is TvShow -> item.poster
-            else -> null
         }
         val banner = when (item) {
             is Movie -> item.banner
             is TvShow -> item.banner
-            else -> null
         }
         runCatching {
             findNavController().navigate(destination, Bundle().apply {
