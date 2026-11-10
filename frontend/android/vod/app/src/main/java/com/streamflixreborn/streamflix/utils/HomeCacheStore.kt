@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.utils
 
 import android.content.Context
+import android.util.AtomicFile
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
@@ -73,9 +74,19 @@ object HomeCacheStore {
             val payload = categories.map { CachedCategory.from(it) }
             val cacheKey = cacheKey(provider)
             remember(cacheKey, payload)
-            cacheFile(context, cacheKey).apply {
-                parentFile?.mkdirs()
-                writeText(gson.toJson(payload))
+            val target = cacheFile(context, cacheKey)
+            target.parentFile?.mkdirs()
+            // Atomic replacement protects the last usable offline catalog
+            // if Android kills the app during a large JSON write.
+            val atomic = AtomicFile(target)
+            var stream: java.io.FileOutputStream? = null
+            try {
+                stream = atomic.startWrite()
+                stream.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
+                atomic.finishWrite(stream)
+            } catch (error: Exception) {
+                stream?.let { atomic.failWrite(it) }
+                throw error
             }
         }
     }
