@@ -129,3 +129,34 @@ test("Platforms only exposes the ten approved services", () => {
     "paramount", "peacock", "starz", "amc"
   ]);
 });
+
+test("approved dashboard has persistent hero, ten matching platform actions and movie shelves", () => {
+  const homeXml = read("android/vod/app/src/main/res/layout/fragment_home_tv.xml");
+  const dashboard = read(vod + "fragments/home/CharmingVodDashboardView.kt");
+  const fragment = read(vod + "fragments/home/HomeTvFragment.kt");
+  const top = read(vod + "charm/VodGlassActionBar.kt");
+  assert.match(homeXml, /charming_vod_dashboard/);
+  assert.match(homeXml, /layout_constraintTop_toBottomOf="@id\/charming_vod_dashboard"/);
+  assert.match(dashboard, /"▶  Watch Now"/);
+  assert.match(dashboard, /"＋  My List"/);
+  assert.match(dashboard, /VodPlatformCatalog\.platforms\.forEach/);
+  assert.match(dashboard, /badge\.viewAllGlass\(focused\)/);
+  assert.match(dashboard, /TRENDING MOVIES/);
+  assert.match(fragment, /binding\.charmingVodDashboard\.bindFeatured\(chosen\)/);
+  assert.match(fragment, /findNavController\(\)\.navigate\(R\.id\.platform_titles/);
+  assert.match(top, /isFillViewport = true/);
+  assert.match(top, /LayoutParams\(0, dp\(110\), 1f\)/);
+});
+
+test("unified VOD never covers native home with the old catalog loading screen", () => {
+  const homeXml = read("android/vod/app/src/main/res/layout/fragment_home_tv.xml");
+  const fragment = read(vod + "fragments/home/HomeTvFragment.kt");
+  const root = read(vod + "charm/VodRootFragment.kt");
+  assert.match(homeXml, /android:id="@\+id\/is_loading"/);
+  assert.match(homeXml, /android:visibility="gone"/);
+  assert.match(fragment, /HomeViewModel\.State\.Loading -> \{/);
+  assert.match(fragment, /binding\.isLoading\.root\.visibility = View\.GONE/);
+  assert.match(fragment, /dashboard\.reportCatalogError\(\)/);
+  assert.doesNotMatch(fragment, /pbIsLoading\.visibility = View\.VISIBLE/);
+  assert.match(root, /b\.navMain\.visibility = View\.GONE/);
+});
