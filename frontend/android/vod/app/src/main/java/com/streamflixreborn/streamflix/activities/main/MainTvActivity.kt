@@ -68,7 +68,7 @@ class MainTvActivity : FragmentActivity() {
         applyThemeNavigationChrome()
 
         val navHostFragment = this.supportFragmentManager
-            .findFragmentById(binding.navMainFragment.id) as NavHostFragment
+            .findFragmentById(binding.vodGlassActionsFragment.id) as NavHostFragment
         val navController = navHostFragment.navController
 
         adjustLayoutDelta(null, null)
@@ -87,7 +87,7 @@ class MainTvActivity : FragmentActivity() {
             }
         }
 
-        binding.navMain.onNavigate = { destination ->
+        binding.vodGlassActions.onNavigate = { destination ->
             if (navController.currentDestination?.id != destination) {
                 navController.navigate(destination, null, navOptions {
                     launchSingleTop = true
@@ -99,17 +99,17 @@ class MainTvActivity : FragmentActivity() {
         updateNavigationVisibility()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            binding.navMainFragment.isFocusedByDefault = true
+            binding.vodGlassActionsFragment.isFocusedByDefault = true
         }
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
             when (destination.id) {
                 R.id.search, R.id.home, R.id.movies, R.id.tv_shows,
                 R.id.favorites, R.id.genre_hub, R.id.platforms, R.id.settings -> {
-                    binding.navMain.visibility = View.VISIBLE
+                    binding.vodGlassActions.visibility = View.VISIBLE
                     updateNavigationVisibility()
                 }
-                else -> binding.navMain.visibility = View.GONE
+                else -> binding.vodGlassActions.visibility = View.GONE
             }
         }
 
@@ -140,10 +140,6 @@ class MainTvActivity : FragmentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.ivSplashOverlay.visibility == View.VISIBLE) {
-                    binding.ivSplashOverlay.dismiss()
-                    return
-                }
                 when (navController.currentDestination?.id) {
                     R.id.home -> finishToMainDrawer()
                     R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites,
@@ -161,11 +157,7 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
         })
-        // Native VOD opens directly. Do not block its catalog with a second
-        // fullscreen welcome/loading screen after the host navigation.
-        binding.ivSplashOverlay.dismiss()
-        binding.ivSplashOverlay.visibility = View.GONE
-        if (savedInstanceState == null) binding.navMainFragment.post { binding.navMainFragment.requestFocus() }
+        if (savedInstanceState == null) binding.vodGlassActionsFragment.post { binding.vodGlassActionsFragment.requestFocus() }
     }
 
     /** A root VOD BACK returns to the host main navigation drawer, not the icon rail. */
@@ -185,11 +177,6 @@ class MainTvActivity : FragmentActivity() {
         super.onDestroy()
     }
 
-    override fun onStop() {
-        binding.ivSplashOverlay.dismiss()
-        super.onStop()
-    }
-
     override fun onResume() {
         super.onResume()
         viewModel.checkUpdate()
@@ -199,12 +186,12 @@ class MainTvActivity : FragmentActivity() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
-        binding.navMain.setBackgroundColor(palette.tvNavBackground)
+        binding.vodGlassActions.setBackgroundColor(palette.tvNavBackground)
     }
     
     private fun updateNavigationVisibility() {
         val provider = UserPreferences.currentProvider
-        binding.navMain.setAvailable(
+        binding.vodGlassActions.setAvailable(
             provider?.let { Provider.supportsMovies(it) } ?: true,
             provider?.let { Provider.supportsTvShows(it) } ?: true,
         )
