@@ -23,7 +23,7 @@ abstract class AniWorldDatabase: RoomDatabase() {
                     AniWorldDatabase::class.java,
                     "ani_world.db"
                 )
-                        .fallbackToDestructiveMigration(dropAllTables = true)
+                        .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }
             }
