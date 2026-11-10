@@ -22,6 +22,8 @@ import androidx.viewbinding.ViewBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.charm.CharmingVodTopIcon
+import com.streamflixreborn.streamflix.vod.VodPreferences
 import com.streamflixreborn.streamflix.adapters.AppAdapter
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.ContentMovieCastMobileBinding
@@ -869,6 +871,26 @@ class MovieViewHolder(
     }
 
     private fun displayMovieTv(binding: ContentMovieTvBinding) {
+        // The same player and favorite DAO own every action. No duplicate
+        // network request, media session or data-store lives in these buttons.
+        fun decorate(button: android.widget.TextView, art: String) {
+            val icon = CharmingVodTopIcon(art, 0xFF08D9FF.toInt(), 0xFFF047CF.toInt())
+            val size = (31 * context.resources.displayMetrics.density + .5f).toInt()
+            icon.setBounds(0, 0, size, size)
+            button.setCompoundDrawables(icon, null, null, null)
+            button.compoundDrawablePadding = (6 * context.resources.displayMetrics.density + .5f).toInt()
+        }
+        decorate(binding.btnMovieWatchNow, "movies")
+        decorate(binding.btnMovieSources, "platforms")
+        decorate(binding.btnMovieMyList, "favorites")
+        binding.btnMovieSources.setOnClickListener {
+            VodPreferences.requestSourcesForNextPlayback()
+            binding.btnMovieWatchNow.performClick()
+        }
+        binding.btnMovieMyList.apply {
+            text = if (movie.isFavorite) "In My List" else "Add to My List"
+            setOnClickListener { binding.btnMovieFavorite.performClick() }
+        }
         binding.ivMoviePoster.run {
             loadMoviePoster(movie) {
                 transition(DrawableTransitionOptions.withCrossFade())
@@ -983,6 +1005,7 @@ class MovieViewHolder(
                             movie.poster = resolvedMovie.poster
                             movie.banner = resolvedMovie.banner
                             movie.isFavorite = newValue
+                            binding.btnMovieMyList.text = if (newValue) "In My List" else "Add to My List"
                             setImageDrawable(
                                 ContextCompat.getDrawable(context, newValue.drawable())
                             )
