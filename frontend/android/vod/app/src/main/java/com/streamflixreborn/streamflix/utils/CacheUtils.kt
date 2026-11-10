@@ -25,13 +25,24 @@ object CacheUtils {
         // Clear the same metadata from memory BEFORE deleting the backing JSON.
         // Do not evict shared Live TV, logo, EPG or WebView caches.
         HomeCacheStore.clearMemory()
-        ownedDirs(context).forEach { directory ->
+        val app = context.applicationContext
+        val vod = File(app.cacheDir, "vod")
+        // The HTTP artwork cache is an OPEN, journal-backed OkHttp Cache.
+        // Deleting its files while its Cache instance is active corrupts the
+        // journal and can break subsequent authenticated poster requests.
+        // Clear replaceable metadata and the in-memory home snapshot, but
+        // leave that managed bounded 10 MiB cache to its own LRU eviction.
+        val replaceable = buildList {
+            add(File(app.filesDir, "home-cache"))
+            vod.listFiles()?.filterTo(this) { it.name != "glide-okhttp-cache" }
+        }
+        replaceable.forEach { directory ->
             try {
                 if (directory.exists() && !directory.deleteRecursively()) {
-                    Log.w(TAG, "Could not clear VOD cache directory: " + directory.name)
+                    Log.w(TAG, "Could not clear VOD metadata: " + directory.name)
                 }
             } catch (error: Exception) {
-                Log.w(TAG, "VOD cache cleanup skipped: " + directory.name, error)
+                Log.w(TAG, "VOD metadata cleanup skipped: " + directory.name, error)
             }
         }
         // Do NOT call Glide.clearMemory(), Glide.clearDiskCache(),
