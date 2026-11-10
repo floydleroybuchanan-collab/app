@@ -40,7 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
 
 class HomeViewModel(database: AppDatabase) : ViewModel() {
 
@@ -69,8 +69,16 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     val immediateState: StateFlow<State> = _state.asStateFlow()
     private var refreshJob: Job? = null
     private var refreshingProviderKey: String? = null
-    private val continueWatchingTvShowCache = ConcurrentHashMap<String, TvShow>()
-    private val continueWatchingSeasonEpisodesCache = ConcurrentHashMap<String, List<Episode>>()
+    // Enrichment lookups belong to this ViewModel, not a process-wide growing map.
+    private fun <T> boundedLookupCache(maxEntries: Int): MutableMap<String, T> =
+        Collections.synchronizedMap(object : LinkedHashMap<String, T>(maxEntries, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, T>?): Boolean =
+                size > maxEntries
+        })
+
+    private val continueWatchingTvShowCache = boundedLookupCache<TvShow>(24)
+    private val continueWatchingSeasonEpisodesCache = boundedLookupCache<List<Episode>>(32)
+    private var userDataJob: Job? = null
     private val _userDataCache = MutableStateFlow<UserDataCache.UserData?>(null)
     private var currentProvider: Provider? = null
 
@@ -334,11 +342,8 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     init {
-        val initialProvider = UserPreferences.currentProvider
-        if (initialProvider != null) {
-            currentProvider = initialProvider
-            loadUserDataCache(initialProvider)
-        }
+        // getHome() reads the cached catalog and starts user-data hydration once.
+        // Do not issue the same four Room queries twice on first VOD entry.
         viewModelScope.launch {
             ProviderChangeNotifier.providerChangeFlow.collect {
                 getHome()
@@ -455,11 +460,13 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     private fun loadUserDataCache(provider: Provider) {
-        val appContext = StreamFlixApp.instance.applicationContext
-        val cached = UserDataCache.read(appContext, provider)
-        _userDataCache.value = cached
-
-        viewModelScope.launch(Dispatchers.IO) {
+        // Never deserialize user-data JSON on the Android UI thread.
+        // Cancel superseded requests when the provider or favorites change.
+        userDataJob?.cancel()
+        userDataJob = viewModelScope.launch(Dispatchers.IO) {
+            val appContext = StreamFlixApp.instance.applicationContext
+            val cached = UserDataCache.read(appContext, provider)
+            _userDataCache.value = cached
             val db = AppDatabase.getInstance(appContext)
             val moviesDeferred = async { db.movieDao().getFavorites().first() }
             val tvShowsDeferred = async { db.tvShowDao().getFavorites().first() }
