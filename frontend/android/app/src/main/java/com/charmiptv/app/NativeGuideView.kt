@@ -11,7 +11,7 @@ import android.view.View
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.uimanager.ThemedReactContext
-import com.facebook.react.uimanager.events.RCTEventEmitter
+import com.facebook.react.uimanager.events.RCTModernEventEmitter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -605,7 +605,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   @Suppress("DEPRECATION")
   private fun emit(name: String, payload: com.facebook.react.bridge.WritableMap?) {
-    (context as? ThemedReactContext)?.getJSModule(RCTEventEmitter::class.java)?.receiveEvent(id, name, payload)
+    (context as? ThemedReactContext)?.getJSModule(RCTModernEventEmitter::class.java)?.receiveEvent(id, name, payload)
   }
 
   private fun timeToX(timeMs: Long, visibleStartMs: Long, visibleEndMs: Long): Float {
