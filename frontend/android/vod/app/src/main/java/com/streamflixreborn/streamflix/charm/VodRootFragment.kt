@@ -71,12 +71,8 @@ class VodRootFragment : Fragment() {
         super.onViewCreated(view, saved)
         requestedSection = arguments?.getString("startSection") ?: "home"
         val b = binding
-        b.ivSplashOverlay.dismiss()
-        b.ivSplashOverlay.visibility = View.GONE
-        b.navMain.visibility = View.GONE
-
-        // No second icon rail: give VOD all the space beneath the existing
-        // Charming MediaLab host rail; recalculation is a single ConstraintSet.
+        // The embedded layout contains no rail or splash overlay. Charming MediaLab's
+        // React shell is the sole owner of app navigation and rail focus.
         ConstraintSet().apply {
             clone(b.root)
             connect(b.vodGlassActions.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
