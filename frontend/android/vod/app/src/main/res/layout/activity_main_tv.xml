@@ -13,6 +13,9 @@
 
     <com.streamflixreborn.streamflix.charm.VodIconRail
         android:id="@+id/nav_main"
+        android:visibility="gone"
+        android:focusable="false"
+        android:importantForAccessibility="noHideDescendants"
         android:layout_width="72dp"
         android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -23,7 +26,7 @@
     <com.streamflixreborn.streamflix.charm.VodGlassActionBar
         android:id="@+id/vod_glass_actions"
         android:layout_width="0dp"
-        android:layout_height="94dp"
+        android:layout_height="130dp"
         android:clipChildren="false"
         android:clipToPadding="false"
         app:layout_constraintStart_toEndOf="@id/nav_main"
