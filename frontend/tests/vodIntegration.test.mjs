@@ -29,13 +29,12 @@ test('one activity, one process, one app: VOD is a native view in the host route
   assert.match(application,/extends not-a-class|class MainApplication : com\.streamflixreborn\.streamflix\.StreamFlixApp\(\)/);
   assert.doesNotMatch(application,/CharmVodProcess\.isVod/);
 });
-test('VOD navigation uses Charming branded glass rail/bars without duplicate native rail',()=>{
+test('VOD navigation uses Charming branded glass bars without duplicate native rail',()=>{
   const fragment=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt');
-  const rail=read('android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodIconRail.kt');
   const layout=read('android/vod/app/src/main/res/layout/activity_main_tv.xml');
-  assert.match(rail,/R\.drawable\.medialab_rail/);
-  assert.match(layout,/VodIconRail/);
-  assert.match(fragment,/b\.navMain\.visibility = View\.GONE/);
+  assert.match(layout,/VodGlassActionBar/);
+  assert.doesNotMatch(layout,/VodIconRail|CharmVodWelcomeView|android:id="@\\+id\\/nav_main"/);
+  assert.doesNotMatch(fragment,/navMain|ivSplashOverlay/);
   assert.match(fragment,/onHostIconRail/);
 });
 test('default provider remains selected and VOD does not install its own app updates',()=>{
