@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 
-const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>("CharmVodSurface");
+const NativeVod = requireNativeComponent<{ style?: any; startSection?: string; screenActive?: boolean }>("CharmVodSurface");
 
 /**
  * VOD is a built-in screen of ONE MainActivity, not a second app or splash.
@@ -13,6 +14,7 @@ const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>
  */
 export default function VideoOnDemandScreen() {
   const { section } = useLocalSearchParams<{ section?: string }>();
+  const isFocused = useIsFocused();
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
   const [immersive, setImmersive] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export default function VideoOnDemandScreen() {
             key={attempt}
             style={styles.surface}
             startSection={section === "settings" ? "settings" : "home"}
+            screenActive={isFocused}
           />
         ) : mountError || Platform.OS !== "android" ? (
           <View style={styles.errorBox}>
