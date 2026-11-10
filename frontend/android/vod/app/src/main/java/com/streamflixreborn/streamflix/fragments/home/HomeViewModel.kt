@@ -157,7 +157,6 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                         is Episode -> item.watchHistory?.lastEngagementTimeUtcMillis
                             ?: item.watchedDate?.timeInMillis
                             ?: 0L
-                        else -> 0L
                     }
                 } as List<AppAdapter.Item>
             }.flowOn(Dispatchers.IO),
@@ -186,7 +185,6 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                         when (item) {
                             is Movie -> item.lastPlayedAtMillis ?: 0L
                             is TvShow -> item.lastPlayedAtMillis ?: 0L
-                            else -> 0L
                         }
                     } as List<AppAdapter.Item>
             }.flowOn(Dispatchers.IO),
