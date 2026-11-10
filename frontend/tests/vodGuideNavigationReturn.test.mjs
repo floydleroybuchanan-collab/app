@@ -36,7 +36,7 @@ test("VOD LEFT reaches icon rail only at content or first action boundary", asyn
   assert.match(focus, /binding\.navMain\.focusLastAction\(\)/);
   assert.match(focus, /KEYCODE_DPAD_DOWN/);
   assert.match(focus, /KEYCODE_DPAD_UP/);
-  assert.match(glass, /scaleX\(if \(hasFocus\) 1\.10f else 1f\)/);
+  assert.match(glass, /scaleX\(if \(focused\) 1\.08f else 1f\)/);
 });
 
 test("Guide BACK and left edge reopen groups at remembered focus", async () => {
