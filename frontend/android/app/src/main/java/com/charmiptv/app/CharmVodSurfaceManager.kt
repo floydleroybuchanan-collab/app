@@ -59,6 +59,15 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         private var mountStartedAt = 0L
         private var mountRetryCount = 0
         private var mountFailureSent = false
+        // A retained Expo tab may be mounted but no longer own remote input.
+        // Preserve its Fragment/back stack without letting it steal focus.
+        var screenActive: Boolean = false
+            set(value) {
+                if (field == value) return
+                field = value
+                fragment?.setHostActive(value)
+                if (value) post { mountIfReady() }
+            }
         var startSection: String = "home"
             set(value) {
                 field = value
@@ -116,7 +125,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             super.onLayout(changed, left, top, right, bottom)
             if (width > 0 && height > 0) {
                 layoutEmbeddedFragment()
-                if (fragment == null && !mountFailureSent) post { mountIfReady() }
+                if (screenActive && fragment == null && !mountFailureSent) post { mountIfReady() }
             }
         }
 
@@ -149,7 +158,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         }
 
         private fun mountIfReady() {
-            if (!isAttachedToWindow || fragment != null || mountFailureSent) return
+            if (!screenActive || !isAttachedToWindow || fragment != null || mountFailureSent) return
             // Never create a NavHost in an unmeasured/hidden Expo Tabs route.
             // The next onLayout delivers a real frame and retries the mount.
             if (width <= 0 || height <= 0) return
@@ -166,6 +175,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             }
             val fm = host.supportFragmentManager
             val screen = VodRootFragment.create(startSection)
+            screen.setHostActive(screenActive)
             screen.onHostBack = { emit("CharmVodRootBack", "") }
             screen.onHostIconRail = {
                 // Prefer a direct native handoff. A React event is only a
@@ -179,13 +189,13 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 emit("CharmVodImmersiveChanged", if (playing) "true" else "false")
             }
             screen.onRootError = { message ->
-                if (fragment === screen && isAttachedToWindow) {
+                if (fragment === screen && isAttachedToWindow && screenActive) {
                     showFailure(message)
                     emit("CharmVodMountError", message)
                 }
             }
             screen.onRootReady = {
-                if (fragment === screen && isAttachedToWindow) {
+                if (fragment === screen && isAttachedToWindow && screenActive) {
                     val elapsedMs = SystemClock.elapsedRealtime() - mountStartedAt
                     Log.i(TAG, "VOD native NavHost ready in ${elapsedMs}ms")
                     emit("CharmVodRootReady", elapsedMs.toString())
@@ -220,7 +230,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         }
 
         fun restoreNativeFocus(): Boolean =
-            isAttachedToWindow && fragment?.restoreFocusFromRail() == true
+            screenActive && isAttachedToWindow && fragment?.restoreFocusFromRail() == true
 
         fun dispose() {
             activity?.detachVodInput(this)
@@ -250,6 +260,11 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
     }
 
     override fun createViewInstance(reactContext: ThemedReactContext) = Surface(reactContext)
+
+    @ReactProp(name = "screenActive", defaultBoolean = false)
+    fun setScreenActive(view: Surface, active: Boolean) {
+        view.screenActive = active
+    }
 
     @ReactProp(name = "startSection")
     fun setStartSection(view: Surface, section: String?) {
