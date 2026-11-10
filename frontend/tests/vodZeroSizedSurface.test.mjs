@@ -5,7 +5,10 @@ const source = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "u
 
 test("native VOD route waits for nonzero layout before Fabric mounts FragmentContainerView", () => {
   const route = source("app/(tabs)/vod.tsx");
-  assert.match(route, /const ready = layout\.width > 0 && layout\.height > 0/);
+  assert.match(route, /if \(layout\.width > 0 && layout\.height > 0\) setLayoutReady\(true\)/);
+  // A transient 0x0 hidden tab must not drop the existing Fragment/NavController.
+  assert.doesNotMatch(route, /setLayoutReady\(false\)|setLayoutReady\(\(current\) => current === ready/);
+  assert.match(route, /key=\{attempt\}/);
   assert.match(route, /!mountError && layoutReady/);
   assert.match(route, /StyleSheet\.absoluteFillObject/);
   assert.doesNotMatch(route, /style:\s*\{ flex: 1, width: "100%", height: "100%" \}/);
@@ -29,5 +32,7 @@ test("NavHost readiness deadline starts only after visible and measured root", (
   assert.match(root, /addOnLayoutChangeListener\(readinessLayoutListener\)/);
   assert.match(root, /removeOnLayoutChangeListener\(readinessLayoutListener\)/);
   assert.match(root, /b\.navMainFragment\.requestLayout\(\)/);
+  assert.match(root, /_binding !== b/); // stale posted callbacks cannot touch a destroyed root
+  assert.match(root, /readyCheckPosted = false/);
   assert.match(root, /container=\$\{b\.navMainFragment\.width\}x\$\{b\.navMainFragment\.height\}, /);
 });
