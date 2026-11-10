@@ -196,6 +196,10 @@ test("VOD warms the retained hero and first posters without blocking app startup
   assert.match(warmer, /Dispatchers\.IO/);
   assert.match(warmer, /DiskCacheStrategy\.DATA/);
   assert.match(warmer, /\.take\(10\)/);
+  assert.match(warmer, /\.filter \{ it\.name != Category\.FEATURED \}/);
+  assert.match(warmer, /warmJob\?\.cancel\(\)/);
+  assert.match(warmer, /REWARM_AFTER_MS = 15L/);
+  assert.match(warmer, /Priority\.HIGH/);
   assert.match(app, /VodHomePrewarm\.onAppStart\(this\)/);
   assert.match(bridge, /showFailure\(message\)/);
 });
