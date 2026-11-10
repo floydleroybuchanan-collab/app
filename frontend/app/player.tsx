@@ -461,7 +461,7 @@ export default function PlayerScreen() {
     }
     if (action === "guide") return openQuickGuide();
     if (action === "previous") return returnToPreviousChannel();
-  }, [openQuickGuide, returnToPreviousChannel, revealControls, scheduleHide, showNotice, stepChannel, toggleFavorite]);
+  }, [openQuickGuide, returnToPreviousChannel, revealControls, showNotice, stepChannel, toggleFavorite]);
 
   useEffect(() => {
     if (!isTV) return;
