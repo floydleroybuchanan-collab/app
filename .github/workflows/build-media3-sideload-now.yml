@@ -18,6 +18,7 @@ on:
     branches:
       - feature/multiple-playlists-test-1
       - fix/vod-first-render-no-network-gate-20261110
+      - chore/resolve-action-and-native-warnings-20261110
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
@@ -49,7 +50,7 @@ concurrency:
 jobs:
   build:
     name: Build Charming MediaLab RC.25.5 updateable universal sideload APK
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'fix/tv-focus-vod-guide-20261109' || github.head_ref == 'feature/vod-ux-platforms-rc25-20261109' || github.head_ref == 'fix/unified-vod-one-activity-20261109' || github.head_ref == 'fix/vod-structural-cleanup-rc25-5') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && (github.ref == 'refs/heads/feature/multiple-playlists-test-1' || github.ref == 'refs/heads/fix/vod-first-render-no-network-gate-20261110')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'fix/tv-focus-vod-guide-20261109' || github.head_ref == 'feature/vod-ux-platforms-rc25-20261109' || github.head_ref == 'fix/unified-vod-one-activity-20261109' || github.head_ref == 'fix/vod-structural-cleanup-rc25-5') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && (github.ref == 'refs/heads/feature/multiple-playlists-test-1' || github.ref == 'refs/heads/fix/vod-first-render-no-network-gate-20261110' || github.ref == 'refs/heads/chore/resolve-action-and-native-warnings-20261110')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
@@ -215,8 +216,8 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          cp "$APK" "artifacts/Charming.MediaLab-2.2.6-RC25.5-Sideload-${GITHUB_RUN_NUMBER}.apk"
-          sha256sum "artifacts/Charming.MediaLab-2.2.6-RC25.5-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
+          cp "$APK" "artifacts/Charming.MediaLab-2.2.7-RC25.5-Sideload-${GITHUB_RUN_NUMBER}.apk"
+          sha256sum "artifacts/Charming.MediaLab-2.2.7-RC25.5-Sideload-${GITHUB_RUN_NUMBER}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
