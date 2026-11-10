@@ -17,6 +17,7 @@ export default function VideoOnDemandScreen() {
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
   const [ready, setReady] = useState(false);
   const [nativeReady, setNativeReady] = useState(false);
+  const [immersive, setImmersive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState("Preparing Video OnDemand...");
   const [waitingLong, setWaitingLong] = useState(false);
@@ -45,7 +46,6 @@ export default function VideoOnDemandScreen() {
     return () => { back.remove(); rail.remove(); mode.remove(); mountError.remove(); mounted.remove(); };
   }, [focusIconRail, openDrawer]);
 
-  const [immersive, setImmersive] = useState(false);
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     startedAt.current = Date.now();
