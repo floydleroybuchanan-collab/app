@@ -206,8 +206,14 @@ class MainActivity : ReactActivity() {
 
   /** Synchronous LEFT handoff from native VOD to the active rail control. */
   fun focusVodRailFromContent(): Boolean {
-    val shell = findTagged(window.decorView, "purple-tv-shell") ?: return false
-    val rail = findTagged(shell, "purple-icon-rail") ?: return false
+    // Use the shell containing the actual VOD Surface. Expo Tabs can keep
+    // inactive shells in its view tree; window-wide search can focus a stale
+    // invisible rail in a different tab.
+    var shell: View? = vodInputOwner as? View
+    while (shell != null && testId(shell) != "purple-tv-shell")
+      shell = shell.parent as? View
+    val activeShell = shell?.takeIf { visible(it) } ?: return false
+    val rail = findTagged(activeShell, "purple-icon-rail") ?: return false
     val focused = findTagged(rail, "purple-icon-rail-video-ondemand")
     val candidate = focused ?: rail.getFocusables(View.FOCUS_FORWARD)
       .firstOrNull { it !== rail && visible(it) && it.isEnabled }
