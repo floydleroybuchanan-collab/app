@@ -114,6 +114,7 @@ export function registerAccountWithInvite(
   username: string,
   email: string,
   password: string,
+  challengeToken?: string,
 ): Promise<AccountApiResult> {
   return accountRequest("/auth/register", {
     method: "POST",
@@ -122,6 +123,7 @@ export function registerAccountWithInvite(
       username: username.trim(),
       email: email.trim().toLowerCase(),
       password,
+      challenge_token: challengeToken,
     }),
   });
 }

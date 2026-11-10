@@ -16,6 +16,7 @@ import {
 } from "@/src/auth/accountApi";
 import { clearManagedContentAccess, configureManagedContentAccess } from "@/src/auth/managedContentAccess";
 import { storage } from "@/src/utils/storage";
+import { forgetRememberedLogin, saveRememberedLogin } from "./rememberedLogin";
 
 export const ACCOUNT_SESSION_TOKEN_KEY = "charm_account_session_token_v1";
 const SESSION_RECHECK_MS = 5 * 60_000;
@@ -26,8 +27,8 @@ type AuthContextValue = {
   status: AuthStatus;
   user: AccountUser | null;
   notice: string | null;
-  signIn: (username: string, password: string) => Promise<string | null>;
-  register: (inviteCode: string, username: string, email: string, password: string) => Promise<string | null>;
+  signIn: (username: string, password: string, rememberLogin?: boolean) => Promise<string | null>;
+  register: (inviteCode: string, username: string, email: string, password: string, challengeToken?: string) => Promise<string | null>;
   loadReferrals: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
   createReferral: () => Promise<{ data: ReferralSummary | null; error: string | null }>;
   deleteReferral: (invitationId: string) => Promise<{ data: ReferralSummary | null; error: string | null }>;
@@ -138,7 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [revalidate, status]);
 
-  const signIn = useCallback(async (username: string, password: string) => {
+  const signIn = useCallback(async (username: string, password: string, rememberLogin = false) => {
     setNotice(null);
     const result = await loginToAccount(username.trim(), password);
     if (!result.response || !result.response.ok || !result.data.success || !result.data.token || !result.data.user) {
@@ -159,6 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void logoutAccount(result.data.token);
       return "This device could not securely save the session. Please try again.";
     }
+    // "Remember login on this device" keeps the details in the device keystore only.
+    if (rememberLogin) await saveRememberedLogin(username, password);
+    else await forgetRememberedLogin();
     tokenRef.current = result.data.token;
     lastValidatedAtRef.current = Date.now();
     setUser(result.data.user);
@@ -194,9 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
-  const register = useCallback(async (inviteCode: string, username: string, email: string, password: string) => {
+  const register = useCallback(async (inviteCode: string, username: string, email: string, password: string, challengeToken?: string) => {
     setNotice(null);
-    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password));
+    return acceptAuthenticatedResult(await registerAccountWithInvite(inviteCode, username, email, password, challengeToken));
   }, [acceptAuthenticatedResult]);
 
   const referralRequest = useCallback(async (action: "load" | "create" | "delete", invitationId?: string) => {
