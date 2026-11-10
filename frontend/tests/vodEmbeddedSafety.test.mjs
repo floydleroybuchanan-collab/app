@@ -237,3 +237,14 @@ test("unified VOD artwork preserves host Glide and verifies TLS certificates", (
   assert.doesNotMatch(glide, /hostnameVerifier|sslSocketFactory|trustAllCerts/);
   assert.match(glide, /10 \* 1024 \* 1024/);
 });
+
+test("Android TV startup never wipes an in-use VOD artwork HTTP cache", () => {
+  const startup = read(vod + "StreamFlixApp.kt");
+  const cleaner = read(vod + "utils/CacheUtils.kt");
+  assert.doesNotMatch(startup, /CacheUtils\.autoClearIfNeeded/);
+  const auto = cleaner.split("fun autoClearIfNeeded(")[1];
+  assert.ok(auto);
+  assert.doesNotMatch(auto, /deleteRecursively\(\)/);
+  assert.match(auto, /glide-okhttp-cache/);
+  assert.match(auto, /bounded OkHttp artwork cache/);
+});
