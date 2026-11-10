@@ -165,3 +165,36 @@ test("unified VOD never covers native home with the old catalog loading screen",
   assert.doesNotMatch(embedded, /VodIconRail|CharmVodWelcomeView|android:id="@\+id\/nav_main"/);
   assert.doesNotMatch(root, /\bnavMain\b|ivSplashOverlay/);
 });
+
+test("VOD first paint is offline, cache-first and never waits for Room or provider picker", () => {
+  const graph = read("android/vod/app/src/main/res/navigation/nav_main_graph_tv.xml");
+  const root = read(vod + "charm/VodRootFragment.kt");
+  const home = read(vod + "fragments/home/HomeTvFragment.kt");
+  const model = read(vod + "fragments/home/HomeViewModel.kt");
+  const cache = read(vod + "utils/HomeCacheStore.kt");
+  const cleaner = read(vod + "utils/CacheUtils.kt");
+  assert.match(graph, /app:startDestination="@id\/home"/);
+  assert.doesNotMatch(root, /UserPreferences\.currentProvider != null -> controller\.navigate\(R\.id\.home\)/);
+  assert.match(root, /notifyWhenDrawn\(\)/);
+  assert.match(model, /val immediateState: StateFlow<State> = _state\.asStateFlow\(\)/);
+  assert.match(model, /refreshJob\?\.isActive == true/);
+  assert.match(home, /viewModel\.immediateState/);
+  assert.doesNotMatch(home, /ProviderChangeNotifier\.providerChangeFlow/);
+  assert.doesNotMatch(home, /CacheUtils\.clearAppCache/);
+  assert.match(cache, /AtomicFile\(target\)/);
+  const startupCleaner = cleaner.split("fun autoClearIfNeeded(")[1];
+  assert.ok(startupCleaner);
+  assert.doesNotMatch(startupCleaner, /clearAppCache\(/);
+});
+
+test("VOD warms the retained hero and first posters without blocking app startup", () => {
+  const warmer = read(vod + "charm/VodHomePrewarm.kt");
+  const app = read("android/app/src/main/java/com/charmiptv/app/MainApplication.kt");
+  const bridge = read("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt");
+  assert.match(warmer, /HomeCacheStore\.read/);
+  assert.match(warmer, /Dispatchers\.IO/);
+  assert.match(warmer, /DiskCacheStrategy\.DATA/);
+  assert.match(warmer, /\.take\(10\)/);
+  assert.match(app, /VodHomePrewarm\.onAppStart\(this\)/);
+  assert.match(bridge, /showFailure\(message\)/);
+});
