@@ -56,8 +56,12 @@ class CharmingVodDashboardView @JvmOverloads constructor(
         setPadding(dp(12), dp(1), dp(12), 0)
         background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(0xFF180727.toInt(), 0xFF0E061B.toInt(), 0xFF160529.toInt()))
-        val heroDp = (heightDp * 0.30f).toInt().coerceIn(150, 276)
-        val platformDp = (heightDp * 0.245f).toInt().coerceIn(128, 194)
+        // Reserve space for the existing 130dp VOD top actions AND a
+        // navigable poster row on 720p/compact TV densities, so focus cannot
+        // disappear into content that sits below the viewport.
+        val availableDp = (heightDp - 130).coerceAtLeast(250)
+        val heroDp = (availableDp * 0.39f).toInt().coerceIn(112, 276)
+        val platformDp = (availableDp * 0.30f).toInt().coerceIn(110, 194)
         dashboardHeightDp = heroDp + platformDp + 36
 
         hero.clipChildren = false
@@ -131,7 +135,7 @@ class CharmingVodDashboardView @JvmOverloads constructor(
             clipToPadding = false
             setPadding(dp(3), dp(2), dp(12), 0)
         }
-        val iconDp = (platformDp - 67).coerceIn(68, 104)
+        val iconDp = (platformDp - 67).coerceIn(42, 104)
         val tileDp = iconDp + 12
         VodPlatformCatalog.platforms.forEach { platform ->
             val tile = LinearLayout(context).apply {
