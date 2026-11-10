@@ -17,6 +17,7 @@ on:
   push:
     branches:
       - feature/multiple-playlists-test-1
+      - fix/vod-first-render-no-network-gate-20261110
     paths:
       - ".github/workflows/build-media3-sideload-now.yml"
       - "frontend/.media3-sideload-build-trigger"
@@ -48,7 +49,7 @@ concurrency:
 jobs:
   build:
     name: Build Charming MediaLab RC.25.5 updateable universal sideload APK
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'fix/tv-focus-vod-guide-20261109' || github.head_ref == 'feature/vod-ux-platforms-rc25-20261109' || github.head_ref == 'fix/unified-vod-one-activity-20261109' || github.head_ref == 'fix/vod-structural-cleanup-rc25-5') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/feature/multiple-playlists-test-1') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'fix/tv-focus-vod-guide-20261109' || github.head_ref == 'feature/vod-ux-platforms-rc25-20261109' || github.head_ref == 'fix/unified-vod-one-activity-20261109' || github.head_ref == 'fix/vod-structural-cleanup-rc25-5') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && (github.ref == 'refs/heads/feature/multiple-playlists-test-1' || github.ref == 'refs/heads/fix/vod-first-render-no-network-gate-20261110')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     defaults:
