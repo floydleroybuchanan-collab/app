@@ -73,8 +73,8 @@ const styles = StyleSheet.create({
   section: { gap: 6, marginBottom: 10 }, heading: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11, marginBottom: 4 },
   row: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderWidth: 2, borderColor: "transparent", borderRadius: 5, backgroundColor: tvColors.panel },
   label: { color: "#fff", fontFamily: fonts.medium, fontSize: 9, flex: 1 }, value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9 },
-  focused: { backgroundColor: tvColors.purpleDeep, borderColor: "#fff" }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8, lineHeight: 12 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8, lineHeight: 12 },
   overlay: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.78)" },
-  menu: { width: 310, maxWidth: "90%", maxHeight: "90%", padding: 12, gap: 3, borderRadius: 8, backgroundColor: tvColors.panelRaised, borderWidth: 1, borderColor: tvColors.line },
-  option: { minHeight: 27, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, borderWidth: 2, borderColor: "transparent", borderRadius: 4 },
+  menu: { width: 310, maxWidth: "90%", maxHeight: "90%", padding: 12, gap: 3, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
+  option: { minHeight: 27, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
 });

@@ -1,7 +1,8 @@
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, Image
+} from "react-native";
 import { supportReport } from "@/src/core/supportReport";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -104,6 +105,41 @@ type Tile = {
   id: Section;
   label: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
+};
+
+import { GlassBackdrop } from "@/src/components/GlassBackdrop";
+
+const TILE_ART: Record<string, number> = {
+  general: require("../../assets/glass/nav_platforms.webp"),
+  player: require("../../assets/glass/settings_playback.webp"),
+  vod: require("../../assets/glass/nav_movies.webp"),
+  remote: require("../../assets/glass/genre_animation.webp"),
+  playlists: require("../../assets/glass/settings_provider.webp"),
+  epg: require("../../assets/glass/settings_epg.webp"),
+  appearance: require("../../assets/glass/settings_appearance.webp"),
+  health: require("../../assets/glass/settings_notifications.webp"),
+  channels: require("../../assets/glass/nav_shows.webp"),
+  parental: require("../../assets/glass/settings_security.webp"),
+  backup: require("../../assets/glass/settings_storage.webp"),
+  invites: require("../../assets/glass/genre_romance.webp"),
+  account: require("../../assets/glass/settings_account.webp"),
+  about: require("../../assets/glass/settings_about.webp"),
+};
+const TILE_ABOUT: Record<string, string> = {
+  "general": "Guide layout, channel display and start-up behavior.",
+  "player": "Buffering, audio, subtitles and player controls.",
+  "vod": "Sources, accounts and playback for Video OnDemand.",
+  "remote": "Choose what each remote button does.",
+  "playlists": "Manage your M3U and provider playlists.",
+  "epg": "Guide sources, refresh timing and matching.",
+  "appearance": "Density, motion and the look of the app.",
+  "health": "Diagnostics, match counts and help.",
+  "channels": "Sort, hide and number your channels.",
+  "parental": "Lock groups with a PIN.",
+  "backup": "Save or restore all of your settings.",
+  "invites": "Share access with invite codes.",
+  "account": "Your subscription and devices.",
+  "about": "Version and build details."
 };
 
 const TILES: Tile[] = [
@@ -579,9 +615,7 @@ function SettingsScreenContent() {
                   style={({ focused }: any) => [styles.tile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 14 }]}
                   testID={`settings-tile-${tile.id}`}
                 >
-                  <View style={[styles.tileIcon, { backgroundColor: ["#186F91BB", "#A04A68BB", "#8A4AC8AA", "#337D91BB", "#C57645BB"][index % 5] }]}>
-                    <Ionicons name={tile.icon} size={27} color={["#4BE3FF", "#FF8FA9", "#E8B1FF", "#74FFE6", "#FFD18B"][index % 5]} />
-                  </View>
+                  <Image source={TILE_ART[tile.id]} style={styles.tileArt} resizeMode="contain" />
                   <Text style={styles.tileText}>{tile.label}</Text>
                 </Pressable>
               ))}
@@ -590,6 +624,15 @@ function SettingsScreenContent() {
         ) : (
           <FocusGuide style={styles.detailsWrap}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.details}>
+            {selected ? (
+              <View style={styles.hero}>
+                <Image source={TILE_ART[selected.id]} style={styles.heroArt} resizeMode="contain" />
+                <View style={styles.heroCopy}>
+                  <Text style={styles.heroTitle}>{selected.label}</Text>
+                  <Text style={styles.heroAbout}>{TILE_ABOUT[selected.id]}</Text>
+                </View>
+              </View>
+            ) : null}
 
             {section === "vod" ? (
               <SettingsCard title="Video OnDemand Settings" icon="film-outline">
@@ -1293,43 +1336,49 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, minWidth: 0, padding: 14, overflow: "hidden" },
+  page: { flex: 1, minWidth: 0, padding: 14, overflow: "hidden", backgroundColor: "transparent" },
   header: { minHeight: 52, flexShrink: 0, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, backgroundColor: tvColors.canvas },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  backButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
+  backButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
+  tileArt: { width: 58, height: 58 },
+  hero: { flexDirection: "row", alignItems: "center", gap: 18, padding: 16, marginBottom: 12, borderRadius: 18, borderWidth: 1, borderColor: "rgba(216,178,255,0.34)", backgroundColor: "rgba(150,70,235,0.20)" },
+  heroArt: { width: 72, height: 72 },
+  heroCopy: { flex: 1, minWidth: 0, gap: 3 },
+  heroTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 19 },
+  heroAbout: { color: "#E0D2EE", fontFamily: fonts.regular, fontSize: 10.5 },
   tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden" },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 9, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
   detailsWrap: { flex: 1 },
-  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 17, borderWidth: 1, borderColor: "#9A72BAA8", backgroundColor: "#67477C66", elevation: 5 },
-  tileIcon: { width: 48, height: 48, borderRadius: 15, borderWidth: 1, borderColor: "#FFFFFF55", alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
+  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
+  tileIcon: { width: 48, height: 48, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   tileText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5, textAlign: "center" },
   details: { paddingTop: 10, paddingHorizontal: 24, paddingBottom: 24 },
-  card: { backgroundColor: tvColors.panel, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.md, padding: 14, gap: 9 },
+  card: { padding: 14, gap: 9, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 9, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: tvColors.line },
-  cardIcon: { width: 32, height: 32, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
+  cardIcon: { width: 32, height: 32, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   cardTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12 },
   settingRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 8 },
   settingLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
-  toggle: { width: 34, height: 19, borderRadius: 10, backgroundColor: "#343145", padding: 2 },
-  toggleOn: { backgroundColor: tvColors.purple },
-  knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "#817D91" },
-  knobOn: { alignSelf: "flex-end", backgroundColor: "#fff" },
+  toggle: { width: 34, height: 19, padding: 2, backgroundColor: "rgba(255,255,255,0.13)", borderColor: "rgba(226,190,255,0.5)", borderWidth: 1, borderRadius: 11 },
+  toggleOn: { backgroundColor: "rgba(205,70,255,0.72)", borderColor: "#F4B8FF", borderWidth: 1, shadowColor: "#E04DFF", elevation: 12 },
+  knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.70)", borderColor: "rgba(255,255,255,0.9)", borderWidth: 1 },
+  knobOn: { alignSelf: "flex-end", backgroundColor: "#FFFFFF", borderColor: "#39E6FF", borderWidth: 1, shadowColor: "#39E6FF", elevation: 10 },
   choiceBlock: { gap: 7, paddingVertical: 4 },
   choices: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  choice: { minHeight: 29, justifyContent: "center", paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  choiceActive: { backgroundColor: tvColors.purple },
+  choice: { minHeight: 29, justifyContent: "center", paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  choiceActive: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
   choiceText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
   choiceTextActive: { color: "#fff" },
-  action: { alignSelf: "flex-start", minHeight: 32, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.purple },
+  action: { alignSelf: "flex-start", minHeight: 32, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   actionText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8.5 },
   disabled: { opacity: 0.55 },
   backupActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, lineHeight: 12.5 },
   inviteList: { gap: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: tvColors.line },
-  inviteRow: { minHeight: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 5, backgroundColor: tvColors.panelRaised },
+  inviteRow: { minHeight: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   inviteMain: { flex: 1, gap: 2 },
   inviteLabel: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8.5 },
   inviteCode: { color: "#fff", fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1 },
@@ -1352,31 +1401,12 @@ const styles = StyleSheet.create({
   matchGroups: { gap: 1, paddingTop: 4 },
   calibrationWrap: { borderTopWidth: 1, borderTopColor: tvColors.line, marginTop: 4, paddingTop: 8 },
   pinInputRow: { gap: 6 },
-  pinInput: {
-    minHeight: 36,
-    borderWidth: 1,
-    borderColor: tvColors.lineStrong,
-    borderRadius: 5,
-    paddingHorizontal: 10,
-    color: "#fff",
-    fontFamily: fonts.medium,
-    fontSize: 11,
-    backgroundColor: tvColors.panelRaised,
-  },
+  pinInput: { minHeight: 36, paddingHorizontal: 10, color: "#fff", fontFamily: fonts.medium, fontSize: 11, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   channelEditBlock: { gap: 3 },
   channelEditActions: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 8, paddingBottom: 4 },
-  miniAction: {
-    minHeight: 28,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: "transparent",
-    backgroundColor: tvColors.panelRaised,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  miniAction: { minHeight: 28, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   miniActionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8 },
-  focused: { borderColor: "#F4DFFF", borderWidth: 2, backgroundColor: "#9560BA8C", elevation: 12 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
 });
 
 export default function SettingsScreen() {

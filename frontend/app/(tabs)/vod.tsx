@@ -3,6 +3,7 @@ import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleS
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
+import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 
 const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>("CharmVodSurface");
 
@@ -18,6 +19,15 @@ export default function VideoOnDemandScreen() {
   const [mountError, setMountError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const enteredAt = useRef(0);
+  const retryRef = useRef<any>(null);
+  const retryFocusedRef = useRef(false);
+
+  // The error replaces the native page, so the remote needs a new home on Retry.
+  useEffect(() => {
+    if (!mountError) return;
+    retryFocusedRef.current = false;
+    return requestNativeFocusWithRetry(() => retryRef.current, [0, 60, 160, 320, 640], () => retryFocusedRef.current);
+  }, [mountError]);
 
   useEffect(() => {
     const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawer({ force: true }));
@@ -63,9 +73,13 @@ export default function VideoOnDemandScreen() {
             <Text style={styles.message}>{mountError || "Video OnDemand is available in the Android TV app."}</Text>
             {Platform.OS === "android" ? (
               <Pressable
+                ref={retryRef}
+                focusable
                 accessibilityLabel="Retry Video OnDemand"
+                onFocus={() => { retryFocusedRef.current = true; }}
+                onBlur={() => { retryFocusedRef.current = false; }}
                 onPress={() => { setMountError(null); setAttempt((n) => n + 1); }}
-                style={styles.button}
+                style={({ focused }: any) => [styles.button, focused && styles.buttonFocused]}
               ><Text style={styles.buttonText}>Retry VOD</Text></Pressable>
             ) : null}
           </View>
@@ -80,6 +94,7 @@ const styles = StyleSheet.create({
   surface: { flex: 1, width: "100%", height: "100%" },
   errorBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, padding: 30 },
   message: { color: "#FFE7F5", fontSize: 17, textAlign: "center" },
-  button: { backgroundColor: "#60348B", paddingVertical: 14, paddingHorizontal: 22, borderRadius: 13 },
+  button: { backgroundColor: "rgba(150,90,235,0.30)", borderWidth: 1, borderColor: "rgba(226,190,255,0.5)", paddingVertical: 14, paddingHorizontal: 22, borderRadius: 13 },
+  buttonFocused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#fff", borderWidth: 2, shadowColor: "#D14DFF", elevation: 16 },
   buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
 });

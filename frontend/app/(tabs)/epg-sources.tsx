@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -174,7 +175,7 @@ function EpgSourcesScreenContent() {
 
   return (
     <PurpleTvShell active="/settings">
-      <View style={styles.page}>
+      <View style={styles.page}><GlassBackdrop />
         <View style={styles.header}>
           <View><Text style={styles.kicker}>GUIDE CONFIGURATION</Text><Text style={styles.title}>EPG & Playlist</Text></View>
           <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/settings" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
@@ -325,38 +326,38 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, paddingHorizontal: 14, paddingTop: 8 },
+  page: { flex: 1, paddingHorizontal: 14, paddingTop: 8, backgroundColor: "transparent" },
   header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
+  back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   scrollWrap: { flex: 1 }, content: { paddingVertical: 12, gap: 10, paddingBottom: 28 },
-  card: { padding: 11, gap: 7, backgroundColor: tvColors.panelRaised, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
+  card: { padding: 11, gap: 7, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 2 },
   cardTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10.5 },
-  sourceRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, backgroundColor: tvColors.panel, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.sm },
+  sourceRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   sourceCopy: { flex: 1, minWidth: 0 }, sourceTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
   sourceSub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, marginTop: 2 },
   sourceStatus: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 7.5, maxWidth: 150, textAlign: "right" },
   settingRow: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 9, borderWidth: 2, borderColor: "transparent", borderRadius: 5, backgroundColor: tvColors.panel },
   settingLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
-  toggle: { width: 34, height: 19, borderRadius: 10, backgroundColor: "#343145", padding: 2 }, toggleOn: { backgroundColor: tvColors.purple },
-  knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "#817D91" }, knobOn: { alignSelf: "flex-end", backgroundColor: "#fff" },
+  toggle: { width: 34, height: 19, padding: 2, backgroundColor: "rgba(255,255,255,0.13)", borderColor: "rgba(226,190,255,0.5)", borderWidth: 1, borderRadius: 11 }, toggleOn: { backgroundColor: "rgba(205,70,255,0.72)", borderColor: "#F4B8FF", borderWidth: 1, shadowColor: "#E04DFF", elevation: 12 },
+  knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.70)", borderColor: "rgba(255,255,255,0.9)", borderWidth: 1 }, knobOn: { alignSelf: "flex-end", backgroundColor: "#FFFFFF", borderColor: "#39E6FF", borderWidth: 1, shadowColor: "#39E6FF", elevation: 10 },
   choiceBlock: { gap: 5 }, choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  choice: { minHeight: 30, justifyContent: "center", paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: tvColors.line, backgroundColor: tvColors.panel },
-  choiceActive: { borderColor: tvColors.purpleSoft, backgroundColor: tvColors.purpleDeep },
+  choice: { minHeight: 30, justifyContent: "center", paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  choiceActive: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
   choiceText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 }, choiceTextActive: { color: "#fff" },
   help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 11 },
-  action: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 12, backgroundColor: tvColors.purple, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
+  action: { minHeight: 34, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   actionText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8.5 },
   infoRow: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: tvColors.line },
   infoLabel: { flex: 1, color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
   infoValue: { color: "#fff", fontFamily: fonts.medium, fontSize: 8, textAlign: "right" },
   error: { color: "#FCA5A5", fontFamily: fonts.regular, fontSize: 7.5, marginTop: 4 },
   actionStatus: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, textAlign: "center" },
-  playlistHealth: { gap: 3, padding: 8, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, backgroundColor: tvColors.panel },
-  disabled: { opacity: 0.55 }, focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  playlistHealth: { gap: 3, padding: 8, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
+  disabled: { opacity: 0.55 }, focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
 });
 
 export default function EpgSourcesScreen() {

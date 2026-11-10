@@ -24,15 +24,17 @@ object VodPlatformCatalog {
         // These are platform *navigation choices*, not proof of an Original
         // title. The catalog matcher only displays verified local titles.
         Platform("starz","STARZ","STARZ",0xFF36D6FB.toInt()),
-        Platform("amc","AMC+ Originals","AMC+",0xFF00DFD2.toInt()),
-        Platform("youtube","YouTube Originals","YouTube",0xFFFF2B3B.toInt()),
-        Platform("crunchyroll","Crunchyroll Originals","crunchyroll",0xFFFF7A1A.toInt()),
+        Platform("mgm","MGM+ Originals","MGM+",0xFFE8BD2E.toInt()),
     )
-    /** The twelve services on the Platforms page, in the order of the approved artwork. */
+    /** AMC+ has a Platforms page section but no tile in the home row design. */
+    private val pageOnly = listOf(Platform("amc","AMC+ Originals","AMC+",0xFF00DFD2.toInt()))
+    private val allPlatforms = platforms + pageOnly
+
+    /** The services on the Platforms page, in the order of the approved artwork. */
     val pagePlatforms: List<Platform> = listOf(
         "netflix", "disney", "apple", "hulu", "max", "prime", "paramount", "peacock",
-        "youtube", "starz", "amc", "crunchyroll",
-    ).map { id -> platforms.first { it.id == id } }
+        "starz", "amc", "mgm",
+    ).map { id -> allPlatforms.first { it.id == id } }
 
     /** TMDb production credits: who actually made a title, not who merely carries it. */
     data class Origin(val networks: String? = null, val companies: String? = null)
@@ -46,10 +48,9 @@ object VodPlatformCatalog {
         "prime" to Origin(networks = "1024", companies = "20580"),
         "paramount" to Origin(networks = "4330"),
         "peacock" to Origin(networks = "3353"),
-        "youtube" to Origin(networks = "1436"),
         "starz" to Origin(networks = "318"),
         "amc" to Origin(networks = "174|4661"),
-        "crunchyroll" to Origin(networks = "1112"),
+        "mgm" to Origin(networks = "6219"),
     )
 
     fun origin(platformId: String): Origin? = origins[platformId]
@@ -90,7 +91,7 @@ object VodPlatformCatalog {
         is Movie -> find(show.title, show.released?.get(Calendar.YEAR))
         is TvShow -> find(show.title, show.released?.get(Calendar.YEAR))
     }
-    fun byId(id: String?): Platform? = platforms.firstOrNull { it.id == id }
+    fun byId(id: String?): Platform? = allPlatforms.firstOrNull { it.id == id }
     private fun normalize(s: String): String =
         s.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]"), "")
     fun match(items: Sequence<Show>, maxPerPlatform: Int = 18): Map<String, List<Show>> {

@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
+  useWindowDimensions, DeviceEventEmitter
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,10 +26,17 @@ import {
 } from "@/src/components/StreamPlayer";
 import { useStore } from "@/src/store";
 import { fonts, radius, tvColors } from "@/src/theme";
-import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
+import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext, setGuideNavigationActive } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
-import { requestNativeFocus } from "@/src/utils/tvFocus";
+import { FocusGuide } from "@/src/components/TVFocusGuideView";
+import { requestNativeFocus, requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
+import { PlayerGuidePanel } from "@/src/components/PlayerGuidePanel";
+import { useGuidePresentation } from "@/src/core/guidePresentation";
+import { setGuideScreenActive } from "@/src/utils/guideSurfGate";
+import { setViewportGuideChannelIds, setPriorityMatchChannelIds } from "@/src/source";
+import { useParentalPin } from "@/src/core/parentalPin";
+import { providerGroupIdentity } from "@/src/core/playlistGuideMenu";
 import { stopFullscreenSession, stopAllPlaybackSessions, type SessionFailReason } from "@/src/core/playbackSession";
 import { clearStreamFailure, noteStreamFailure } from "@/src/core/streamFailureRegistry";
 import { restartNativePlaybackChannel } from "@/src/nativePlayback";
@@ -76,7 +83,27 @@ export default function PlayerScreen() {
   const params = useLocalSearchParams<{ channelId: string; returnToGuide?: string; returnGuideGroup?: string }>();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const [guideOverlayOpen, setGuideOverlayOpen] = useState(false);
+  const guidePresentation = useGuidePresentation();
+  const guideOverlayOpenRef = useRef(false);
+  guideOverlayOpenRef.current = guideOverlayOpen;
+  const { windowStart: guideWindowStart, windowEnd: guideWindowEnd, patchProgramsForChannelIds } = useStore();
+  const { ready: parentalReady, hasPin, isGroupLocked } = useParentalPin();
+  useEffect(() => {
+    if (!guideOverlayOpen) return;
+    setGuideScreenActive(true);
+    setGuideNavigationActive(true);
+    setRemoteContext("guide");
+    return () => {
+      setGuideNavigationActive(false);
+      setGuideScreenActive(false);
+      setViewportGuideChannelIds(null);
+      setPriorityMatchChannelIds([]);
+      resetRemoteContextIfOwned("guide", "player");
+    };
+  }, [guideOverlayOpen]);
   const {
+    favorites,
     channels,
     recent,
     channelById,
@@ -137,6 +164,13 @@ export default function PlayerScreen() {
   const channelIdRef = useRef(params.channelId);
   const lastRouteChannelIdRef = useRef(params.channelId);
   const previousChannelIdRef = useRef<string | null>(null);
+  const controlsFocusedRef = useRef(false);
+  const errorButtonRef = useRef<any>(null);
+  const subtitlesOffRef = useRef<any>(null);
+  const cancelFocusRef = useRef<(() => void) | null>(null);
+  const overlayOpenRef = useRef(false);
+  const keepControlsRef = useRef(false);
+  const quickActionsOpenRef = useRef(false);
   const textTrackIdRef = useRef<string | number | undefined>(undefined);
   const subtitleDefaultLanguageRef = useRef(subtitleDefaultLanguage);
   const subtitleAutoAppliedRef = useRef<string | null>(null);
@@ -148,8 +182,15 @@ export default function PlayerScreen() {
     setRemoteContext("player");
     return () => { resetRemoteContextIfOwned("player", "default"); };
   }, [isTV]);
-  const overlayHideMs = playerControlsTimeoutMs;
+  const overlayHideMs = Math.max(3000, playerControlsTimeoutMs || 5000);
+  overlayOpenRef.current = playerOverlay !== null;
+  keepControlsRef.current = status === "error" || !channelById(channelId)?.url;
   const safe = useMemo(() => getTvSafeInsets(width, height, deviceLayoutMode), [deviceLayoutMode, height, width]);
+  const guidePreviewWidth = Math.round((width - safe.left - safe.right - 28) * 0.42);
+  const guidePreviewHeight = guidePreviewWidth * 9 / 16;
+  // The SAME fullscreen Media3 surface is resized for the small preview window.
+  // Do not mount a second player: duplicate codecs caused prior low-RAM crashes.
+  const showPlayerGuidePreview = guideOverlayOpen && isTV && guidePresentation.mode === "preview";
   const channelMeta = useMemo(() => channelById(channelId), [channelById, channelId]);
   const channelPrograms = useGuidePrograms(channelId);
   const channel = useMemo(() => (channelMeta ? { ...channelMeta, programs: channelPrograms } : undefined), [channelMeta, channelPrograms]);
@@ -174,6 +215,9 @@ export default function PlayerScreen() {
     for (let index = 0; index < channels.length; index += 1) result[channels[index].id] = index + 1;
     return result;
   }, [channelNumbers, channels]);
+
+  const overlayGuideChannels = useMemo(() => parentalReady ? channels.filter((item) =>
+    !hasPin || !isGroupLocked(providerGroupIdentity(item.group))) : [], [channels, hasPin, isGroupLocked, parentalReady]);
 
   useEffect(() => {
     const timer = setInterval(() => setPlayerNow(new Date()), 30_000);
@@ -214,22 +258,55 @@ export default function PlayerScreen() {
 
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (overlayOpenRef.current || keepControlsRef.current || quickActionsOpenRef.current) return;
     hideTimer.current = setTimeout(() => {
+      if (overlayOpenRef.current || keepControlsRef.current || quickActionsOpenRef.current) return;
+      cancelFocusRef.current?.();
+      controlsFocusedRef.current = false;
       controlsRef.current = false; setControls(false); setChannelsOpen(false); setTracksOpen(false);
     }, overlayHideMs);
   }, [overlayHideMs, setChannelsOpen, setTracksOpen]);
 
+  const claimControlsFocus = useCallback(() => {
+    cancelFocusRef.current?.();
+    if (!isTV || overlayOpenRef.current || quickActionsOpenRef.current) return;
+    cancelFocusRef.current = requestNativeFocusWithRetry(
+      () => errorButtonRef.current || channelsButtonRef.current, [0, 32, 96, 200, 400],
+      () => controlsFocusedRef.current || !controlsRef.current || exitInFlightRef.current,
+    );
+  }, [isTV]);
+
   const revealControls = useCallback((opts?: { claimChannelsFocus?: boolean }) => {
-    const wasHidden = !controlsRef.current;
     controlsRef.current = true; setControls(true);
-    if (status === "error" || !hasStream) {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      return;
-    }
     scheduleHide();
-    const shouldClaim = opts?.claimChannelsFocus !== false && wasHidden && isTV && !channelsOpenRef.current;
-    if (shouldClaim) requestAnimationFrame(() => requestNativeFocus(channelsButtonRef.current));
-  }, [hasStream, isTV, scheduleHide, status]);
+    if (opts?.claimChannelsFocus !== false && !controlsFocusedRef.current) claimControlsFocus();
+  }, [claimControlsFocus, scheduleHide]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("CharmQuickActionsVisibility", (open: boolean) => {
+      const wasOpen = quickActionsOpenRef.current;
+      quickActionsOpenRef.current = open;
+      if (open) {
+        cancelFocusRef.current?.();
+        if (hideTimer.current) clearTimeout(hideTimer.current);
+        controlsFocusedRef.current = false;
+      } else if (wasOpen && !exitInFlightRef.current) revealControls();
+    });
+    return () => sub.remove();
+  }, [revealControls]);
+
+  useEffect(() => {
+    if (controls && !playerOverlay) claimControlsFocus();
+    scheduleHide();
+    return () => { cancelFocusRef.current?.(); };
+  }, [claimControlsFocus, controls, playerOverlay, scheduleHide, status]);
+
+  useEffect(() => {
+    if (!isTV || !tracksOpen) return;
+    controlsFocusedRef.current = false;
+    return requestNativeFocusWithRetry(() => subtitlesOffRef.current, [0, 32, 96, 200],
+      () => controlsFocusedRef.current || exitInFlightRef.current);
+  }, [isTV, tracksOpen]);
 
   const restartInFlightRef = useRef(false);
   const restartThisChannel = useCallback(async () => {
@@ -289,6 +366,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!isTV) return;
     return addPlayerQuickCommandListener((command) => {
+      if (guideOverlayOpenRef.current) return;
       if (command === "CYCLE_ASPECT") return cycleScaleMode();
       if (command === "OPEN_TRACKS") {
         controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
@@ -310,7 +388,12 @@ export default function PlayerScreen() {
   const closeOverlayAndRestoreFocus = useCallback(() => {
     setPlayerOverlay(null);
     const opener = overlayOpenerRef.current; overlayOpenerRef.current = null;
-    if (opener) requestAnimationFrame(() => requestNativeFocus(opener));
+    controlsFocusedRef.current = false;
+    cancelFocusRef.current?.();
+    cancelFocusRef.current = requestNativeFocusWithRetry(
+      () => opener || channelsButtonRef.current, [0, 32, 96, 200],
+      () => controlsFocusedRef.current || exitInFlightRef.current,
+    );
   }, []);
 
   useEffect(() => {
@@ -353,8 +436,9 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     if (!isTV) return;
-    return addTvKeyListener(() => {
-      if (!controlsRef.current) revealControls({ claimChannelsFocus: true });
+    return addTvKeyListener((key) => {
+      if (key === "BACK" || exitInFlightRef.current || guideOverlayOpenRef.current) return;
+      if (!controlsRef.current || !controlsFocusedRef.current) revealControls({ claimChannelsFocus: true });
       else scheduleHide();
     });
   }, [isTV, revealControls, scheduleHide]);
@@ -383,6 +467,7 @@ export default function PlayerScreen() {
     if (reason !== undefined) setFailReason(reason);
     const channelKey = channelIdRef.current;
     if (nextStatus === "playing") {
+      controlsFocusedRef.current = false;
       setFailReason(null);
       if (channelKey) clearStreamFailure(channelKey);
     } else if (nextStatus === "error" && channelKey) {
@@ -410,16 +495,17 @@ export default function PlayerScreen() {
 
   const goGuide = useCallback(() => {
     if (exitInFlightRef.current) return;
-    exitInFlightRef.current = true;
     void Haptics.selectionAsync().catch(() => undefined);
-    const currentChannelId = pendingChannelIdRef.current || channelIdRef.current;
-    const returnGuideGroup = String(params.returnGuideGroup || "").trim() || "All";
-    if (currentChannelId) requestGuideJump({ channelId: currentChannelId, group: returnGuideGroup });
-    generationRef.current += 1;
-    void stopFullscreenSession().then(() => router.replace("/guide" as any));
-  }, [params.returnGuideGroup, router]);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    controlsRef.current = false;
+    setControls(false);
+    setChannelsOpen(false);
+    setTracksOpen(false);
+    setGuideOverlayOpen(true);
+  }, [setChannelsOpen, setTracksOpen]);
 
   const runRemoteAction = useCallback((action: PlayerRemoteAction) => {
+    if (guideOverlayOpenRef.current) return;
     if (exitInFlightRef.current) return;
     if (action === "channel_up") return stepChannel(-1);
     if (action === "channel_down") return stepChannel(1);
@@ -458,6 +544,7 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (guideOverlayOpenRef.current) { setGuideOverlayOpen(false); return true; }
       if (exitInFlightRef.current) return true;
       if (!controlsRef.current) { revealControls(); return true; }
       if (tracksOpen || channelsOpen) { closeOverlayAndRestoreFocus(); scheduleHide(); return true; }
@@ -518,7 +605,10 @@ export default function PlayerScreen() {
               }
             }}
             onStatus={handleStreamStatus}
-            style={StyleSheet.absoluteFill}
+            style={showPlayerGuidePreview ? {
+              position: "absolute", left: safe.left + 14, top: insets.top + safe.top + 20,
+              width: guidePreviewWidth, height: guidePreviewHeight,
+            } : StyleSheet.absoluteFill}
           />
         </ErrorBoundary>
       ) : null}
@@ -535,17 +625,28 @@ export default function PlayerScreen() {
         />
       ) : null}
 
+      {isTV ? (
+        // A mouse on an emulator still needs a click target; the remote never lands here.
+        <Pressable
+          style={[StyleSheet.absoluteFill, styles.touchCatcher]}
+          focusable={false}
+          onPress={() => revealControls()}
+        />
+      ) : null}
+
       {(!hasStream || status === "error") ? (
-        <View style={styles.errorOverlay} pointerEvents="box-none">
+        <View testID="player-error-controls" collapsable={false} style={styles.errorOverlay} pointerEvents="box-none"
+          onFocusCapture={() => { controlsFocusedRef.current = true; }}
+          onBlurCapture={() => { controlsFocusedRef.current = false; }}>
           <Ionicons name="warning-outline" size={32} color={tvColors.purpleSoft} />
           <Text style={styles.errorTitle}>{failReason === "unsupported-protocol" ? "Unsupported stream protocol" : hasStream ? "Stream unavailable" : "No stream available"}</Text>
           {hasStream ? <Text style={styles.errorText}>{failReason ? FAIL_REASON_LABEL[failReason] : "Use Retry Now to re-prepare this stream."}</Text> : null}
           {hasStream && failReason !== "unsupported-protocol" ? (
-            <Pressable hasTVPreferredFocus={!controls} onPress={retryNow} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
+            <Pressable ref={errorButtonRef} onPress={retryNow} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
               <Ionicons name="refresh" size={14} color="#fff" /><Text style={styles.retryText}>Retry Now</Text>
             </Pressable>
           ) : (
-            <Pressable hasTVPreferredFocus={!controls} onPress={stopAndExit} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
+            <Pressable ref={errorButtonRef} onPress={stopAndExit} style={({ focused }: any) => [styles.retry, focused && styles.focused]}>
               <Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.retryText}>Back to Guide</Text>
             </Pressable>
           )}
@@ -554,7 +655,7 @@ export default function PlayerScreen() {
 
       {notice ? <View style={styles.notice} pointerEvents="none"><ActivityIndicator size="small" color="#fff" /><Text numberOfLines={1} style={styles.noticeText}>{notice}</Text></View> : null}
 
-      {controls ? (
+      {controls && !guideOverlayOpen ? (
         <>
           <LinearGradient colors={["rgba(5,4,13,0.92)", "rgba(5,4,13,0.42)", "transparent"]} style={[styles.topOverlay, { paddingTop: insets.top + safe.top + 8, paddingLeft: safe.left + 14, paddingRight: safe.right + 14 }]}>
             <View style={styles.channelIdentity}>
@@ -567,7 +668,11 @@ export default function PlayerScreen() {
             <View style={styles.topSpacer} /><Text style={styles.clock}>{fmtTime(playerNow.toISOString())}</Text>
           </LinearGradient>
 
-          <LinearGradient colors={["transparent", "rgba(5,4,13,0.90)", "rgba(5,4,13,0.98)"]} style={[styles.bottomOverlay, { paddingLeft: safe.left + 14, paddingRight: safe.right + 14, paddingBottom: insets.bottom + safe.bottom + 10 }]}>
+          <FocusGuide testID="player-controls" collapsable={false} autoFocus={hasStream && status !== "error"} trapFocusUp={hasStream && status !== "error"} trapFocusDown trapFocusLeft trapFocusRight
+            style={[styles.bottomOverlay, { paddingTop: 0 }]}
+            onFocusCapture={() => { controlsFocusedRef.current = true; scheduleHide(); }}
+            onBlurCapture={() => { controlsFocusedRef.current = false; }}>
+          <LinearGradient colors={["transparent", "rgba(20,8,44,0.72)", "rgba(20,8,44,0.90)"]} style={[styles.bottomContent, { paddingLeft: safe.left + 14, paddingRight: safe.right + 14, paddingBottom: insets.bottom + safe.bottom + 10 }]}>
             <View style={styles.infoRow}><View style={styles.programCopy}>
               <View style={styles.liveLine}><View style={styles.livePill}><Text style={styles.livePillText}>LIVE</Text></View><Text style={styles.programTime}>{current ? `${fmtTime(current.start)}${current.stop ? ` - ${fmtTime(current.stop)}` : ""}` : "Streaming now"}</Text></View>
               <Text numberOfLines={1} style={styles.programTitle}>{current?.title || channel?.name || "Live TV"}</Text>
@@ -602,7 +707,7 @@ export default function PlayerScreen() {
                   </Pressable>
                 )) : <Text style={styles.errorText}>No audio tracks reported</Text>}
                 <Text style={[styles.controlLabel, { marginTop: 8 }]}>Subtitles</Text>
-                <Pressable onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
+                <Pressable ref={subtitlesOffRef} onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
                 {textTracks.map((track) => <Pressable key={`t-${track.id}`} onPress={() => setTextTrackId(track.id)} style={({ focused }: any) => [styles.trackRow, textTrackId === track.id && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>{track.name}</Text></Pressable>)}
               </View>
             ) : null}
@@ -618,7 +723,43 @@ export default function PlayerScreen() {
               </View>
             ) : null}
           </LinearGradient>
+          </FocusGuide>
         </>
+      ) : null}
+      {guideOverlayOpen ? (
+        <PlayerGuidePanel
+          mode={guidePresentation.mode}
+          transparency={guidePresentation.transparency}
+          animationEnabled={guidePresentation.animate}
+          autoplayOnFocus={guidePresentation.autoplayOnFocus}
+          stayInGuide={guidePresentation.stayInGuide}
+          safeLeft={safe.left}
+          safeRight={safe.right}
+          safeTop={insets.top + safe.top}
+          safeBottom={insets.bottom + safe.bottom}
+          previewWidth={guidePreviewWidth}
+          previewHeight={guidePreviewHeight}
+          channels={overlayGuideChannels}
+          favoriteIds={favorites}
+          playingChannel={channel}
+          playingCurrent={current}
+          playingNext={next}
+          windowStart={guideWindowStart}
+          windowEnd={guideWindowEnd}
+          channelNumbers={numberById}
+          showLogos={channelLogos}
+          onTune={(nextChannel) => changeChannel(nextChannel.id, true)}
+          onDismiss={() => setGuideOverlayOpen(false)}
+          onModeChange={(mode) => guidePresentation.change({ mode })}
+          onTransparencyChange={(transparency) => guidePresentation.change({ transparency })}
+          onAutoplayChange={(autoplayOnFocus) => guidePresentation.change({ autoplayOnFocus })}
+          onStayChange={(stayInGuide) => guidePresentation.change({ stayInGuide })}
+          onRunway={(ids, priorityIds) => {
+            setViewportGuideChannelIds(ids);
+            setPriorityMatchChannelIds(priorityIds);
+            void patchProgramsForChannelIds(ids, priorityIds);
+          }}
+        />
       ) : null}
     </View>
   );
@@ -641,6 +782,7 @@ const styles = StyleSheet.create({
   topSpacer: { flex: 1 },
   clock: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5, marginTop: 4 },
   bottomOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, paddingTop: 70 },
+  bottomContent: { paddingTop: 70 },
   infoRow: { flexDirection: "row", alignItems: "flex-end" },
   programCopy: { maxWidth: "62%" },
   liveLine: { flexDirection: "row", alignItems: "center", gap: 7 },
@@ -655,12 +797,12 @@ const styles = StyleSheet.create({
   track: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },
   fill: { height: 3, backgroundColor: tvColors.purpleBright },
   controlsRow: { minHeight: 42, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
-  textControl: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
+  textControl: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 11, borderRadius: 11, borderWidth: 1, borderColor: "rgba(226,190,255,0.42)", backgroundColor: "rgba(150,90,235,0.20)" },
   controlActive: { backgroundColor: tvColors.purpleDeep },
   controlLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   controlsSpacer: { flex: 1 },
-  iconControl: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 2, borderColor: "transparent" },
-  pauseControl: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.purple },
+  iconControl: { width: 44, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "rgba(226,190,255,0.42)", backgroundColor: "rgba(150,90,235,0.20)" },
+  pauseControl: { width: 50, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 2, borderColor: "#F0D6FF", backgroundColor: "rgba(168,60,255,0.72)", shadowColor: "#D14DFF", elevation: 14 },
   channelStrip: { gap: 6, paddingTop: 5 },
   tracksPanel: { maxHeight: 160, marginTop: 6, padding: 8, borderRadius: radius.sm, backgroundColor: "rgba(16,16,30,0.94)", gap: 4 },
   trackRow: { minHeight: 28, justifyContent: "center", paddingHorizontal: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
@@ -668,5 +810,5 @@ const styles = StyleSheet.create({
   channelCard: { width: 96, minHeight: 54, alignItems: "center", justifyContent: "center", gap: 3, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: "rgba(16,16,30,0.94)", padding: 4 },
   channelCardActive: { backgroundColor: tvColors.purpleDeep, borderColor: tvColors.purpleBright },
   channelCardName: { color: "#fff", fontFamily: fonts.medium, fontSize: 7.5, textAlign: "center" },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: { borderColor: "#fff", borderWidth: 2, backgroundColor: "rgba(178,70,255,0.62)", shadowColor: "#D14DFF", elevation: 16 },
 });

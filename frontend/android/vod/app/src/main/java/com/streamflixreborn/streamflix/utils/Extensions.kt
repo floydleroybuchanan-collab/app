@@ -99,7 +99,16 @@ fun FragmentActivity.getCurrentFragment(): Fragment? = when (this) {
         navHostFragment.childFragmentManager.fragments.firstOrNull()
     }
 
-    else -> null
+    // Embedded in the React host, the NavHost sits inside VodRootFragment.
+    else -> supportFragmentManager.fragments.firstNotNullOfOrNull { it.visibleNavDestination() }
+}
+
+private fun Fragment.visibleNavDestination(): Fragment? {
+    if (!isAdded) return null
+    if (this is NavHostFragment) {
+        return childFragmentManager.primaryNavigationFragment ?: childFragmentManager.fragments.firstOrNull()
+    }
+    return childFragmentManager.fragments.firstNotNullOfOrNull { it.visibleNavDestination() }
 }
 
 suspend fun <T> retry(retries: Int, predicate: suspend (attempt: Int) -> T): T {

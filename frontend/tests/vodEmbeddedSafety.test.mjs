@@ -123,12 +123,12 @@ test("platform View All buttons have platform-specific neon glass styling", () =
   assert.match(platforms, /badge\.viewAllGlass\(focused\)/);
 });
 
-test("Platforms only exposes the ten approved services", () => {
+test("Platforms only exposes the approved services", () => {
   const catalog = read(vod + "charm/VodPlatformCatalog.kt");
   const listed = [...catalog.matchAll(/Platform\("([^"]+)",/g)].map((match) => match[1]);
   assert.deepEqual(listed, [
     "netflix", "prime", "disney", "max", "hulu", "apple", "paramount", "peacock",
-    "starz", "amc", "youtube", "crunchyroll"
+    "starz", "mgm", "amc"
   ]);
 });
 

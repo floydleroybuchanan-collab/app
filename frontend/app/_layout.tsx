@@ -1,3 +1,4 @@
+import "@/src/utils/tvRuntime";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { AppUpdateNotice } from "@/src/components/AppUpdateNotice";
 import * as SplashScreen from "expo-splash-screen";

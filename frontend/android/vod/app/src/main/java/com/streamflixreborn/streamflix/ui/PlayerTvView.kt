@@ -30,6 +30,20 @@ class PlayerTvView @JvmOverloads constructor(
 
     private var zoomToast: Toast? = null
 
+    override fun setPlayer(player: Player?) {
+        super.setPlayer(player)
+        if (player == null || !com.streamflixreborn.streamflix.charm.VodSourceRequest.pending) return
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState != Player.STATE_READY) return
+                player.removeListener(this)
+                if (com.streamflixreborn.streamflix.charm.VodSourceRequest.take()) {
+                    findViewById<android.view.View>(R.id.btn_exo_sources)?.performClick()
+                }
+            }
+        })
+    }
+
     fun enterManualZoomMode() {
         player?.pause()
         isManualZoomEnabled = true

@@ -884,6 +884,10 @@ class MovieViewHolder(
     }
 
     private fun displayMovieTv(binding: ContentMovieTvBinding) {
+        com.streamflixreborn.streamflix.charm.VodTitleActions.attach(
+            binding.btnMovieWatchNow, binding.btnMovieSources, binding.btnMovieMyList, binding.btnMovieTrailer,
+            binding.btnMovieSimilar, binding.btnMovieBack, binding.btnMovieFavorite, { movie.isFavorite },
+        )
         binding.ivMoviePoster.run {
             loadMoviePoster(movie) {
                 transition(DrawableTransitionOptions.withCrossFade())

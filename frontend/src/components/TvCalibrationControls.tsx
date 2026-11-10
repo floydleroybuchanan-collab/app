@@ -221,5 +221,5 @@ const styles = StyleSheet.create({
   },
   saveText: { color: "#fff", fontFamily: fonts.bold, fontSize: 11 },
   disabled: { opacity: 0.45 },
-  focused: { borderColor: "#fff", borderWidth: 2 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
 });

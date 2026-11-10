@@ -94,6 +94,20 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             }
         }
 
+        /** Sizes the native page from this view, or its parent while RN is still laying it out. */
+        fun forceLayoutPass() {
+            if (!isAttachedToWindow) return
+            val host = parent as? View
+            val w = if (width > 0) width else host?.width ?: 0
+            val h = if (height > 0) height else host?.height ?: 0
+            if (w <= 0 || h <= 0) return
+            measure(
+                View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY),
+            )
+            layout(left, top, left + w, top + h)
+        }
+
         private fun showFailure(message: String) {
             // Native fallback is reliable even if React has not registered the
             // failure event listener yet. Never leave an unexplained black view.
@@ -159,7 +173,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                     true
                 }
             }
+            screen.onNeedsLayout = { forceLayoutPass() }
             screen.onImmersiveChanged = { playing ->
+                host.setVodImmersive(playing)
                 emit("CharmVodImmersiveChanged", if (playing) "true" else "false")
             }
             screen.onRootError = { message ->
@@ -209,6 +225,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 onHostBack = null
                 onHostIconRail = null
                 onImmersiveChanged = null
+                onNeedsLayout = null
                 onRootReady = null
                 onRootError = null
             }

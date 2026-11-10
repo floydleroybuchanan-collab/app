@@ -129,13 +129,15 @@ class VodFocusCoordinator(
         // BACK never uses this path and does not touch the icon rail.
         if (key == KeyEvent.KEYCODE_DPAD_LEFT) {
             if (inBar && binding.vodGlassActions.isFirstActionFocused(current)) {
-                return onHostRailFocus?.invoke() == true
+                return event.repeatCount > 0 || onHostRailFocus?.invoke() == true
             }
             if (inContent && content != null) {
                 val next = current.focusSearch(View.FOCUS_LEFT)
                 // A diagonal item in another row is not a Left neighbor.
                 if (next == null || !VodFocusMemory.isWithin(content, next) || !sharesRow(current, next)) {
-                    return onHostRailFocus?.invoke() == true
+                    // A row still scrolling back has more items; a held key stops at the edge.
+                    if (hasMoreToTheLeft(current, content)) return false
+                    return event.repeatCount > 0 || onHostRailFocus?.invoke() == true
                 }
             }
         }
@@ -151,6 +153,15 @@ class VodFocusCoordinator(
             }
         }
         return false // Native Android D-pad handles all ordinary in-section moves.
+    }
+
+    private fun hasMoreToTheLeft(view: View, content: View): Boolean {
+        var ancestor = view.parent as? View
+        while (ancestor != null && ancestor !== content) {
+            if (ancestor.canScrollHorizontally(-1)) return true
+            ancestor = ancestor.parent as? View
+        }
+        return false
     }
 
     private fun sharesRow(a: View, b: View): Boolean {

@@ -25,6 +25,7 @@ import com.streamflixreborn.streamflix.providers.ZaluknijProvider
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import com.streamflixreborn.streamflix.utils.ThemeManager
 import com.streamflixreborn.streamflix.providers.Provider
+import com.streamflixreborn.streamflix.models.Video
 
 /**
  * Native VOD belongs to the SAME Charming MediaLab MainActivity and process.
@@ -40,6 +41,7 @@ class VodRootFragment : Fragment() {
     var onImmersiveChanged: ((Boolean) -> Unit)? = null
     var onRootReady: (() -> Unit)? = null
     var onRootError: ((String) -> Unit)? = null
+    var onNeedsLayout: (() -> Unit)? = null
     private var rootStartedAt = 0L
     private var readyAttempts = 0
     private var rootReadyReported = false
@@ -61,7 +63,9 @@ class VodRootFragment : Fragment() {
         Log.i("CharmVodRoot", "Inflating embedded VOD root")
         // The original TV layout was built for Theme.Leanback. Keep that theme
         // scoped to VOD views; never change the shared React Native Activity.
-        // Host AppTheme supplies VOD attribute fallbacks for nested fragments.
+        // Nested fragments inflate from the host Activity theme, so add the VOD
+        // attributes it lacks. force=false never changes a value React relies on.
+        requireActivity().theme.applyStyle(ThemeManager.tvThemeRes(UserPreferences.selectedTheme), false)
         val themedContext = ContextThemeWrapper(
             inflater.context, ThemeManager.tvThemeRes(UserPreferences.selectedTheme)
         )
@@ -106,8 +110,12 @@ class VodRootFragment : Fragment() {
             it.install()
         }
 
-        controller.addOnDestinationChangedListener { _, destination, _ ->
+        controller.addOnDestinationChangedListener { _, destination, args ->
             onImmersiveChanged?.invoke(destination.id == R.id.player)
+            if (destination.id == R.id.player) {
+                @Suppress("DEPRECATION")
+                VodPlayerSimilar.attach(viewLifecycleOwner, b.root, args?.get("videoType") as? Video.Type, controller)
+            }
         }
         // The graph starts at Home. Do not navigate there again: this used to
         // recreate the first destination and delay/blank the embedded dashboard.
@@ -149,7 +157,9 @@ class VodRootFragment : Fragment() {
                 if (!b.root.hasFocus()) b.vodGlassActions.focusLastAction()
                 Log.i("CharmVodRoot", "VOD actual destination ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
                 onRootReady?.invoke()
-            } else if (++readyAttempts <= 45) {
+            } else if (b.navMainFragment.width <= 0 || b.navMainFragment.height <= 0 || ++readyAttempts <= 45) {
+                // A view that has no size yet is still being laid out, not a failure.
+                onNeedsLayout?.invoke()
                 b.navMainFragment.postDelayed({ notifyWhenDrawn() }, 100L)
             } else {
                 val message = "VOD destination did not draw: destination=$destination, " +
@@ -223,6 +233,7 @@ class VodRootFragment : Fragment() {
         onImmersiveChanged?.invoke(false)
         onRootReady = null
         onRootError = null
+        onNeedsLayout = null
         _binding = null
         super.onDestroyView()
     }

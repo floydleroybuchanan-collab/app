@@ -52,6 +52,7 @@ import kotlinx.coroutines.withContext
 class VodPlatformsFragment : Fragment() {
     private var scroll: ScrollView? = null
     private var body: LinearLayout? = null
+    private val posterRows = mutableListOf<RecyclerView>()
     private data class CatalogSnapshot(
         val originals: Map<String, List<Show>>,
         val allowed: List<Show>,
@@ -63,7 +64,7 @@ class VodPlatformsFragment : Fragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         val context = requireContext()
-        val root = ScrollView(context).apply {
+        val root = VodPageScrollView(context).apply {
             isFillViewport = true
             isFocusable = false
             setBackgroundColor(0xFF120A20.toInt())
@@ -363,6 +364,11 @@ class VodPlatformsFragment : Fragment() {
             if (art != null) {
                 header.addView(VodPlatformBadgeView(requireContext(), platform, pill = true).apply {
                     asRemoteTarget("View all ${platform.label}", { open.onClick(this) })
+                    // LEFT returns to this row's posters instead of leaving the page.
+                    setOnKeyListener { _, code, event ->
+                        code == android.view.KeyEvent.KEYCODE_DPAD_LEFT && event.action == android.view.KeyEvent.ACTION_DOWN &&
+                            rowUnder(this)?.requestFocus() == true
+                    }
                 }, LinearLayout.LayoutParams(dp(112), dp(32)))
             } else {
                 header.addView(label("View All  ›", 13f).apply {
@@ -391,7 +397,30 @@ class VodPlatformsFragment : Fragment() {
             setHasFixedSize(true)
             overScrollMode = View.OVER_SCROLL_NEVER
         }
+        posterRows += posters
         column.addView(posters, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(212)))
+    }
+
+    private fun screenTop(view: View) = IntArray(2).also(view::getLocationOnScreen)[1]
+
+    private fun rowUnder(button: View): RecyclerView? =
+        posterRows.filter { screenTop(it) >= screenTop(button) }.minByOrNull(::screenTop)
+
+    /** UP/DOWN go to the same column in the next row; only the far right reaches View All. */
+    private fun movePosterFocus(card: View, code: Int): Boolean {
+        val step = when (code) {
+            android.view.KeyEvent.KEYCODE_DPAD_UP -> -1
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> 1
+            else -> return false
+        }
+        val row = card.parent as? RecyclerView ?: return false
+        val cardCenter = card.left + card.width / 2
+        if (step < 0 && cardCenter > row.width * 3 / 4) return false
+        val ordered = posterRows.sortedBy(::screenTop)
+        val target = ordered.getOrNull(ordered.indexOf(row) + step) ?: return false
+        val next = (0 until target.childCount).map(target::getChildAt)
+            .minByOrNull { kotlin.math.abs(it.left + it.width / 2 - cardCenter) } ?: return false
+        return next.requestFocus()
     }
 
     private inner class PosterAdapter(private val shows: List<Show>) :
@@ -434,6 +463,9 @@ class VodPlatformsFragment : Fragment() {
             f.layoutParams = RecyclerView.LayoutParams(dp(113), dp(192)).apply {
                 rightMargin = dp(12)
             }
+            f.setOnKeyListener { v, code, event ->
+                event.action == android.view.KeyEvent.ACTION_DOWN && movePosterFocus(v, code)
+            }
             f.onFocusChangeListener = View.OnFocusChangeListener { v, focused ->
                 v.background = if (focused) raised else resting
                 VodHomeShelf.liftCard(v, focused)
@@ -463,6 +495,7 @@ class VodPlatformsFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        posterRows.clear()
         scroll = null
         body = null
         super.onDestroyView()

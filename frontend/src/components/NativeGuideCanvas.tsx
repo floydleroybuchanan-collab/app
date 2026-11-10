@@ -8,6 +8,9 @@ type RunwayEvent = { ids: string[]; priorityIds: string[]; pageSize: number; vel
 type Props = {
   channels: Channel[]; windowStart: string; windowEnd: string; active: boolean; restoreChannelId?: string | null; restoreTimeMs?: number | null; reloadGeneration?: number;
   clock24h?: boolean;
+  overlayMode?: boolean;
+  transparencyLevel?: number;
+  enableUpBoundary?: boolean;
   channelNumberById: Record<string, number>;
   onChannelFocus: (channel: Channel, settled: boolean) => void;
   onProgramFocus: (program: Program, channel: Channel, settled: boolean) => void;
@@ -29,6 +32,10 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   restoreTimeMs,
   reloadGeneration = 0,
   clock24h = false,
+  overlayMode = false,
+  transparencyLevel = 50,
+  // The full Guide always routes Up at its top row to its preview actions.
+  enableUpBoundary = true,
   channelNumberById,
   onChannelFocus,
   onProgramFocus,
@@ -149,6 +156,9 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       restoreGeneration={deferredRestore.generation}
       restoreTimeMs={deferredRestoreTimeMs}
       reloadGeneration={reloadGeneration}
+      overlayMode={overlayMode}
+      transparencyLevel={transparencyLevel}
+      enableUpBoundary={enableUpBoundary}
       clock24h={clock24h}
       onSelectionChange={handleSelectionChange}
       onRunwayChange={handleRunwayChange}

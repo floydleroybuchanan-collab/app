@@ -156,6 +156,37 @@ class NativeGuideView(context: Context) : View(context) {
     setBackgroundColor(Color.BLACK)
   }
 
+  private var overlayMode = false
+  // The guide's original transparency setting of 50 translates to 25%
+  // see-through backgrounds, not 50%. Preview mode remains fully opaque.
+  private var transparencyLevel = 50
+  var enableUpBoundary = false
+  fun setTransparencyLevel(value: Int) {
+    val next = value.coerceIn(0, 100)
+    if (next == transparencyLevel) return
+    transparencyLevel = next
+    applyGuideOpacity()
+  }
+  fun setOverlayMode(value: Boolean) {
+    if (overlayMode == value) return
+    overlayMode = value
+    applyGuideOpacity()
+  }
+  private fun guideOpacity(): Int =
+    if (overlayMode) (255f * (1f - 0.005f * transparencyLevel)).toInt().coerceIn(0, 255) else 255
+  private fun applyGuideOpacity() {
+    val opacity = guideOpacity()
+    // Only the visible cell/channel surface takes the configured alpha, so two
+    // stacked translucent rectangles never hide the video behind the guide.
+    setBackgroundColor(if (overlayMode) Color.TRANSPARENT else Color.BLACK)
+    background.alpha = if (overlayMode) 0 else 255
+    header.alpha = opacity
+    channel.alpha = opacity
+    rowSurface.alpha = if (overlayMode) 0 else 255
+    cell.alpha = opacity
+    invalidate()
+  }
+
   private fun scheduleLiveClock() {
     removeCallbacks(liveClockRunnable)
     if (!disposed && enabled && isAttachedToWindow) {
@@ -490,7 +521,7 @@ class NativeGuideView(context: Context) : View(context) {
       removeCallbacks(settleSelectionRunnable)
     }
     when (keyCode) {
-      KeyEvent.KEYCODE_DPAD_UP -> if (selectedRow == 0) emit("upBoundary", null) else moveVertical(-1)
+      KeyEvent.KEYCODE_DPAD_UP -> if (selectedRow != 0) moveVertical(-1) else if (overlayMode || enableUpBoundary) emit("upBoundary", null)
       KeyEvent.KEYCODE_DPAD_DOWN -> moveVertical(1)
       KeyEvent.KEYCODE_DPAD_LEFT -> {
         liveFollowEnabled = false
@@ -713,7 +744,18 @@ class NativeGuideView(context: Context) : View(context) {
       drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)
 
       val list = programs[row.id].orEmpty()
+      // Every stretch of the row is painted: a hole in the EPG data shows a
+      // selectable "No information" cell rather than black space with no focus.
+      var gapStart = visibleStartMs
       var paintedProgramme = false
+      fun paintGap(start: Long, end: Long) {
+        val left = max(channelWidth, timeToX(start, visibleStartMs, visibleEndMs)) + density
+        val right = min(width.toFloat(), timeToX(end, visibleStartMs, visibleEndMs)) - density
+        if (right <= left) return
+        val chosen = !channelRailSelected && rowIndex == selectedRow && selectedTimeMs >= start && selectedTimeMs < end
+        canvas.drawRect(RectF(left, top + density, right, top + rowHeight - 2f * density), if (chosen) selected else cell)
+        drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
+      }
       for (program in list) {
         if (program.endMs <= visibleStartMs || program.startMs >= visibleEndMs) continue
         val left = timeToX(program.startMs, visibleStartMs, visibleEndMs)
@@ -722,6 +764,8 @@ class NativeGuideView(context: Context) : View(context) {
         val clippedRight = min(width.toFloat(), right)
         if (clippedRight <= clippedLeft) continue
         paintedProgramme = true
+        if (program.startMs > gapStart) paintGap(gapStart, program.startMs)
+        gapStart = max(gapStart, program.endMs)
         val chosen = !channelRailSelected && rowIndex == selectedRow && program.startMs <= selectedTimeMs && program.endMs > selectedTimeMs
         canvas.drawRect(
           RectF(clippedLeft + density, top + density, clippedRight - density, top + rowHeight - 2f * density),
@@ -743,6 +787,7 @@ class NativeGuideView(context: Context) : View(context) {
           drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
         }
       }
+      else if (gapStart < visibleEndMs) paintGap(gapStart, visibleEndMs)
       canvas.drawLine(0f, top + rowHeight, width.toFloat(), top + rowHeight, divider)
     }
     canvas.restore()

@@ -7,10 +7,10 @@
 
     <ImageView
         android:id="@+id/iv_tv_show_poster"
-        android:layout_width="250dp"
+        android:layout_width="170dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="70dp"
-        android:layout_marginTop="50dp"
+        android:layout_marginStart="26dp"
+        android:layout_marginTop="18dp"
         android:adjustViewBounds="true"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -24,10 +24,11 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="40dp"
-        android:layout_marginTop="50dp"
-        android:layout_marginEnd="70dp"
+        android:layout_marginTop="18dp"
+        android:layout_marginEnd="26dp"
         android:textColor="#FFFFFF"
-        android:textSize="50sp"
+        android:textStyle="bold"
+        android:textSize="30sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toTopOf="parent"
@@ -126,10 +127,10 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="40dp"
-        android:layout_marginTop="30dp"
-        android:layout_marginEnd="70dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="26dp"
         android:ellipsize="end"
-        android:maxLines="10"
+        android:maxLines="4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toBottomOf="@id/tv_tv_show_genres"
@@ -139,60 +140,110 @@
     <TextView
         android:id="@+id/btn_tv_show_watch_now"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="40dp"
-        android:layout_marginTop="30dp"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:text="@string/tv_show_watch_season_episode"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="26dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Watch"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
-        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
-        app:layout_goneMarginStart="70dp" />
+        app:layout_goneMarginStart="70dp"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+
+    <TextView
+        android:id="@+id/btn_tv_show_sources"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Sources"
+        app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+
+    <TextView
+        android:id="@+id/btn_tv_show_my_list"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="My List"
+        app:layout_constraintStart_toEndOf="@id/btn_tv_show_sources"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+
+    <TextView
+        android:id="@+id/btn_tv_show_trailer"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Trailer"
+        app:layout_constraintStart_toEndOf="@id/btn_tv_show_my_list"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+
+    <TextView
+        android:id="@+id/btn_tv_show_episodes"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Episodes"
+        app:layout_constraintStart_toEndOf="@id/btn_tv_show_trailer"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+
+    <TextView
+        android:id="@+id/btn_tv_show_similar"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Similar"
+        app:layout_constraintStart_toEndOf="@id/btn_tv_show_episodes"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
+
+    <TextView
+        android:id="@+id/btn_tv_show_back"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="84dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="9dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Back"
+        app:layout_constraintStart_toEndOf="@id/btn_tv_show_similar"
+        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
 
     <ProgressBar
         android:id="@+id/pb_tv_show_progress_episode"
         style="@android:style/Widget.ProgressBar.Horizontal"
         android:layout_width="0dp"
-        android:layout_height="4dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="16dp"
+        android:layout_height="3dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="10dp"
         android:backgroundTint="#CC646464"
-        android:progressTint="#FFFFFF"
+        android:progressTint="#E04DFF"
         app:layout_constraintEnd_toEndOf="@id/btn_tv_show_watch_now"
         app:layout_constraintStart_toStartOf="@id/btn_tv_show_watch_now"
-        app:layout_constraintTop_toBottomOf="@id/btn_tv_show_watch_now"
-        tools:progress="80" />
+        app:layout_constraintTop_toBottomOf="@id/btn_tv_show_watch_now" />
 
-    <TextView
-        android:id="@+id/btn_tv_show_trailer"
-        style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="25dp"
-        android:layout_marginTop="30dp"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:text="@string/tv_show_trailer"
-        app:layout_constraintStart_toEndOf="@id/btn_tv_show_watch_now"
-        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview" />
-
+    <!-- The saved state behind My List; the visible button drives it. -->
     <ImageView
         android:id="@+id/btn_tv_show_favorite"
-        style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="wrap_content"
-        android:layout_height="0dp"
-        android:layout_marginStart="20dp"
-        android:layout_marginTop="30dp"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:src="@drawable/ic_favorite_disable"
-        android:tint="@drawable/color_button_text"
-        app:layout_constraintStart_toEndOf="@id/btn_tv_show_trailer"
-        app:layout_constraintTop_toBottomOf="@id/tv_tv_show_overview"
-        tools:ignore="ContentDescription,UseAppTint" />
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="ContentDescription" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

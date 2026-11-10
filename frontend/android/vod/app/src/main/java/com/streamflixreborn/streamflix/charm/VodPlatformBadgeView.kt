@@ -23,10 +23,10 @@ import android.widget.TextView
 class VodPlatformBadgeView(
     context: Context, val platform: VodPlatformCatalog.Platform,
     private val small: Boolean = false,
-    pill: Boolean = false,
+    private val pill: Boolean = false,
 ) : TextView(context) {
     private val artwork = CharmingPlatformArt(platform.id)
-    private val glassArt: Drawable? = VodPlatformArt.of(platform.id)?.let {
+    private var glassArt: Drawable? = VodPlatformArt.of(platform.id)?.let {
         context.getDrawable(if (pill) it.viewAll else it.button)
     }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -58,6 +58,13 @@ class VodPlatformBadgeView(
             outlineAmbientShadowColor = platform.tint
         }
     }
+
+    /** Switches this button to the home row's original logo artwork. */
+    fun useHomeArt() {
+        VodPlatformArt.homeOf(platform.id)?.let { glassArt = context.getDrawable(if (pill) it.viewAll else it.button) }
+    }
+
+
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)

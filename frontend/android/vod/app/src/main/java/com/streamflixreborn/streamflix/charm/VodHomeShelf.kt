@@ -5,6 +5,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.util.TypedValue
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.animation.OvershootInterpolator
@@ -68,6 +69,11 @@ object VodHomeShelf {
             isFocusable = false
             val destination = if (category.list.firstOrNull() is TvShow) R.id.tv_shows else R.id.movies
             setOnClickListener { findNavController().navigate(destination) }
+            // Back to the row's posters, never out to the rail from a header link.
+            setOnKeyListener { _, code, event ->
+                code == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN &&
+                    binding.hgvCategory.requestFocus()
+            }
             setOnFocusChangeListener { view, focused ->
                 view.background = if (focused) linkFocus(view) else null
                 if (!focused) refreshRowLink(view)

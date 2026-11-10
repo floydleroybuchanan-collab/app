@@ -1,4 +1,5 @@
 import { providerGroupDisabled } from "@/src/core/groupVisibility";
+import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { providerGroupKey } from "@/src/core/playlistGuideMenu";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -179,7 +180,7 @@ export default function GroupSettingsScreen() {
 
   return (
     <PurpleTvShell active="/settings">
-      <View style={styles.page}>
+      <View style={styles.page}><GlassBackdrop />
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>PHASE 9</Text>
@@ -298,31 +299,31 @@ export default function GroupSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: tvColors.canvas, padding: 18 },
+  page: { flex: 1, padding: 18, backgroundColor: "transparent" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2 },
   title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 24 },
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 36, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
+  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 36, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 11 },
   scrollWrap: { flex: 1 },
   content: { gap: 12, paddingBottom: 40 },
-  card: { backgroundColor: tvColors.panel, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.md, padding: 12, gap: 6 },
+  card: { padding: 12, gap: 6, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
   cardTitle: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 14 },
   help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15, marginBottom: 4 },
   row: { minHeight: 40, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  selected: { backgroundColor: "rgba(120,80,210,0.22)", borderColor: "rgba(168,132,245,0.24)" },
-  focused: { borderColor: tvColors.purpleBright, backgroundColor: "rgba(126,84,218,0.32)" },
+  selected: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
   rowText: { color: tvColors.text, fontFamily: fonts.medium, fontSize: 11 },
   sub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, marginTop: 2 },
   value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 10 },
   inputRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  input: { flex: 1, minHeight: 38, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 11 },
-  action: { minHeight: 38, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
+  input: { flex: 1, minHeight: 38, color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 11, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  action: { minHeight: 38, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   actionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
   groupBlock: { gap: 4 },
   providerEdit: { gap: 6, paddingHorizontal: 10, paddingBottom: 4 },
   groupActions: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 10 },
-  mini: { minHeight: 32, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
+  mini: { minHeight: 32, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginVertical: 4 },
   disabled: { opacity: 0.35 },
 });

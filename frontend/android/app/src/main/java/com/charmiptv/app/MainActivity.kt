@@ -70,11 +70,11 @@ class MainActivity : ReactActivity() {
     return null
   }
 
-  private fun focusContentFromRail(root: View, rail: View, focus: View): Boolean {
+  private fun focusContentFromRail(root: View, rail: View?, focus: View): Boolean {
     val page = findTagged(root, "phase9-guide-groups-drawer") ?: findTagged(root, "purple-tv-page") ?: return false
     val next = focus.focusSearch(View.FOCUS_RIGHT)
     fun usable(view: View?): Boolean = view != null && view !== page && visible(view) &&
-      view.isEnabled && view.isFocusable && within(view, page) && !within(view, rail) &&
+      view.isEnabled && view.isFocusable && within(view, page) && (rail == null || !within(view, rail)) &&
       !(view is ReactViewGroup && view.isTVFocusGuide) &&
       view !is android.widget.ScrollView && view !is android.widget.HorizontalScrollView
     // RN TV autoFocus guides expose only themselves to getFocusables() when
@@ -125,6 +125,8 @@ class MainActivity : ReactActivity() {
   /** Resolve physical page/rail boundaries against this window's live views. */
   private fun routeShellBoundary(event: android.view.KeyEvent): Boolean {
     if (event.action != android.view.KeyEvent.ACTION_DOWN || TvRemoteModule.pointerActive) return false
+    // The full-screen VOD player owns Left/Right for seeking and its controls.
+    if (vodImmersive) return false
     val focus = currentFocus ?: return false
     var shell: View? = focus
     while (shell != null && testId(shell) != "purple-tv-shell") shell = shell.parent as? View
@@ -205,6 +207,28 @@ class MainActivity : ReactActivity() {
   private var vodKeyHandler: ((android.view.KeyEvent) -> Boolean)? = null
   private var vodBackHandler: (() -> Boolean)? = null
   private var vodBackKeyDownConsumed = false
+  private var vodImmersive = false
+
+  fun setVodImmersive(playing: Boolean) { vodImmersive = playing }
+
+  /** Runs once the drawer has released focus, so RIGHT lands on the visible page. */
+  private fun moveFocusOntoPageAfterDrawer() {
+    for (delay in longArrayOf(120L, 240L, 420L)) window.decorView.postDelayed({
+      if (TvRemoteModule.remoteContext != "main_drawer") {
+        val vod = vodInputOwner as? CharmVodSurfaceManager.Surface
+        if (vod != null && visible(vod)) {
+          if (!nativeVodOwnsFocus()) vod.restoreNativeFocus()
+        } else {
+          val shell = findTagged(window.decorView, "purple-tv-shell")
+          val focus = currentFocus
+          val page = shell?.let { findTagged(it, "purple-tv-page") }
+          if (shell != null && focus != null && page != null && !within(focus, page)) {
+            focusContentFromRail(shell, findTagged(shell, "purple-icon-rail"), focus)
+          }
+        }
+      }
+    }, delay)
+  }
 
   fun attachVodInput(
     owner: Any,
@@ -222,6 +246,7 @@ class MainActivity : ReactActivity() {
     vodKeyHandler = null
     vodBackHandler = null
     vodBackKeyDownConsumed = false
+    vodImmersive = false
   }
 
   /** Synchronous LEFT handoff from native VOD to the active rail control. */
@@ -256,6 +281,10 @@ class MainActivity : ReactActivity() {
         event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
       vodBackKeyDownConsumed = false
       return true
+    }
+    // Media3 hides its controls by clearing focus; the next key must still reach it.
+    if (vodImmersive && event.action == android.view.KeyEvent.ACTION_DOWN && !nativeVodOwnsFocus()) {
+      (vodInputOwner as? CharmVodSurfaceManager.Surface)?.restoreNativeFocus()
     }
     if (nativeVodOwnsFocus() && vodKeyHandler?.invoke(event) == true) {
       if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_BACK)
@@ -424,7 +453,7 @@ class MainActivity : ReactActivity() {
       }
       val owned =
         (context == "guide_groups" && (boundaryKey == "LEFT" || boundaryKey == "RIGHT" || boundaryKey == "BACK")) ||
-          (context == "main_drawer" && boundaryKey == "RIGHT") ||
+          (context == "main_drawer" && (boundaryKey == "RIGHT" || boundaryKey == "LEFT")) ||
           // RIGHT is native focus traversal back into the visible page. Do not
           // round-trip it through JS: a screen transition can invalidate the
           // stored React node before the event arrives and make focus vanish.
@@ -432,6 +461,7 @@ class MainActivity : ReactActivity() {
           (context == "drawer_edge" && boundaryKey == "LEFT")
       if (owned && boundaryKey != null) {
         emitRemoteEvent("TvRemoteKey", boundaryKey)
+        if (context == "main_drawer" && boundaryKey == "RIGHT") moveFocusOntoPageAfterDrawer()
         return true
       }
     }

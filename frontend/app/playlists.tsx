@@ -1,4 +1,5 @@
 import { encodeXtream, decodeXtream } from "@/src/core/xtream";
+import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -73,7 +74,7 @@ export default function PlaylistsScreen() {
     finally { await loadHealth().catch(() => undefined); operationInFlight.current = false; setBusy(false); }
   };
   const availableEpg = [{ id: "user", name: legacy.userName || "Custom EPG", enabled: legacy.userEnabled }, ...epgs.sources];
-  return <PurpleTvShell active="/settings"><View style={styles.page}>
+  return <PurpleTvShell active="/settings"><View style={styles.page}><GlassBackdrop />
     <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><Text style={styles.title}>Playlists</Text></View>
       <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => { if (!busy) back(); }} accessibilityState={{ disabled: busy }} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
     </View>
@@ -165,19 +166,19 @@ export default function PlaylistsScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, paddingHorizontal: 14, paddingTop: 8 },
+  page: { flex: 1, paddingHorizontal: 14, paddingTop: 8, backgroundColor: "transparent" },
   header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
+  back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 }, scrollWrap: { flex: 1 }, content: { paddingVertical: 12, paddingBottom: 40, gap: 10 },
   heading: { fontFamily: fonts.semibold, fontSize: 10.5, color: "#fff" },
   text: { color: tvColors.text, fontFamily: fonts.regular, fontSize: 8.5, lineHeight: 13 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 11 },
-  card: { backgroundColor: tvColors.panelRaised, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, padding: 11, gap: 7 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  card: { padding: 11, gap: 7, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   priorityRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7, paddingVertical: 3 }, priorityLabel: { minWidth: 180, flex: 1, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5 },
-  button: { alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: tvColors.line, backgroundColor: tvColors.panel },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
-  input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.sm },
+  button: { alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
+  input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },
   health: { color: "#D8C4FF", fontFamily: fonts.semibold, fontSize: 8.5, lineHeight: 13 },
 });

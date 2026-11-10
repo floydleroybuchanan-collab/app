@@ -23,7 +23,7 @@ import com.streamflixreborn.streamflix.models.TvShow
 import java.util.Calendar
 
 /**
- * The persistent top of the VOD home: featured hero, then twelve branded platforms
+ * The persistent top of the VOD home: featured hero, then ten branded platforms
  * with their own View All actions. Poster shelves sit directly beneath it.
  * Sizes follow the approved 960x540 layout and scale with the screen.
  *
@@ -141,7 +141,7 @@ class CharmingVodDashboardView @JvmOverloads constructor(
     }
 
     private fun buildPlatforms() {
-        // All twelve scroll sideways inside this strip. Its bounds clip them,
+        // All ten scroll sideways inside this strip. Its bounds clip them,
         // so neither the buttons nor their glow can reach another part of the app.
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -167,6 +167,7 @@ class CharmingVodDashboardView @JvmOverloads constructor(
                 isFocusable = false
             }
             val badge = VodPlatformBadgeView(context, platform, small = false).apply {
+                useHomeArt()
                 isFocusable = true
                 isClickable = true
                 contentDescription = "Open ${platform.label}"
@@ -178,6 +179,7 @@ class CharmingVodDashboardView @JvmOverloads constructor(
             }
             tile.addView(badge, LayoutParams(dp(72), dp(44)))
             val viewAll = VodPlatformBadgeView(context, platform, small = false, pill = true)
+            viewAll.useHomeArt()
             viewAll.asRemoteTarget(
                 "View all ${platform.label}",
                 onOpen = { onPlatform?.invoke(platform.id) },

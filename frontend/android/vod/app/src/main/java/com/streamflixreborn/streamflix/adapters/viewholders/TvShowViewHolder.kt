@@ -757,6 +757,10 @@ class TvShowViewHolder(
     }
 
     private fun displayTvShowTv(binding: ContentTvShowTvBinding) {
+        com.streamflixreborn.streamflix.charm.VodTitleActions.attach(
+            binding.btnTvShowWatchNow, binding.btnTvShowSources, binding.btnTvShowMyList, binding.btnTvShowTrailer,
+            binding.btnTvShowSimilar, binding.btnTvShowBack, binding.btnTvShowFavorite, { tvShow.isFavorite }, binding.btnTvShowEpisodes,
+        )
         binding.ivTvShowPoster.run {
             loadTvShowPoster(tvShow) {
                 fallback(R.drawable.glide_fallback_cover)

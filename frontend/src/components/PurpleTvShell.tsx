@@ -418,9 +418,19 @@ export function PurpleTvShell({
     if (!isFocused || !drawerOpen) return;
     setRemoteContext("main_drawer");
     if (active === "/guide") setGuideNavigationActive(false);
-    const off = active === "/guide"
-      ? addTvKeyListener((key) => {
-          if (key !== "RIGHT") return;
+    const off = addTvKeyListener((key) => {
+      if (key === "LEFT") {
+        // The rail returns as soon as the drawer closes, so it can take focus.
+        closeDrawer({ force: true });
+        requestAnimationFrame(() => focusIconRail());
+        return;
+      }
+      if (key !== "RIGHT") return;
+      if (active !== "/guide") {
+        // MainActivity moves focus onto the page once the drawer has released it.
+        closeDrawer({ force: true });
+        return;
+      }
           const now = Date.now();
           if (now - lastGuideDrawerTransferRef.current < GUIDE_DRAWER_TRANSFER_GUARD_MS) return;
           lastGuideDrawerTransferRef.current = now;
@@ -429,16 +439,7 @@ export function PurpleTvShell({
           // becomes remote owner or both focus trees can be live at once.
           closeDrawer({ force: true });
           requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
-        })
-      : active === "/vod"
-      ? addTvKeyListener((key) => {
-          if (key !== "RIGHT") return;
-          // The VOD drawer must release its TV focus guide before the rail
-          // is restored. Trapping RIGHT here strands focus in the old drawer.
-          closeDrawer({ force: true });
-          requestAnimationFrame(() => focusIconRail());
-        })
-      : () => undefined;
+    });
     return () => {
       off();
       if (active === "/guide") {
@@ -484,6 +485,15 @@ export function PurpleTvShell({
       cancelFocus?.();
     };
   }, [active, isFocused, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
+
+  // Focus that leaves the drawer by any route closes it, so it can never sit
+  // open behind a page or a second drawer that already owns the remote.
+  const drawerBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearDrawerBlurTimer = useCallback(() => {
+    if (drawerBlurTimerRef.current) clearTimeout(drawerBlurTimerRef.current);
+    drawerBlurTimerRef.current = null;
+  }, []);
+  useEffect(() => clearDrawerBlurTimer, [clearDrawerBlurTimer, drawerOpen]);
 
   const reopenArmedAtRef = useRef(0);
   useFocusEffect(
@@ -649,7 +659,12 @@ export function PurpleTvShell({
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight={active !== "/vod"} onFocusCapture={() => {
+        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight={active !== "/vod"} onBlurCapture={() => {
+          clearDrawerBlurTimer();
+          if (!drawerOpen) return;
+          drawerBlurTimerRef.current = setTimeout(() => closeDrawer({ force: true }), 160);
+        }} onFocusCapture={() => {
+          clearDrawerBlurTimer();
           if (!isFocused || !drawerOpen) return;
           // Android can restore a drawer child after Player changes the remote
           // owner. Reconcile real focus, otherwise Right is never sent to JS.

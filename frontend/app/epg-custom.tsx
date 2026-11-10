@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useRouter } from "expo-router";
@@ -288,7 +289,7 @@ export default function CustomEpgScreen() {
 
   return (
     <PurpleTvShell active="/settings">
-      <View style={styles.page}>
+      <View style={styles.page}><GlassBackdrop />
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>PHASE 9 · GUIDE SOURCES</Text>
@@ -420,15 +421,15 @@ function CycleSetting<T extends string | number>({ label, value, values, format,
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: tvColors.canvas, padding: 18 },
+  page: { flex: 1, padding: 18, backgroundColor: "transparent" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 1.1 },
   title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 22, marginTop: 2 },
-  back: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
+  back: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
   scrollWrap: { flex: 1 },
   content: { gap: 12, paddingBottom: 50 },
-  card: { backgroundColor: tvColors.panel, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.md, padding: 12, gap: 6 },
+  card: { padding: 12, gap: 6, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
   cardTitle: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 14 },
   help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15 },
   row: { minHeight: 42, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent", flexDirection: "row", alignItems: "center", gap: 10 },
@@ -436,12 +437,12 @@ const styles = StyleSheet.create({
   sub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, marginTop: 2 },
   value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9.5, maxWidth: 260 },
   flex: { flex: 1, minWidth: 0 },
-  selected: { backgroundColor: "rgba(120,80,210,0.22)", borderColor: "rgba(168,132,245,0.30)" },
-  focused: { borderColor: tvColors.purpleBright, backgroundColor: "rgba(126,84,218,0.32)" },
-  input: { minHeight: 40, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 10.5 },
+  selected: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
+  input: { minHeight: 40, color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 10.5, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  action: { minHeight: 36, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
-  small: { minHeight: 32, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line },
+  action: { minHeight: 36, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  small: { minHeight: 32, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   actionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginVertical: 3 },
   disabled: { opacity: 0.35 },
