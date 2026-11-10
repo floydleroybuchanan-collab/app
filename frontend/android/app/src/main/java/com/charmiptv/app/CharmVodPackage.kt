@@ -10,7 +10,7 @@ import com.facebook.react.uimanager.ViewManager
  * No secondary Android Activity or process, no extra APK or launcher.
  */
 class CharmVodPackage : ReactPackage {
-    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = emptyList()
-    override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> =
-        listOf(CharmVodSurfaceManager(context))
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> = emptyList()
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
+        listOf(CharmVodSurfaceManager(reactContext))
 }
