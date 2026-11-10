@@ -206,6 +206,8 @@ class QrScannerActivity : AppCompatActivity() {
         manager.openCamera(cameraId, cameraStateCallback, backgroundHandler)
     }
 
+    // Android 7/8 camera session fallback is kept for API 24-27 devices.
+    @Suppress("DEPRECATION")
     private fun createCaptureSession() {
         val texture = binding.qrScannerPreview.surfaceTexture ?: return
         val device = cameraDevice ?: return
