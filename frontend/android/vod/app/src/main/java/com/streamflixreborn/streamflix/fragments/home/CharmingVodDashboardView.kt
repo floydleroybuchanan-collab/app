@@ -145,7 +145,17 @@ class CharmingVodDashboardView @JvmOverloads constructor(
                 clipToPadding = false
                 isFocusable = false
             }
-            val badge = VodPlatformBadgeView(context, platform, small = false)
+            val badge = VodPlatformBadgeView(context, platform, small = false).apply {
+                // The glass logo is itself a real TV remote/mouse target.
+                // "View All" beneath it is a second, equivalent entry point.
+                isFocusable = true
+                isClickable = true
+                contentDescription = "Open ${platform.label}"
+                setOnClickListener { onPlatform?.invoke(platform.id) }
+                onFocusChangeListener = OnFocusChangeListener { _, focused ->
+                    showFocus(focused)
+                }
+            }
             tile.addView(badge, LayoutParams(dp(iconDp), dp(iconDp)))
             val viewAll = action("View All  ›", platform.tint, 0xFF33104F.toInt()).apply {
                 textSize = 12.5f
