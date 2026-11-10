@@ -10,6 +10,7 @@ object UserDataNotifier {
         extraBufferCapacity = 1
     )
 
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     val updates = _updates
         .debounce(300)
 
