@@ -13,7 +13,7 @@ import { getPlaylistUrl, movePlaylist, previewPlaylist, removePlaylist, savePers
 import { reloadPlaylistCatalog } from "@/src/source.native";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import type { PlaylistPreview } from "@/src/core/playlistRegistry";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, tvColors } from "@/src/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { readPlaylistGuideHealth, refreshOnePlaylistAndGuide, refreshOnePlaylistGuide, refreshOnePlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";

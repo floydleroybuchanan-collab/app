@@ -1,4 +1,5 @@
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
+import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View, Image
@@ -59,7 +60,7 @@ import {
   type SubtitleBg,
   type SubtitleSize,
 } from "@/src/core/subtitlePreferences";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useAudioTrackPreferences } from "@/src/core/audioTrackPreferences";
 import { PREFERRED_AUDIO_LANGUAGE_OPTIONS } from "@/src/core/preferredAudioLanguages";
@@ -107,7 +108,6 @@ type Tile = {
   icon: React.ComponentProps<typeof Ionicons>["name"];
 };
 
-import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 
 const TILE_ART: Record<string, number> = {
   general: require("../../assets/glass/nav_platforms.webp"),
@@ -577,7 +577,7 @@ function SettingsScreenContent() {
 
   return (
     <PurpleTvShell active="/settings">
-      <View style={styles.page}>
+      <View style={styles.page}><GlassBackdrop />
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <PurpleDrawerButton testID="settings-open-drawer" />

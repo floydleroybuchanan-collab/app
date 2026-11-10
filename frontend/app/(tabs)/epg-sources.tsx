@@ -20,7 +20,7 @@ import { useCustomGuideGroups } from "@/src/core/customGuideGroups";
 import { GUIDE_START_LAST_USED, useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { formatRelativeAge } from "@/src/utils/time";
 import { createCustomEpgSourceId, useMultiEpgSources } from "@/src/core/multiEpgSources";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { readPlaylistGuideHealth, refreshEveryGuide, refreshEveryPlaylistAndGuide, refreshEveryPlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 import { nativeEpgAvailable, readNativeUpdateDiagnostics, type NativeUpdateDiagnostics } from "@/src/nativeEpg";

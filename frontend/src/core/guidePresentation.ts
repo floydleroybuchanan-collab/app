@@ -77,11 +77,11 @@ export function useGuidePresentation() {
 }
 
 /** Only offer dates supported by the currently retained EPG window. */
-export function availableGuideDays(start: string, end: string): Array<{ key: string; label: string; at: number }> {
+export function availableGuideDays(start: string, end: string): { key: string; label: string; at: number }[] {
   const from = Date.parse(start), to = Date.parse(end);
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return [];
   const first = new Date(from); first.setHours(0, 0, 0, 0);
-  const days: Array<{ key: string; label: string; at: number }> = [];
+  const days: { key: string; label: string; at: number }[] = [];
   const today = new Date(); today.setHours(0, 0, 0, 0);
   for (let cursor = first.getTime(), n = 0; cursor < to && n < 15; n++) {
     if (cursor + 86400000 > from) {
