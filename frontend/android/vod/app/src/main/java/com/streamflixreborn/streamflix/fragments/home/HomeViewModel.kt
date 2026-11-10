@@ -22,13 +22,17 @@ import com.streamflixreborn.streamflix.utils.UserDataCache.toEpisode
 import com.streamflixreborn.streamflix.utils.UserDataCache.toMovie
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import com.streamflixreborn.streamflix.utils.combine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
@@ -60,6 +64,10 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     private val _state = MutableStateFlow<State>(State.Loading)
+    // Publish cached catalog without waiting for Room/history enrichment.
+    val immediateState: StateFlow<State> = _state.asStateFlow()
+    private var refreshJob: Job? = null
+    private var refreshingProviderKey: String? = null
     private val continueWatchingTvShowCache = ConcurrentHashMap<String, TvShow>()
     private val continueWatchingSeasonEpisodesCache = ConcurrentHashMap<String, List<Episode>>()
     private val _userDataCache = MutableStateFlow<UserDataCache.UserData?>(null)
@@ -399,11 +407,18 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
         }.awaitAll()
     }
 
-    fun getHome() = viewModelScope.launch(Dispatchers.IO) {
-        val provider = UserPreferences.currentProvider ?: run {
-            _state.emit(State.FailedLoading(IllegalStateException("No provider selected")))
-            return@launch
-        }
+    fun getHome() {
+        val provider = UserPreferences.currentProvider
+        val key = provider?.name
+        // Init, screen entry and provider notifications share one catalog refresh.
+        if (refreshJob?.isActive == true && refreshingProviderKey == key) return
+        refreshJob?.cancel()
+        refreshingProviderKey = key
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
+            if (provider == null) {
+                _state.emit(State.FailedLoading(IllegalStateException("No provider selected")))
+                return@launch
+            }
 
 
         currentProvider = provider
@@ -424,6 +439,8 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
             val categories = provider.getHome()
             HomeCacheStore.write(appContext, provider, categories)
             _state.emit(State.SuccessLoading(categories))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("HomeViewModel", "getHome: ", e)
             if (cachedCategories.isNullOrEmpty()) {
@@ -431,6 +448,7 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
             } else if (deferCachedHomeForClearance) {
                 _state.emit(State.SuccessLoading(cachedCategories))
             }
+        }
         }
     }
 
