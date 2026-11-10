@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.charm
 
 import android.os.SystemClock
+import android.util.Log
 import android.view.FocusFinder
 import android.view.KeyEvent
 import android.view.View
@@ -62,6 +63,13 @@ class VodFocusCoordinator(
             UserPreferences.currentProvider?.let { Provider.supportsMovies(it) } ?: true,
             UserPreferences.currentProvider?.let { Provider.supportsTvShows(it) } ?: true,
         )
+        // Keep the embedded content container visible on every section
+        // transition; only the native player may hide the top glass controls.
+        binding.navMainFragment.visibility = View.VISIBLE
+        binding.navMainFragment.post {
+            binding.navMainFragment.requestLayout()
+            binding.navMainFragment.invalidate()
+        }
         cancelPendingRestore()
         if (focusMemory.hasBookmark(destination.id) || lastZoneWasBar[destination.id] == true) {
             pendingDestination = destination.id
@@ -75,13 +83,20 @@ class VodFocusCoordinator(
         binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
         binding.vodGlassActions.onNavigate = { destination ->
             if (navigation.currentDestination?.id != destination) {
+                Log.i("CharmVodFocus", "Top VOD action: destination=$destination")
                 navigation.navigate(destination, null, navOptions {
                     launchSingleTop = true
-                    // A top-navigation click is a section switch, not another
-                    // copy of the same stack. Movie/episode detail stacks remain
-                    // intact until explicitly leaving via the bar.
+                    // A section switch restores its own visible layout; do not
+                    // recreate the React host or Activity.
                     popUpTo(R.id.home) { inclusive = false }
                 })
+                // On emulators and older Android TVs, native NavHost content
+                // sometimes requires a layout pass after a child transaction.
+                binding.navMainFragment.post {
+                    binding.navMainFragment.visibility = View.VISIBLE
+                    binding.navMainFragment.requestLayout()
+                    binding.navMainFragment.invalidate()
+                }
             }
         }
         navigation.addOnDestinationChangedListener(destinationListener)
@@ -140,6 +155,21 @@ class VodFocusCoordinator(
 
     fun focusBar(): Boolean = binding.vodGlassActions.visibility == View.VISIBLE &&
         binding.vodGlassActions.focusLastAction()
+
+    /**
+     * RIGHT from Charming MediaLab's React rail cannot use the RN page guide:
+     * this nested NavHost is an Android View hierarchy. Restore the native
+     * focus bookmark, otherwise choose content then the top glass action.
+     */
+    fun restoreFocusFromHost(): Boolean {
+        if (disposed) return false
+        val destination = navigation.currentDestination?.id ?: return focusBar()
+        if (lastZoneWasBar[destination] == true && focusBar()) return true
+        val content = currentContentRoot()
+        if (content != null && focusMemory.restore(destination, content)) return true
+        if (content?.requestFocus(View.FOCUS_RIGHT) == true) return true
+        return focusBar()
+    }
 
     private fun focusContent(): Boolean {
         val content = currentContentRoot() ?: return false
