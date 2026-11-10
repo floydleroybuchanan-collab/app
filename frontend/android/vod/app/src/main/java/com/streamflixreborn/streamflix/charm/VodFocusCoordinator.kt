@@ -76,6 +76,7 @@ class VodFocusCoordinator(
             binding.navMainFragment.requestLayout()
             binding.navMainFragment.invalidate()
         }
+        animatePage(destination.id, 0)
         cancelPendingRestore()
         if (focusMemory.hasBookmark(destination.id) || lastZoneWasBar[destination.id] == true) {
             pendingDestination = destination.id
@@ -153,6 +154,24 @@ class VodFocusCoordinator(
             }
         }
         return false // Native Android D-pad handles all ordinary in-section moves.
+    }
+
+    private var lastAnimatedPage: View? = null
+
+    /** The new page's view arrives shortly after navigation, so wait a few frames for it. */
+    private fun animatePage(destination: Int, attempt: Int) {
+        if (disposed || destination == R.id.player || navigation.currentDestination?.id != destination) return
+        val page = currentContentRoot()
+        if (page == null || page === lastAnimatedPage) {
+            if (attempt < 10) binding.navMainFragment.postDelayed({ animatePage(destination, attempt + 1) }, 32L)
+            return
+        }
+        lastAnimatedPage = page
+        when (destination) {
+            R.id.movies, R.id.tv_shows, R.id.search, R.id.favorites, R.id.season, R.id.genre, R.id.people ->
+                page.background = VodMotion.background()
+        }
+        VodMotion.page(page)
     }
 
     private fun hasMoreToTheLeft(view: View, content: View): Boolean {
@@ -240,6 +259,7 @@ class VodFocusCoordinator(
 
     fun dispose() {
         disposed = true
+        lastAnimatedPage = null
         cancelPendingRestore()
         binding.vodGlassActions.onNavigate = null
         onHostRailFocus = null

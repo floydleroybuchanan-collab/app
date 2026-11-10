@@ -12,6 +12,8 @@ import com.streamflixreborn.streamflix.R
 /** A press of Sources asks the next player to open its source list once it is ready. */
 object VodSourceRequest {
     var pending = false
+    /** A source picked on the title page, applied once the player has its list. */
+    var chosen: String? = null
     fun take(): Boolean = pending.also { pending = false }
 }
 
@@ -57,6 +59,9 @@ object VodTitleActions {
         watch: TextView, sources: TextView, myList: TextView, trailer: TextView,
         similar: TextView, back: TextView, favorite: View, isFavorite: () -> Boolean,
         episodes: TextView? = null,
+        heart: TextView,
+        panels: android.view.ViewGroup,
+        heartKey: String,
     ) {
         style(watch, R.drawable.vod_action_watch, PURPLE, primary = true)
         style(sources, R.drawable.vod_action_sources, BLUE)
@@ -65,10 +70,19 @@ object VodTitleActions {
         style(similar, R.drawable.vod_action_similar, GLASS)
         style(back, R.drawable.vod_action_back, GLASS)
         episodes?.let { style(it, R.drawable.vod_action_episodes, BLUE) }
+        style(heart, R.drawable.vod_action_favorite, PINK)
+        val saved = heart.context.getSharedPreferences("vod_hearts", android.content.Context.MODE_PRIVATE)
+        fun heartLabel() { heart.text = if (saved.getBoolean(heartKey, false)) "Favorited" else "Favorite" }
+        heartLabel()
+        heart.setOnClickListener {
+            saved.edit().putBoolean(heartKey, !saved.getBoolean(heartKey, false)).apply()
+            heartLabel()
+        }
 
         fun label() { myList.text = if (isFavorite()) "In My List" else "My List" }
         label()
         sources.setOnClickListener {
+            if (panels.findViewWithTag<View>(VodTitlePanels.FIRST_SOURCE)?.requestFocus() == true) return@setOnClickListener
             VodSourceRequest.pending = true
             watch.performClick()
         }
@@ -82,6 +96,8 @@ object VodTitleActions {
         similar.setOnClickListener { view ->
             grid(view)?.let { it.setSelectedPositionSmooth((it.adapter?.itemCount ?: 1) - 1) }
         }
-        episodes?.setOnClickListener { view -> grid(view)?.setSelectedPositionSmooth(1) }
+        episodes?.setOnClickListener { view ->
+            if (panels.findViewWithTag<View>(VodTitlePanels.FIRST_EPISODE)?.requestFocus() != true) grid(view)?.setSelectedPositionSmooth(1)
+        }
     }
 }

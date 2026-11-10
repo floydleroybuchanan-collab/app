@@ -760,7 +760,9 @@ class TvShowViewHolder(
         com.streamflixreborn.streamflix.charm.VodTitleActions.attach(
             binding.btnTvShowWatchNow, binding.btnTvShowSources, binding.btnTvShowMyList, binding.btnTvShowTrailer,
             binding.btnTvShowSimilar, binding.btnTvShowBack, binding.btnTvShowFavorite, { tvShow.isFavorite }, binding.btnTvShowEpisodes,
+            heart = binding.btnTvShowHeart, panels = binding.llTvShowPanels, heartKey = "tv:" + tvShow.id,
         )
+        com.streamflixreborn.streamflix.charm.VodTitlePanels.show(binding.llTvShowPanels, tvShow)
         binding.ivTvShowPoster.run {
             loadTvShowPoster(tvShow) {
                 fallback(R.drawable.glide_fallback_cover)

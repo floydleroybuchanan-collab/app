@@ -140,7 +140,7 @@
     <TextView
         android:id="@+id/btn_movie_watch_now"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="84dp"
+        android:layout_width="76dp"
         android:layout_height="62dp"
         android:layout_marginStart="26dp"
         android:layout_marginTop="16dp"
@@ -153,9 +153,9 @@
     <TextView
         android:id="@+id/btn_movie_sources"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="84dp"
+        android:layout_width="76dp"
         android:layout_height="62dp"
-        android:layout_marginStart="9dp"
+        android:layout_marginStart="7dp"
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="Sources"
@@ -165,9 +165,9 @@
     <TextView
         android:id="@+id/btn_movie_my_list"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="84dp"
+        android:layout_width="76dp"
         android:layout_height="62dp"
-        android:layout_marginStart="9dp"
+        android:layout_marginStart="7dp"
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="My List"
@@ -175,23 +175,35 @@
         app:layout_constraintTop_toBottomOf="@id/tv_movie_overview" />
 
     <TextView
+        android:id="@+id/btn_movie_heart"
+        style="@style/AppTheme.Widget.Tv.Button"
+        android:layout_width="76dp"
+        android:layout_height="62dp"
+        android:layout_marginStart="7dp"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Favorite"
+        app:layout_constraintStart_toEndOf="@id/btn_movie_my_list"
+        app:layout_constraintTop_toBottomOf="@id/tv_movie_overview" />
+
+    <TextView
         android:id="@+id/btn_movie_trailer"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="84dp"
+        android:layout_width="76dp"
         android:layout_height="62dp"
-        android:layout_marginStart="9dp"
+        android:layout_marginStart="7dp"
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="Trailer"
-        app:layout_constraintStart_toEndOf="@id/btn_movie_my_list"
+        app:layout_constraintStart_toEndOf="@id/btn_movie_heart"
         app:layout_constraintTop_toBottomOf="@id/tv_movie_overview" />
 
     <TextView
         android:id="@+id/btn_movie_similar"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="84dp"
+        android:layout_width="76dp"
         android:layout_height="62dp"
-        android:layout_marginStart="9dp"
+        android:layout_marginStart="7dp"
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="Similar"
@@ -201,9 +213,9 @@
     <TextView
         android:id="@+id/btn_movie_back"
         style="@style/AppTheme.Widget.Tv.Button"
-        android:layout_width="84dp"
+        android:layout_width="76dp"
         android:layout_height="62dp"
-        android:layout_marginStart="9dp"
+        android:layout_marginStart="7dp"
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="Back"
@@ -233,5 +245,25 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         tools:ignore="ContentDescription" />
+
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/barrier_movie_panels"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="iv_movie_poster,btn_movie_watch_now" />
+
+    <LinearLayout
+        android:id="@+id/ll_movie_panels"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="26dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginEnd="26dp"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/barrier_movie_panels" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

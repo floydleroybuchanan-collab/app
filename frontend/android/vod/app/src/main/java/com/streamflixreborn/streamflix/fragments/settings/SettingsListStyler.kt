@@ -39,10 +39,10 @@ internal object SettingsListStyler {
         if (recyclerView.getTag(R.id.settings_list_styler_tag) == true) return
 
         val backgroundColor = resolveThemeColor(root, R.attr.app_background_color, 0xFF181818.toInt())
-        root.setBackgroundColor(backgroundColor)
+        root.background = com.streamflixreborn.streamflix.charm.VodMotion.background()
         recyclerView.setTag(R.id.settings_list_styler_tag, true)
         recyclerView.clipToPadding = false
-        recyclerView.setBackgroundColor(backgroundColor)
+        recyclerView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         recyclerView.setPadding(
             0,
             recyclerView.context.dp(if (isTv) 18 else 10),
@@ -143,13 +143,13 @@ internal object SettingsListStyler {
 
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         val surfaceColor = resolveThemeColor(view, R.attr.app_background_color, 0xFF181818.toInt())
-        val titleColor = palette.tvHeaderPrimary
-        val summaryColor = palette.tvHeaderSecondary
-        val accentColor = palette.mobileNavActive
-        val rowBackgroundColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, titleColor, 0.22f), if (isTv) 128 else 160)
-        val rowBorderColor = ColorUtils.blendARGB(surfaceColor, summaryColor, 0.42f)
-        val rowHighlightColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.34f else 0.25f), 196)
-        val rowHighlightBorderColor = ColorUtils.blendARGB(surfaceColor, accentColor, 0.62f)
+        val titleColor = android.graphics.Color.WHITE
+        val summaryColor = 0xFFE0D2EE.toInt()
+        val accentColor = 0xFFF09BFF.toInt()
+        val rowBackgroundColor = 0x2E9A5CF0
+        val rowBorderColor = 0x73E2BEFF
+        val rowHighlightColor = 0xB8B446FF.toInt()
+        val rowHighlightBorderColor = android.graphics.Color.WHITE
 
         layoutParams?.setMargins(
             context.dp(if (isTv) 28 else 16),
@@ -188,6 +188,18 @@ internal object SettingsListStyler {
         icon?.drawable?.let {
             icon.imageTintList = ColorStateList.valueOf(accentColor)
         }
+        if (isTv) {
+            view.outlineSpotShadowColorCompat()
+            view.setOnFocusChangeListener { row, focused ->
+                row.animate().cancel()
+                row.animate().scaleX(if (focused) 1.025f else 1f).scaleY(if (focused) 1.025f else 1f)
+                    .translationZ(if (focused) row.context.dp(12).toFloat() else 0f).setDuration(150L).start()
+            }
+        }
+    }
+
+    private fun View.outlineSpotShadowColorCompat() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) outlineSpotShadowColor = 0xFFD14DFF.toInt()
     }
 
     private fun createRowBackground(

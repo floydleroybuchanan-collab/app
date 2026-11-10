@@ -27,6 +27,10 @@ import kotlinx.coroutines.launch
 object SourcePicker {
     fun show(fragment: Fragment, model: PlayerViewModel, currentId: String?, selected: (Video.Server) -> Unit) {
         if (!fragment.isAdded || fragment.isRemoving) return
+        com.streamflixreborn.streamflix.charm.VodSourceRequest.chosen?.let { wanted ->
+            com.streamflixreborn.streamflix.charm.VodSourceRequest.chosen = null
+            model.sources.value.firstOrNull { it.id == wanted }?.let { selected(it); return }
+        }
         val context = fragment.requireContext()
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
@@ -47,10 +51,10 @@ object SourcePicker {
         val list = ListView(context).apply {
             divider = ColorDrawable(Color.TRANSPARENT); dividerHeight = dp(8)
             selector = StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_pressed), surface(0xAA69308C.toInt(), 0xFFE3B1FF.toInt()))
-                addState(intArrayOf(android.R.attr.state_focused), surface(0x9969308C.toInt(), 0xFFE3B1FF.toInt()))
-                addState(intArrayOf(android.R.attr.state_selected), surface(0x9969308C.toInt(), 0xFFE3B1FF.toInt()))
-                addState(intArrayOf(), ColorDrawable(Color.TRANSPARENT))
+                addState(intArrayOf(android.R.attr.state_pressed), surface(0xCCB446FF.toInt(), Color.WHITE))
+                addState(intArrayOf(android.R.attr.state_focused), surface(0xCCB446FF.toInt(), Color.WHITE))
+                addState(intArrayOf(android.R.attr.state_selected), surface(0xCCB446FF.toInt(), Color.WHITE))
+                addState(intArrayOf(), surface(0x1FFFFFFF, 0x59E2BEFF))
             }
             setDrawSelectorOnTop(false)
         }
@@ -102,7 +106,7 @@ object SourcePicker {
                 }
                 val details = row.details
                 (item.getChildAt(0) as TextView).apply {
-                    text = (if (row.id == currentId) "✓ " else "") +
+                    text = (if (row.id == currentId) "◉  " else "○  ") +
                         (if (details?.kind == SourceDetails.Kind.REAL_DEBRID) "🧲 " else "") + row.name
                     setTextColor(if (details?.kind == SourceDetails.Kind.REAL_DEBRID) 0xFFFF989E.toInt() else Color.WHITE)
                     // Keep the list scannable; full release names remain available in Details.
@@ -110,7 +114,7 @@ object SourcePicker {
                 }
                 (item.getChildAt(1) as TextView).text = listOfNotNull(
                     details?.badges?.takeIf { it.isNotBlank() }, DeviceCompatibility.badge(details),
-                    if (row.id == currentId) "Currently playing" else null).joinToString("  ·  ")
+                    if (position == 0) "★ Best" else null, if (row.id == currentId) "Currently playing" else null).joinToString("  ·  ")
                 return item
             }
         }
@@ -127,8 +131,8 @@ object SourcePicker {
             text = label; textSize = 16f; isAllCaps = false
             setTextColor(Color.WHITE)
             background = StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_focused), surface(0xFF403052.toInt(), 0xFFCA82FF.toInt()))
-                addState(intArrayOf(), surface(0xFF272035.toInt(), Color.TRANSPARENT))
+                addState(intArrayOf(android.R.attr.state_focused), surface(0xCCB446FF.toInt(), Color.WHITE))
+                addState(intArrayOf(), surface(0x339A5CF0, 0x73E2BEFF))
             }
             setOnClickListener { change(this); updateRows() }
             controls.addView(this)
@@ -181,7 +185,7 @@ object SourcePicker {
         }
         dialog.show()
         dialog.window?.apply {
-            setBackgroundDrawable(surface(0xDC140C20.toInt(), 0xAAAD70CE.toInt()))
+            setBackgroundDrawable(surface(0xE61A0A3C.toInt(), 0xFFC64DFF.toInt()))
             setDimAmount(.18f)
         }
         fitWindow()

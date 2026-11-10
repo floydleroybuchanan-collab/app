@@ -223,36 +223,52 @@ class VodPlatformsFragment : Fragment() {
 
     /** Immediate keyboard/remote accessible choices, regardless of API speed. */
     private fun addPlatformShortcuts(column: LinearLayout) {
-        VodPlatformCatalog.pagePlatforms.chunked(4).forEach { group ->
-            val row = LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.HORIZONTAL
+        val strip = android.widget.HorizontalScrollView(requireContext()).apply {
+            isHorizontalScrollBarEnabled = false
+            isFocusable = false
+            isSmoothScrollingEnabled = true
+            clipChildren = true
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val row = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
+            setPadding(dp(18), dp(22), dp(18), dp(22))
+        }
+        VodPlatformCatalog.pagePlatforms.forEachIndexed { index, platform ->
+            val open = {
+                findNavController().navigate(R.id.platform_titles,
+                    Bundle().apply { putString("platformId", platform.id) })
+                Unit
+            }
+            val tile = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
                 clipChildren = false
                 clipToPadding = false
             }
-            group.forEach { platform ->
-                val open = {
-                    findNavController().navigate(R.id.platform_titles,
-                        Bundle().apply { putString("platformId", platform.id) })
-                    Unit
+            fun reveal() {
+                val start = tile.left - dp(26)
+                val end = tile.right + dp(26)
+                when {
+                    start < strip.scrollX -> strip.smoothScrollTo(start, 0)
+                    end > strip.scrollX + strip.width -> strip.smoothScrollTo(end - strip.width, 0)
                 }
-                val tile = LinearLayout(requireContext()).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
-                    clipChildren = false
-                    clipToPadding = false
-                }
-                tile.addView(VodPlatformBadgeView(requireContext(), platform).apply {
-                    asRemoteTarget("Browse ${platform.label}", open)
-                }, LinearLayout.LayoutParams(dp(116), dp(80)))
-                tile.addView(VodPlatformBadgeView(requireContext(), platform, pill = true).apply {
-                    asRemoteTarget("View all ${platform.label}", open)
-                }, LinearLayout.LayoutParams(dp(116), dp(32)))
-                row.addView(tile, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    bottomMargin = dp(8)
-                })
             }
-            column.addView(row)
+            tile.addView(VodPlatformBadgeView(requireContext(), platform).apply {
+                enableFlare()
+                asRemoteTarget("Browse ${platform.label}", open, ::reveal)
+            }, LinearLayout.LayoutParams(dp(116), dp(80)))
+            tile.addView(VodPlatformBadgeView(requireContext(), platform, pill = true).apply {
+                asRemoteTarget("View all ${platform.label}", open, ::reveal)
+            }, LinearLayout.LayoutParams(dp(116), dp(32)))
+            row.addView(tile, LinearLayout.LayoutParams(dp(138), ViewGroup.LayoutParams.WRAP_CONTENT))
+            VodMotion.stagger(tile, index)
         }
+        strip.addView(row)
+        column.addView(strip)
     }
 
     private fun artwork(resource: Int) = ImageView(requireContext()).apply {

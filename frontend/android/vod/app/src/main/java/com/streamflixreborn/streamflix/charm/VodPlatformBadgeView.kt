@@ -104,6 +104,7 @@ class VodPlatformBadgeView(
             artwork.setBounds(0, 0, width, height)
             artwork.draw(canvas)
         }
+        drawFlare(canvas)
     }
 
     fun glass(focused: Boolean): Drawable =
@@ -130,6 +131,45 @@ class VodPlatformBadgeView(
         return VodGlass.surface(tones[0], dp(9).toFloat(), dp(1), focused)
     }
 
+    private var flareOn = false
+    private var flareLevel = -1f
+    private var flareAnimator: ValueAnimator? = null
+    private val shine = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    /** Adds the Platforms row flare: a light sweep and a pulsing colored ring on focus. */
+    fun enableFlare() { flareOn = true }
+
+    private fun drawFlare(canvas: Canvas) {
+        if (flareLevel < 0f || width == 0) return
+        val x = width * (flareLevel * 1.8f - .4f)
+        shine.shader = android.graphics.LinearGradient(x - width * .22f, 0f, x + width * .22f, height.toFloat(),
+            intArrayOf(0x00FFFFFF, 0xB0FFFFFF.toInt(), 0x00FFFFFF), null, Shader.TileMode.CLAMP)
+        val inset = height * .08f
+        val radius = dp(12).toFloat()
+        canvas.drawRoundRect(inset, inset, width - inset, height - inset, radius, radius, shine)
+        val pulse = kotlin.math.abs(flareLevel * 2f - 1f)
+        ring.color = platform.tint
+        ring.alpha = (120 + 135 * pulse).toInt()
+        ring.strokeWidth = dp(1) + dp(2) * pulse
+        canvas.drawRoundRect(inset, inset, width - inset, height - inset, radius, radius, ring)
+    }
+
+    private fun updateFlare(focused: Boolean) {
+        flareAnimator?.cancel()
+        if (!flareOn) return
+        if (!focused) { flareLevel = -1f; invalidate(); return }
+        flareAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1250L
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { flareLevel = it.animatedValue as Float; invalidate() }
+            start()
+        }
+        animate().cancel()
+        animate().scaleX(1.26f).scaleY(1.26f).translationZ(dp(26).toFloat()).rotationX(-7f)
+            .setInterpolator(android.view.animation.OvershootInterpolator(2.4f)).setDuration(230L).start()
+    }
+
     /** Rises toward the viewer with a shadow and lights up in the button's own color. */
     fun showFocus(focused: Boolean) {
         artwork.focused = focused
@@ -142,10 +182,14 @@ class VodPlatformBadgeView(
             }
             start()
         }
+        if (flareOn) rotationX = 0f
         VodHomeShelf.liftCard(this, focused)
+        updateFlare(focused)
     }
 
     override fun onDetachedFromWindow() {
+        flareAnimator?.cancel()
+        flareAnimator = null
         glowAnimator?.cancel()
         glowAnimator = null
         super.onDetachedFromWindow()

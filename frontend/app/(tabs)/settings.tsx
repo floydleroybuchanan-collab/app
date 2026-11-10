@@ -125,6 +125,17 @@ const TILE_ART: Record<string, number> = {
   account: require("../../assets/glass/settings_account.webp"),
   about: require("../../assets/glass/settings_about.webp"),
 };
+/** Picks the glass artwork that fits a control's purpose. */
+function glassArt(icon: string): number {
+  const rule: [RegExp, string][] = [
+    [/film|video/, "vod"], [/play|volume|mic|musical|speed/, "player"], [/game|remote|keypad/, "remote"], [/calendar|time|alarm/, "epg"],
+    [/lock|shield|key|eye/, "parental"], [/color|brush|contrast|image|moon|sunny/, "appearance"], [/person|people/, "account"],
+    [/notif|pulse|help|medkit|bug|warning/, "health"], [/cloud|download|upload|save|archive|trash|folder|share/, "backup"],
+    [/information/, "about"], [/gift|heart|star/, "invites"], [/tv|radio|grid/, "channels"], [/list|layers|link/, "playlists"],
+  ];
+  const match = rule.find(([pattern]) => pattern.test(icon));
+  return TILE_ART[match ? match[1] : "general"];
+}
 const TILE_ABOUT: Record<string, string> = {
   "general": "Guide layout, channel display and start-up behavior.",
   "player": "Buffering, audio, subtitles and player controls.",
@@ -1281,7 +1292,7 @@ function SettingsCard({ title, icon, children }: { title: string; icon: React.Co
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <View style={styles.cardIcon}><Ionicons name={icon} size={18} color={tvColors.purpleSoft} /></View>
+        <Image source={glassArt(icon)} style={styles.cardArt} resizeMode="contain" />
         <Text style={styles.cardTitle}>{title}</Text>
       </View>
       {children}
@@ -1320,7 +1331,7 @@ function ChoiceRow<T extends string | number>({ label, value, options, onChange 
 function Action({ label, icon, onPress, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean }) {
   return (
     <Pressable disabled={disabled} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}>
-      <Ionicons name={icon} size={14} color="#fff" />
+      <Image source={glassArt(icon)} style={styles.actionArt} resizeMode="contain" />
       <Text style={styles.actionText}>{label}</Text>
     </Pressable>
   );
@@ -1344,6 +1355,8 @@ const styles = StyleSheet.create({
   backButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   tileArt: { width: 58, height: 58 },
+  cardArt: { width: 34, height: 34 },
+  actionArt: { width: 20, height: 20 },
   hero: { flexDirection: "row", alignItems: "center", gap: 18, padding: 16, marginBottom: 12, borderRadius: 18, borderWidth: 1, borderColor: "rgba(216,178,255,0.34)", backgroundColor: "rgba(150,70,235,0.20)" },
   heroArt: { width: 72, height: 72 },
   heroCopy: { flex: 1, minWidth: 0, gap: 3 },

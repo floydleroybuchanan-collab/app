@@ -98,6 +98,7 @@ class VodGenresHubFragment : Fragment() {
                 visible.addView(text("This provider does not expose browsable genres yet.", 18f, 0xFFD2BEE3.toInt()))
                 return@launch
             }
+            var shown = 0
             genres.chunked(4).forEach { row ->
                 val line = LinearLayout(requireContext()).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -105,7 +106,11 @@ class VodGenresHubFragment : Fragment() {
                     clipToPadding = false
                     setPadding(0, dp(6), 0, dp(6))
                 }
-                row.forEach { line.addView(card(it), LinearLayout.LayoutParams(0, dp(84), 1f).apply { rightMargin = dp(12) }) }
+                row.forEach { genre ->
+                    val tile = card(genre)
+                    VodMotion.stagger(tile, shown++)
+                    line.addView(tile, LinearLayout.LayoutParams(0, dp(84), 1f).apply { rightMargin = dp(12) })
+                }
                 repeat(4 - row.size) {
                     line.addView(View(requireContext()), LinearLayout.LayoutParams(0, 0, 1f).apply { rightMargin = dp(12) })
                 }
