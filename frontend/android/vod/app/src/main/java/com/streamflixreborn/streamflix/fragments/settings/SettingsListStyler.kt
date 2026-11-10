@@ -4,6 +4,9 @@ import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.widget.Switch
+import androidx.appcompat.widget.SwitchCompat
+import com.streamflixreborn.streamflix.charm.CharmingVodSettingsIcon
 import android.graphics.drawable.StateListDrawable
 import android.util.TypedValue
 import android.view.View
@@ -148,8 +151,8 @@ internal object SettingsListStyler {
         val accentColor = palette.mobileNavActive
         val rowBackgroundColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, titleColor, 0.22f), if (isTv) 128 else 160)
         val rowBorderColor = ColorUtils.blendARGB(surfaceColor, summaryColor, 0.42f)
-        val rowHighlightColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.34f else 0.25f), 196)
-        val rowHighlightBorderColor = ColorUtils.blendARGB(surfaceColor, accentColor, 0.62f)
+        val rowHighlightColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.62f else 0.25f), if (isTv) 222 else 196)
+        val rowHighlightBorderColor = if (isTv) 0xFFFF78FF.toInt() else ColorUtils.blendARGB(surfaceColor, accentColor, 0.62f)
 
         layoutParams?.setMargins(
             context.dp(if (isTv) 28 else 16),
@@ -186,8 +189,41 @@ internal object SettingsListStyler {
         }
 
         icon?.drawable?.let {
-            icon.imageTintList = ColorStateList.valueOf(accentColor)
+            // Retain the original multi-color translucency of our vector artwork
+            // instead of flattening every icon to a single tinted silhouette.
+            icon.imageTintList = if (it is CharmingVodSettingsIcon) null
+                else ColorStateList.valueOf(accentColor)
         }
+        if (isTv) styleSwitches(view, accentColor)
+    }
+
+    private fun styleSwitches(root: View, accentColor: Int) {
+        // The few visible RecyclerView rows are the only ones traversed.
+        // Keep switch colors state-driven instead of attaching per-row listeners.
+        val fluorescent = 0xFFFF73F8.toInt()
+        val thumb = ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_checked),
+                intArrayOf(android.R.attr.state_focused),
+                intArrayOf(),
+            ),
+            intArrayOf(fluorescent, accentColor, 0xFFC2B4DD.toInt()),
+        )
+        val track = ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_checked),
+                intArrayOf(),
+            ),
+            intArrayOf(0xA5A53CFA.toInt(), 0x70503F68.toInt()),
+        )
+        fun style(view: View) {
+            when (view) {
+                is SwitchCompat -> { view.thumbTintList = thumb; view.trackTintList = track }
+                is Switch -> { view.thumbTintList = thumb; view.trackTintList = track }
+                is ViewGroup -> for (i in 0 until view.childCount) style(view.getChildAt(i))
+            }
+        }
+        style(root)
     }
 
     private fun createRowBackground(
