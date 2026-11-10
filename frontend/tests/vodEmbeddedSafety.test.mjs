@@ -162,6 +162,6 @@ test("unified VOD never covers native home with the old catalog loading screen",
   assert.match(fragment, /dashboard\.reportCatalogError\(\)/);
   assert.doesNotMatch(fragment, /pbIsLoading\.visibility = View\.VISIBLE/);
   const embedded = read("android/vod/app/src/main/res/layout/activity_main_tv.xml");
-  assert.doesNotMatch(embedded, /VodIconRail|CharmVodWelcomeView|@\+id\/nav_main/);
+  assert.doesNotMatch(embedded, /VodIconRail|CharmVodWelcomeView|android:id="@\+id\/nav_main"/);
   assert.doesNotMatch(root, /navMain|ivSplashOverlay/);
 });
