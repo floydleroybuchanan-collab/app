@@ -25,6 +25,9 @@ import com.streamflixreborn.streamflix.providers.IptvProvider
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.BuildConfig
+import com.streamflixreborn.streamflix.charm.CharmingVodTopIcon
+import com.streamflixreborn.streamflix.vod.VodPreferences
 import com.streamflixreborn.streamflix.adapters.AppAdapter
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.*
@@ -276,7 +279,12 @@ class TvShowViewHolder(
                     return@setOnClickListener
                 }
                 checkProviderAndRun {
-                    if (isIptvProvider()) {
+                    // Picking a TV-series poster always opens its detail and
+                    // season/source actions in the unified app. Only explicitly
+                    // pressing Watch should start Media3 or source discovery.
+                    if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                        findNavController().navigate(R.id.tv_show, tvShowArgs())
+                    } else if (isIptvProvider()) {
                         handleDirectPlay(findNavController())
                     } else {
                         findNavController().navigate(R.id.tv_show, tvShowArgs())
@@ -379,7 +387,12 @@ class TvShowViewHolder(
                     return@setOnClickListener
                 }
                 checkProviderAndRun {
-                    if (isIptvProvider()) {
+                    // Picking a TV-series poster always opens its detail and
+                    // season/source actions in the unified app. Only explicitly
+                    // pressing Watch should start Media3 or source discovery.
+                    if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                        findNavController().navigate(R.id.tv_show, tvShowArgs())
+                    } else if (isIptvProvider()) {
                         handleDirectPlay(findNavController())
                     } else {
                         findNavController().navigate(R.id.tv_show, tvShowArgs())
@@ -742,6 +755,27 @@ class TvShowViewHolder(
     }
 
     private fun displayTvShowTv(binding: ContentTvShowTvBinding) {
+        fun decorate(button: android.widget.TextView, art: String) {
+            val icon = CharmingVodTopIcon(art, 0xFF08D9FF.toInt(), 0xFFF047CF.toInt())
+            val size = (31 * context.resources.displayMetrics.density + .5f).toInt()
+            icon.setBounds(0, 0, size, size)
+            button.setCompoundDrawables(icon, null, null, null)
+            button.compoundDrawablePadding = (6 * context.resources.displayMetrics.density + .5f).toInt()
+        }
+        decorate(binding.btnTvShowWatchNow, "shows")
+        decorate(binding.btnTvShowSources, "platforms")
+        decorate(binding.btnTvShowMyList, "favorites")
+        binding.btnTvShowMyList.apply {
+            text = if (tvShow.isFavorite) "In My List" else "Add to My List"
+            setOnClickListener { binding.btnTvShowFavorite.performClick() }
+        }
+        binding.btnTvShowSources.apply {
+            isVisible = tvShow.episodeToWatch != null
+            setOnClickListener {
+                VodPreferences.requestSourcesForNextPlayback()
+                binding.btnTvShowWatchNow.performClick()
+            }
+        }
         binding.ivTvShowPoster.run {
             loadTvShowPoster(tvShow) {
                 fallback(R.drawable.glide_fallback_cover)
@@ -861,6 +895,7 @@ class TvShowViewHolder(
                             tvShow.poster = resolvedTvShow.poster
                             tvShow.banner = resolvedTvShow.banner
                             tvShow.isFavorite = newValue
+                            binding.btnTvShowMyList.text = if (newValue) "In My List" else "Add to My List"
                             setImageDrawable(
                                 ContextCompat.getDrawable(context, newValue.drawable())
                             )

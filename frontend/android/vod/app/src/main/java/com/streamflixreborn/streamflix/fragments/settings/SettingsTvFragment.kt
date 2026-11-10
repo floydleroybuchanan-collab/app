@@ -27,7 +27,6 @@ import android.widget.TextView
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.constraintlayout.widget.Group
 import androidx.leanback.preference.LeanbackPreferenceFragmentCompat
@@ -36,6 +35,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceGroup
 import androidx.preference.PreferenceManager
 import androidx.preference.PreferenceScreen
 import androidx.preference.SeekBarPreference
@@ -43,7 +43,8 @@ import androidx.preference.SwitchPreference
 import androidx.preference.SwitchPreferenceCompat
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.R
-import com.streamflixreborn.streamflix.activities.main.MainTvActivity
+import com.streamflixreborn.streamflix.charm.VodRootFragment
+import com.streamflixreborn.streamflix.charm.CharmingVodSettingsIcon
 import com.streamflixreborn.streamflix.backup.BackupRestoreManager
 import com.streamflixreborn.streamflix.backup.ProviderBackupContext
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -92,7 +93,6 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     private val PREFS_ERROR_VALUE = "PREFS_NOT_INIT_ERROR"
     private var currentScreenState = SettingsScreenState(rootKey = null, title = null)
     private val screenBackStack = ArrayDeque<SettingsScreenState>()
-    private lateinit var settingsBackCallback: OnBackPressedCallback
 
     private lateinit var db: AppDatabase
     private lateinit var movieDao: MovieDao
@@ -182,17 +182,14 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         displaySettings()
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        settingsBackCallback = object : OnBackPressedCallback(false) {
-            override fun handleOnBackPressed() {
-                if (screenBackStack.isEmpty()) return
-                currentScreenState = screenBackStack.removeLast()
-                settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
-                renderCurrentScreen()
-            }
-        }
-        requireActivity().onBackPressedDispatcher.addCallback(this, settingsBackCallback)
+    // MainActivity owns the only physical BACK dispatcher. This nested settings
+    // stack is queried by VodRootFragment while VOD actually holds focus; an
+    // Activity-wide callback here could steal BACK from retained/hidden tabs.
+    fun navigateBackWithinSettings(): Boolean {
+        if (screenBackStack.isEmpty()) return false
+        currentScreenState = screenBackStack.removeLast()
+        renderCurrentScreen()
+        return true
     }
 
     override fun onPreferenceTreeClick(preference: Preference): Boolean {
@@ -202,7 +199,6 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                 rootKey = preference.key,
                 title = preference.title?.toString(),
             )
-            settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
             renderCurrentScreen()
             return true
         }
@@ -220,11 +216,50 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         activity?.title = currentScreenState.title ?: getString(R.string.player_settings_title)
     }
 
+    /**
+     * One theme pass for the entire nested Preference hierarchy. Do not create
+     * a Bitmap per item: each icon is an inexpensive vector Drawable and only
+     * the active RecyclerView rows receive views from Leanback.
+     */
+    private fun stylePreferenceIcons(group: PreferenceGroup) {
+        val currentScreen = currentScreenState.rootKey.orEmpty().lowercase(Locale.ROOT)
+        for (index in 0 until group.preferenceCount) {
+            val preference = group.getPreference(index)
+            if (preference !is PreferenceCategory) {
+                val label = (preference.key.orEmpty() + " " + preference.title?.toString().orEmpty() +
+                    " " + currentScreen).lowercase(Locale.ROOT)
+                val kind = when {
+                    listOf("provider", "playlist", "source", "stream", "debrid", "connection")
+                        .any(label::contains) -> "provider"
+                    listOf("playback", "player", "buffer", "autoplay", "video", "audio", "subtitle")
+                        .any(label::contains) -> "playback"
+                    listOf("epg", "guide", "schedule", "refresh", "update interval")
+                        .any(label::contains) -> "epg"
+                    listOf("parental", "security", "pin", "privacy", "password", "lock")
+                        .any(label::contains) -> "security"
+                    listOf("appearance", "theme", "style", "color", "display", "language", "padding")
+                        .any(label::contains) -> "appearance"
+                    listOf("account", "login", "sign", "profile", "supabase")
+                        .any(label::contains) -> "account"
+                    listOf("notification", "reminder", "alert", "message")
+                        .any(label::contains) -> "notifications"
+                    listOf("storage", "cache", "backup", "download", "database", "restore")
+                        .any(label::contains) -> "storage"
+                    else -> "about"
+                }
+                preference.icon = CharmingVodSettingsIcon(kind)
+                preference.isIconSpaceReserved = true
+            }
+            if (preference is PreferenceGroup) stylePreferenceIcons(preference)
+        }
+    }
+
     private fun renderCurrentScreen() {
         setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey)
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }
+        preferenceScreen?.let(::stylePreferenceIcons)
         applyScreenTitle()
         view?.post { listView?.requestFocus() }
     }
@@ -233,6 +268,11 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
         SettingsListStyler.attach(view, isTv = true)
         view.post { listView?.requestFocus() }
+    }
+
+    override fun onDestroyView() {
+        view?.let(SettingsListStyler::detach)
+        super.onDestroyView()
     }
 
     private fun displaySettings() {
@@ -769,7 +809,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             value = UserPreferences.paddingX
             setOnPreferenceChangeListener { preference, newValue ->
                 UserPreferences.paddingX = newValue as Int
-                (activity as? MainTvActivity)?.adjustLayoutDelta(UserPreferences.paddingX, null)
+                (parentFragment?.parentFragment as? VodRootFragment)?.adjustLayoutDelta(UserPreferences.paddingX, null)
                 true
             }
         }
@@ -779,7 +819,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             value = UserPreferences.paddingY
             setOnPreferenceChangeListener { preference, newValue ->
                 UserPreferences.paddingY = newValue as Int
-                (activity as? MainTvActivity)?.adjustLayoutDelta(null, UserPreferences.paddingY)
+                (parentFragment?.parentFragment as? VodRootFragment)?.adjustLayoutDelta(null, UserPreferences.paddingY)
                 true
             }
         }
@@ -803,13 +843,8 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                 UserPreferences.selectedTheme = newTheme
 
                 // Apply the theme and restart the activity
-                requireActivity().apply {
-                    finish()
-                    startActivity(Intent(this, MainTvActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                    overridePendingTransition(0, 0) // Disable transition animation
-                }
+                // Preferences stay in the one Charming MediaLab host Activity.
+                requireActivity().recreate()
                 true
             }
         }
@@ -824,13 +859,8 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             setOnPreferenceChangeListener { _, newValue ->
                 val newLanguage = newValue as String
                 AppLanguageManager.setSelectedLanguage(newLanguage)
-                requireActivity().apply {
-                    finish()
-                    startActivity(Intent(this, MainTvActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                    overridePendingTransition(0, 0)
-                }
+                // Preferences stay in the one Charming MediaLab host Activity.
+                requireActivity().recreate()
                 true
             }
         }

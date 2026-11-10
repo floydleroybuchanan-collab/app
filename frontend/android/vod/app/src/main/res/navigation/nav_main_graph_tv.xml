@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/nav_main_graph_tv"
-    app:startDestination="@id/providers">
+    app:startDestination="@id/home">
 
     <fragment
         android:id="@+id/providers"
@@ -169,6 +169,21 @@
             app:argType="string"
             app:nullable="true" />
     </fragment>
+    <fragment
+        android:id="@+id/genre_hub"
+        android:name="com.streamflixreborn.streamflix.charm.VodGenresHubFragment"
+        android:label="Genres" />
+    <fragment
+        android:id="@+id/platforms"
+        android:name="com.streamflixreborn.streamflix.charm.VodPlatformsFragment"
+        android:label="Platform Originals" />
+    <fragment
+        android:id="@+id/platform_titles"
+        android:name="com.streamflixreborn.streamflix.charm.VodPlatformsFragment"
+        android:label="Platform Originals">
+        <argument android:name="platformId" app:argType="string" />
+    </fragment>
+
     <fragment
         android:id="@+id/genre"
         android:name="com.streamflixreborn.streamflix.fragments.genre.GenreTvFragment"

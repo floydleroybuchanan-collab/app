@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
@@ -52,6 +55,35 @@ internal object NativeMultiview {
     panes.values.forEach { it.player?.playWhenReady = !paused && focused }
   }
   private fun audio() = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+  private val modernFocusRequest: AudioFocusRequest? by lazy {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(AudioAttributes.Builder()
+          .setUsage(AudioAttributes.USAGE_MEDIA)
+          .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
+        .setOnAudioFocusChangeListener(audioFocus)
+        .build()
+    } else null
+  }
+  private fun requestFocus(): Boolean {
+    val manager = audio() ?: return false
+    val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      manager.requestAudioFocus(requireNotNull(modernFocusRequest))
+    } else requestLegacyFocus(manager)
+    return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+  }
+  private fun abandonFocus() {
+    val manager = audio() ?: return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      modernFocusRequest?.let(manager::abandonAudioFocusRequest)
+    } else abandonLegacyFocus(manager)
+  }
+  // Android 7 uses the pre-Oreo focus interface; only these bridges are legacy.
+  @Suppress("DEPRECATION")
+  private fun requestLegacyFocus(manager: AudioManager): Int =
+    manager.requestAudioFocus(audioFocus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+  @Suppress("DEPRECATION")
+  private fun abandonLegacyFocus(manager: AudioManager) { manager.abandonAudioFocus(audioFocus) }
   fun begin(ctx: ReactApplicationContext, token: String, promise: Promise) {
     if (active && session != token) { promise.reject("E_MULTIVIEW_BUSY", "Close the current multiview session first."); return }
     if (releaseFailed) { promise.reject("E_MULTIVIEW_RELEASE", "Restart the app before starting more streams."); return }
@@ -59,7 +91,7 @@ internal object NativeMultiview {
       if (failure != null) promise.reject("E_MULTIVIEW_RELEASE", "The previous player could not close.")
       else {
         context = ctx; session = token; paused = false
-        focused = audio()?.requestAudioFocus(audioFocus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        focused = requestFocus()
         EpgImportCoordinator.playbackActive = true
         promise.resolve(null)
       }
@@ -194,12 +226,12 @@ internal object NativeMultiview {
   }
   fun suspendSession(token: String) {
     if (token != session) return
-    paused = true; panes.values.forEach { release(it) }; audio()?.abandonAudioFocus(audioFocus); focused = false
+    paused = true; panes.values.forEach { release(it) }; abandonFocus(); focused = false
   }
   fun resumeSession(token: String) {
     if (token != session || !paused) return
     paused = false
-    focused = audio()?.requestAudioFocus(audioFocus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    focused = requestFocus()
     panes.forEach { (slot, pane) -> create(slot, pane) }
   }
   fun end(token: String): Boolean {
@@ -254,7 +286,10 @@ class MultiviewModule(private val ctx: ReactApplicationContext) : ReactContextBa
   override fun onHostPause() = onMain { NativeMultiview.session?.let(NativeMultiview::suspendSession) }
   override fun onHostResume() = onMain { NativeMultiview.session?.let(NativeMultiview::resumeSession) }
   override fun onHostDestroy() = onMain { NativeMultiview.session?.let(NativeMultiview::end) }
+  @Suppress("OVERRIDE_DEPRECATION")
   override fun onLowMemory() = onMain { NativeMultiview.memoryPressure() }
+  // API 24 and 25 TVs still send legacy trim levels.
+  @Suppress("DEPRECATION")
   override fun onTrimMemory(level: Int) { if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level == ComponentCallbacks2.TRIM_MEMORY_COMPLETE) onLowMemory() }
   override fun onConfigurationChanged(configuration: Configuration) = Unit
   override fun invalidate() { ctx.removeLifecycleEventListener(this); ctx.unregisterComponentCallbacks(this); onHostDestroy(); super.invalidate() }

@@ -16,12 +16,24 @@ import com.streamflixreborn.streamflix.providers.Provider
 import com.streamflixreborn.streamflix.sync.CloudSyncHooks
 import com.streamflixreborn.streamflix.ui.UserDataNotifier
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
 
 object UserDataCache {
 
     private val gson = Gson()
-    private val memoryCache = ConcurrentHashMap<String, UserData>()
+    // Keep favorite/history state for the active and most recently used provider
+    // in RAM; the authoritative Room DB and persisted user data stay intact.
+    private val memoryCache: MutableMap<String, UserData> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, UserData>(4, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, UserData>?): Boolean =
+                size > 2
+        }
+    )
+
+    // Android memory pressure may evict copies, never the persisted user's data.
+    fun clearMemory() {
+        memoryCache.clear()
+    }
 
     data class UserData(
         val favoritesMovies: List<CachedMovie> = emptyList(),

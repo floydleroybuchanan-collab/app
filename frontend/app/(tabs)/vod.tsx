@@ -1,75 +1,143 @@
-import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
-import React, { useCallback, useRef, useState } from "react";
-import { NativeModules, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
-import { tvColors } from "@/src/theme";
+import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 
-/** The host route blurs Live TV before launching the internal native VOD screen. */
+const NativeVod = requireNativeComponent<{ style?: any; startSection?: string; screenActive?: boolean }>("CharmVodSurface");
+
+/**
+ * VOD is a built-in screen of ONE MainActivity, not a second app or splash.
+ * Mount the native NavHost immediately instead of gating it on Live TV cleanup.
+ * Native navigation must never remount the route or cover it with a black overlay.
+ */
 export default function VideoOnDemandScreen() {
-  const { width, height } = useWindowDimensions();
-  const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const launching = useRef(false);
-  const entered = useRef(false);
-  const { closeDrawer, openDrawer } = usePurpleTvDrawer();
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const isFocused = useIsFocused();
+  const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
+  const [immersive, setImmersive] = useState(false);
+  const [mountError, setMountError] = useState<string | null>(null);
+  const [nativeReady, setNativeReady] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  // Expo Tabs may mount a retained route before it has a real viewport.
+  // A FragmentContainerView inserted into a 0x0 Fabric surface cannot draw.
+  const [layoutReady, setLayoutReady] = useState(false);
+  const enteredAt = useRef(0);
+  const retryButtonRef = useRef<any>(null);
+  const retryFocusedRef = useRef(false);
 
-  const openVod = useCallback(async () => {
-    if (launching.current) return;
-    launching.current = true;
-    setOpening(true);
-    setError(null);
-    try {
-      closeDrawer({ force: true });
-      // Acknowledge decoder release instead of racing a second player against Live TV.
-      await stopAllPlaybackSessions("superseded");
-      if (Platform.OS !== "android" || !NativeModules.CharmVod?.open) {
-        throw new Error("Video OnDemand is available in the experimental Android APK.");
-      }
-      await NativeModules.CharmVod.open();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to open Video OnDemand.");
-    } finally {
-      launching.current = false;
-      setOpening(false);
+  useEffect(() => {
+    const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawer({ force: true }));
+    const rail = DeviceEventEmitter.addListener("CharmVodFocusHostRail", () => focusIconRail());
+    const mode = DeviceEventEmitter.addListener("CharmVodImmersiveChanged", (value: string) =>
+      setImmersive(value === "true")
+    );
+    const failure = DeviceEventEmitter.addListener("CharmVodMountError", (message: string) => {
+      console.error("[CharmVodStartup] native mount failed", message);
+      setNativeReady(false);
+      setMountError(message || "Unable to open the VOD screen.");
+    });
+    const mounted = DeviceEventEmitter.addListener("CharmVodRootReady", (elapsed: string) => {
+      console.info("[CharmVodStartup] embedded VOD is ready", {
+        routeMs: Date.now() - enteredAt.current, nativeMs: elapsed,
+      });
+      setNativeReady(true);
+      setMountError(null);
+    });
+    return () => { back.remove(); rail.remove(); mode.remove(); failure.remove(); mounted.remove(); };
+  }, [focusIconRail, openDrawer]);
+
+  // The native Fragment may fail before any focusable child exists. A visible
+  // retry action must take real TV focus; Android should never require a mouse
+  // after a native error. Cancel bounded retries as soon as focus is confirmed.
+  useEffect(() => {
+    if (!isFocused || !mountError) {
+      retryFocusedRef.current = false;
+      return;
     }
-  }, [closeDrawer]);
+    return requestNativeFocusWithRetry(
+      () => retryButtonRef.current,
+      [0, 80, 180, 360, 650],
+      () => retryFocusedRef.current,
+    );
+  }, [isFocused, mountError]);
 
   useFocusEffect(useCallback(() => {
-    if (!entered.current) {
-      entered.current = true;
-      void openVod();
-    }
-    return () => { entered.current = false; };
-  }, [openVod]));
+    enteredAt.current = Date.now();
+    closeDrawer({ force: true });
+    // Let the native VOD UI appear immediately. Releasing a Live TV player
+    // happens alongside it; catalog navigation does not require a decoder.
+    void stopAllPlaybackSessions("superseded").catch((error) => {
+      console.warn("[CharmVodStartup] Live TV cleanup failed", error);
+    });
+    return () => setImmersive(false);
+  }, [closeDrawer]));
 
   return (
-    <PurpleTvShell active="/vod">
-      <View style={styles.content}><MediaLabBackdrop />
-        <MediaLabArt width={Math.min(width - 56, height * .75, 600)} />
-        <Text style={styles.title}>Video OnDemand</Text>
-        <Text style={styles.subtitle}>{opening ? "Opening your VOD library…" : "Movies, series, search, favorites and continue watching."}</Text>
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        <View style={{ flexDirection: width > 800 ? "row" : "column", gap: 12 }}>
-        <Pressable disabled={opening} hasTVPreferredFocus={!opening} onPress={() => void openVod()} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
-          <Text style={styles.label}>{opening ? "Opening…" : "Open Video OnDemand"}</Text>
-        </Pressable>
-        <Pressable onPress={() => openDrawer({ focusTop: true })} style={({ focused }: any) => [styles.button, focused && styles.focused]}>
-          <Text style={styles.label}>Charming MediaLab TV</Text>
-        </Pressable></View>
+    <PurpleTvShell active="/vod" immersiveContent={immersive}>
+      <View
+        style={styles.page}
+        onLayout={({ nativeEvent: { layout } }) => {
+          // Latch after the first valid measurement. Expo Tabs can resize a
+          // retained route to 0x0 while another tab is active; unmounting its
+          // Fragment on blur would destroy the VOD back stack and focus memory.
+          if (layout.width > 0 && layout.height > 0) setLayoutReady(true);
+        }}
+      >
+        {Platform.OS === "android" && !mountError && layoutReady ? (
+          <NativeVod
+            key={attempt}
+            style={styles.surface}
+            startSection={section === "settings" ? "settings" : "home"}
+            screenActive={isFocused}
+          />
+        ) : mountError || Platform.OS !== "android" ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.message}>{mountError || "Video OnDemand is available in the Android TV app."}</Text>
+            {Platform.OS === "android" ? (
+              <Pressable
+                accessibilityLabel="Retry Video OnDemand"
+                ref={retryButtonRef}
+                focusable
+                hasTVPreferredFocus
+                onFocus={() => { retryFocusedRef.current = true; }}
+                onBlur={() => { retryFocusedRef.current = false; }}
+                onPress={() => {
+                  retryFocusedRef.current = false;
+                  setNativeReady(false);
+                  setMountError(null);
+                  setAttempt((n) => n + 1);
+                }}
+                style={styles.button}
+              ><Text style={styles.buttonText}>Retry VOD</Text></Pressable>
+            ) : null}
+          </View>
+        ) : null}
+        {Platform.OS === "android" && isFocused && !mountError && !nativeReady ? (
+          <View style={styles.loadingOverlay} pointerEvents="none" accessibilityElementsHidden>
+            <ActivityIndicator size="large" color="#E58CFF" />
+            <Text style={styles.loadingTitle}>Opening Video OnDemand</Text>
+            <Text style={styles.loadingDetail}>Preparing your Movies, Series and collections</Text>
+          </View>
+        ) : null}
       </View>
     </PurpleTvShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, justifyContent: "center", alignItems: "center", padding: 28, gap: 12 },
-  eyebrow: { color: tvColors.purpleSoft, fontSize: 14, letterSpacing: 3 },
-  title: { color: tvColors.text, fontSize: 36, fontWeight: "700" },
-  subtitle: { color: tvColors.textMuted, fontSize: 17 },
-  error: { color: "#FB7185", fontSize: 16, maxWidth: 600 },
-  button: { backgroundColor: tvColors.panelRaised, borderColor: "transparent", borderWidth: 3, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, minWidth: 280 },
-  focused: { borderColor: tvColors.focus, backgroundColor: tvColors.purpleDeep },
-  label: { color: tvColors.text, fontSize: 17, fontWeight: "600" },
+  page: { flex: 1, minWidth: 0, minHeight: 0, backgroundColor: "#10091D" },
+  // Only visible before the native destination is measured and drawn.
+  // No extra player/bitmap/cache is created; the VOD Home art is unmodified.
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "#10091D", justifyContent: "center", alignItems: "center", gap: 10, zIndex: 5 },
+  loadingTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "700", marginTop: 12 },
+  loadingDetail: { color: "#D9B9ED", fontSize: 13 },
+  // Exact fill avoids conflicting flex and percentage dimensions in Fabric.
+  surface: { ...StyleSheet.absoluteFillObject },
+  errorBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, padding: 30 },
+  message: { color: "#FFE7F5", fontSize: 17, textAlign: "center" },
+  button: { backgroundColor: "#60348B", paddingVertical: 14, paddingHorizontal: 22, borderRadius: 13 },
+  buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
 });

@@ -133,7 +133,6 @@ class BypassWebViewActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
             loadWithOverviewMode = true
             useWideViewPort = true
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE

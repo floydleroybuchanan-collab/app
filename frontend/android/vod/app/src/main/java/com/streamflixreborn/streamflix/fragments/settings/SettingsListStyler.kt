@@ -4,6 +4,9 @@ import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.widget.Switch
+import androidx.appcompat.widget.SwitchCompat
+import com.streamflixreborn.streamflix.charm.CharmingVodSettingsIcon
 import android.graphics.drawable.StateListDrawable
 import android.util.TypedValue
 import android.view.View
@@ -34,13 +37,20 @@ internal object SettingsListStyler {
         val summarySizePx: Float?,
     )
 
+    // Adapter observers/listeners must not retain the destroyed Preference
+    // RecyclerView across VOD tab changes or repeated nested-Settings visits.
+    private data class Attachment(
+        val adapter: RecyclerView.Adapter<*>?,
+        val observer: RecyclerView.AdapterDataObserver,
+        val childListener: RecyclerView.OnChildAttachStateChangeListener,
+    )
+
     fun attach(root: View, isTv: Boolean) {
         val recyclerView = findRecyclerView(root) ?: return
-        if (recyclerView.getTag(R.id.settings_list_styler_tag) == true) return
+        if (recyclerView.getTag(R.id.settings_list_styler_tag) is Attachment) return
 
         val backgroundColor = resolveThemeColor(root, R.attr.app_background_color, 0xFF181818.toInt())
         root.setBackgroundColor(backgroundColor)
-        recyclerView.setTag(R.id.settings_list_styler_tag, true)
         recyclerView.clipToPadding = false
         recyclerView.setBackgroundColor(backgroundColor)
         recyclerView.setPadding(
@@ -50,15 +60,11 @@ internal object SettingsListStyler {
             recyclerView.context.dp(if (isTv) 28 else 18),
         )
 
-        recyclerView.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
-            override fun onChildViewAttachedToWindow(view: View) {
-                styleRow(view, isTv)
-            }
-
+        val childListener = object : RecyclerView.OnChildAttachStateChangeListener {
+            override fun onChildViewAttachedToWindow(view: View) = styleRow(view, isTv)
             override fun onChildViewDetachedFromWindow(view: View) = Unit
-        })
-
-        recyclerView.adapter?.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+        }
+        val observer = object : RecyclerView.AdapterDataObserver() {
             override fun onChanged() = restyle()
             override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = restyle()
             override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) = restyle()
@@ -68,14 +74,27 @@ internal object SettingsListStyler {
 
             private fun restyle() {
                 recyclerView.post {
-                    styleVisibleRows(recyclerView, isTv)
+                    if (recyclerView.getTag(R.id.settings_list_styler_tag) is Attachment)
+                        styleVisibleRows(recyclerView, isTv)
                 }
             }
-        })
-
-        recyclerView.post {
-            styleVisibleRows(recyclerView, isTv)
         }
+        val adapter = recyclerView.adapter
+        recyclerView.addOnChildAttachStateChangeListener(childListener)
+        adapter?.registerAdapterDataObserver(observer)
+        recyclerView.setTag(R.id.settings_list_styler_tag, Attachment(adapter, observer, childListener))
+        recyclerView.post {
+            if (recyclerView.getTag(R.id.settings_list_styler_tag) is Attachment)
+                styleVisibleRows(recyclerView, isTv)
+        }
+    }
+
+    fun detach(root: View) {
+        val recyclerView = findRecyclerView(root) ?: return
+        val attachment = recyclerView.getTag(R.id.settings_list_styler_tag) as? Attachment ?: return
+        recyclerView.setTag(R.id.settings_list_styler_tag, null)
+        attachment.adapter?.unregisterAdapterDataObserver(attachment.observer)
+        recyclerView.removeOnChildAttachStateChangeListener(attachment.childListener)
     }
 
     private fun styleVisibleRows(recyclerView: RecyclerView, isTv: Boolean) {
@@ -109,7 +128,7 @@ internal object SettingsListStyler {
             view.setTag(R.id.settings_row_defaults, it)
         }
         val titleText = title.text?.toString().orEmpty()
-        val hasChevron = view.findViewById<View>(R.id.settings_chevron) != null
+        val hasChevron = view.isFocusable || view.findViewById<View>(R.id.settings_chevron) != null
         if (!hasChevron) {
             layoutParams?.setMargins(
                 defaults.marginLeft,
@@ -146,10 +165,10 @@ internal object SettingsListStyler {
         val titleColor = palette.tvHeaderPrimary
         val summaryColor = palette.tvHeaderSecondary
         val accentColor = palette.mobileNavActive
-        val rowBackgroundColor = ColorUtils.blendARGB(surfaceColor, titleColor, if (isTv) 0.09f else 0.07f)
+        val rowBackgroundColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, titleColor, 0.22f), if (isTv) 128 else 160)
         val rowBorderColor = ColorUtils.blendARGB(surfaceColor, summaryColor, 0.42f)
-        val rowHighlightColor = ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.22f else 0.18f)
-        val rowHighlightBorderColor = ColorUtils.blendARGB(surfaceColor, accentColor, 0.62f)
+        val rowHighlightColor = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(surfaceColor, accentColor, if (isTv) 0.62f else 0.25f), if (isTv) 222 else 196)
+        val rowHighlightBorderColor = if (isTv) 0xFFFF78FF.toInt() else ColorUtils.blendARGB(surfaceColor, accentColor, 0.62f)
 
         layoutParams?.setMargins(
             context.dp(if (isTv) 28 else 16),
@@ -186,8 +205,41 @@ internal object SettingsListStyler {
         }
 
         icon?.drawable?.let {
-            icon.imageTintList = ColorStateList.valueOf(accentColor)
+            // Retain the original multi-color translucency of our vector artwork
+            // instead of flattening every icon to a single tinted silhouette.
+            icon.imageTintList = if (it is CharmingVodSettingsIcon) null
+                else ColorStateList.valueOf(accentColor)
         }
+        if (isTv) styleSwitches(view, accentColor)
+    }
+
+    private fun styleSwitches(root: View, accentColor: Int) {
+        // The few visible RecyclerView rows are the only ones traversed.
+        // Keep switch colors state-driven instead of attaching per-row listeners.
+        val fluorescent = 0xFFFF73F8.toInt()
+        val thumb = ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_checked),
+                intArrayOf(android.R.attr.state_focused),
+                intArrayOf(),
+            ),
+            intArrayOf(fluorescent, accentColor, 0xFFC2B4DD.toInt()),
+        )
+        val track = ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_checked),
+                intArrayOf(),
+            ),
+            intArrayOf(0xA5A53CFA.toInt(), 0x70503F68.toInt()),
+        )
+        fun style(view: View) {
+            when (view) {
+                is SwitchCompat -> { view.thumbTintList = thumb; view.trackTintList = track }
+                is Switch -> { view.thumbTintList = thumb; view.trackTintList = track }
+                is ViewGroup -> for (i in 0 until view.childCount) style(view.getChildAt(i))
+            }
+        }
+        style(root)
     }
 
     private fun createRowBackground(

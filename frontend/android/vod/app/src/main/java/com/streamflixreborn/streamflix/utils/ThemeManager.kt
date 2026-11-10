@@ -19,13 +19,13 @@ object ThemeManager {
     const val RETRO_NEON = "retro_neon"
 
     data class Palette(
-        @ColorInt val mobileNavBackground: Int,
-        @ColorInt val mobileNavActive: Int,
-        @ColorInt val mobileNavInactive: Int,
-        @ColorInt val systemBar: Int,
-        @ColorInt val tvNavBackground: Int,
-        @ColorInt val tvHeaderPrimary: Int,
-        @ColorInt val tvHeaderSecondary: Int,
+        @param:ColorInt val mobileNavBackground: Int,
+        @param:ColorInt val mobileNavActive: Int,
+        @param:ColorInt val mobileNavInactive: Int,
+        @param:ColorInt val systemBar: Int,
+        @param:ColorInt val tvNavBackground: Int,
+        @param:ColorInt val tvHeaderPrimary: Int,
+        @param:ColorInt val tvHeaderSecondary: Int,
     )
 
     @StyleRes

@@ -1,14 +1,10 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
-apply plugin: "org.jetbrains.kotlin.kapt"
 apply plugin: "com.google.devtools.ksp"
 apply plugin: "com.facebook.react"
 
-kapt {
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
-        arg("room.incremental", "true")
-    }
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
@@ -101,8 +97,8 @@ android {
         applicationId 'com.charmiptv.app.purple.next.vodtest1'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "2.1.0-rc.10.1"
+        versionCode 2507
+        versionName "2.2.8-rc.25"
         // IPTV providers commonly use legacy HTTP stream URLs. Keep cleartext
         // compatibility intentionally enabled for release and sideload builds.
         manifestPlaceholders = [allowCleartextStreams: "true"]
@@ -204,7 +200,8 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
-    kapt("androidx.room:room-compiler:2.7.2")
+    // Room 2.7 uses KSP, avoiding legacy KAPT stubs and ignored processor options.
+    ksp("androidx.room:room-compiler:2.7.2")
     implementation("androidx.work:work-runtime-ktx:2.10.2")
     implementation("com.github.bumptech.glide:glide:4.16.0")
     // LGPL-only Media3 FFmpeg audio extension built from pinned source in CI.

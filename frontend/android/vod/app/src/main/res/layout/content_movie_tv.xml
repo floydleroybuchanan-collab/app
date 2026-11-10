@@ -141,6 +141,10 @@
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:minHeight="54dp"
+        android:background="@drawable/charm_vod_detail_action_glass"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
         android:layout_marginStart="40dp"
         android:layout_marginTop="30dp"
         android:focusable="true"
@@ -149,6 +153,24 @@
         app:layout_constraintStart_toEndOf="@id/iv_movie_poster"
         app:layout_constraintTop_toBottomOf="@id/tv_movie_overview"
         app:layout_goneMarginStart="70dp" />
+
+    <TextView
+        android:id="@+id/btn_movie_sources"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minHeight="54dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="30dp"
+        android:background="@drawable/charm_vod_detail_action_glass"
+        android:gravity="center"
+        android:paddingHorizontal="14dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:text="Sources"
+        android:textSize="17sp"
+        android:textColor="#FFFFFF"
+        app:layout_constraintStart_toEndOf="@id/btn_movie_watch_now"
+        app:layout_constraintTop_toBottomOf="@id/tv_movie_overview" />
 
     <ProgressBar
         android:id="@+id/pb_movie_progress"
@@ -170,19 +192,26 @@
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:minHeight="54dp"
+        android:background="@drawable/charm_vod_detail_action_glass"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
         android:layout_marginStart="25dp"
         android:layout_marginTop="30dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
         android:text="@string/movie_trailer"
-        app:layout_constraintStart_toEndOf="@id/btn_movie_watch_now"
+        app:layout_constraintStart_toEndOf="@id/btn_movie_sources"
         app:layout_constraintTop_toBottomOf="@id/tv_movie_overview" />
 
     <ImageView
         android:id="@+id/btn_movie_favorite"
         style="@style/AppTheme.Widget.Tv.Button"
         android:layout_width="wrap_content"
-        android:layout_height="0dp"
+        android:layout_height="54dp"
+        android:minWidth="54dp"
+        android:background="@drawable/charm_vod_detail_action_glass"
+        android:contentDescription="Favorite"
         android:layout_marginStart="20dp"
         android:layout_marginTop="30dp"
         android:focusable="true"
@@ -194,5 +223,23 @@
         app:layout_constraintStart_toEndOf="@id/btn_movie_trailer"
         app:layout_constraintTop_toBottomOf="@id/tv_movie_overview"
         tools:ignore="ContentDescription,UseAppTint" />
+
+    <TextView
+        android:id="@+id/btn_movie_my_list"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minHeight="54dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginTop="30dp"
+        android:background="@drawable/charm_vod_detail_action_glass"
+        android:gravity="center"
+        android:paddingHorizontal="14dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:text="My List"
+        android:textSize="17sp"
+        android:textColor="#FFFFFF"
+        app:layout_constraintStart_toEndOf="@id/btn_movie_favorite"
+        app:layout_constraintTop_toBottomOf="@id/tv_movie_overview" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

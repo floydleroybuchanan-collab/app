@@ -88,12 +88,19 @@ const NAV: NavItem[] = [
   { route: "/settings", label: "Settings", icon: "settings-outline" },
 ];
 
+// Each route renders its own PurpleTvShell. Keep focus identity outside that
+// short-lived component so returning from VOD/Guide preserves the cursor.
+let lastMainDrawerRoute: Route | null = null;
+let lastMainDrawerGroupName: string | null = null;
+
 export const PURPLE_SIDEBAR_WIDTH = 192;
 export const PURPLE_ICON_RAIL_WIDTH = 52;
 export const PURPLE_DRAWER_ANIMATION_MS = 180;
 
 export type OpenDrawerOptions = {
   focusTop?: boolean;
+  /** Explicit remote/back intent must not be delayed by the Guide surf gate. */
+  force?: boolean;
 };
 
 type DrawerContextValue = {
@@ -137,7 +144,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   const openedAtRef = useRef(0);
 
   const openDrawer = useCallback((options?: OpenDrawerOptions) => {
-    if (isGuideScreenActive() && isGuideSurfing()) return;
+    if (isGuideScreenActive() && isGuideSurfing() && !options?.force) return;
     if (drawerOpenRef.current) return;
     drawerOpenRef.current = true;
     openedAtRef.current = Date.now();
@@ -147,7 +154,9 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
 
   const closeDrawer = useCallback((options?: { force?: boolean }) => {
     if (!drawerOpenRef.current) return;
-    if (!options?.force && Date.now() - openedAtRef.current < PURPLE_DRAWER_ANIMATION_MS + 70) return;
+    // Allow an intentional close while the native-driver animation is running.
+    // Animated.timing cancels/reverses cleanly; ignoring the key causes lag and
+    // lets a second D-pad event travel into a different focus tree.
     drawerOpenRef.current = false;
     setFocusDrawerTop(false);
     setDrawerOpen(false);
@@ -221,6 +230,7 @@ export function PurpleTvShell({
   guideGroups,
   watchingChannelId,
   secondaryDrawer,
+  immersiveContent = false,
   onIconRailNavigate,
   onIconRailOpenMainDrawer,
 }: {
@@ -233,6 +243,8 @@ export function PurpleTvShell({
   guideGroups?: PurpleGuideGroup[];
   watchingChannelId?: string | null;
   secondaryDrawer?: React.ReactNode;
+  /** Native VOD player temporarily occupies the full 10-foot canvas. */
+  immersiveContent?: boolean;
   onIconRailNavigate?: () => void;
   onIconRailOpenMainDrawer?: () => void;
 }) {
@@ -249,6 +261,7 @@ export function PurpleTvShell({
     drawerProgress,
     openDrawer,
     closeDrawer,
+    focusIconRail,
     publishIconRailEntryTag,
     iconRailFocusRequest,
     focusDrawerTop,
@@ -258,7 +271,7 @@ export function PurpleTvShell({
   const { deviceLayoutMode, activeProgram } = useStore();
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && (active !== "/guide" || Boolean(secondaryDrawer));
+  const showIconRail = isFocused && railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && !immersiveContent && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -275,15 +288,26 @@ export function PurpleTvShell({
   const onIconRailNavigateRef = useRef(onIconRailNavigate);
   const onIconRailOpenMainDrawerRef = useRef(onIconRailOpenMainDrawer);
   const guideGroupRefs = useRef(new Map<string, unknown>());
+  const lastGuideDrawerTransferRef = useRef(0);
   const deferredDrawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
+  // Retain the offscreen drawer only for its closing animation. Previously
+  // every non-VOD route kept an invisible TVFocusGuide mounted indefinitely;
+  // a stale child could continue trapping DPAD while the content was visible.
+  const [drawerRendered, setDrawerRendered] = useState(drawerOpen);
   const drawerFocusConfirmedRef = useRef(false);
   const [drawerPreferredRoute, setDrawerPreferredRoute] = useState<Route | null>(drawerOpen ? active : null);
   const activeGuideGroupName = useMemo(
     () => guideGroups?.find((item) => item.active)?.name || null,
     [guideGroups],
   );
+  // Keep latest group identities for the next drawer entry without restarting
+  // an in-flight focus restoration when the EPG refreshes or groups rerender.
+  const guideDrawerFocusSnapshotRef = useRef({ guideGroups, activeGuideGroupName });
+  useEffect(() => {
+    guideDrawerFocusSnapshotRef.current = { guideGroups, activeGuideGroupName };
+  }, [guideGroups, activeGuideGroupName]);
   onIconRailNavigateRef.current = onIconRailNavigate;
   onIconRailOpenMainDrawerRef.current = onIconRailOpenMainDrawer;
 
@@ -398,11 +422,23 @@ export function PurpleTvShell({
     const off = active === "/guide"
       ? addTvKeyListener((key) => {
           if (key !== "RIGHT") return;
+          // A held key must transfer focus only once per animation window.
+          const now = Date.now();
+          if (now - lastGuideDrawerTransferRef.current < PURPLE_DRAWER_ANIMATION_MS + 60) return;
+          lastGuideDrawerTransferRef.current = now;
           // This is an intentional drawer-to-drawer boundary transition, not an
           // accidental close during animation. Main must be gone before Groups
           // becomes remote owner or both focus trees can be live at once.
           closeDrawer({ force: true });
           requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+        })
+      : active === "/vod"
+      ? addTvKeyListener((key) => {
+          if (key !== "RIGHT") return;
+          // The VOD drawer must release its TV focus guide before the rail
+          // is restored. Trapping RIGHT here strands focus in the old drawer.
+          closeDrawer({ force: true });
+          requestAnimationFrame(() => focusIconRail());
         })
       : () => undefined;
     return () => {
@@ -418,7 +454,7 @@ export function PurpleTvShell({
         resetRemoteContextIfOwned("main_drawer", "default");
       }
     };
-  }, [active, isFocused, closeDrawer, drawerOpen]);
+  }, [active, isFocused, closeDrawer, drawerOpen, focusIconRail]);
 
   useEffect(() => {
     if (!isFocused || !drawerOpen) {
@@ -428,9 +464,14 @@ export function PurpleTvShell({
       return;
     }
 
-    const preferredGuideGroupName =
-      !focusDrawerTop && active === "/guide" ? activeGuideGroupName : null;
-    const preferredRoute: Route | null = preferredGuideGroupName ? null : focusDrawerTop ? NAV[0].route : active;
+    const { guideGroups: availableGuideGroups, activeGuideGroupName: currentGuideGroupName } =
+      guideDrawerFocusSnapshotRef.current;
+    const preferredGuideGroupName = !focusDrawerTop && active === "/guide"
+      ? (availableGuideGroups?.some((item) => item.name === lastMainDrawerGroupName)
+          ? lastMainDrawerGroupName : currentGuideGroupName)
+      : null;
+    const preferredRoute: Route | null = preferredGuideGroupName
+      ? null : focusDrawerTop ? NAV[0].route : (lastMainDrawerRoute || active);
     if (focusDrawerTop) consumeFocusDrawerTop();
     setDrawerPreferredRoute(preferredRoute);
     setDrawerAutoFocus(true);
@@ -444,7 +485,7 @@ export function PurpleTvShell({
     return () => {
       cancelFocus?.();
     };
-  }, [active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
+  }, [active, isFocused, consumeFocusDrawerTop, drawerOpen, focusDrawerTop]);
 
   const reopenArmedAtRef = useRef(0);
   useFocusEffect(
@@ -535,6 +576,17 @@ export function PurpleTvShell({
     if (exitHintTimer.current) clearTimeout(exitHintTimer.current);
   }, []);
 
+  useEffect(() => {
+    if (drawerOpen) {
+      setDrawerRendered(true);
+      return;
+    }
+    // Wait for the existing 180ms translation; then release the old focus
+    // hierarchy entirely. No extra bitmap/cached drawer view is retained.
+    const remove = setTimeout(() => setDrawerRendered(false), PURPLE_DRAWER_ANIMATION_MS);
+    return () => clearTimeout(remove);
+  }, [drawerOpen]);
+
   const drawerTranslateX = drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-PURPLE_SIDEBAR_WIDTH, 0] });
 
   const claimIconRail = useCallback((owner: Route | "power") => {
@@ -563,6 +615,7 @@ export function PurpleTvShell({
         }}
         focusable={drawerOpen}
         hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === item.route}
+        onFocus={() => { if (drawerOpen) lastMainDrawerRoute = item.route; }}
         onPress={() => navigate(item.route)}
         style={({ focused }: any) => [
           styles.navRow,
@@ -605,11 +658,17 @@ export function PurpleTvShell({
         },
       ]}
     >
-      <Animated.View
+      {isFocused && drawerRendered ? <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
-        <FocusGuide style={styles.sidebar} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={() => {
+        <FocusGuide
+          style={styles.sidebar}
+          trapFocusUp={drawerOpen}
+          trapFocusDown={drawerOpen}
+          trapFocusLeft={drawerOpen}
+          trapFocusRight={drawerOpen && active !== "/vod"}
+          onFocusCapture={() => {
           if (!isFocused || !drawerOpen) return;
           // Android can restore a drawer child after Player changes the remote
           // owner. Reconcile real focus, otherwise Right is never sent to JS.
@@ -655,7 +714,8 @@ export function PurpleTvShell({
                       else guideGroupRefs.current.delete(item.name);
                     }}
                     focusable={drawerOpen}
-                    hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === null && !!item.active}
+                    hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === null && item.name === (lastMainDrawerGroupName || activeGuideGroupName)}
+                    onFocus={() => { if (drawerOpen) lastMainDrawerGroupName = item.name; }}
                     onPress={item.onPress}
                     onLongPress={item.onLongPress}
                     delayLongPress={420}
@@ -719,9 +779,9 @@ export function PurpleTvShell({
             </Pressable>
           </View>
         </FocusGuide>
-      </Animated.View>
+      </Animated.View> : null}
 
-      {drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
+      {isFocused && drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
       {showIconRail ? (
         <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
           <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>
@@ -739,7 +799,7 @@ export function PurpleTvShell({
                   }}
                   focusable
                   accessibilityLabel={item.label}
-                  nextFocusRight={contentReturnTag}
+                  nextFocusRight={active === "/vod" ? undefined : contentReturnTag}
                   onFocus={() => claimIconRail(item.route)}
                   onBlur={() => releaseIconRail(item.route)}
                   onPress={() => navigate(item.route, "rail")}
@@ -763,7 +823,7 @@ export function PurpleTvShell({
           <Pressable
             focusable
             accessibilityLabel="Exit"
-            nextFocusRight={contentReturnTag}
+            nextFocusRight={active === "/vod" ? undefined : contentReturnTag}
             onFocus={() => claimIconRail("power")}
             onBlur={() => releaseIconRail("power")}
             onPress={promptHoldToExit}
@@ -776,14 +836,14 @@ export function PurpleTvShell({
           </Pressable>
         </FocusGuide>
       ) : null}
-      {!drawerOpen && secondaryDrawer ? secondaryDrawer : null}
+      {isFocused && !drawerOpen && secondaryDrawer ? secondaryDrawer : null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
-        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide"}
-        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide"}
+        autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         onFocusCapture={(event: any) => {
           const tag = Number(event?.nativeEvent?.target || event?.target || 0);
           if (tag > 0) setContentReturnTag((current) => current === tag ? current : tag);
@@ -791,7 +851,7 @@ export function PurpleTvShell({
       >
         {children}
       </FocusGuide>
-      {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
+      {!immersiveContent && headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
     </View>
   );
 }
