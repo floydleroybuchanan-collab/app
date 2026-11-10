@@ -81,6 +81,7 @@ class VodRootFragment : Fragment() {
     private val binding get() = requireNotNull(_binding)
     private var coordinator: VodFocusCoordinator? = null
     private var navigation: NavController? = null
+    private var immersiveDestinationListener: NavController.OnDestinationChangedListener? = null
     private var requestedSection = "home"
 
     companion object {
@@ -143,9 +144,13 @@ class VodRootFragment : Fragment() {
             it.setHostActive(hostActive)
         }
 
-        controller.addOnDestinationChangedListener { _, destination, _ ->
-            onImmersiveChanged?.invoke(destination.id == R.id.player)
+        // This listener belongs to the current View/NavHost, not the entire
+        // retained Fragment. Unregister it when the view is destroyed.
+        val immersiveListener = NavController.OnDestinationChangedListener { _, destination, _ ->
+            if (hostActive) onImmersiveChanged?.invoke(destination.id == R.id.player)
         }
+        immersiveDestinationListener = immersiveListener
+        controller.addOnDestinationChangedListener(immersiveListener)
         // The graph starts at Home. Do not navigate there again: this used to
         // recreate the first destination and delay/blank the embedded dashboard.
         if (saved == null && requestedSection == "settings") {
@@ -275,6 +280,10 @@ class VodRootFragment : Fragment() {
         readyAttempts = 0
         coordinator?.dispose()
         coordinator = null
+        navigation?.let { controller ->
+            immersiveDestinationListener?.let { controller.removeOnDestinationChangedListener(it) }
+        }
+        immersiveDestinationListener = null
         navigation = null
         onImmersiveChanged?.invoke(false)
         // The surface owner, not this View lifecycle, owns callback release.
