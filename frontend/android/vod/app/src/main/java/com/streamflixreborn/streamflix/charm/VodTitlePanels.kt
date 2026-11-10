@@ -20,6 +20,7 @@ import com.streamflixreborn.streamflix.models.Video
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import com.streamflixreborn.streamflix.utils.format
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -90,6 +91,8 @@ object VodTitlePanels {
         host.post {
             val owner = host.findViewTreeLifecycleOwner() ?: return@post
             owner.lifecycleScope.launch {
+                // Skip the source lookup for titles the viewer only passes through.
+                delay(700L)
                 val type = Video.Type.Movie(movie.id, movie.title, movie.released?.format("yyyy-MM-dd") ?: "", movie.poster ?: movie.banner ?: "", movie.imdbId)
                 val servers = withContext(Dispatchers.IO) {
                     val provider = UserPreferences.currentProvider ?: return@withContext emptyList<Video.Server>()

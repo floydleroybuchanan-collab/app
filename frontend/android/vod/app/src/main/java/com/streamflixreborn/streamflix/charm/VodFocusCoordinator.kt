@@ -156,17 +156,17 @@ class VodFocusCoordinator(
         return false // Native Android D-pad handles all ordinary in-section moves.
     }
 
-    private var lastAnimatedPage: View? = null
+    private var lastAnimatedPage = java.lang.ref.WeakReference<View>(null)
 
     /** The new page's view arrives shortly after navigation, so wait a few frames for it. */
     private fun animatePage(destination: Int, attempt: Int) {
         if (disposed || destination == R.id.player || navigation.currentDestination?.id != destination) return
         val page = currentContentRoot()
-        if (page == null || page === lastAnimatedPage) {
+        if (page == null || page === lastAnimatedPage.get()) {
             if (attempt < 10) binding.navMainFragment.postDelayed({ animatePage(destination, attempt + 1) }, 32L)
             return
         }
-        lastAnimatedPage = page
+        lastAnimatedPage = java.lang.ref.WeakReference(page)
         when (destination) {
             R.id.movies, R.id.tv_shows, R.id.search, R.id.favorites, R.id.season, R.id.genre, R.id.people ->
                 page.background = VodMotion.background()
@@ -259,7 +259,7 @@ class VodFocusCoordinator(
 
     fun dispose() {
         disposed = true
-        lastAnimatedPage = null
+        lastAnimatedPage.clear()
         cancelPendingRestore()
         binding.vodGlassActions.onNavigate = null
         onHostRailFocus = null

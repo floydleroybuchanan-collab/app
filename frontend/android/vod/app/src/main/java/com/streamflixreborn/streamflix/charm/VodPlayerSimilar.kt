@@ -30,6 +30,8 @@ object VodPlayerSimilar {
     fun attach(owner: LifecycleOwner, root: View, type: Video.Type?, navigation: NavController) {
         if (type == null) return
         owner.lifecycleScope.launch {
+            // The stream gets the network and CPU first while it is starting.
+            delay(5_000L)
             val titles = withContext(Dispatchers.IO) {
                 val provider = UserPreferences.currentProvider ?: return@withContext emptyList<Show>()
                 runCatching {

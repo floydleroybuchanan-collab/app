@@ -69,6 +69,8 @@ class VodPlatformBadgeView(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w <= 0 || h <= 0) return
+        if (flareOn) shine.shader = android.graphics.LinearGradient(-w * .22f, 0f, w * .22f, h.toFloat(),
+            intArrayOf(0x00FFFFFF, 0xB0FFFFFF.toInt(), 0x00FFFFFF), null, Shader.TileMode.CLAMP)
         glowPaint.shader = RadialGradient(
             w / 2f, h / 2f, maxOf(w, h) * GLOW_REACH,
             intArrayOf(
@@ -135,6 +137,7 @@ class VodPlatformBadgeView(
     private var flareLevel = -1f
     private var flareAnimator: ValueAnimator? = null
     private val shine = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val shineMatrix = android.graphics.Matrix()
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
 
     /** Adds the Platforms row flare: a light sweep and a pulsing colored ring on focus. */
@@ -143,8 +146,8 @@ class VodPlatformBadgeView(
     private fun drawFlare(canvas: Canvas) {
         if (flareLevel < 0f || width == 0) return
         val x = width * (flareLevel * 1.8f - .4f)
-        shine.shader = android.graphics.LinearGradient(x - width * .22f, 0f, x + width * .22f, height.toFloat(),
-            intArrayOf(0x00FFFFFF, 0xB0FFFFFF.toInt(), 0x00FFFFFF), null, Shader.TileMode.CLAMP)
+        shineMatrix.setTranslate(x, 0f)
+        shine.shader?.setLocalMatrix(shineMatrix)
         val inset = height * .08f
         val radius = dp(12).toFloat()
         canvas.drawRoundRect(inset, inset, width - inset, height - inset, radius, radius, shine)

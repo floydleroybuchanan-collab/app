@@ -44,6 +44,7 @@ class VodRootFragment : Fragment() {
     var onNeedsLayout: (() -> Unit)? = null
     private var rootStartedAt = 0L
     private var readyAttempts = 0
+    private var sizeAttempts = 0
     private var rootReadyReported = false
 
     private var _binding: ActivityMainTvBinding? = null
@@ -157,7 +158,7 @@ class VodRootFragment : Fragment() {
                 if (!b.root.hasFocus()) b.vodGlassActions.focusLastAction()
                 Log.i("CharmVodRoot", "VOD actual destination ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
                 onRootReady?.invoke()
-            } else if (b.navMainFragment.width <= 0 || b.navMainFragment.height <= 0 || ++readyAttempts <= 45) {
+            } else if (((b.navMainFragment.width <= 0 || b.navMainFragment.height <= 0) && ++sizeAttempts <= 150) || ++readyAttempts <= 45) {
                 // A view that has no size yet is still being laid out, not a failure.
                 onNeedsLayout?.invoke()
                 b.navMainFragment.postDelayed({ notifyWhenDrawn() }, 100L)

@@ -753,7 +753,7 @@ class NativeGuideView(context: Context) : View(context) {
         val right = min(width.toFloat(), timeToX(end, visibleStartMs, visibleEndMs)) - density
         if (right <= left) return
         val chosen = !channelRailSelected && rowIndex == selectedRow && selectedTimeMs >= start && selectedTimeMs < end
-        canvas.drawRect(RectF(left, top + density, right, top + rowHeight - 2f * density), if (chosen) selected else cell)
+        canvas.drawRect(left, top + density, right, top + rowHeight - 2f * density, if (chosen) selected else cell)
         drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
       }
       for (program in list) {

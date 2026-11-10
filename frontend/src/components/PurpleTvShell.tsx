@@ -414,12 +414,17 @@ export function PurpleTvShell({
     openDrawer();
   }), [isFocused, openDrawer]);
 
+  const railCanTakeFocusRef = useRef(false);
+  railCanTakeFocusRef.current = active !== "/guide" && railPreferences.ready && railPreferences.enabled && !railTimedOut && !immersiveContent;
+
   useEffect(() => {
     if (!isFocused || !drawerOpen) return;
     setRemoteContext("main_drawer");
     if (active === "/guide") setGuideNavigationActive(false);
     const off = addTvKeyListener((key) => {
       if (key === "LEFT") {
+        // The Guide has no rail here, and closing onto nothing would strand focus.
+        if (!railCanTakeFocusRef.current) return;
         // The rail returns as soon as the drawer closes, so it can take focus.
         closeDrawer({ force: true });
         requestAnimationFrame(() => focusIconRail());

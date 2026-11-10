@@ -135,6 +135,7 @@ object VodHomeShelf {
     fun liftCard(card: View, focused: Boolean) {
         card.animate().cancel()
         card.animate()
+            .setStartDelay(0L)
             .scaleX(if (focused) FOCUS_SCALE else 1f)
             .scaleY(if (focused) FOCUS_SCALE else 1f)
             .translationZ(if (focused) card.px(FOCUS_LIFT_DP).toFloat() else 0f)

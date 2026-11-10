@@ -32,7 +32,12 @@ class PlayerTvView @JvmOverloads constructor(
 
     override fun setPlayer(player: Player?) {
         super.setPlayer(player)
-        if (player == null || !com.streamflixreborn.streamflix.charm.VodSourceRequest.pending) return
+        if (player == null) {
+            com.streamflixreborn.streamflix.charm.VodSourceRequest.pending = false
+            com.streamflixreborn.streamflix.charm.VodSourceRequest.chosen = null
+            return
+        }
+        if (!com.streamflixreborn.streamflix.charm.VodSourceRequest.pending) return
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState != Player.STATE_READY) return
