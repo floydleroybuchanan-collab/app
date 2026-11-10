@@ -4,6 +4,7 @@ import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -60,7 +61,7 @@ export default function CustomEpgScreen() {
   const entryFocus = useTvRouteEntryFocus(true, "custom-epg");
 
   useTvBackHandler(useCallback(() => {
-    router.replace("/epg-sources" as any);
+    goToTab(router, "/epg-sources");
     return true;
   }, [router]));
 
@@ -296,7 +297,7 @@ export default function CustomEpgScreen() {
             <Text style={styles.kicker}>PHASE 9 · GUIDE SOURCES</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="epg" size={34} /><Text style={styles.title}>{prefs.userName}</Text></View>
           </View>
-          <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
+          <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => goToTab(router, "/epg-sources")} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" />
             <Text style={styles.backText}>EPG Settings</Text>
           </Pressable>

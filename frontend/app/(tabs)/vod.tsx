@@ -13,7 +13,8 @@ const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>
  * Native navigation must never remount the route or cover it with a black overlay.
  */
 export default function VideoOnDemandScreen() {
-  const { section, screen } = useLocalSearchParams<{ section?: string; screen?: string }>();
+  // "pane", not "screen": React Navigation strips params.screen as a nested-route key.
+  const { section, pane } = useLocalSearchParams<{ section?: string; pane?: string }>();
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
   const router = useRouter();
   const sectionRef = useRef(section);
@@ -24,6 +25,8 @@ export default function VideoOnDemandScreen() {
   const enteredAt = useRef(0);
   const retryRef = useRef<any>(null);
   const retryFocusedRef = useRef(false);
+  const focusedRef = useRef(false);
+  const autoRetriedRef = useRef(false);
 
   // The error replaces the native page, so the remote needs a new home on Retry.
   useEffect(() => {
@@ -34,21 +37,32 @@ export default function VideoOnDemandScreen() {
 
   useEffect(() => {
     const openDrawerOrReturnToSettings = () => {
+      if (!focusedRef.current) return;
       // VOD Settings was opened from the Settings page, so Back returns there.
       if (sectionRef.current === "settings") {
-        router.setParams({ section: undefined } as any);
+        router.setParams({ section: undefined, pane: undefined } as any);
         router.replace("/settings?section=vod" as any);
         return;
       }
       openDrawer({ force: true });
     };
+    // Native events are global; only the focused VOD screen may act on them.
     const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawerOrReturnToSettings());
-    const rail = DeviceEventEmitter.addListener("CharmVodFocusHostRail", () => focusIconRail());
-    const guide = DeviceEventEmitter.addListener("CharmVodOpenGuide", () => router.replace("/guide" as any));
+    const rail = DeviceEventEmitter.addListener("CharmVodFocusHostRail", () => { if (focusedRef.current) focusIconRail(); });
+    const guide = DeviceEventEmitter.addListener("CharmVodOpenGuide", () => { if (focusedRef.current) router.replace("/guide" as any); });
     const mode = DeviceEventEmitter.addListener("CharmVodImmersiveChanged", (value: string) =>
       setImmersive(value === "true")
     );
     const failure = DeviceEventEmitter.addListener("CharmVodMountError", (message: string) => {
+      if (!focusedRef.current) return;
+      // A surface stuck at 0x0 recovers on a fresh native view (what Retry did
+      // by hand), so try that once silently before showing an error.
+      if (!autoRetriedRef.current) {
+        autoRetriedRef.current = true;
+        console.warn("[CharmVodStartup] remounting VOD after", message);
+        setAttempt((n) => n + 1);
+        return;
+      }
       console.error("[CharmVodStartup] native mount failed", message);
       setMountError(message || "Unable to open the VOD screen.");
     });
@@ -63,13 +77,15 @@ export default function VideoOnDemandScreen() {
 
   useFocusEffect(useCallback(() => {
     enteredAt.current = Date.now();
+    focusedRef.current = true;
+    autoRetriedRef.current = false;
     closeDrawer({ force: true });
     // Let the native VOD UI appear immediately. Releasing a Live TV player
     // happens alongside it; catalog navigation does not require a decoder.
     void stopAllPlaybackSessions("superseded").catch((error) => {
       console.warn("[CharmVodStartup] Live TV cleanup failed", error);
     });
-    return () => setImmersive(false);
+    return () => { focusedRef.current = false; setImmersive(false); };
   }, [closeDrawer]));
 
   return (
@@ -81,7 +97,7 @@ export default function VideoOnDemandScreen() {
           <NativeVod
             key={attempt}
             style={styles.surface}
-            startSection={section !== "settings" ? "home" : screen && /^screen_[a-z_]+$/.test(screen) ? `settings:${screen}` : "settings"}
+            startSection={section !== "settings" ? "home" : pane && /^screen_[a-z_]+$/.test(pane) ? `settings:${pane}` : "settings"}
           />
         ) : (
           <View style={styles.errorBox}>

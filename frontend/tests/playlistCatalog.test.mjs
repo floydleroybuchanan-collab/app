@@ -61,7 +61,7 @@ function registryHarness() {
   const mocks = {
     "./xtream": xtream,
     "expo-file-system/legacy": filesystem,
-    "expo-secure-store": { getItemAsync: async key => secrets.get(key) || null, setItemAsync: async (key, value) => { secrets.set(key, value); }, deleteItemAsync: async key => { secrets.delete(key); } },
+    "@/src/utils/deviceVault": { getItemAsync: async key => secrets.get(key) || null, setItemAsync: async (key, value) => { secrets.set(key, value); }, deleteItemAsync: async key => { secrets.delete(key); } },
     react: { useState: () => {}, useEffect: () => {} },
     "@/src/utils/storage": { storage: { getItem: async (key, fallback) => prefs.has(key) ? JSON.parse(prefs.get(key)) : fallback, setItem: async (key, value) => { if (failCommit) return false; prefs.set(key, JSON.stringify(value)); return true; } } },
     "@react-native-async-storage/async-storage": { default: { getItem: async key => prefs.get(key) || null, setItem: async (key, value) => { if (failCommit) throw Error("Disk write failed"); prefs.set(key, value); } } },

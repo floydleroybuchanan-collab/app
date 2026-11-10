@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useFocusEffect, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useParentalPin } from "@/src/core/parentalPin";
@@ -65,7 +66,7 @@ export default function PlaylistsScreen() {
     setHealth(Object.fromEntries(rows.map((row) => [row.playlistId, row])));
   }, []);
   useEffect(() => { void loadHealth(); }, [loadHealth, playlists]);
-  const back = useCallback(() => { if (editing !== null) { setEditing(null); setPreview(null); setUrl(""); setXcPassword(""); setXcUser(""); } else router.replace("/settings" as any); return true; }, [editing, router]);
+  const back = useCallback(() => { if (editing !== null) { setEditing(null); setPreview(null); setUrl(""); setXcPassword(""); setXcUser(""); } else goToTab(router, "/settings"); return true; }, [editing, router]);
   useTvBackHandler(back);
   const run = async (action: () => Promise<void>) => {
     if (operationInFlight.current) return;
@@ -114,7 +115,7 @@ export default function PlaylistsScreen() {
       </View> : <>
         <Action label="Add M3U playlist" disabled={busy} onPress={() => { setSourceKind("m3u"); setEditing(""); setName("My playlist"); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); }} />
         <Action label="Add Xtream Codes account" disabled={busy} onPress={() => { setSourceKind("xtream"); setEditing(""); setName("My Xtream account"); setUrl(""); setXcUser(""); setXcPassword(""); setXcOutput("ts"); setPreview(null); }} />
-        <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => router.push("/epg-sources" as any)} />
+        <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => goToTab(router, "/epg-sources")} />
         {playlists.map((source) => <View key={source.id} style={styles.card}>
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
           <Action label="Manage groups / hide tabs" disabled={!source.enabled} onPress={() => router.push({pathname:"/group-settings" as any,params:{playlistId:source.id}})} />

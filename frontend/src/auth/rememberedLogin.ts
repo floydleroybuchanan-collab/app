@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/src/utils/deviceVault";
 
 const KEY = "charm_remembered_login_v1";
 export type RememberedLogin = { username: string; password: string };

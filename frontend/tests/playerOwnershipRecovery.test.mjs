@@ -35,7 +35,7 @@ test("fullscreen exit serializes decoder teardown before Guide remount", async (
   const player = await source("app/player.tsx");
   assert.match(player, /const exitInFlightRef = useRef\(false\)/);
   assert.match(player, /if \(exitInFlightRef\.current\) return/);
-  assert.match(player, /void stopFullscreenSession\(\)\.then\(\(\) => \{[\s\S]*?router\.replace\("\/guide" as any\)/);
+  assert.match(player, /void stopFullscreenSession\(\)\.then\(\(\) => \{[\s\S]*?goToTab\(router, "\/guide"\)/);
 });
 
 test("unsupported protocol errors explain the Media3 limitation without offering another identical retry", async () => {

@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useStore } from "@/src/store";
@@ -355,12 +356,12 @@ export function TvQuickActionsOverlay() {
 
   const goGuide = useCallback(() => {
     close();
-    router.replace("/guide" as any);
+    goToTab(router, "/guide");
   }, [close, router]);
 
   const openSettings = useCallback(() => {
     close();
-    router.replace("/settings" as any);
+    goToTab(router, "/settings");
   }, [close, router]);
 
   if (!open || !channel) return null;

@@ -30,6 +30,10 @@ class VodGenresHubFragment : Fragment() {
     private class Style(val key: String, @DrawableRes val art: Int, val about: String, val tint: Int)
 
     private val styles = listOf(
+        // Combined genres first: "Action & Adventure" also contains "action".
+        Style("action & adventure", R.drawable.vod_genre_action_adventure, "Explosive action and daring adventures.", 0xFFFF7A1A.toInt()),
+        Style("action and adventure", R.drawable.vod_genre_action_adventure, "Explosive action and daring adventures.", 0xFFFF7A1A.toInt()),
+        Style("action-adventure", R.drawable.vod_genre_action_adventure, "Explosive action and daring adventures.", 0xFFFF7A1A.toInt()),
         Style("action", R.drawable.vod_genre_action, "High-energy adventures, fights, and heroic missions.", 0xFFFF7A1A.toInt()),
         Style("adventure", R.drawable.vod_genre_adventure, "Exciting journeys, exploration, and epic discoveries.", 0xFF38B9ED.toInt()),
         Style("anim", R.drawable.vod_genre_animation, "Animated favorites for kids and adults alike.", 0xFF36D6FB.toInt()),

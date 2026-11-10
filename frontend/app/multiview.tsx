@@ -3,6 +3,7 @@ import { useChannelCustomize } from "@/src/core/channelCustomize";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, BackHandler, FlatList, Platform, Pressable, requireNativeComponent, ScrollView, StyleSheet, Text, TextInput, View, type ViewProps } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { multiviewLayout } from "@/src/core/multiviewLayout";
 import { useMultiviewPreferences, loadMultiviewPreferences, getMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import { useStore } from "@/src/store";
@@ -175,7 +176,7 @@ export default function MultiviewScreen() {
       await stopFullscreenSession("user-stop");
       const channel = paneRef.current[selected]?.channel;
       if (fullscreen && channel) router.replace({ pathname: "/player", params: { channelId: channel.id, returnToGuide: "1", returnGuideGroup: params.returnGuideGroup } });
-      else { if (channel) requestGuideJump({channelId:channel.id,group:params.returnGuideGroup || "All"}); router.replace("/guide" as any); }
+      else { if (channel) requestGuideJump({channelId:channel.id,group:params.returnGuideGroup || "All"}); goToTab(router, "/guide"); }
     } catch { leaving.current = false; setNotice("A player could not close. Restart Charming MediaLab before opening more streams."); }
   }, [params.returnGuideGroup, router, selected, token]);
   const exitRef = useRef(exit); exitRef.current = exit;

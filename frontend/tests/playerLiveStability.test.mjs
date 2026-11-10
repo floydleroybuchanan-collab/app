@@ -116,7 +116,7 @@ test("fullscreen exit returns currently tuned channel to the originating Guide g
   assert.match(player, /const returnGuideGroup = String\(params\.returnGuideGroup \|\| ""\)\.trim\(\) \|\| "All"/);
   assert.match(player, /requestGuideJump\(\{ channelId: currentChannelId, group: returnGuideGroup \}\)/);
   assert.match(player, /stopFullscreenSession\(\)\.then\(\(\) => \{/);
-  assert.match(player, /router\.replace\("\/guide" as any\)/);
+  assert.match(player, /goToTab\(router, "\/guide"\)/);
 });
 
 test("Program Details Watch now preserves Guide return anchor", async () => { const modal = await source("src/components/ProgramModal.tsx"); assert.match(modal, /openFullscreenPlayer\(router, channel\.id, \{ returnToGuide: pathname\?\.startsWith\("\/guide"\) \}\)/); });

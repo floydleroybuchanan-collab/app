@@ -160,7 +160,9 @@ class VodRootFragment : Fragment() {
                 if (!b.root.hasFocus()) b.vodGlassActions.focusLastAction()
                 Log.i("CharmVodRoot", "VOD actual destination ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
                 onRootReady?.invoke()
-            } else if (((b.navMainFragment.width <= 0 || b.navMainFragment.height <= 0) && ++sizeAttempts <= 150) || ++readyAttempts <= 45) {
+            } else if (((b.navMainFragment.width <= 0 || b.navMainFragment.height <= 0) && ++sizeAttempts <= 25) || ++readyAttempts <= 45) {
+                // 2.5s at 0x0 is a stuck host layout, not a slow one; the React side
+                // remounts the surface once on the error below (what Retry did by hand).
                 // A view that has no size yet is still being laid out, not a failure.
                 onNeedsLayout?.invoke()
                 b.navMainFragment.postDelayed({ notifyWhenDrawn() }, 100L)

@@ -665,7 +665,7 @@ function SettingsScreenContent() {
                   <Pressable
                     key={item.key}
                     nextFocusLeft={index % 4 === 0 ? iconRailEntryTag : undefined}
-                    onPress={() => router.push(`/vod?section=settings&screen=${item.key}` as any)}
+                    onPress={() => router.push(`/vod?section=settings&pane=${item.key}` as any)}
                     style={({ focused }: any) => [styles.tile, styles.vodTile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 14 }]}
                     testID={`settings-vod-${item.key}`}
                   >

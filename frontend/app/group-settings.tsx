@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { Ionicons } from "@expo/vector-icons";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { useStore } from "@/src/store";
@@ -49,7 +50,7 @@ export default function GroupSettingsScreen() {
   }, []);
 
   const returnToSettings = useCallback(() => {
-    router.replace("/settings" as any);
+    goToTab(router, "/settings");
   }, [router]);
 
   useTvBackHandler(useCallback(() => {

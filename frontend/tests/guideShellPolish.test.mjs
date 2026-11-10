@@ -142,12 +142,12 @@ test("drawer route changes release drawer focus ownership before mounting the ne
   assert.match(navigate, /closeDrawer\(\{ force: true \}\)/);
   assert.match(navigate, /if \(route === active && pathname === route\) \{[\s\S]*CharmGuideGroupsRequestOpen[\s\S]*return;[\s\S]*\}/);
   assert.match(navigate, /requestAnimationFrame\(\(\) => \{/);
-  assert.match(navigate, /router\.replace\(route as any\)/);
+  assert.match(navigate, /goToTab\(router, route\)/);
   assert.ok(
     navigate.indexOf('closeDrawer({ force: true })') < navigate.indexOf('requestAnimationFrame'),
     "drawer must close before route handoff",
   );
-  assert.doesNotMatch(navigate, /closeDrawer\(\);[\s\S]*router\.replace/);
+  assert.doesNotMatch(navigate, /closeDrawer\(\);[\s\S]*goToTab/);
 });
 
 test("main drawer focus retries ignore EPG group-count and programme churn", async () => {

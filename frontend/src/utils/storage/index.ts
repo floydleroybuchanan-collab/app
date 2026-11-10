@@ -18,7 +18,7 @@
 // with no error in the logs.
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/src/utils/deviceVault";
 
 import { AssertNoExtras, StorageBase, StorageItemValue } from "./storage-base";
 

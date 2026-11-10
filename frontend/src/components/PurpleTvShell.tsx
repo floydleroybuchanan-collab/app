@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useFocusEffect, usePathname, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -296,6 +297,8 @@ export function PurpleTvShell({
   const isWatching = !!watchingChannelId;
   const [drawerAutoFocus, setDrawerAutoFocus] = useState(drawerOpen);
   const drawerFocusConfirmedRef = useRef(false);
+  const drawerTargetRouteRef = useRef<Route | null>(null);
+  const drawerTargetReachedRef = useRef(true);
   const [drawerPreferredRoute, setDrawerPreferredRoute] = useState<Route | null>(drawerOpen ? active : null);
   const activeGuideGroupName = useMemo(
     () => guideGroups?.find((item) => item.active)?.name || null,
@@ -502,12 +505,17 @@ export function PurpleTvShell({
     setDrawerPreferredRoute(preferredRoute);
     setDrawerAutoFocus(true);
     drawerFocusConfirmedRef.current = false;
+    // Android first drops focus on whichever drawer row is nearest the old
+    // focus (over VOD that is Exit, bottom-left). Keep handing focus to the
+    // intended row until it has really held focus once.
+    drawerTargetRouteRef.current = preferredRoute;
+    drawerTargetReachedRef.current = preferredRoute === null;
     const preferredNode = preferredGuideGroupName
       ? guideGroupRefs.current.get(preferredGuideGroupName)
       : preferredRoute
         ? navRefs.current.get(preferredRoute)
         : null;
-    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 34, 100, PURPLE_DRAWER_ANIMATION_MS + 20, 380, 560], () => drawerFocusConfirmedRef.current);
+    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 34, 100, PURPLE_DRAWER_ANIMATION_MS + 20, 380, 560], () => drawerFocusConfirmedRef.current && drawerTargetReachedRef.current);
     return () => {
       cancelFocus?.();
     };
@@ -586,7 +594,7 @@ export function PurpleTvShell({
 
       requestAnimationFrame(() => {
         if (route === "/settings") DeviceEventEmitter.emit("CharmShowAllSettings");
-        router.replace(route as any);
+        goToTab(router, route);
       });
     },
     [active, closeDrawer, pathname, router],
@@ -639,7 +647,12 @@ export function PurpleTvShell({
         }}
         focusable={drawerOpen}
         hasTVPreferredFocus={drawerAutoFocus && drawerPreferredRoute === item.route}
-        onFocus={() => { if (drawerOpen) lastMainDrawerRoute = item.route; }}
+        onFocus={() => {
+          if (!drawerOpen) return;
+          if (item.route === drawerTargetRouteRef.current) drawerTargetReachedRef.current = true;
+          // Only the viewer's own moves are remembered, never Android's stray first pick.
+          if (drawerTargetReachedRef.current) lastMainDrawerRoute = item.route;
+        }}
         onPress={() => navigate(item.route)}
         style={({ focused }: any) => [
           styles.navRow,
@@ -725,6 +738,11 @@ export function PurpleTvShell({
             <View style={styles.guideGroupSection}>
               <Text style={styles.guideGroupLabel}>{guideGroups.some((item) => item.kind === "playlist") ? "Playlists" : "Groups"}</Text>
               <ScrollView
+                // Android ScrollView takes focus itself once its rows are unfocusable.
+                // The closed drawer still lays out under the rail, and its traps then
+                // hold every arrow key on an invisible list. scrollEnabled drives the
+                // native focusable flag, so a closed drawer can never be a focus target.
+                scrollEnabled={drawerOpen}
                 style={styles.guideGroupList}
                 contentContainerStyle={styles.guideGroupListContent}
                 showsVerticalScrollIndicator={false}
@@ -761,6 +779,7 @@ export function PurpleTvShell({
           <View style={styles.navSections} testID="purple-nav-bounded-sections">
             <View style={styles.primaryNavSection}>
               <ScrollView
+                scrollEnabled={drawerOpen}
                 style={styles.primaryNavList}
                 contentContainerStyle={styles.navListContent}
                 showsVerticalScrollIndicator={false}

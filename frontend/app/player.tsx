@@ -12,6 +12,7 @@ import {
   useWindowDimensions, DeviceEventEmitter
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -232,7 +233,7 @@ export default function PlayerScreen() {
       exitInFlightRef.current = true;
       setSleepTimerMinutes(0);
       generationRef.current += 1;
-      void stopFullscreenSession().then(() => router.replace("/" as any));
+      void stopFullscreenSession().then(() => goToTab(router, "/"));
     }, 15_000);
     return () => clearInterval(timer);
   }, [router, setSleepTimerMinutes, sleepTimerMinutes]);
@@ -457,7 +458,7 @@ export default function PlayerScreen() {
     // Do not mount the Guide/home tree while MediaCodec/ExoPlayer is still
     // releasing. That overlap was a reproducible peak-RAM/lifecycle crash path.
     void stopFullscreenSession().then(() => {
-      if (returnToGuide) router.replace("/guide" as any);
+      if (returnToGuide) goToTab(router, "/guide");
       else router.back();
     });
   }, [params.returnGuideGroup, params.returnToGuide, router]);

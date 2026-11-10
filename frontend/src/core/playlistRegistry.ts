@@ -1,5 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/src/utils/deviceVault";
 import { decodeXtream, previewXtream, type XtreamAccount } from "./xtream";
 import { useEffect, useState } from "react";
 import type { Channel } from "@/src/api";

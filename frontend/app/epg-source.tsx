@@ -4,6 +4,7 @@ import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 import { PurpleTvShell, useIconRailFocusBoundary } from "@/src/components/PurpleTvShell";
 import { EpgChannelAssignDrawer, type EpgPickerFilter } from "@/src/components/EpgChannelAssignDrawer";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
@@ -58,7 +59,7 @@ export default function EpgSourceScreen() {
     const topTimer = setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), 0);
     return () => clearTimeout(topTimer);
   }, []);
-  useTvBackHandler(useCallback(() => { router.replace("/epg-sources" as any); return true; }, [router]));
+  useTvBackHandler(useCallback(() => { goToTab(router, "/epg-sources"); return true; }, [router]));
 
   const nativeSources = useCallback((nextExtras: CustomEpgSourceRecord[]) => [
     { id: "user", url: primary.userUrl, enabled: primary.userEnabled, refreshHours: 12 },
@@ -142,7 +143,7 @@ export default function EpgSourceScreen() {
     try {
       await clearNativeSourceGuide(sourceId);
       const extras = registry.sources.filter((item) => item.id !== sourceId); registry.remove(sourceId);
-      await configureNativeUserGuideSources(primary.primaryEnabled, nativeSources(extras)); invalidateGuideOwnershipCaches(); router.replace("/epg-sources" as any);
+      await configureNativeUserGuideSources(primary.primaryEnabled, nativeSources(extras)); invalidateGuideOwnershipCaches(); goToTab(router, "/epg-sources");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not remove EPG source."); setBusy(false); }
   }, [busy, nativeSources, primary.primaryEnabled, registry, router, sourceId]);
 
@@ -152,7 +153,7 @@ export default function EpgSourceScreen() {
     return choices[(Math.max(0, choices.indexOf(value)) + 1) % choices.length];
   };
   return <PurpleTvShell active="/settings"><View style={styles.page}><GlassBackdrop />
-    <View style={styles.header}><View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="epg" size={34} /><Text style={styles.title}>Saved EPG source</Text></View><Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
+    <View style={styles.header}><View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="epg" size={34} /><Text style={styles.title}>Saved EPG source</Text></View><Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => goToTab(router, "/epg-sources")} style={({ focused }: any) => [styles.button, focused && styles.focused]}><Text style={styles.text}>Back</Text></Pressable></View>
     <View style={styles.scrollWrap}>
       <ScrollView ref={scrollRef} removeClippedSubviews={false} focusable={false} scrollEnabled nestedScrollEnabled showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="never" contentContainerStyle={styles.content}>
       <View style={styles.card}><Text style={styles.cardTitle}>Source settings</Text>

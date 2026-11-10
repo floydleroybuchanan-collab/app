@@ -1,6 +1,7 @@
 import React from "react";
 import { BackHandler, Platform } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { goToTab } from "@/src/utils/goToTab";
 
 /** Hardware BACK handler is active only while its page is focused. */
 export function useTvBackHandler(onBack: () => boolean, enabled = true) {
@@ -22,7 +23,7 @@ export function useTvBackToGuide(enabled = true) {
 
   useTvBackHandler(
     React.useCallback(() => {
-      router.replace("/guide");
+      goToTab(router, "/guide");
       return true;
     }, [router]),
     enabled,

@@ -1,7 +1,7 @@
 import { Alert, NativeModules, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/src/utils/deviceVault";
 import { listPlaylists } from "@/src/core/playlistRegistry";
 import { readNativeCustomization, nativeSetChannelHidden, nativeSetCustomNumber, nativeSetChannelOrder, nativeCreateCustomGroup, nativeDeleteCustomGroup, nativeSetCustomGroupMembership, type NativeCustomizationSnapshot } from "@/src/nativeCustomization";
 import { clearNativeEpgBindings, readNativeEpgBindings, setNativeEpgBinding, type NativeEpgBindingMap } from "@/src/nativeEpgBindings";

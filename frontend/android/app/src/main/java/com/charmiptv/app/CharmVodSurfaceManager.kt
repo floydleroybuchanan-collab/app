@@ -60,6 +60,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         private var mountRetryCount = 0
         private var mountFailureSent = false
         private var layoutPassPending = false
+        private var zeroSizeLogged = false
         var startSection: String = "home"
             set(value) {
                 field = value
@@ -101,7 +102,16 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             val host = parent as? View
             val w = if (width > 0) width else host?.width ?: 0
             val h = if (height > 0) height else host?.height ?: 0
-            if (w <= 0 || h <= 0) return
+            if (w <= 0 || h <= 0) {
+                if (!zeroSizeLogged) {
+                    zeroSizeLogged = true
+                    // Which layer has no size: this view, the RN screen, or the tab scene.
+                    val chain = generateSequence(this as View) { it.parent as? View }.take(8)
+                        .joinToString(" < ") { "${it.javaClass.simpleName}=${it.width}x${it.height}/v${it.visibility}" }
+                    Log.w(TAG, "VOD surface has no size yet: shown=$isShown $chain")
+                }
+                return
+            }
             forceLayout()
             measure(
                 View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
@@ -132,6 +142,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             mountStartedAt = SystemClock.elapsedRealtime()
             mountRetryCount = 0
             mountFailureSent = false
+            zeroSizeLogged = false
             Log.i(TAG, "VOD native view attached; awaiting host activity")
             post { mountIfReady() }
         }
