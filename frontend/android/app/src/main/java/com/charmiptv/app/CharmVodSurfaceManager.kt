@@ -1,12 +1,9 @@
 package com.charmiptv.app
 
-import android.graphics.Color
 import android.os.SystemClock
 import android.util.Log
-import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
-import android.widget.TextView
 import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.FragmentManager
 import com.facebook.react.bridge.ReactApplicationContext
@@ -81,21 +78,6 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             addView(container, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         }
 
-        private fun showFailure(message: String) {
-            // Native fallback is reliable even if React has not registered the
-            // failure event listener yet. Never leave an unexplained black view.
-            if (findViewWithTag<View>("charm_vod_failure") != null) return
-            addView(TextView(context).apply {
-                tag = "charm_vod_failure"
-                text = "VOD couldn't open. Use Back and select Video OnDemand again.\n\n$message"
-                setTextColor(Color.WHITE)
-                textSize = 17f
-                gravity = Gravity.CENTER
-                setPadding(32, 32, 32, 32)
-                setBackgroundColor(0xFF190B29.toInt())
-            }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        }
-
         // React Native Fabric owns the outer Surface's frame, but Fragment views
         // inserted after reconciliation do not automatically receive a Yoga layout.
         // Keep the FragmentContainerView sized to that actual frame, rather than
@@ -152,7 +134,6 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 mountFailureSent = true
                 val message = "VOD could not attach to MainActivity: $reason"
                 Log.e(TAG, message)
-                showFailure(message)
                 emit("CharmVodMountError", message)
             }
         }
@@ -190,8 +171,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             }
             screen.onRootError = { message ->
                 if (fragment === screen && isAttachedToWindow && screenActive) {
-                    showFailure(message)
-                    emit("CharmVodMountError", message)
+                        emit("CharmVodMountError", message)
                 }
             }
             screen.onRootReady = {
@@ -224,7 +204,6 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                     if (screen.isAdded) fm.beginTransaction().remove(screen).commitNowAllowingStateLoss()
                 }
                 val message = failureSummary(e)
-                showFailure(message)
                 emit("CharmVodMountError", message)
             }
         }
