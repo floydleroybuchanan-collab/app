@@ -32,12 +32,19 @@ class VodFocusCoordinator(
     private var pendingStartedAt = 0L
     private var restoring = false
     private var disposed = false
+    private var hostActive = false
+
+    fun setHostActive(active: Boolean) {
+        hostActive = active
+        // Any pending RecyclerView focus restore must not fire after tab blur.
+        if (!active) cancelPendingRestore()
+    }
     private var layoutListenerAttached = false
 
     private val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, new ->
         // Default Android focus on a newly mounted fragment is not the
         // user's previous selection. Never overwrite a pending bookmark.
-        if (disposed || restoring || pendingDestination != null || new == null) return@OnGlobalFocusChangeListener
+        if (disposed || !hostActive || restoring || pendingDestination != null || new == null) return@OnGlobalFocusChangeListener
         val destination = navigation.currentDestination?.id ?: return@OnGlobalFocusChangeListener
         val content = currentContentRoot()
         when {
@@ -71,7 +78,7 @@ class VodFocusCoordinator(
             binding.navMainFragment.invalidate()
         }
         cancelPendingRestore()
-        if (focusMemory.hasBookmark(destination.id) || lastZoneWasBar[destination.id] == true) {
+        if (hostActive && (focusMemory.hasBookmark(destination.id) || lastZoneWasBar[destination.id] == true)) {
             pendingDestination = destination.id
             pendingStartedAt = SystemClock.uptimeMillis()
             attachLayoutListener()
@@ -103,7 +110,7 @@ class VodFocusCoordinator(
     }
 
     fun onKey(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN || disposed) return false
+        if (event.action != KeyEvent.ACTION_DOWN || disposed || !hostActive) return false
         val key = event.keyCode
         if (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN ||
             key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT ||
@@ -146,7 +153,7 @@ class VodFocusCoordinator(
         return false // Native Android D-pad handles all ordinary in-section moves.
     }
 
-    fun focusBar(): Boolean = binding.vodGlassActions.visibility == View.VISIBLE &&
+    fun focusBar(): Boolean = hostActive && binding.vodGlassActions.visibility == View.VISIBLE &&
         binding.vodGlassActions.focusLastAction()
 
     /**
@@ -155,7 +162,7 @@ class VodFocusCoordinator(
      * focus bookmark, otherwise choose content then the top glass action.
      */
     fun restoreFocusFromHost(): Boolean {
-        if (disposed) return false
+        if (disposed || !hostActive) return false
         val destination = navigation.currentDestination?.id ?: return focusBar()
         if (lastZoneWasBar[destination] == true && focusBar()) return true
         val content = currentContentRoot()
@@ -195,7 +202,7 @@ class VodFocusCoordinator(
 
     private fun attemptRestore() {
         val destination = pendingDestination ?: return
-        if (disposed || navigation.currentDestination?.id != destination ||
+        if (disposed || !hostActive || navigation.currentDestination?.id != destination ||
             SystemClock.uptimeMillis() - pendingStartedAt > 6000L) {
             cancelPendingRestore()
             return
