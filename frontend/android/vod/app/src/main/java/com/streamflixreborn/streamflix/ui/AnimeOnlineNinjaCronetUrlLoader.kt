@@ -24,7 +24,6 @@ import okhttp3.OkHttpClient
 class AnimeOnlineNinjaCronetUrlLoader(
     private val context: Context,
     private val fallback: ModelLoader<GlideUrl, InputStream>,
-    private val onlySpecialVodImages: Boolean = false,
 ) :
     ModelLoader<GlideUrl, InputStream> {
 
@@ -37,8 +36,7 @@ class AnimeOnlineNinjaCronetUrlLoader(
     // In the unified MainActivity process, leave Live TV and Expo image
     // requests to the host loader; intercept only VOD's specialized URLs.
     override fun handles(model: GlideUrl): Boolean =
-        !onlySpecialVodImages ||
-            isAnimeOnlineNinja(model) ||
+        isAnimeOnlineNinja(model) ||
             model.toStringUrl().substringAfter('#', "").split('&')
                 .any { it.startsWith("sf_headers=") }
 
@@ -58,12 +56,11 @@ class AnimeOnlineNinjaCronetUrlLoader(
     class Factory(
         private val context: Context,
         private val okHttpClient: OkHttpClient,
-        private val onlySpecialVodImages: Boolean = false,
     ) : ModelLoaderFactory<GlideUrl, InputStream> {
         override fun build(multiFactory: MultiModelLoaderFactory): ModelLoader<GlideUrl, InputStream> {
             val fallback = OkHttpUrlLoader.Factory(okHttpClient).build(multiFactory)
             return AnimeOnlineNinjaCronetUrlLoader(
-                context.applicationContext, fallback, onlySpecialVodImages
+                context.applicationContext, fallback
             )
         }
 
