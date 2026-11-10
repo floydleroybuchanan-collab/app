@@ -503,6 +503,9 @@ class MainActivity : ReactActivity() {
     return super.dispatchKeyEvent(event)
   }
 
+  // React Native TV 0.81 still exposes the legacy host while the bridgeless
+  // ReactHost is warming up; preserve that compatibility path for remote keys.
+  @Suppress("DEPRECATION")
   private fun emitRemoteEvent(name: String, value: String) {
     try {
       val app = application as com.facebook.react.ReactApplication
