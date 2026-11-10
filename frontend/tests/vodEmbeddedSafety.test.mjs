@@ -97,6 +97,7 @@ test("VOD native focus leaves RN guide traps and crosses both rail boundaries", 
   assert.match(activity, /fun focusVodRailFromContent\(\)/);
   assert.match(coordinator, /fun restoreFocusFromHost\(\)/);
   assert.match(coordinator, /binding\.navMainFragment\.requestLayout\(\)/);
+  assert.doesNotMatch(coordinator, /binding\.navMain(?!Fragment)/);
 });
 
 
@@ -160,5 +161,7 @@ test("unified VOD never covers native home with the old catalog loading screen",
   assert.match(fragment, /binding\.isLoading\.root\.visibility = View\.GONE/);
   assert.match(fragment, /dashboard\.reportCatalogError\(\)/);
   assert.doesNotMatch(fragment, /pbIsLoading\.visibility = View\.VISIBLE/);
-  assert.match(root, /b\.navMain\.visibility = View\.GONE/);
+  const embedded = read("android/vod/app/src/main/res/layout/activity_main_tv.xml");
+  assert.doesNotMatch(embedded, /VodIconRail|CharmVodWelcomeView|@\+id\/nav_main/);
+  assert.doesNotMatch(root, /navMain|ivSplashOverlay/);
 });
