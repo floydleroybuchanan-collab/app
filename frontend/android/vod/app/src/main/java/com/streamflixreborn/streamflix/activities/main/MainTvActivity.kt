@@ -182,6 +182,8 @@ class MainTvActivity : FragmentActivity() {
         viewModel.checkUpdate()
     }
 
+    // Legacy VOD activity is retained for API 24-35 styling compatibility.
+    @Suppress("DEPRECATION")
     private fun applyThemeNavigationChrome() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         window.statusBarColor = palette.systemBar
