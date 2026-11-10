@@ -141,6 +141,8 @@ test("approved dashboard has persistent hero, ten matching platform actions and 
   assert.match(dashboard, /"＋  My List"/);
   assert.match(dashboard, /VodPlatformCatalog\.platforms\.forEach/);
   assert.match(dashboard, /badge\.viewAllGlass\(focused\)/);
+  assert.match(dashboard, /contentDescription = "Open \$\{platform\.label\}"/);
+  assert.match(dashboard, /setOnClickListener \{ onPlatform\?\.invoke\(platform\.id\) \}/);
   assert.match(dashboard, /TRENDING MOVIES/);
   assert.match(fragment, /binding\.charmingVodDashboard\.bindFeatured\(chosen\)/);
   assert.match(fragment, /findNavController\(\)\.navigate\(R\.id\.platform_titles/);
