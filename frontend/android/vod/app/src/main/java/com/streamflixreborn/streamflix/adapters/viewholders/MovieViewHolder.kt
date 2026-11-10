@@ -22,6 +22,7 @@ import androidx.viewbinding.ViewBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.charm.CharmingVodTopIcon
 import com.streamflixreborn.streamflix.vod.VodPreferences
 import com.streamflixreborn.streamflix.adapters.AppAdapter
@@ -408,6 +409,15 @@ class MovieViewHolder(
                     return@setOnClickListener
                 }
                 checkProviderAndRun {
+                    if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                        // MainActivity is an Expo host, not MainTvActivity:
+                        // getCurrentFragment() is null here. Navigate by the
+                        // actual shared VOD NavController destination instead.
+                        findNavController().navigate(R.id.movie, Bundle().apply {
+                            putString("id", movie.id)
+                        })
+                        return@checkProviderAndRun
+                    }
                     when (context.toActivity()?.getCurrentFragment()) {
                         is HomeTvFragment -> {
                             if (movie.itemType == AppAdapter.Type.MOVIE_CONTINUE_WATCHING_TV_ITEM) {
@@ -578,6 +588,15 @@ class MovieViewHolder(
                     return@setOnClickListener
                 }
                 checkProviderAndRun {
+                    if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                        // MainActivity is an Expo host, not MainTvActivity:
+                        // getCurrentFragment() is null here. Navigate by the
+                        // actual shared VOD NavController destination instead.
+                        findNavController().navigate(R.id.movie, Bundle().apply {
+                            putString("id", movie.id)
+                        })
+                        return@checkProviderAndRun
+                    }
                     when (context.toActivity()?.getCurrentFragment()) {
                         is HomeTvFragment -> findNavController().navigate(HomeTvFragmentDirections.actionHomeToMovie(id = movie.id))
                         is MoviesTvFragment -> findNavController().navigate(MoviesTvFragmentDirections.actionMoviesToMovie(id = movie.id))
