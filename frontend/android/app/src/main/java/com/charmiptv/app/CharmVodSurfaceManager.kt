@@ -111,8 +111,12 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             val screen = VodRootFragment.create(startSection)
             screen.onHostBack = { emit("CharmVodRootBack", "") }
             screen.onHostIconRail = {
-                emit("CharmVodFocusHostRail", "")
-                true
+                // Prefer a direct native handoff. A React event is only a
+                // fallback when the rail was hidden by its idle timeout.
+                if (host.focusVodRailFromContent()) true else {
+                    emit("CharmVodFocusHostRail", "")
+                    true
+                }
             }
             screen.onImmersiveChanged = { playing ->
                 emit("CharmVodImmersiveChanged", if (playing) "true" else "false")
@@ -143,6 +147,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 emit("CharmVodMountError", failureSummary(e))
             }
         }
+
+        fun restoreNativeFocus(): Boolean =
+            isAttachedToWindow && fragment?.restoreFocusFromRail() == true
 
         fun dispose() {
             activity?.detachVodInput(this)
