@@ -2,6 +2,7 @@ package com.streamflixreborn.streamflix.utils
 
 import android.content.Context
 import android.util.AtomicFile
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
@@ -20,7 +21,13 @@ object HomeCacheStore {
     // Keep a tiny, access-ordered window of complete VOD catalogs. Very large
     // catalogs remain on disk but are never pinned in RAM beside Live TV/EPG.
     private const val MAX_MEMORY_PROVIDERS = 2
-    private const val MAX_MEMORY_ITEMS = 3000
+    private const val MAX_MEMORY_ITEMS = 1500
+    // Catalog metadata is replaceable; favorite/watch-history data is stored separately.
+    // Retain the active provider plus two recently-used provider snapshots, subject to
+    // a 24 MiB aggregate budget. An oversized active snapshot is never discarded.
+    private const val MAX_DISK_PROVIDERS = 3
+    private const val MAX_DISK_BYTES = 24L * 1024L * 1024L
+    private val diskLock = Any()
     private val memoryCache = LinkedHashMap<String, List<CachedCategory>>(4, 0.75f, true)
 
     private fun remember(key: String, payload: List<CachedCategory>) {
@@ -53,23 +60,26 @@ object HomeCacheStore {
         }
 
         val file = cacheFile(context, cacheKey)
-        if (!file.exists()) return null
-
-        return runCatching {
-            val type = object : TypeToken<List<CachedCategory>>() {}.type
-            // AtomicFile.openRead restores the previous snapshot if a write
-            // was interrupted before its final rename.
-            val payload: List<CachedCategory> = AtomicFile(file).openRead().bufferedReader()
-                .use { reader -> gson.fromJson(reader, type) }
-            remember(cacheKey, payload)
-            payload.toCategories()
-        }.recoverCatching {
-            if (it is JsonSyntaxException) {
-                forget(cacheKey)
-                file.delete()
-            }
-            null
-        }.getOrNull()
+        return synchronized(diskLock) {
+            // A valid .bak may remain if the process died during atomic replacement.
+            if (!file.exists() && !File(file.path + ".bak").exists()) return@synchronized null
+            runCatching {
+                val type = object : TypeToken<List<CachedCategory>>() {}.type
+                val payload: List<CachedCategory> = AtomicFile(file).openRead().bufferedReader()
+                    .use { reader -> gson.fromJson(reader, type) }
+                // Access time is used for bounded disk eviction; only real provider
+                // snapshots are stored, never synthesized titles or artwork.
+                file.setLastModified(System.currentTimeMillis())
+                remember(cacheKey, payload)
+                payload.toCategories()
+            }.recoverCatching {
+                if (it is JsonSyntaxException) {
+                    forget(cacheKey)
+                    AtomicFile(file).delete()
+                }
+                null
+            }.getOrNull()
+        }
     }
 
     fun write(context: Context, provider: Provider, categories: List<Category>) {
@@ -78,26 +88,63 @@ object HomeCacheStore {
             val cacheKey = cacheKey(provider)
             remember(cacheKey, payload)
             val target = cacheFile(context, cacheKey)
-            target.parentFile?.mkdirs()
-            // Atomic replacement protects the last usable offline catalog
-            // if Android kills the app during a large JSON write.
-            val atomic = AtomicFile(target)
-            var stream: java.io.FileOutputStream? = null
-            try {
-                stream = atomic.startWrite()
-                stream.write(gson.toJson(payload).toByteArray(Charsets.UTF_8))
-                atomic.finishWrite(stream)
-            } catch (error: Exception) {
-                stream?.let { atomic.failWrite(it) }
-                throw error
+            synchronized(diskLock) {
+                target.parentFile?.mkdirs()
+                // Stream JSON to AtomicFile to avoid allocating an entire serialized
+                // catalog string (and then a second UTF-8 byte array) in RAM.
+                val atomic = AtomicFile(target)
+                var stream: java.io.FileOutputStream? = null
+                try {
+                    stream = atomic.startWrite()
+                    val writer = stream.writer(Charsets.UTF_8)
+                    gson.toJson(payload, writer)
+                    writer.flush()
+                    atomic.finishWrite(stream)
+                    target.setLastModified(System.currentTimeMillis())
+                    pruneOldCatalogs(context, target)
+                } catch (error: Exception) {
+                    stream?.let { atomic.failWrite(it) }
+                    throw error
+                }
             }
-        }
+        }.onFailure { Log.w("CharmVodCache", "Could not persist VOD catalog", it) }
     }
 
     fun clear(context: Context, provider: Provider) {
         val cacheKey = cacheKey(provider)
-        forget(cacheKey)
-        cacheFile(context, cacheKey).delete()
+        synchronized(diskLock) {
+            forget(cacheKey)
+            AtomicFile(cacheFile(context, cacheKey)).delete()
+        }
+    }
+
+    /**
+     * Evict only replaceable home catalogs. Never touch user-data-cache,
+     * Glide's bounded artwork cache, or the host app's Live TV / EPG files.
+     */
+    private fun pruneOldCatalogs(context: Context, retained: File) {
+        val files = retained.parentFile?.listFiles()
+            ?.filter { it.isFile && it.extension == "json" }
+            ?.sortedWith(
+                compareByDescending<File> { it.absolutePath == retained.absolutePath }
+                    .thenByDescending { it.lastModified() }
+            ) ?: return
+        var count = 0
+        var bytes = 0L
+        files.forEach { file ->
+            val shouldKeep = count == 0 ||
+                (count < MAX_DISK_PROVIDERS && bytes + file.length() <= MAX_DISK_BYTES)
+            if (shouldKeep) {
+                count++
+                bytes += file.length()
+            } else {
+                AtomicFile(file).delete()
+                synchronized(memoryCache) {
+                    memoryCache.keys.filter { cacheFile(context, it).absolutePath == file.absolutePath }
+                        .forEach { memoryCache.remove(it) }
+                }
+            }
+        }
     }
 
     private fun cacheFile(context: Context, cacheKey: String): File {
