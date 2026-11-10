@@ -96,6 +96,7 @@ export default function PlayerScreen() {
   const [retryToken, setRetryToken] = useState(0);
   const [controls, setControls] = useState(true);
   const [playerOverlay, setPlayerOverlay] = useState<"channels" | "tracks" | null>(null);
+  const [guidePreviewId, setGuidePreviewId] = useState(params.channelId);
   const [notice, setNotice] = useState<string | null>(null);
   const [playerNow, setPlayerNow] = useState(() => new Date());
   const [playbackPaused, setPlaybackPaused] = useState(false);
@@ -125,6 +126,8 @@ export default function PlayerScreen() {
   const stableHistoryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsRef = useRef(true);
   const channelsOpenRef = useRef(false);
+  const tracksOpenRef = useRef(false);
+  const controlsFocusedRef = useRef(false);
   const generationRef = useRef(0);
   const exitInFlightRef = useRef(false);
   const channelsButtonRef = useRef<any>(null);
@@ -152,6 +155,11 @@ export default function PlayerScreen() {
   const safe = useMemo(() => getTvSafeInsets(width, height, deviceLayoutMode), [deviceLayoutMode, height, width]);
   const channelMeta = useMemo(() => channelById(channelId), [channelById, channelId]);
   const channelPrograms = useGuidePrograms(channelId);
+  // A single row-level subscription; the in-player guide never copies the
+  // entire EPG or starts a second player/decoder just to preview a channel.
+  const guidePreviewPrograms = useGuidePrograms(channelsOpen ? guidePreviewId : channelId);
+  const guidePreviewChannel = channelById(guidePreviewId);
+  const { current: guideCurrent, next: guideNext } = nowNext(guidePreviewPrograms, playerNow);
   const channel = useMemo(() => (channelMeta ? { ...channelMeta, programs: channelPrograms } : undefined), [channelMeta, channelPrograms]);
   const streamUri = channel?.url || "";
   const streamChannels = channels;
@@ -215,6 +223,10 @@ export default function PlayerScreen() {
   const scheduleHide = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
+      // Never remove player controls while the remote is navigating them or
+      // while a modal/guide is open. Otherwise the focused view disappears
+      // under a D-pad press and can strand the user on a black video surface.
+      if (controlsFocusedRef.current || channelsOpenRef.current || tracksOpenRef.current) return;
       controlsRef.current = false; setControls(false); setChannelsOpen(false); setTracksOpen(false);
     }, overlayHideMs);
   }, [overlayHideMs, setChannelsOpen, setTracksOpen]);
@@ -306,8 +318,11 @@ export default function PlayerScreen() {
 
   useEffect(() => { controlsRef.current = controls; }, [controls]);
   useEffect(() => { channelsOpenRef.current = channelsOpen; }, [channelsOpen]);
+  useEffect(() => { tracksOpenRef.current = tracksOpen; }, [tracksOpen]);
 
   const closeOverlayAndRestoreFocus = useCallback(() => {
+    channelsOpenRef.current = false;
+    tracksOpenRef.current = false;
     setPlayerOverlay(null);
     const opener = overlayOpenerRef.current; overlayOpenerRef.current = null;
     if (opener) requestAnimationFrame(() => requestNativeFocus(opener));
@@ -408,6 +423,20 @@ export default function PlayerScreen() {
   }, [channelMeta?.name, failReason, showNotice]);
   saveAudioReportRef.current = () => { void saveAudioReport(); };
 
+  const openQuickGuide = useCallback(() => {
+    if (exitInFlightRef.current) return;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    controlsRef.current = true;
+    channelsOpenRef.current = true;
+    tracksOpenRef.current = false;
+    setControls(true);
+    setTracksOpen(false);
+    setGuidePreviewId(pendingChannelIdRef.current || channelIdRef.current);
+    setChannelsOpen(true);
+  }, [setChannelsOpen, setTracksOpen]);
+
+  // The full-screen Guide remains available explicitly from the two-pane
+  // player guide. The Guide button itself must not tear down playback.
   const goGuide = useCallback(() => {
     if (exitInFlightRef.current) return;
     exitInFlightRef.current = true;
@@ -423,16 +452,16 @@ export default function PlayerScreen() {
     if (exitInFlightRef.current) return;
     if (action === "channel_up") return stepChannel(-1);
     if (action === "channel_down") return stepChannel(1);
-    if (action === "channels") { controlsRef.current = true; setControls(true); setTracksOpen(false); setChannelsOpen(true); scheduleHide(); return; }
+    if (action === "channels") { openQuickGuide(); return; }
     if (action === "controls") return revealControls({ claimChannelsFocus: true });
     if (action === "favorite") {
       const target = pendingChannelIdRef.current || channelIdRef.current;
       if (target) { toggleFavorite(target); showNotice("Favorite updated"); }
       return;
     }
-    if (action === "guide") return goGuide();
+    if (action === "guide") return openQuickGuide();
     if (action === "previous") return returnToPreviousChannel();
-  }, [goGuide, returnToPreviousChannel, revealControls, scheduleHide, setChannelsOpen, setTracksOpen, showNotice, stepChannel, toggleFavorite]);
+  }, [openQuickGuide, returnToPreviousChannel, revealControls, scheduleHide, showNotice, stepChannel, toggleFavorite]);
 
   useEffect(() => {
     if (!isTV) return;
@@ -575,14 +604,22 @@ export default function PlayerScreen() {
             </View></View>
             <View style={styles.progressRow}><Text style={styles.edgeTime}>{current ? fmtTime(current.start) : "LIVE"}</Text><View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View><Text style={styles.edgeTime}>{current?.stop ? fmtTime(current.stop) : "LIVE"}</Text></View>
 
-            <View style={styles.controlsRow}>
+            <View style={styles.controlsRow}
+              onFocusCapture={() => {
+                controlsFocusedRef.current = true;
+                if (hideTimer.current) clearTimeout(hideTimer.current);
+              }}
+              onBlurCapture={() => {
+                controlsFocusedRef.current = false;
+                scheduleHide();
+              }}>
               {multiview && appPolicy.multiview_max>0 && <Pressable onPress={() => {
                 if (exitInFlightRef.current) return;
                 exitInFlightRef.current = true;
                 void stopAllPlaybackSessions("superseded").then(() => router.replace({ pathname: "/multiview" as any, params: { channelId, returnGuideGroup: params.returnGuideGroup } })).catch(() => { exitInFlightRef.current = false; showNotice("The current player could not close. Try again."); });
               }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="grid-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Multiview</Text></Pressable>}
-              <Pressable onPress={goGuide} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="information-circle-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Guide</Text></Pressable>
-              <Pressable ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; setTracksOpen(false); setChannelsOpen((value) => !value); scheduleHide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
+              <Pressable onPress={openQuickGuide} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="information-circle-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>Guide</Text></Pressable>
+              <Pressable ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; if (channelsOpen) { closeOverlayAndRestoreFocus(); scheduleHide(); } else openQuickGuide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
               <View style={styles.controlsSpacer} />
               <Pressable accessibilityLabel="Restart this channel" testID="restart-current-channel" onPress={() => void restartThisChannel()} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="refresh" size={15} color="#fff" /><Text style={styles.controlLabel}>Restart channel</Text></Pressable>
               <Pressable ref={prevButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(-1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-back" size={18} color="#fff" /></Pressable>
@@ -608,13 +645,49 @@ export default function PlayerScreen() {
             ) : null}
 
             {channelsOpen ? (
-              <View>
-                <Text style={styles.controlLabel}>Previous & recent channels</Text>
-                <FlatList data={historyChannels} horizontal keyExtractor={(item) => item.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={4} removeClippedSubviews={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.channelStrip} renderItem={({ item }) => (
-                  <Pressable onPress={() => changeChannel(item.id, true)} onFocus={() => previewChannel(item.id)} style={({ focused }: any) => [styles.channelCard, item.id === channelId && styles.channelCardActive, focused && styles.focused]}>
-                    <ChannelLogo name={item.name} logo={item.logo} disabled={!channelLogos} size={30} /><Text numberOfLines={1} style={styles.channelCardName}>{item.name}</Text>
-                  </Pressable>
-                )} />
+              <View style={styles.inPlayerGuide}>
+                <View style={styles.guideChannelsPane}>
+                  <Text style={styles.guideHeading}>Channels</Text>
+                  <FlatList
+                    data={historyChannels}
+                    keyExtractor={(item) => item.id}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={8}
+                    windowSize={4}
+                    removeClippedSubviews={false}
+                    showsVerticalScrollIndicator={false}
+                    style={styles.guideChannelList}
+                    renderItem={({ item }) => (
+                      <Pressable
+                        onFocus={() => { setGuidePreviewId(item.id); previewChannel(item.id); }}
+                        onPress={() => { changeChannel(item.id, true); closeOverlayAndRestoreFocus(); }}
+                        style={({ focused }: any) => [styles.guideChannelRow, item.id === channelId && styles.guideCurrentChannel, focused && styles.focused]}
+                      >
+                        <ChannelLogo name={item.name} logo={item.logo} disabled={!channelLogos} size={28} />
+                        <Text numberOfLines={1} style={styles.guideChannelName}>
+                          {channelNumbers ? (numberById[item.id] || "") + "  " : ""}{item.name}
+                        </Text>
+                      </Pressable>
+                    )}
+                  />
+                </View>
+                <View style={styles.guideDetailsPane}>
+                  <Text style={styles.guideHeading}>{guidePreviewChannel?.name || "Program details"}</Text>
+                  <Text style={styles.guideSubheading}>NOW PLAYING</Text>
+                  <Text numberOfLines={2} style={styles.guideProgram}>{guideCurrent?.title || "No program information"}</Text>
+                  <Text style={styles.guideProgramTime}>{guideCurrent ? fmtTime(guideCurrent.start) + (guideCurrent.stop ? " – " + fmtTime(guideCurrent.stop) : "") : "Guide information will appear here"}</Text>
+                  <Text numberOfLines={3} style={styles.guideDescription}>{guideCurrent?.desc || "Browse channels without leaving playback. Select a channel to tune it."}</Text>
+                  <Text style={styles.guideSubheading}>UP NEXT</Text>
+                  <Text numberOfLines={2} style={styles.guideProgram}>{guideNext?.title || "No upcoming information"}</Text>
+                  <View style={styles.guideFooter}>
+                    <Pressable onPress={() => { closeOverlayAndRestoreFocus(); scheduleHide(); }} style={({ focused }: any) => [styles.guideFooterButton, focused && styles.focused]}>
+                      <Text style={styles.controlLabel}>Close guide</Text>
+                    </Pressable>
+                    <Pressable onPress={goGuide} style={({ focused }: any) => [styles.guideFooterButton, focused && styles.focused]}>
+                      <Text style={styles.controlLabel}>Full Guide</Text>
+                    </Pressable>
+                  </View>
+                </View>
               </View>
             ) : null}
           </LinearGradient>
@@ -662,6 +735,24 @@ const styles = StyleSheet.create({
   iconControl: { width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 2, borderColor: "transparent" },
   pauseControl: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.purple },
   channelStrip: { gap: 6, paddingTop: 5 },
+  inPlayerGuide: {
+    flexDirection: "row", height: 272, marginTop: 8, marginBottom: 4,
+    borderRadius: 14, overflow: "hidden", borderColor: "rgba(218,135,255,0.65)",
+    borderWidth: 1, backgroundColor: "rgba(18,8,38,0.86)",
+  },
+  guideChannelsPane: { width: "47%", paddingHorizontal: 11, paddingVertical: 8, borderRightWidth: 1, borderRightColor: "rgba(210,128,255,0.28)" },
+  guideDetailsPane: { flex: 1, paddingHorizontal: 14, paddingVertical: 10 },
+  guideHeading: { color: "#FFFFFF", fontFamily: fonts.bold, fontSize: 16, marginBottom: 6 },
+  guideSubheading: { color: "#EC88F7", fontFamily: fonts.bold, fontSize: 9, marginTop: 6, marginBottom: 3 },
+  guideChannelList: { flex: 1 },
+  guideChannelRow: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 9, paddingHorizontal: 8, borderWidth: 2, borderColor: "transparent" },
+  guideCurrentChannel: { backgroundColor: "rgba(132,49,230,0.35)" },
+  guideChannelName: { flex: 1, color: "#FFFFFF", fontFamily: fonts.medium, fontSize: 11 },
+  guideProgram: { color: "#FFFFFF", fontFamily: fonts.semibold, fontSize: 12 },
+  guideProgramTime: { color: "#BEADD4", fontFamily: fonts.medium, fontSize: 9, marginTop: 3 },
+  guideDescription: { color: "#D4C5EB", fontFamily: fonts.regular, fontSize: 10, lineHeight: 15, marginTop: 7 },
+  guideFooter: { marginTop: "auto", flexDirection: "row", gap: 8, paddingTop: 8 },
+  guideFooterButton: { minHeight: 33, borderColor: "rgba(193,127,255,0.58)", borderWidth: 1, backgroundColor: "rgba(83,25,152,0.52)", borderRadius: 8, paddingHorizontal: 13, justifyContent: "center" },
   tracksPanel: { maxHeight: 160, marginTop: 6, padding: 8, borderRadius: radius.sm, backgroundColor: "rgba(16,16,30,0.94)", gap: 4 },
   trackRow: { minHeight: 28, justifyContent: "center", paddingHorizontal: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
   trackUnsupported: { opacity: 0.45 },
