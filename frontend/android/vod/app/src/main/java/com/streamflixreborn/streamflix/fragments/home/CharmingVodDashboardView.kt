@@ -28,7 +28,9 @@ import com.streamflixreborn.streamflix.models.TvShow
  * Created synchronously, without awaiting a network request or a loading gate.
  * No second icon rail, Activity, WebView, player or hidden focus owner.
  */
-class CharmingVodDashboardView(context: Context) : LinearLayout(context) {
+class CharmingVodDashboardView @JvmOverloads constructor(
+    context: Context, attrs: android.util.AttributeSet? = null,
+) : LinearLayout(context, attrs) {
     var onFeature: (() -> Unit)? = null
     var onFavorites: (() -> Unit)? = null
     var onPlatform: ((String) -> Unit)? = null
