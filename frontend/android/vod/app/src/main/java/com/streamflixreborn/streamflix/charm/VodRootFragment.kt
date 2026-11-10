@@ -43,6 +43,17 @@ class VodRootFragment : Fragment() {
     private var rootStartedAt = 0L
     private var readyAttempts = 0
     private var rootReadyReported = false
+    private var hostActive = false
+
+    /** Expo Tabs retain the Fragment; only the currently focused tab may own readiness/focus. */
+    fun setHostActive(active: Boolean) {
+        val changed = hostActive != active
+        hostActive = active
+        if (active && changed && !rootReadyReported) {
+            readyAttempts = 0
+            notifyWhenDrawn()
+        }
+    }
     private var readyCheckPosted = false
     private val readinessLayoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
         if (!rootReadyReported) notifyWhenDrawn()
@@ -76,6 +87,9 @@ class VodRootFragment : Fragment() {
 
     override fun onViewCreated(view: View, saved: Bundle?) {
         super.onViewCreated(view, saved)
+        // Readiness belongs to each VIEW, not the retained Fragment instance.
+        rootReadyReported = false
+        readyAttempts = 0
         requestedSection = arguments?.getString("startSection") ?: "home"
         val b = binding
         // The embedded layout contains no rail or splash overlay. Charming MediaLab's
@@ -150,6 +164,7 @@ class VodRootFragment : Fragment() {
         b.navMainFragment.post {
             readyCheckPosted = false
             if (!isAdded || _binding !== b || rootReadyReported) return@post
+            if (!hostActive) return@post
             // An inactive Expo Tabs route can be attached with a 0x0 viewport.
             // That is a layout lifecycle state, not a failed provider/destination.
             // Wait for the real measured root before starting the readiness budget.
@@ -247,12 +262,15 @@ class VodRootFragment : Fragment() {
             b.navMainFragment.removeOnLayoutChangeListener(readinessLayoutListener)
         }
         readyCheckPosted = false
+        rootReadyReported = false
+        readyAttempts = 0
         coordinator?.dispose()
         coordinator = null
         navigation = null
         onImmersiveChanged?.invoke(false)
-        onRootReady = null
-        onRootError = null
+        // The surface owner, not this View lifecycle, owns callback release.
+        // A retained Fragment may recreate its View when returning from Player;
+        // clearing callbacks here would permanently lose native-ready/error events.
         _binding = null
         super.onDestroyView()
     }
