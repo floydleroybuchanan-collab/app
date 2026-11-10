@@ -16,6 +16,7 @@ import androidx.navigation.navOptions
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.databinding.ActivityMainTvBinding
 import com.streamflixreborn.streamflix.fragments.player.PlayerTvFragment
+import com.streamflixreborn.streamflix.fragments.settings.SettingsTvFragment
 import com.streamflixreborn.streamflix.providers.AnimeOnlineNinjaProvider
 import com.streamflixreborn.streamflix.providers.Cine24hProvider
 import com.streamflixreborn.streamflix.providers.FilmyOnlineCcProvider
@@ -246,6 +247,14 @@ class VodRootFragment : Fragment() {
 
     fun navigateBack(): Boolean {
         val controller = navigation ?: return false
+        // Pop nested Settings screens before opening the host main drawer.
+        // Only this focused native VOD owner handles hardware BACK; settings
+        // fragments no longer install global Activity callbacks.
+        if (controller.currentDestination?.id == R.id.settings) {
+            val settings = (childFragmentManager.findFragmentById(binding.navMainFragment.id)
+                as? NavHostFragment)?.childFragmentManager?.primaryNavigationFragment as? SettingsTvFragment
+            if (settings?.navigateBackWithinSettings() == true) return true
+        }
         when (controller.currentDestination?.id) {
             R.id.home, R.id.settings, R.id.search, R.id.movies, R.id.tv_shows,
             R.id.favorites, R.id.genre_hub, R.id.platforms -> {
