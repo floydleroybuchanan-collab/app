@@ -211,6 +211,9 @@ test("VOD catalog and user caches are bounded without discarding watch history",
   assert.doesNotMatch(home, /gson\.toJson\(payload\)\.toByteArray/);
   assert.match(user, /Collections\.synchronizedMap/);
   assert.match(user, /size > 2/);
+  assert.match(user, /fun clearMemory\(\)/);
+  const app = read("android/app/src/main/java/com/charmiptv/app/MainApplication.kt");
+  assert.match(app, /UserDataCache\.clearMemory\(\)/);
   assert.match(model, /boundedLookupCache<TvShow>\(24\)/);
   assert.match(model, /boundedLookupCache<List<Episode>>\(32\)/);
   assert.doesNotMatch(model, /loadUserDataCache\(initialProvider\)/);
