@@ -125,7 +125,7 @@ class VodFocusCoordinator(
             if (inBar && binding.vodGlassActions.isFirstActionFocused(current)) {
                 return onHostRailFocus?.invoke() == true
             }
-            if (inContent && content != null) {
+            if (inContent) {
                 val next = current.focusSearch(View.FOCUS_LEFT)
                 if (next == null || !VodFocusMemory.isWithin(content, next)) {
                     return onHostRailFocus?.invoke() == true
