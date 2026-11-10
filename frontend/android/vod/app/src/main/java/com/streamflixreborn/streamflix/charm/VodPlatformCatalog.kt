@@ -20,7 +20,17 @@ object VodPlatformCatalog {
         Platform("max","HBO / Max Originals","max",0xFFB68AF5.toInt()),
         Platform("prime","Prime Video Originals","prime",0xFF38B9ED.toInt()),
         Platform("paramount","Paramount+ Originals","P+",0xFF468FF1.toInt()),
-        Platform("peacock","Peacock Originals","peacock",0xFFFFA5CD.toInt())
+        Platform("peacock","Peacock Originals","peacock",0xFFFFA5CD.toInt()),
+        // These are platform *navigation choices*, not proof of an Original
+        // title. The catalog matcher only displays verified local titles.
+        Platform("youtube","YouTube","▶",0xFFFF3650.toInt()),
+        Platform("youtube_tv","YouTube TV","YouTube TV",0xFFED3353.toInt()),
+        Platform("plex","Plex","❯",0xFFFFC12E.toInt()),
+        Platform("tubi","Tubi","tubi",0xFFBA4AF7.toInt()),
+        Platform("fubo","Fubo","fubo",0xFFF54B63.toInt()),
+        Platform("starz","STARZ","STARZ",0xFF36D6FB.toInt()),
+        Platform("amc","AMC+","AMC+",0xFF00DFD2.toInt()),
+        Platform("crunchyroll","Crunchyroll","C",0xFFFF8C1A.toInt())
     )
     private val originals = listOf(
         Triple("Stranger Things",2016,"netflix"),Triple("The Crown",2016,"netflix"),
