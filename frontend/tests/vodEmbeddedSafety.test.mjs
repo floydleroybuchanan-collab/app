@@ -54,9 +54,9 @@ test("VOD cache invalidation is scoped to VOD paths and its in-memory catalog", 
 test("network-series metadata never masquerades as verified platform originals", () => {
   const platform = read(vod + "charm/VodPlatformsFragment.kt");
   const originals = read(vod + "charm/VodPlatformCatalog.kt");
-  assert.match(platform, /loadNetworkSeries\(allowed\)/);
-  assert.match(platform, /provider is TmdbProvider/);
-  assert.match(platform, /VodPlatformCatalog\.find\(local\) == null/);
+  assert.match(platform, /discoverPlatformTitles\(platforms, language, pages\)/);
+  assert.match(platform, /provider as\? TmdbProvider/);
+  assert.match(platform, /VodPlatformCatalog\.find\(it\) == null/);
   assert.match(platform, /Network series/);
   assert.match(originals, /Original\/exclusive attribution/);
 });
@@ -127,8 +127,8 @@ test("Platforms only exposes the ten approved services", () => {
   const catalog = read(vod + "charm/VodPlatformCatalog.kt");
   const listed = [...catalog.matchAll(/Platform\("([^"]+)",/g)].map((match) => match[1]);
   assert.deepEqual(listed, [
-    "netflix", "disney", "apple", "hulu", "max", "prime",
-    "paramount", "peacock", "starz", "amc"
+    "netflix", "prime", "disney", "max", "hulu", "apple", "paramount", "peacock",
+    "starz", "amc", "youtube", "crunchyroll"
   ]);
 });
 
@@ -142,14 +142,14 @@ test("approved dashboard has persistent hero, ten matching platform actions and 
   assert.match(dashboard, /"▶  Watch Now"/);
   assert.match(dashboard, /"＋  My List"/);
   assert.match(dashboard, /VodPlatformCatalog\.platforms\.forEach/);
-  assert.match(dashboard, /badge\.viewAllGlass\(focused\)/);
+  assert.match(dashboard, /VodPlatformBadgeView\(context, platform, small = false, pill = true\)/);
   assert.match(dashboard, /contentDescription = "Open \$\{platform\.label\}"/);
   assert.match(dashboard, /setOnClickListener \{ onPlatform\?\.invoke\(platform\.id\) \}/);
-  assert.match(dashboard, /TRENDING MOVIES/);
+  assert.match(fragment, /"Trending Movies"/);
   assert.match(fragment, /binding\.charmingVodDashboard\.bindFeatured\(chosen\)/);
   assert.match(fragment, /findNavController\(\)\.navigate\(R\.id\.platform_titles/);
   assert.match(top, /isFillViewport = true/);
-  assert.match(top, /LayoutParams\(0, dp\(110\), 1f\)/);
+  assert.match(top, /LayoutParams\(0, dp\(49\), 1f\)/);
 });
 
 test("unified VOD never covers native home with the old catalog loading screen", () => {

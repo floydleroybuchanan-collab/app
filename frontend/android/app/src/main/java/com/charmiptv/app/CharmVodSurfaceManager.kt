@@ -59,6 +59,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         private var mountStartedAt = 0L
         private var mountRetryCount = 0
         private var mountFailureSent = false
+        private var layoutPassPending = false
         var startSection: String = "home"
             set(value) {
                 field = value
@@ -70,6 +71,27 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             isFocusable = false
             descendantFocusability = FOCUS_AFTER_DESCENDANTS
             addView(container, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+
+        /**
+         * React Native's parent views end requestLayout() without scheduling a
+         * pass, so children added after RN sized this view (the VOD fragment)
+         * would stay 0x0 and show a blank page. Run that pass here instead.
+         */
+        override fun requestLayout() {
+            super.requestLayout()
+            if (layoutPassPending) return
+            layoutPassPending = true
+            post {
+                layoutPassPending = false
+                if (isAttachedToWindow && width > 0 && height > 0) {
+                    measure(
+                        View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+                    )
+                    layout(left, top, right, bottom)
+                }
+            }
         }
 
         private fun showFailure(message: String) {

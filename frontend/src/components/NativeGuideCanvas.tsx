@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { findNodeHandle, Platform, requireNativeComponent, type NativeSyntheticEvent, View } from "react-native";
 import type { Channel, Program } from "@/src/api";
 import { setGuideFocusedChannel, setGuideFocusedProgram } from "@/src/core/guideSelectionStore";
@@ -75,16 +75,30 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
     if (!Number.isFinite(windowStartMs) || !Number.isFinite(windowEndMs) || windowEndMs <= windowStartMs) return 0;
     return Math.max(windowStartMs, Math.min(windowEndMs - 1, requested));
   }, [restoreTimeMs, windowEndMs, windowStartMs]);
-  const [deferredRestoreChannelId, setDeferredRestoreChannelId] = useState("");
+  const [deferredRestore, setDeferredRestore] = useState({ channelId: "", generation: 0 });
   const [deferredRestoreTimeMs, setDeferredRestoreTimeMs] = useState(0);
+  const latestRestoreChannelId = useRef(validRestoreChannelId);
+  latestRestoreChannelId.current = validRestoreChannelId;
+  const lastReloadGeneration = useRef(reloadGeneration);
 
   // Apply restore props one render after the native channel/window props. This
   // avoids Android prop-order races where restoreChannel is evaluated while the
   // view still has its previous (or empty) row list and silently falls to row 1.
+  // Restore only on a new channel list or a logical reset (group change, jump).
+  // The JS channel id trails the native cursor, so following it on every render
+  // pulled the cursor backward while the remote was moving it.
   useEffect(() => {
-    setDeferredRestoreChannelId(validRestoreChannelId);
+    const channelId = latestRestoreChannelId.current;
+    const reloaded = lastReloadGeneration.current !== reloadGeneration;
+    lastReloadGeneration.current = reloadGeneration;
+    setDeferredRestore((previous) => {
+      if (!reloaded && previous.channelId === channelId) return previous;
+      return { channelId, generation: previous.generation + (reloaded ? 1 : 0) };
+    });
+  }, [channels, reloadGeneration]);
+  useEffect(() => {
     setDeferredRestoreTimeMs(validRestoreTimeMs);
-  }, [validRestoreChannelId, validRestoreTimeMs]);
+  }, [validRestoreTimeMs]);
 
   const handleSelectionChange = useCallback((event: NativeSyntheticEvent<SelectionEvent>) => {
     const value = event.nativeEvent;
@@ -131,7 +145,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       windowStartMs={windowStartMs}
       windowEndMs={windowEndMs}
       active={active}
-      restoreChannelId={deferredRestoreChannelId}
+      restoreChannelId={deferredRestore.channelId}
+      restoreGeneration={deferredRestore.generation}
       restoreTimeMs={deferredRestoreTimeMs}
       reloadGeneration={reloadGeneration}
       clock24h={clock24h}

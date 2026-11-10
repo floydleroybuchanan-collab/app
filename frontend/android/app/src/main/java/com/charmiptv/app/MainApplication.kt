@@ -93,7 +93,9 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
     com.streamflixreborn.streamflix.utils.UserDataCache.clearMemory()
     val pressure = trimLevel.name.lowercase()
     try {
-      reactNativeHost.reactInstanceManager.currentReactContext
+      // New-architecture context: the legacy manager would be a second, empty
+      // runtime object, and memory-pressure events would never reach JS.
+      reactHost.currentReactContext
         ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
         ?.emit("CharmMemoryPressure", pressure)
     } catch (_: Throwable) {

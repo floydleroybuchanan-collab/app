@@ -14,18 +14,46 @@ object VodPlatformCatalog {
     data class Platform(val id: String, val label: String, val mark: String, val tint: Int)
     val platforms = listOf(
         Platform("netflix","Netflix Originals","N",0xFFEB2832.toInt()),
-        Platform("disney","Disney+ Originals","Disney+",0xFF26B8EF.toInt()),
-        Platform("apple","Apple TV+ Originals","tv+",0xFFE2D8FF.toInt()),
-        Platform("hulu","Hulu Originals","hulu",0xFF26DF85.toInt()),
-        Platform("max","HBO / Max Originals","max",0xFFB68AF5.toInt()),
         Platform("prime","Prime Video Originals","prime",0xFF38B9ED.toInt()),
+        Platform("disney","Disney+ Originals","Disney+",0xFF26B8EF.toInt()),
+        Platform("max","HBO / Max Originals","max",0xFFB68AF5.toInt()),
+        Platform("hulu","Hulu Originals","hulu",0xFF26DF85.toInt()),
+        Platform("apple","Apple TV+ Originals","tv+",0xFFE2D8FF.toInt()),
         Platform("paramount","Paramount+ Originals","P+",0xFF468FF1.toInt()),
         Platform("peacock","Peacock Originals","peacock",0xFFFFA5CD.toInt()),
         // These are platform *navigation choices*, not proof of an Original
         // title. The catalog matcher only displays verified local titles.
         Platform("starz","STARZ","STARZ",0xFF36D6FB.toInt()),
-        Platform("amc","AMC+","AMC+",0xFF00DFD2.toInt()),
+        Platform("amc","AMC+ Originals","AMC+",0xFF00DFD2.toInt()),
+        Platform("youtube","YouTube Originals","YouTube",0xFFFF2B3B.toInt()),
+        Platform("crunchyroll","Crunchyroll Originals","crunchyroll",0xFFFF7A1A.toInt()),
     )
+    /** The twelve services on the Platforms page, in the order of the approved artwork. */
+    val pagePlatforms: List<Platform> = listOf(
+        "netflix", "disney", "apple", "hulu", "max", "prime", "paramount", "peacock",
+        "youtube", "starz", "amc", "crunchyroll",
+    ).map { id -> platforms.first { it.id == id } }
+
+    /** TMDb production credits: who actually made a title, not who merely carries it. */
+    data class Origin(val networks: String? = null, val companies: String? = null)
+
+    private val origins = mapOf(
+        "netflix" to Origin(networks = "213", companies = "178464"),
+        "disney" to Origin(networks = "2739"),
+        "apple" to Origin(networks = "2552", companies = "194232"),
+        "hulu" to Origin(networks = "453"),
+        "max" to Origin(networks = "49", companies = "3268"),
+        "prime" to Origin(networks = "1024", companies = "20580"),
+        "paramount" to Origin(networks = "4330"),
+        "peacock" to Origin(networks = "3353"),
+        "youtube" to Origin(networks = "1436"),
+        "starz" to Origin(networks = "318"),
+        "amc" to Origin(networks = "174|4661"),
+        "crunchyroll" to Origin(networks = "1112"),
+    )
+
+    fun origin(platformId: String): Origin? = origins[platformId]
+
     private val originals = listOf(
         Triple("Stranger Things",2016,"netflix"),Triple("The Crown",2016,"netflix"),
         Triple("Squid Game",2021,"netflix"),Triple("Wednesday",2022,"netflix"),

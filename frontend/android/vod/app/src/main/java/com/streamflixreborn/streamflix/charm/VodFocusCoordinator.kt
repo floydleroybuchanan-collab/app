@@ -12,6 +12,7 @@ import androidx.navigation.fragment.NavHostFragment
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.databinding.ActivityMainTvBinding
 import com.streamflixreborn.streamflix.providers.Provider
+import com.streamflixreborn.streamflix.providers.TmdbProvider
 import com.streamflixreborn.streamflix.utils.UserPreferences
 
 /**
@@ -59,9 +60,14 @@ class VodFocusCoordinator(
         // The video player and the provider selector remain full-screen.
         binding.vodGlassActions.visibility = if (destination.id == R.id.player ||
             destination.id == R.id.providers) View.GONE else View.VISIBLE
+        binding.vodGlassActions.setActiveDestination(destination.id)
+        // TMDb supports both kinds. Answering here keeps this per-navigation check
+        // from constructing every provider object in the table.
+        val provider = UserPreferences.currentProvider
+        val supportsEverything = provider == null || provider is TmdbProvider
         binding.vodGlassActions.setAvailable(
-            UserPreferences.currentProvider?.let { Provider.supportsMovies(it) } ?: true,
-            UserPreferences.currentProvider?.let { Provider.supportsTvShows(it) } ?: true,
+            supportsEverything || Provider.supportsMovies(provider!!),
+            supportsEverything || Provider.supportsTvShows(provider!!),
         )
         // Keep the embedded content container visible on every section
         // transition; only the native player may hide the top glass controls.
@@ -127,7 +133,8 @@ class VodFocusCoordinator(
             }
             if (inContent && content != null) {
                 val next = current.focusSearch(View.FOCUS_LEFT)
-                if (next == null || !VodFocusMemory.isWithin(content, next)) {
+                // A diagonal item in another row is not a Left neighbor.
+                if (next == null || !VodFocusMemory.isWithin(content, next) || !sharesRow(current, next)) {
                     return onHostRailFocus?.invoke() == true
                 }
             }
@@ -144,6 +151,12 @@ class VodFocusCoordinator(
             }
         }
         return false // Native Android D-pad handles all ordinary in-section moves.
+    }
+
+    private fun sharesRow(a: View, b: View): Boolean {
+        val first = IntArray(2).also(a::getLocationOnScreen)
+        val second = IntArray(2).also(b::getLocationOnScreen)
+        return first[1] < second[1] + b.height && second[1] < first[1] + a.height
     }
 
     fun focusBar(): Boolean = binding.vodGlassActions.visibility == View.VISIBLE &&

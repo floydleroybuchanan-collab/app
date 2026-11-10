@@ -2,7 +2,9 @@ package com.streamflixreborn.streamflix.utils
 
 import android.util.Log
 import android.webkit.CookieManager
+import okhttp3.ConnectionPool
 import okhttp3.ConnectionSpec
+import okhttp3.Dispatcher
 import com.streamflixreborn.streamflix.BuildConfig
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -31,6 +33,14 @@ object NetworkClient {
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
 
     private val cookieManager by lazy { CookieManager.getInstance() }
+
+    // The app's own clients share one idle-connection pool and one thread pool.
+    private val sharedConnectionPool = ConnectionPool()
+    private val sharedDispatcher = Dispatcher()
+
+    fun sharedBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
+        .connectionPool(sharedConnectionPool)
+        .dispatcher(sharedDispatcher)
 
     val cookieJar = object : CookieJar {
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
@@ -74,7 +84,7 @@ object NetworkClient {
     }
 
     private fun buildClient(dns: Dns, customizer: ((OkHttpClient.Builder) -> Unit)? = null): OkHttpClient {
-        val builder = OkHttpClient.Builder()
+        val builder = sharedBuilder()
             .addInterceptor { chain ->
                 val original = chain.request()
                 val requestBuilder = original.newBuilder()

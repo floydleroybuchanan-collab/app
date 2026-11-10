@@ -16,7 +16,7 @@
     <com.streamflixreborn.streamflix.charm.VodGlassActionBar
         android:id="@+id/vod_glass_actions"
         android:layout_width="0dp"
-        android:layout_height="130dp"
+        android:layout_height="62dp"
         android:clipChildren="false"
         android:clipToPadding="false"
         app:layout_constraintStart_toStartOf="parent"

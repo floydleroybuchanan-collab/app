@@ -96,6 +96,9 @@ let lastMainDrawerGroupName: string | null = null;
 export const PURPLE_SIDEBAR_WIDTH = 192;
 export const PURPLE_ICON_RAIL_WIDTH = 52;
 export const PURPLE_DRAWER_ANIMATION_MS = 180;
+// Native forwards only the first press of a held key, so this guards a double
+// event and nothing else; quick intentional presses must get through.
+const GUIDE_DRAWER_TRANSFER_GUARD_MS = 90;
 
 export type OpenDrawerOptions = {
   focusTop?: boolean;
@@ -370,7 +373,7 @@ export function PurpleTvShell({
     railRevealPendingRef.current = false;
     lastIconRailFocusRequestRef.current = iconRailFocusRequest;
     const node = iconRailRefs.current.get(active) || iconRailRefs.current.get(NAV[0].route);
-    const cancelFocus = requestNativeFocusWithRetry(node, [0, 70, 150], () => iconRailFocusOwnerRef.current !== null);
+    const cancelFocus = requestNativeFocusWithRetry(node, [0, 34, 100, 180], () => iconRailFocusOwnerRef.current !== null);
     return () => cancelFocus?.();
   }, [active, isFocused, showIconRail, iconRailFocusRequest, railFocusNonce, revealRail]);
 
@@ -418,9 +421,8 @@ export function PurpleTvShell({
     const off = active === "/guide"
       ? addTvKeyListener((key) => {
           if (key !== "RIGHT") return;
-          // A held key must transfer focus only once per animation window.
           const now = Date.now();
-          if (now - lastGuideDrawerTransferRef.current < PURPLE_DRAWER_ANIMATION_MS + 60) return;
+          if (now - lastGuideDrawerTransferRef.current < GUIDE_DRAWER_TRANSFER_GUARD_MS) return;
           lastGuideDrawerTransferRef.current = now;
           // This is an intentional drawer-to-drawer boundary transition, not an
           // accidental close during animation. Main must be gone before Groups
@@ -477,7 +479,7 @@ export function PurpleTvShell({
       : preferredRoute
         ? navRefs.current.get(preferredRoute)
         : null;
-    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 70, PURPLE_DRAWER_ANIMATION_MS + 20, 380, 560], () => drawerFocusConfirmedRef.current);
+    const cancelFocus = requestNativeFocusWithRetry(preferredNode, [0, 34, 100, PURPLE_DRAWER_ANIMATION_MS + 20, 380, 560], () => drawerFocusConfirmedRef.current);
     return () => {
       cancelFocus?.();
     };
@@ -760,9 +762,18 @@ export function PurpleTvShell({
         </FocusGuide>
       </Animated.View> : null}
 
-      {isFocused && drawerOpen ? <View style={styles.sidebarSpacer} /> : null}
+      {/* Drawers float over the page. Resizing it re-lays out the whole Guide or VOD on every step. */}
+      {isFocused && drawerOpen && active !== "/guide" && railPreferences.ready && railPreferences.enabled && !railTimedOut && !immersiveContent
+        ? <View style={styles.railPlaceholder} />
+        : null}
       {showIconRail ? (
-        <FocusGuide style={styles.iconRail} trapFocusUp trapFocusDown trapFocusLeft testID="purple-icon-rail">
+        <FocusGuide
+          style={[styles.iconRail, active === "/guide" && [styles.guideDrawerLayer, { left: edges.padding.left, top: edges.padding.top, bottom: edges.padding.bottom }]]}
+          trapFocusUp
+          trapFocusDown
+          trapFocusLeft
+          testID="purple-icon-rail"
+        >
           <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>
             <MediaLabArt kind="rail" width={43} height={59} />
           </View>
@@ -778,6 +789,7 @@ export function PurpleTvShell({
                   }}
                   focusable
                   accessibilityLabel={item.label}
+                  nativeID={selected ? "purple-icon-rail-selected" : undefined}
                   nextFocusRight={active === "/vod" ? undefined : contentReturnTag}
                   onFocus={() => claimIconRail(item.route)}
                   onBlur={() => releaseIconRail(item.route)}
@@ -815,7 +827,11 @@ export function PurpleTvShell({
           </Pressable>
         </FocusGuide>
       ) : null}
-      {isFocused && !drawerOpen && secondaryDrawer ? secondaryDrawer : null}
+      {isFocused && !drawerOpen && secondaryDrawer ? (
+        <View style={[styles.guideDrawerLayer, { left: edges.padding.left + (showIconRail ? PURPLE_ICON_RAIL_WIDTH : 0), top: edges.padding.top, bottom: edges.padding.bottom }]}>
+          {secondaryDrawer}
+        </View>
+      ) : null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
         style={[styles.content, contentStyle]}
@@ -838,7 +854,8 @@ export function PurpleTvShell({
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", backgroundColor: tvColors.canvas, overflow: "hidden" },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
-  sidebarSpacer: { width: PURPLE_SIDEBAR_WIDTH, height: "100%" },
+  railPlaceholder: { width: PURPLE_ICON_RAIL_WIDTH, height: "100%", flexShrink: 0 },
+  guideDrawerLayer: { position: "absolute", zIndex: 15 },
   iconRail: {
     width: PURPLE_ICON_RAIL_WIDTH,
     height: "100%",

@@ -55,6 +55,20 @@ class HomeTvFragment : Fragment() {
     private var isBackgroundPinned = false
     private var featuredItem: Show? = null
     private var catalogFailed = false
+    private var featuredItems: List<Show> = emptyList()
+    private var featuredIndex = 0
+    private val featuredRotation = object : Runnable {
+        override fun run() {
+            val b = _binding ?: return
+            if (featuredItems.size > 1 && !b.charmingVodDashboard.heroHasFocus()) {
+                featuredIndex = (featuredIndex + 1) % featuredItems.size
+                featuredItem = featuredItems[featuredIndex]
+                b.charmingVodDashboard.bindFeatured(featuredItem)
+                b.charmingVodDashboard.setFeaturedPosition(featuredIndex, featuredItems.size)
+            }
+            swiperHandler.postDelayed(this, FEATURED_ROTATION_MS)
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -76,7 +90,6 @@ class HomeTvFragment : Fragment() {
             if (catalogFailed) viewModel.getHome() else openFeaturedTitle()
         }
         dashboard.onFavorites = { navigateSection(R.id.favorites) }
-        dashboard.onViewMovies = { navigateSection(R.id.movies) }
         dashboard.onPlatform = { platformId ->
             runCatching {
                 findNavController().navigate(R.id.platform_titles, Bundle().apply {
@@ -141,6 +154,7 @@ class HomeTvFragment : Fragment() {
     
     override fun onStart() {
         super.onStart()
+        scheduleFeaturedRotation()
         // Riavvia il carosello se i dati sono già stati caricati e il fragment è visibile
         appAdapter.items
             .filterIsInstance<Category>()
@@ -228,8 +242,9 @@ class HomeTvFragment : Fragment() {
         binding.vgvHome.apply {
             adapter = appAdapter.apply {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
+                landscapeCards = true
             }
-            setItemSpacing(resources.getDimension(R.dimen.home_spacing).toInt() * 2)
+            setItemSpacing(0)
         }
 
         // Avoid stealing focus from the top navigation while catalog loads.
@@ -237,12 +252,16 @@ class HomeTvFragment : Fragment() {
     }
 
     private fun displayHome(categories: List<Category>) {
-        val chosen = categories.find { it.name == Category.FEATURED }
-            ?.list?.filterIsInstance<Show>()?.firstOrNull()
+        featuredItems = categories.find { it.name == Category.FEATURED }
+            ?.list?.filterIsInstance<Show>()?.take(4).orEmpty()
+        featuredIndex = featuredIndex.coerceIn(0, (featuredItems.size - 1).coerceAtLeast(0))
+        val chosen = featuredItems.getOrNull(featuredIndex)
             ?: categories.asSequence().flatMap { it.list.asSequence() }
                 .filterIsInstance<Show>().firstOrNull()
         featuredItem = chosen
         binding.charmingVodDashboard.bindFeatured(chosen)
+        binding.charmingVodDashboard.setFeaturedPosition(featuredIndex, featuredItems.size)
+        scheduleFeaturedRotation()
         categories
             .find { it.name == Category.FEATURED }
             ?.also {
@@ -296,7 +315,7 @@ class HomeTvFragment : Fragment() {
             ?.also { it.name = getString(R.string.home_favorite_tv_shows) }
 
         appAdapter.submitList(
-            categories
+            (leadShelves(categories) + categories)
                 .filter { it.list.isNotEmpty() && it.name != Category.FEATURED }
                 .onEach { category ->
                     if (category.name != getString(R.string.home_continue_watching)) {
@@ -315,6 +334,35 @@ class HomeTvFragment : Fragment() {
                     }
                 }
         )
+    }
+
+    /** The first screen always opens on these two shelves, ahead of personal rows. */
+    private fun leadShelves(categories: List<Category>): List<Category> {
+        val catalog = categories.filter {
+            it.name != Category.FEATURED &&
+                it.name != getString(R.string.home_continue_watching) &&
+                it.name != getString(R.string.home_recently_watched) &&
+                it.name != getString(R.string.home_favorite_movies) &&
+                it.name != getString(R.string.home_favorite_tv_shows)
+        }
+        val movies = catalog.firstOrNull { row -> row.list.any { it is Movie } }
+            ?.list?.filterIsInstance<Movie>().orEmpty()
+        val shows = catalog.firstOrNull { row -> row.list.any { it is TvShow } }
+            ?.list?.filterIsInstance<TvShow>().orEmpty()
+            .sortedByDescending { it.released?.timeInMillis ?: 0L }
+        return listOf(
+            Category(name = "Trending Movies", list = movies),
+            Category(name = "Latest TV Shows", list = shows),
+        )
+    }
+
+    private fun scheduleFeaturedRotation() {
+        swiperHandler.removeCallbacks(featuredRotation)
+        if (featuredItems.size > 1) swiperHandler.postDelayed(featuredRotation, FEATURED_ROTATION_MS)
+    }
+
+    private companion object {
+        const val FEATURED_ROTATION_MS = 8_000L
     }
 
     fun resetSwiperSchedule() {

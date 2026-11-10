@@ -18,7 +18,6 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
-import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -34,7 +33,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   // Reads every enabled guide store through the same binding-aware repository
   // as the React bridge; the canvas must never fall back to primary-only SQL.
-  private val combinedGuide = CombinedGuideRepository(context.applicationContext)
+  private val combinedGuide = CombinedGuideRepository(context.applicationContext, PAINT_DESCRIPTION_CHARS)
   private val io = Executors.newSingleThreadExecutor { task -> Thread(task, "CharmGuideRead").apply { isDaemon = true } }
   private val rows = ArrayList<ChannelRow>()
   @Volatile private var programs = emptyMap<String, Array<NativeEpgProgram>>()
@@ -58,6 +57,15 @@ class NativeGuideView(context: Context) : View(context) {
   private var selectKeyDown = false
   private var selectLongPressSeen = false
   private var pendingRestoreChannelId: String? = null
+  private var lastRestoreChannelId: String? = null
+  private var restoreGeneration = 0
+  // Rows whose read already covers this time range, including rows with no
+  // programmes. These skip SQLite until the range changes or the TTL lapses,
+  // and the TTL lets a finished EPG refresh reach rows that stay on screen.
+  private val coveredRows = HashSet<String>()
+  private var coveredStartMs = 0L
+  private var coveredEndMs = 0L
+  private var coveredAtMs = 0L
   private var pendingRestoreTimeMs: Long? = null
   private var reloadGeneration = 0
   // Keep the live Guide runway moving with wall-clock time. Manual horizontal
@@ -86,8 +94,10 @@ class NativeGuideView(context: Context) : View(context) {
       }
       // Route attachment and the remote owner can arrive after the active prop.
       // Bound retries; a menu/preview owner must never lose focus to this view.
+      // Growing delays span about 1.8s, enough for a closing drawer to hand back
+      // the remote owner.
       focusEntryAttempts += 1
-      if (focusEntryAttempts < 6) postDelayed(this, 80L)
+      if (focusEntryAttempts < 6) postDelayed(this, 120L * focusEntryAttempts)
     }
   }
 
@@ -103,6 +113,7 @@ class NativeGuideView(context: Context) : View(context) {
     post {
       if (disposed) return@post
       programs = emptyMap()
+      coveredRows.clear()
       generation += 1
       pendingQuery = null
       loadPrograms()
@@ -113,7 +124,9 @@ class NativeGuideView(context: Context) : View(context) {
   private val density = resources.displayMetrics.density
   private val channelWidth = 184f * density
   private val headerHeight = 38f * density
-  private val rowHeight = 54f * density
+  private val baseRowHeight = 54f * density
+  // Stretched in onSizeChanged so a whole number of rows fills the grid exactly.
+  private var rowHeight = baseRowHeight
   private val pad = 8f * density
 
   /** Three visible hours gives six equal 30-minute header columns on every TV size. */
@@ -173,6 +186,7 @@ class NativeGuideView(context: Context) : View(context) {
     rows.addAll(nextRows)
     val keepIds = nextRows.asSequence().map { it.id }.toHashSet()
     programs = programs.filterKeys { it in keepIds }
+    coveredRows.clear()
 
     val wantedId = pendingRestoreChannelId ?: currentRestoreId
     val restoreIndex = wantedId?.let { wanted -> rows.indexOfFirst { it.id == wanted } } ?: -1
@@ -253,7 +267,16 @@ class NativeGuideView(context: Context) : View(context) {
   fun restoreChannel(channelId: String?) {
     val wanted = channelId?.trim().orEmpty()
     if (wanted.isEmpty()) return
+    lastRestoreChannelId = wanted
     pendingRestoreChannelId = wanted
+    applyPendingRestoreChannel()
+  }
+
+  /** Re-applies an unchanged restore id: a repeat jump to the same channel sends no new id. */
+  fun setRestoreGeneration(value: Int) {
+    if (value == restoreGeneration) return
+    restoreGeneration = value
+    pendingRestoreChannelId = lastRestoreChannelId ?: return
     applyPendingRestoreChannel()
   }
 
@@ -273,6 +296,7 @@ class NativeGuideView(context: Context) : View(context) {
     if (value == reloadGeneration) return
     removeCallbacks(settleSelectionRunnable)
     reloadGeneration = value
+    coveredRows.clear()
     generation += 1
     pendingQuery = null
     // Logical Guide resets (group switch/Search/fullscreen return) keep the
@@ -345,6 +369,8 @@ class NativeGuideView(context: Context) : View(context) {
 
     val queryStart = max(windowStartMs, viewportStartMs - horizontalPrefetchBeforeMs)
     val queryEnd = min(windowEndMs, viewportEndMs() + horizontalPrefetchAfterMs)
+    val coverageFresh = SystemClock.uptimeMillis() - coveredAtMs < COVERAGE_TTL_MS
+    if (coverageFresh && queryStart >= coveredStartMs && queryEnd <= coveredEndMs && coveredRows.containsAll(ids)) return
     pendingQuery = GuideQuery(++generation, queryStart, queryEnd, ids)
     scheduleQueryDrain()
   }
@@ -382,7 +408,17 @@ class NativeGuideView(context: Context) : View(context) {
             while (merged.size > cap) {
               val oldest = merged.keys.firstOrNull() ?: break
               merged.remove(oldest)
+              coveredRows.remove(oldest)
             }
+            val readAt = SystemClock.uptimeMillis()
+            if (request.startMs != coveredStartMs || request.endMs != coveredEndMs || readAt - coveredAtMs >= COVERAGE_TTL_MS) {
+              coveredRows.clear()
+              coveredStartMs = request.startMs
+              coveredEndMs = request.endMs
+              coveredAtMs = readAt
+            }
+            coveredRows.addAll(request.ids)
+            for (id in request.ids) if (id !in merged && frozen[id] != null) coveredRows.remove(id)
             programs = merged
             invalidate()
             // Data arrival may update the selected programme payload, but only
@@ -551,8 +587,21 @@ class NativeGuideView(context: Context) : View(context) {
     emitRunway(delta)
   }
 
+  /** The small bias keeps float rounding from counting an exact fit one row short. */
+  private fun fullRowCount(): Int = max(1, ((height - headerHeight) / rowHeight + 0.01f).toInt())
+
+  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+    super.onSizeChanged(w, h, oldw, oldh)
+    val gridHeight = h - headerHeight
+    if (gridHeight <= 0f) return
+    rowHeight = gridHeight / max(1, (gridHeight / baseRowHeight).toInt())
+    ensureVisible()
+    loadPrograms()
+    invalidate()
+  }
+
   private fun ensureVisible() {
-    val visible = max(1, ((height - headerHeight) / rowHeight).toInt())
+    val visible = fullRowCount()
     if (selectedRow < firstVisibleRow) firstVisibleRow = selectedRow
     if (selectedRow >= firstVisibleRow + visible) firstVisibleRow = selectedRow - visible + 1
     firstVisibleRow = firstVisibleRow.coerceIn(0, max(0, rows.size - visible))
@@ -647,7 +696,7 @@ class NativeGuideView(context: Context) : View(context) {
     val visibleEndMs = viewportEndMs()
     // The last physical channel is also the bottom of the EPG grid.
     // Clipping both cells and time markers prevents phantom partial rows below it.
-    val visibleRows = max(1, ceil((height - headerHeight) / rowHeight).toInt())
+    val visibleRows = fullRowCount()
     val drawnRows = min(visibleRows, (rows.size - firstVisibleRow).coerceAtLeast(0))
     val gridBottom = min(height.toFloat(), headerHeight + drawnRows * rowHeight)
     drawHeader(canvas, visibleStartMs, visibleEndMs, gridBottom)
@@ -725,6 +774,10 @@ class NativeGuideView(context: Context) : View(context) {
 
   companion object {
     private const val LIVE_CLOCK_TICK_MS = 30_000L
+    private const val COVERAGE_TTL_MS = 60_000L
+    // The grid paints titles only. This short text covers the preview until the
+    // selected channel's full description arrives from React.
+    private const val PAINT_DESCRIPTION_CHARS = 200
     private const val PAINT_CACHE_CHANNELS = 128
     private const val LOW_RAM_PAINT_CACHE_CHANNELS = 64
   }

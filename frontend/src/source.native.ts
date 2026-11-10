@@ -771,10 +771,19 @@ async function ensureLoaded(): Promise<NativeMeta> {
     const old = new Map(cached.channels.map((channel) => [channel.id, channel]));
     cached.channels = combined.map((channel) => ({ ...channel, tvg_id: channel.id.startsWith("pl:") ? "" : old.get(channel.id)?.tvg_id || channel.tvg_id }));
     MEM = cached;
-    await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
-    await syncMatchesToNative(cached.channels, cached.guideEpoch || 0);
-    await syncPlaylistEpg(cached.channels);
-    void applyPersistedGuideOwnership().catch(() => undefined);
+    const syncNativeCatalog = async () => {
+      await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
+      await syncMatchesToNative(cached.channels, cached.guideEpoch || 0);
+      await syncPlaylistEpg(cached.channels);
+      void applyPersistedGuideOwnership().catch(() => undefined);
+    };
+    // A native snapshot already matches these SQL tables, so the first Guide
+    // paint does not wait on this bookkeeping. JSON/legacy caches still must.
+    if (!nativeCached) {
+      await syncNativeCatalog();
+    } else {
+      void syncNativeCatalog().catch((error) => console.warn("Guide catalog sync failed", error));
+    }
     if (cached.epgError) {
       lastSourceError = cached.epgError;
       setProgress({ phase: "error", ratio: 0, etaSeconds: null, message: cached.epgError }, true);

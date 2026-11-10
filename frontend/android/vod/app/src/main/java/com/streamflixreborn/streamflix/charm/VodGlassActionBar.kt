@@ -27,20 +27,21 @@ class VodGlassActionBar @JvmOverloads constructor(
         val id: Int, val title: String, val art: String, val first: Int, val second: Int,
     )
     private val actions = listOf(
-        Action(R.id.home, "Home", "home", 0xFF0DCBF9.toInt(), 0xFFFF6B4B.toInt()),
-        Action(R.id.search, "Search", "search", 0xFF18C3FF.toInt(), 0xFFDD35F9.toInt()),
-        Action(R.id.movies, "Movies", "movies", 0xFFFF7835.toInt(), 0xFFDE2ECB.toInt()),
-        Action(R.id.tv_shows, "TV Shows", "shows", 0xFF0DD7F8.toInt(), 0xFFF03BBE.toInt()),
-        Action(R.id.favorites, "My List", "favorites", 0xFFF4379E.toInt(), 0xFFFFAF35.toInt()),
-        Action(R.id.genre_hub, "Genres", "genres", 0xFFFFA136.toInt(), 0xFFC02AF4.toInt()),
-        Action(R.id.platforms, "Platforms", "platforms", 0xFF18C7FB.toInt(), 0xFFA942FA.toInt()),
+        Action(R.id.home, "Home", "home", 0xFF8E2BF0.toInt(), 0xFF4A0FA0.toInt()),
+        Action(R.id.search, "Search", "search", 0xFF10418F.toInt(), 0xFF061E4D.toInt()),
+        Action(R.id.movies, "Movies", "movies", 0xFFB01227.toInt(), 0xFF5A0A16.toInt()),
+        Action(R.id.tv_shows, "TV Shows", "shows", 0xFF123F90.toInt(), 0xFF081F4F.toInt()),
+        Action(R.id.favorites, "My List", "favorites", 0xFF0E8A3A.toInt(), 0xFF06451E.toInt()),
+        Action(R.id.genre_hub, "Genres", "genres", 0xFFA8740F.toInt(), 0xFF553A08.toInt()),
+        Action(R.id.platforms, "Platforms", "platforms", 0xFF4A2AB0.toInt(), 0xFF241358.toInt()),
     )
+    private var activeId = R.id.home
     private val strip = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         clipChildren = false
         clipToPadding = false
-        setPadding(dp(8), dp(4), dp(12), dp(4))
+        setPadding(dp(52), dp(6), dp(52), dp(7))
     }
     private val buttons = LinkedHashMap<Int, View>()
     private var lastFocusedId = R.id.home
@@ -57,7 +58,7 @@ class VodGlassActionBar @JvmOverloads constructor(
         setBackgroundColor(Color.TRANSPARENT)
         // Match the full-width seven-column header in the approved mockup;
         // minimum width preserves readable DPAD targets on compact TV displays.
-        strip.minimumWidth = dp(7 * 112)
+        strip.minimumWidth = dp(7 * 92)
         addView(strip, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         actions.forEachIndexed { index, action ->
             val button = LinearLayout(context).apply {
@@ -68,10 +69,10 @@ class VodGlassActionBar @JvmOverloads constructor(
                 isFocusableInTouchMode = false
                 isClickable = true
                 contentDescription = action.title
-                setPadding(dp(4), dp(3), dp(4), dp(5))
+                setPadding(dp(4), dp(2), dp(4), dp(2))
                 clipChildren = false
                 clipToPadding = false
-                background = buttonGlass(false, action.first, action.second)
+                background = buttonGlass(false, action.id == activeId, action.first, action.second)
                 elevation = dp(6).toFloat()
                 val icon = ImageView(context).apply {
                     setImageDrawable(CharmingVodTopIcon(action.art, action.first, action.second))
@@ -79,21 +80,21 @@ class VodGlassActionBar @JvmOverloads constructor(
                     isFocusable = false
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-                addView(icon, LinearLayout.LayoutParams(dp(72), dp(73)))
+                addView(icon, LinearLayout.LayoutParams(dp(25), dp(25)))
                 addView(TextView(context).apply {
                     text = action.title
                     gravity = Gravity.CENTER
-                    textSize = 15.5f
+                    textSize = 11.5f
                     setTextColor(Color.WHITE)
                     setTypeface(typeface, Typeface.BOLD)
                     isFocusable = false
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     maxLines = 1
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(16)))
                 setOnClickListener { onNavigate?.invoke(action.id) }
                 onFocusChangeListener = View.OnFocusChangeListener { view, focused ->
                     if (focused) lastFocusedId = action.id
-                    background = buttonGlass(focused, action.first, action.second)
+                    background = buttonGlass(focused, action.id == activeId, action.first, action.second)
                     view.animate().cancel()
                     view.animate()
                         .scaleX(if (focused) 1.08f else 1f)
@@ -107,8 +108,8 @@ class VodGlassActionBar @JvmOverloads constructor(
                     }
                 }
             }
-            strip.addView(button, LinearLayout.LayoutParams(0, dp(110), 1f).apply {
-                rightMargin = if (index == actions.lastIndex) 0 else dp(5)
+            strip.addView(button, LinearLayout.LayoutParams(0, dp(49), 1f).apply {
+                rightMargin = if (index == actions.lastIndex) 0 else dp(13)
             })
             buttons[action.id] = button
         }
@@ -130,15 +131,19 @@ class VodGlassActionBar @JvmOverloads constructor(
         if (buttons[lastFocusedId]?.visibility == View.GONE) lastFocusedId = R.id.home
     }
 
-    private fun buttonGlass(focused: Boolean, a: Int, b: Int) =
-        GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            if (focused) intArrayOf(a and 0x00FFFFFF or 0xC1000000.toInt(),
-                b and 0x00FFFFFF or 0x9A000000.toInt(), 0xA72E1056.toInt())
-            else intArrayOf(0x140F0821, 0x1B12072A, 0x1A180A2A)
-        ).apply {
-            cornerRadius = dp(16).toFloat()
-            setStroke(dp(if (focused) 2 else 0), if (focused) 0xFFE6B5FF.toInt() else Color.TRANSPARENT)
+    /** Highlights the section on screen; the focused button still reads above it. */
+    fun setActiveDestination(id: Int) {
+        if (id == activeId) return
+        activeId = id
+        actions.forEach { action ->
+            val button = buttons[action.id] ?: return@forEach
+            button.background = buttonGlass(button.isFocused, action.id == activeId, action.first, action.second)
         }
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    private fun buttonGlass(focused: Boolean, active: Boolean, a: Int, b: Int) =
+        VodGlass.surface(a, dp(10).toFloat(), dp(1), focused, active)
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density + .5f).toInt()
 }

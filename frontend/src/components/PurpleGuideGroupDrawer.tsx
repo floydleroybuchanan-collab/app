@@ -9,6 +9,12 @@ import { addTvKeyListener, addTvLongPressListener, resetRemoteContextIfOwned, se
 
 export const GUIDE_GROUP_DRAWER_WIDTH = 232;
 
+// The drawer opens with the rows the remote can reach right away. The rest are
+// appended below them after the transition, so nothing shifts under the cursor.
+const FIRST_PAINT_MIN_ROWS = 40;
+const FIRST_PAINT_ROWS_PAST_TARGET = 16;
+const REMAINING_ROWS_DELAY_MS = 260;
+
 // This drawer is conditionally mounted and unmounted on every guide handoff.
 // Keep only its last small identity token across mounts, never a View reference.
 let lastFocusedGuideGroupName: string | null = null;
@@ -37,6 +43,7 @@ export function PurpleGuideGroupDrawer({
   const focusIconRailRef = useRef(onFocusIconRail);
   const openMainDrawerRef = useRef(onOpenMainDrawer);
   const [preferActiveFocus, setPreferActiveFocus] = useState(false);
+  const [allRowsReady, setAllRowsReady] = useState(false);
 
   // Keep the latest callbacks/data available to the single open-scoped remote
   // listeners without tearing them down on every Guide render. Group counts and
@@ -85,8 +92,10 @@ export function PurpleGuideGroupDrawer({
       ? selectedName : (lastFocusedGuideGroupName || groupsRef.current[0]?.name || null);
     focusTargetNameRef.current = targetName;
     const node = targetName ? refs.current.get(targetName) : emptyRef.current;
-    const cancelFocus = requestNativeFocusWithRetry(node, [0, 80, 160, 260, 560], () => focusConfirmedRef.current);
+    const cancelFocus = requestNativeFocusWithRetry(node, [0, 34, 100, 200, 560], () => focusConfirmedRef.current);
+    const remainingRowsTimer = setTimeout(() => setAllRowsReady(true), REMAINING_ROWS_DELAY_MS);
     return () => {
+      clearTimeout(remainingRowsTimer);
       offKey();
       offLongPress();
       cancelFocus?.();
@@ -109,6 +118,12 @@ export function PurpleGuideGroupDrawer({
 
   if (!open) return null;
 
+  const firstPaintCount = Math.max(
+    FIRST_PAINT_MIN_ROWS,
+    groups.findIndex((item) => item.name === activeNameRef.current) + FIRST_PAINT_ROWS_PAST_TARGET,
+  );
+  const renderedGroups = allRowsReady ? groups : groups.slice(0, firstPaintCount);
+
   return (
     <View style={styles.overlay} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
@@ -118,7 +133,7 @@ export function PurpleGuideGroupDrawer({
             onPress={onOpenMainDrawer} style={({ focused }: any) => [styles.row, focused && styles.focused]}>
             <Text style={styles.name}>No enabled playlists · Open main menu</Text>
           </Pressable>}
-          {groups.map((item) => (
+          {renderedGroups.map((item) => (
             <Pressable
               key={item.name}
               ref={(node) => {

@@ -23,9 +23,13 @@ open class GlideCustomModule : AppGlideModule() {
     private fun getOkHttpClient(context: Context): OkHttpClient {
         val appCache = Cache(File(context.cacheDir, "vod/glide-okhttp-cache"), 10 * 1024 * 1024)
 
-        val logging = HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)
+        // Logging every artwork request allocates per image, so release builds skip it.
+        val logging = HttpLoggingInterceptor().setLevel(
+            if (com.streamflixreborn.streamflix.BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC
+            else HttpLoggingInterceptor.Level.NONE
+        )
 
-        return Builder()
+        return NetworkClient.sharedBuilder()
             .cache(appCache)
             .cookieJar(imageCookieJar)
             .addInterceptor { chain ->

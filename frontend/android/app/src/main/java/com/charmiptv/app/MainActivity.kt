@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.FocusFinder
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.View
@@ -91,6 +92,26 @@ class MainActivity : ReactActivity() {
     )
   }
 
+  private fun sharesRow(a: View, b: View): Boolean {
+    val first = IntArray(2).also(a::getLocationOnScreen)
+    val second = IntArray(2).also(b::getLocationOnScreen)
+    return first[1] < second[1] + b.height && second[1] < first[1] + a.height
+  }
+
+  /** LEFT stays in the page only for a real neighbor on the same row, never a diagonal one. */
+  private fun hasLeftNeighborInRow(focus: View, page: View): Boolean {
+    val next = FocusFinder.getInstance().findNextFocus(page as? ViewGroup ?: return false, focus, View.FOCUS_LEFT)
+    return next != null && next !== focus && visible(next) && sharesRow(focus, next)
+  }
+
+  private fun selectedRailItem(view: View): View? {
+    if (view.getTag(com.facebook.react.R.id.view_tag_native_id) == "purple-icon-rail-selected") return view
+    if (view is ViewGroup) for (index in 0 until view.childCount) {
+      selectedRailItem(view.getChildAt(index))?.let { return it }
+    }
+    return null
+  }
+
   /** UI-thread precondition for removing a rail: it cannot retain focus. */
   fun prepareIconRailHide(shellTag: Int): Boolean {
     val root = window.decorView.findViewById<View>(shellTag) ?: return true
@@ -124,9 +145,7 @@ class MainActivity : ReactActivity() {
           focus is EditText || TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "main_drawer") return false
       val guidePage = findTagged(root, "purple-tv-guide-page")
       val page = guidePage ?: findTagged(root, "purple-tv-page") ?: return false
-      if (!within(focus, page)) return false
-      val next = focus.focusSearch(View.FOCUS_LEFT)
-      if (next !== focus && visible(next) && within(next, page)) return false
+      if (!within(focus, page) || hasLeftNeighborInRow(focus, page)) return false
       if (event.repeatCount == 0) {
         if (guidePage != null) emitRemoteEvent("CharmGuideGroupsRequestOpen", "")
         else emitRemoteEvent("CharmIconRailReveal", root.id.toString())
@@ -153,11 +172,12 @@ class MainActivity : ReactActivity() {
     if (key != android.view.KeyEvent.KEYCODE_DPAD_LEFT || focus is EditText || focus is NativeGuideView) return false
     if (TvRemoteModule.remoteContext == "modal" || TvRemoteModule.remoteContext == "guide_groups") return false
     val page = findTagged(root, "purple-tv-page") ?: return false
-    if (!within(focus, page)) return false
-    val next = focus.focusSearch(View.FOCUS_LEFT)
-    if (next !== focus && visible(next) && within(next, page)) return false
-    val destination = if (visible(next) && within(next, rail)) next
-      else rail.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== rail && visible(it) && it.isEnabled }
+    if (!within(focus, page) || hasLeftNeighborInRow(focus, page)) return false
+    // Direct native handoff to the current route's icon: it needs no React
+    // state, so it works from the first frame after startup. A page with no icon
+    // of its own (a route outside the rail) enters at the rail's first item.
+    val destination = selectedRailItem(rail)
+      ?: rail.getFocusables(View.FOCUS_FORWARD).firstOrNull { it !== rail && visible(it) && it.isEnabled }
     destination?.requestFocus()
     return true
   }

@@ -4,26 +4,28 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.bumptech.glide.Glide
+import com.streamflixreborn.streamflix.charm.VodGlass
 import com.streamflixreborn.streamflix.charm.VodPlatformBadgeView
 import com.streamflixreborn.streamflix.charm.VodPlatformCatalog
 import com.streamflixreborn.streamflix.models.Movie
 import com.streamflixreborn.streamflix.models.Show
 import com.streamflixreborn.streamflix.models.TvShow
+import java.util.Calendar
 
 /**
- * The persistent VOD home composition, matching the approved TV mockup:
- * hero banner -> ten branded platforms + their own View All actions ->
- * Trending Movies header. Existing Leanback poster shelves sit immediately
- * beneath this header; all titles and artwork come from the selected provider.
+ * The persistent top of the VOD home: featured hero, then twelve branded platforms
+ * with their own View All actions. Poster shelves sit directly beneath it.
+ * Sizes follow the approved 960x540 layout and scale with the screen.
  *
  * Created synchronously, without awaiting a network request or a loading gate.
  * No second icon rail, Activity, WebView, player or hidden focus owner.
@@ -34,97 +36,118 @@ class CharmingVodDashboardView @JvmOverloads constructor(
     var onFeature: (() -> Unit)? = null
     var onFavorites: (() -> Unit)? = null
     var onPlatform: ((String) -> Unit)? = null
-    var onViewMovies: (() -> Unit)? = null
 
-    private fun dp(n: Int) = (n * resources.displayMetrics.density + 0.5f).toInt()
-    private val heightDp = (resources.displayMetrics.heightPixels / resources.displayMetrics.density).toInt()
-    val dashboardHeightDp: Int
+    private val density = resources.displayMetrics.density
+    private val screenScale =
+        (resources.displayMetrics.heightPixels / density / 540f).coerceIn(0.8f, 1.5f)
+
+    private fun dp(n: Float) = (n * screenScale * density + 0.5f).toInt()
+    private fun dp(n: Int) = dp(n.toFloat())
+
     private val hero = FrameLayout(context)
     private val banner = ImageView(context)
-    private val heroTitle = label("YOUR VOD LIBRARY", 28f, true)
-    private val heroDescription = label("Movies and series in your selected library", 13f, false)
-    private val heroMetadata = label("MOVIES  •  SERIES  •  FAVORITES", 12f, false)
-    private val heroDots = label("●  ○  ○  ○  ○", 13f, true)
-    private val watch = action("▶  Watch Now", 0xFFAB32F5.toInt(), 0xFF6A19C8.toInt())
-    private val myList = action("＋  My List", 0xFF4E335D.toInt(), 0xFF25142F.toInt())
+    private val heroTitle = label("YOUR VOD LIBRARY", 25f, true).apply {
+        maxLines = 2
+        ellipsize = TextUtils.TruncateAt.END
+    }
+    private val heroQuality = label("", 10.5f, true).apply {
+        gravity = Gravity.CENTER
+        setPadding(dp(7), 0, dp(7), 0)
+        background = GradientDrawable().apply {
+            cornerRadius = dp(5).toFloat()
+            setStroke(dp(1), 0xCCFFFFFF.toInt())
+        }
+        visibility = View.GONE
+    }
+    private val heroMetadata = label("MOVIES  |  SERIES  |  FAVORITES", 11f, false)
+    private val heroDescription = label("Movies and series in your selected library", 11.5f, false).apply {
+        maxLines = 2
+        ellipsize = TextUtils.TruncateAt.END
+    }
+    private val heroDots = label("●  ○  ○  ○", 8f, true).apply { setTextColor(0xFFD9B3FF.toInt()) }
+    private val watch = heroButton("▶  Watch Now", 0xFFA82BF2.toInt(), 0xFF5A14C4.toInt())
+    private val myList = heroButton("＋  My List", 0xCC2A1B38.toInt(), 0xCC120A1C.toInt())
 
     init {
         orientation = VERTICAL
         isFocusable = false
-        clipChildren = false
-        clipToPadding = false
-        setPadding(dp(12), dp(1), dp(12), 0)
-        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xFF180727.toInt(), 0xFF0E061B.toInt(), 0xFF160529.toInt()))
-        // Reserve space for the existing 130dp VOD top actions AND a
-        // navigable poster row on 720p/compact TV densities, so focus cannot
-        // disappear into content that sits below the viewport.
-        val availableDp = (heightDp - 130).coerceAtLeast(250)
-        val heroDp = (availableDp * 0.39f).toInt().coerceIn(112, 276)
-        val platformDp = (availableDp * 0.30f).toInt().coerceIn(110, 194)
-        dashboardHeightDp = heroDp + platformDp + 36
+        setPadding(dp(8), 0, dp(4), 0)
+        setBackgroundColor(Color.TRANSPARENT)
+        buildHero()
+        buildPlatforms()
+    }
 
-        hero.clipChildren = false
-        hero.clipToPadding = false
-        hero.background = GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF2E0C56.toInt(), 0xFF241246.toInt(), 0xFF160820.toInt())
-        ).apply {
-            cornerRadius = dp(19).toFloat()
-            setStroke(dp(1), 0xC05321A1.toInt())
+    private fun buildHero() {
+        hero.background = GradientDrawable().apply {
+            setColor(0xFF160820.toInt())
+            cornerRadius = dp(10).toFloat()
         }
+        hero.outlineProvider = ViewOutlineProvider.BACKGROUND
+        hero.clipToOutline = true
         banner.scaleType = ImageView.ScaleType.CENTER_CROP
-        banner.alpha = 0.93f
         banner.isFocusable = false
         hero.addView(banner, FrameLayout.LayoutParams(-1, -1))
         hero.addView(View(context).apply {
             isFocusable = false
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xF40C0719.toInt(), 0xD11A0A2F.toInt(), 0x4516072C, 0x12060413))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xF5090514.toInt(), 0xE00C0719.toInt(), 0x400C0719, 0x00000000),
+            )
         }, FrameLayout.LayoutParams(-1, -1))
+
         val copy = LinearLayout(context).apply {
             orientation = VERTICAL
-            gravity = Gravity.BOTTOM or Gravity.START
-            setPadding(dp(29), 0, dp(12), dp(18))
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(30), dp(10), dp(12), dp(10))
             isFocusable = false
         }
-        val eyebrow = label("A CHARMING MEDIALAB FEATURED TITLE", 10f, true).apply {
-            letterSpacing = 0.22f
-            setTextColor(0xFFECC9FF.toInt())
-        }
-        copy.addView(eyebrow)
-        copy.addView(heroTitle, LayoutParams(-1, -2).apply { topMargin = dp(10) })
-        copy.addView(heroMetadata, LayoutParams(-1, -2).apply { topMargin = dp(4) })
-        copy.addView(heroDescription, LayoutParams(-1, -2).apply { topMargin = dp(4) })
-        val actions = LinearLayout(context).apply {
+        val eyebrow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        actions.addView(watch, LayoutParams(-2, dp(35)))
-        actions.addView(myList, LayoutParams(-2, dp(35)).apply { leftMargin = dp(10) })
-        copy.addView(actions, LayoutParams(-2, dp(42)).apply { topMargin = dp(6) })
-        hero.addView(copy, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.START))
-        hero.addView(heroDots, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            bottomMargin = dp(7)
-        })
-        addView(hero, LayoutParams(-1, dp(heroDp)).apply { bottomMargin = dp(6) })
-        watch.setOnClickListener { onFeature?.invoke() }
-        myList.setOnClickListener { onFavorites?.invoke() }
+        eyebrow.addView(View(context).apply { setBackgroundColor(0xFFA335F2.toInt()) }, LayoutParams(dp(2), dp(18)))
+        eyebrow.addView(label("FEATURED", 9.5f, true).apply {
+            letterSpacing = 0.34f
+        }, LayoutParams(-2, -2).apply { leftMargin = dp(9) })
+        copy.addView(eyebrow)
+        copy.addView(heroTitle, LayoutParams(-1, -2).apply { topMargin = dp(3) })
 
-        val platforms = LinearLayout(context).apply {
-            orientation = VERTICAL
-            isFocusable = false
+        val meta = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        meta.addView(heroQuality, LayoutParams(-2, dp(16)).apply { rightMargin = dp(9) })
+        meta.addView(heroMetadata)
+        copy.addView(meta, LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        copy.addView(heroDescription, LayoutParams(-1, -2).apply { topMargin = dp(5) })
+
+        val actions = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             clipChildren = false
             clipToPadding = false
         }
-        platforms.addView(label("▎PLATFORMS", 18f, true).apply {
-            setTextColor(0xFFF8E4FF.toInt())
-            letterSpacing = 0.03f
-        }, LayoutParams(-1, dp(29)))
+        actions.addView(watch, LayoutParams(dp(132), dp(27)))
+        actions.addView(myList, LayoutParams(dp(104), dp(27)).apply { leftMargin = dp(16) })
+        copy.addView(actions, LayoutParams(-1, dp(32)).apply { topMargin = dp(8) })
+
+        hero.addView(copy, FrameLayout.LayoutParams((dp(880) * 0.46f).toInt(), -1, Gravity.START))
+        hero.addView(heroDots, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = dp(4)
+        })
+        addView(hero, LayoutParams(-1, dp(197)))
+        watch.setOnClickListener { onFeature?.invoke() }
+        myList.setOnClickListener { onFavorites?.invoke() }
+    }
+
+    private fun buildPlatforms() {
+        // All twelve scroll sideways inside this strip. Its bounds clip them,
+        // so neither the buttons nor their glow can reach another part of the app.
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             isFocusable = false
-            clipChildren = false
+            isSmoothScrollingEnabled = true
+            clipChildren = true
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
         }
@@ -133,10 +156,8 @@ class CharmingVodDashboardView @JvmOverloads constructor(
             gravity = Gravity.TOP
             clipChildren = false
             clipToPadding = false
-            setPadding(dp(3), dp(2), dp(12), 0)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
         }
-        val iconDp = (platformDp - 67).coerceIn(42, 104)
-        val tileDp = iconDp + 12
         VodPlatformCatalog.platforms.forEach { platform ->
             val tile = LinearLayout(context).apply {
                 orientation = VERTICAL
@@ -146,55 +167,45 @@ class CharmingVodDashboardView @JvmOverloads constructor(
                 isFocusable = false
             }
             val badge = VodPlatformBadgeView(context, platform, small = false).apply {
-                // The glass logo is itself a real TV remote/mouse target.
-                // "View All" beneath it is a second, equivalent entry point.
                 isFocusable = true
                 isClickable = true
                 contentDescription = "Open ${platform.label}"
                 setOnClickListener { onPlatform?.invoke(platform.id) }
                 onFocusChangeListener = OnFocusChangeListener { _, focused ->
                     showFocus(focused)
+                    if (focused) scroll.reveal(tile)
                 }
             }
-            tile.addView(badge, LayoutParams(dp(iconDp), dp(iconDp)))
-            val viewAll = action("View All  ›", platform.tint, 0xFF33104F.toInt()).apply {
-                textSize = 12.5f
-                contentDescription = "View all ${platform.label}"
-                background = badge.viewAllGlass(false)
-                onFocusChangeListener = OnFocusChangeListener { view, focused ->
-                    view.background = badge.viewAllGlass(focused)
-                    view.animate().cancel()
-                    view.animate().scaleX(if (focused) 1.06f else 1f)
-                        .scaleY(if (focused) 1.06f else 1f)
-                        .translationZ(if (focused) dp(12).toFloat() else 0f)
-                        .setDuration(135).start()
-                }
-            }
-            viewAll.setOnClickListener { onPlatform?.invoke(platform.id) }
-            tile.addView(viewAll, LayoutParams(dp(iconDp), dp(28)).apply { topMargin = dp(4) })
-            tiles.addView(tile, LayoutParams(dp(tileDp), -2).apply { rightMargin = dp(1) })
+            tile.addView(badge, LayoutParams(dp(72), dp(44)))
+            val viewAll = VodPlatformBadgeView(context, platform, small = false, pill = true)
+            viewAll.asRemoteTarget(
+                "View all ${platform.label}",
+                onOpen = { onPlatform?.invoke(platform.id) },
+                onFocused = { scroll.reveal(tile) },
+            )
+            tile.addView(viewAll, LayoutParams(dp(72), dp(18)).apply { topMargin = dp(1) })
+            tiles.addView(tile, LayoutParams(dp(87), -2))
         }
         scroll.addView(tiles, FrameLayout.LayoutParams(-2, -2))
-        platforms.addView(scroll, LayoutParams(-1, 0, 1f))
-        addView(platforms, LayoutParams(-1, dp(platformDp)))
-        val moviesHeader = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        addView(scroll, LayoutParams(-1, dp(75)).apply { topMargin = dp(1) })
+    }
+
+    /** Scrolls a whole tile into the strip, leaving room for its focus lift and glow. */
+    private fun HorizontalScrollView.reveal(tile: View) {
+        val start = tile.left - dp(4)
+        val end = tile.right + dp(4)
+        when {
+            start < scrollX -> smoothScrollTo(start, 0)
+            end > scrollX + width -> smoothScrollTo(end - width, 0)
         }
-        moviesHeader.addView(label("▎TRENDING MOVIES", 18f, true), LayoutParams(0, -2, 1f))
-        val moreMovies = label("View All  ›", 13.5f, true).apply {
-            isFocusable = true
-            isClickable = true
-            contentDescription = "View all movies"
-            setPadding(dp(12), dp(5), dp(12), dp(5))
-            background = buttonGlass(0xFF5B279F.toInt(), 0xFF291247.toInt(), false)
-            setOnClickListener { onViewMovies?.invoke() }
-            setOnFocusChangeListener { v, focused ->
-                v.background = buttonGlass(0xFF9441D9.toInt(), 0xFF3F1964.toInt(), focused)
-            }
-        }
-        moviesHeader.addView(moreMovies)
-        addView(moviesHeader, LayoutParams(-1, dp(36)))
+    }
+
+    fun heroHasFocus(): Boolean = hero.hasFocus()
+
+    /** Moves the dot marker; the fourth-of-four style matches the featured carousel. */
+    fun setFeaturedPosition(index: Int, count: Int) {
+        heroDots.visibility = if (count > 1) View.VISIBLE else View.INVISIBLE
+        heroDots.text = (0 until count).joinToString("  ") { if (it == index) "●" else "○" }
     }
 
     fun bindFeatured(item: Show?) {
@@ -213,13 +224,34 @@ class CharmingVodDashboardView @JvmOverloads constructor(
             is TvShow -> item.banner ?: item.poster
             else -> null
         }
+        val quality = when (item) {
+            is Movie -> item.quality
+            is TvShow -> item.quality
+            else -> null
+        }
+        val released = when (item) {
+            is Movie -> item.released
+            is TvShow -> item.released
+            else -> null
+        }
+        val rating = when (item) {
+            is Movie -> item.rating
+            is TvShow -> item.rating
+            else -> null
+        }
         heroTitle.text = title ?: "YOUR VOD LIBRARY"
-        heroDescription.text = description?.take(125) ?: "Browse movies, series and your favorite platforms"
-        heroDescription.maxLines = 2
+        heroDescription.text = description ?: "Browse movies, series and your favorite platforms"
+        heroQuality.text = quality.orEmpty()
+        heroQuality.visibility = if (quality.isNullOrBlank()) View.GONE else View.VISIBLE
+        heroMetadata.text = listOfNotNull(
+            released?.get(Calendar.YEAR)?.toString(),
+            rating?.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
+            when (item) { is Movie -> "Movie"; is TvShow -> "Series"; else -> null },
+        ).joinToString("   |   ")
         watch.isEnabled = item != null
         watch.alpha = if (item != null) 1f else 0.65f
         if (image != null) {
-            Glide.with(banner).load(image).into(banner)
+            Glide.with(banner).load(image.replace("/original/", "/w1280/")).into(banner)
         } else {
             Glide.with(banner).clear(banner)
         }
@@ -243,27 +275,22 @@ class CharmingVodDashboardView @JvmOverloads constructor(
         setTypeface(typeface, if (bold) Typeface.BOLD else Typeface.NORMAL)
         isFocusable = false
         gravity = Gravity.CENTER_VERTICAL
-        maxLines = 2
+        maxLines = 1
     }
 
-    private fun buttonGlass(a: Int, b: Int, focused: Boolean) =
-        GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(if (focused) a else (a and 0x00FFFFFF or 0xD0000000.toInt()),
-                if (focused) b else (b and 0x00FFFFFF or 0xB0000000.toInt()))
-        ).apply {
-            cornerRadius = dp(13).toFloat()
-            setStroke(dp(if (focused) 2 else 1), if (focused) Color.WHITE else 0xA1EDB7FF.toInt())
-        }
+    @Suppress("UNUSED_PARAMETER")
+    private fun buttonGlass(a: Int, b: Int, focused: Boolean, glow: Boolean) =
+        VodGlass.surface(a or 0xFF000000.toInt(), dp(14).toFloat(), dp(1), focused, glow)
 
-    private fun action(title: String, a: Int, b: Int): TextView =
-        label(title, 14f, true).apply {
+    private fun heroButton(title: String, a: Int, b: Int): TextView =
+        label(title, 12.5f, true).apply {
+            val glow = a == 0xFFA82BF2.toInt()
             gravity = Gravity.CENTER
             isFocusable = true
             isClickable = true
-            setPadding(dp(12), 0, dp(12), 0)
-            background = buttonGlass(a, b, false)
+            background = buttonGlass(a, b, false, glow)
             setOnFocusChangeListener { view, focused ->
-                view.background = buttonGlass(a, b, focused)
+                view.background = buttonGlass(a, b, focused, glow)
                 view.animate().cancel()
                 view.animate().scaleX(if (focused) 1.065f else 1f)
                     .scaleY(if (focused) 1.065f else 1f)

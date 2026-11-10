@@ -452,6 +452,10 @@ class MovieViewHolder(
                 true
             }
             setOnFocusChangeListener { _, hasFocus ->
+                if (landscapeCard) {
+                    com.streamflixreborn.streamflix.charm.VodHomeShelf.focusCard(binding.root, hasFocus)
+                    return@setOnFocusChangeListener
+                }
                 val animation = when {
                     hasFocus -> AnimationUtils.loadAnimation(context, R.anim.zoom_in)
                     else -> AnimationUtils.loadAnimation(context, R.anim.zoom_out)
@@ -471,7 +475,9 @@ class MovieViewHolder(
             }
         }
 
-        binding.ivMoviePoster.loadMoviePoster(movie) {
+        if (landscapeCard) {
+            com.streamflixreborn.streamflix.charm.VodHomeShelf.loadCard(binding.ivMoviePoster, movie.banner, movie.poster)
+        } else binding.ivMoviePoster.loadMoviePoster(movie) {
             fallback(R.drawable.glide_fallback_cover)
             centerCrop()
             transition(DrawableTransitionOptions.withCrossFade())
@@ -498,7 +504,16 @@ class MovieViewHolder(
         binding.tvMovieReleasedYear.text = movie.released?.format("yyyy")
             ?: context.getString(R.string.movie_item_type)
         binding.tvMovieTitle.text = movie.title
+        if (landscapeCard) {
+            com.streamflixreborn.streamflix.charm.VodHomeShelf.styleCard(
+                binding.root, binding.ivMoviePoster, binding.tvMovieTitle,
+                binding.tvMovieQuality, binding.tvMovieReleasedYear,
+            )
+        }
     }
+
+    private val landscapeCard: Boolean
+        get() = (bindingAdapter as? AppAdapter)?.landscapeCards == true
 
     private fun displayGridMobileItem(binding: ItemMovieGridMobileBinding) {
         binding.root.apply {

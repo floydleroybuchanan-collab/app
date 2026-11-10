@@ -27,6 +27,8 @@ import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.providers.TmdbProvider
 import com.streamflixreborn.streamflix.utils.TMDb3
+import com.streamflixreborn.streamflix.utils.TMDb3.original
+import com.streamflixreborn.streamflix.utils.TMDb3.w500
 import com.streamflixreborn.streamflix.models.Movie
 import com.streamflixreborn.streamflix.models.Show
 import com.streamflixreborn.streamflix.models.TvShow
@@ -53,8 +55,9 @@ class VodPlatformsFragment : Fragment() {
     private data class CatalogSnapshot(
         val originals: Map<String, List<Show>>,
         val allowed: List<Show>,
-        val canDiscoverNetworks: Boolean,
+        val tmdbLanguage: String?,
     )
+    private data class PlatformTitles(val movies: List<Show>, val series: List<Show>)
     private fun dp(n: Int) = (n * resources.displayMetrics.density + .5f).toInt()
     private val platformId: String? get() = arguments?.getString("platformId")
 
@@ -64,8 +67,9 @@ class VodPlatformsFragment : Fragment() {
             isFillViewport = true
             isFocusable = false
             setBackgroundColor(0xFF120A20.toInt())
-            clipChildren = false
-            clipToPadding = false
+            // Rows and focused posters stay inside the page, under the top bar.
+            clipChildren = true
+            clipToPadding = true
         }
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -112,7 +116,7 @@ class VodPlatformsFragment : Fragment() {
                     withContext(Dispatchers.IO) {
                         val provider = UserPreferences.currentProvider
                         if (provider == null) {
-                            CatalogSnapshot(emptyMap(), emptyList(), false)
+                            CatalogSnapshot(emptyMap(), emptyList(), null)
                         } else {
                             val categories = HomeCacheStore.read(requireContext().applicationContext, provider)
                                 ?: runCatching { provider.getHome() }.getOrDefault(emptyList())
@@ -123,9 +127,11 @@ class VodPlatformsFragment : Fragment() {
                             CatalogSnapshot(
                                 verified,
                                 allowed,
-                                // TMDb IDs are trustworthy only with the TMDb provider.
-                                provider is TmdbProvider && UserPreferences.enableTmdb &&
-                                    (BuildConfig.TMDB_API_KEY.isNotBlank() || UserPreferences.tmdbApiKey.isNotBlank()),
+                                // TMDb credits identify titles only with the TMDb provider.
+                                (provider as? TmdbProvider)?.takeIf {
+                                    UserPreferences.enableTmdb &&
+                                        (BuildConfig.TMDB_API_KEY.isNotBlank() || UserPreferences.tmdbApiKey.isNotBlank())
+                                }?.language,
                             )
                         }
                     }
@@ -144,42 +150,64 @@ class VodPlatformsFragment : Fragment() {
 
             status.text = "Showing titles available in your selected VOD catalog."
             var shown = 0
-            val platforms = VodPlatformCatalog.platforms.filter {
+            val platforms = VodPlatformCatalog.pagePlatforms.filter {
                 currentPlatformId == null || it.id == currentPlatformId
-            }
-            platforms.forEach { platform ->
-                val items = snapshot.originals[platform.id].orEmpty()
-                if (items.isNotEmpty()) {
-                    shown++
-                    addPlatformRow(current, platform,
-                        if (currentPlatformId == null) items.take(14) else items, currentPlatformId == null)
+            }.ifEmpty { listOfNotNull(VodPlatformCatalog.byId(currentPlatformId)) }
+            // One section per platform keeps its rows together as results arrive.
+            val sections = platforms.associate { platform ->
+                platform.id to LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.VERTICAL
+                    clipChildren = false
+                    clipToPadding = false
+                    current.addView(this)
                 }
             }
-
-            if (snapshot.canDiscoverNetworks && snapshot.allowed.isNotEmpty()) {
-                val networksStatus = label("Checking TV network associations...", 14f).apply {
+            val curatedIds = hashSetOf<String>()
+            val language = snapshot.tmdbLanguage
+            fun addOriginals(platform: VodPlatformCatalog.Platform, found: List<Show>) {
+                val items = (snapshot.originals[platform.id].orEmpty() + found).distinctBy { showId(it) }
+                if (items.isEmpty()) return
+                shown++
+                items.forEach { curatedIds += showId(it) }
+                addPlatformRow(sections.getValue(platform.id), platform,
+                    if (currentPlatformId == null) items.take(14) else items, currentPlatformId == null)
+            }
+            if (language == null) platforms.forEach { addOriginals(it, emptyList()) }
+            if (language != null) {
+                val networksStatus = label("Checking each platform's own titles...", 14f).apply {
                     setTextColor(0xFFC7B3D8.toInt())
                 }
                 current.addView(networksStatus)
-                val allowed = snapshot.allowed
-                val networks = try {
+                val pages = if (currentPlatformId == null) 1 else 3
+                val discovered = try {
                     withTimeoutOrNull(15_000L) {
-                        withContext(Dispatchers.IO) { loadNetworkSeries(allowed) }
+                        withContext(Dispatchers.IO) { discoverPlatformTitles(platforms, language, pages) }
                     }
                 } catch (error: Exception) {
-                    Log.w("CharmVodPlatforms", "Optional network metadata unavailable", error)
+                    Log.w("CharmVodPlatforms", "Platform credits unavailable", error)
                     null
                 }
                 if (body == null) return@launch
                 current.removeView(networksStatus)
                 platforms.forEach { platform ->
-                    val associated = networks?.get(platform.id).orEmpty()
-                    if (associated.isNotEmpty()) {
+                    val titles = discovered?.get(platform.id)
+                    // A verified original always sits in the Originals row, and
+                    // a network credit alone never claims to be one.
+                    val credited = titles?.let { it.movies + it.series }.orEmpty()
+                    addOriginals(platform, credited.filter { VodPlatformCatalog.find(it)?.id == platform.id })
+                    if (titles == null) return@forEach
+                    val name = platform.label.substringBefore(" Originals")
+                    val section = sections.getValue(platform.id)
+                    val limit = if (currentPlatformId == null) 14 else Int.MAX_VALUE
+                    val movies = titles.movies.filter { VodPlatformCatalog.find(it) == null && showId(it) !in curatedIds }.take(limit)
+                    if (movies.isNotEmpty()) {
                         shown++
-                        addPlatformRow(current, platform,
-                            if (currentPlatformId == null) associated.take(14) else associated,
-                            currentPlatformId == null,
-                            platform.label.substringBefore(" Originals") + " • Network series")
+                        addPlatformRow(section, platform, movies, currentPlatformId == null, "$name • Movies")
+                    }
+                    val series = titles.series.filter { VodPlatformCatalog.find(it) == null && showId(it) !in curatedIds }.take(limit)
+                    if (series.isNotEmpty()) {
+                        shown++
+                        addPlatformRow(section, platform, series, currentPlatformId == null, "$name • Network series")
                     }
                 }
             }
@@ -194,89 +222,115 @@ class VodPlatformsFragment : Fragment() {
 
     /** Immediate keyboard/remote accessible choices, regardless of API speed. */
     private fun addPlatformShortcuts(column: LinearLayout) {
-        VodPlatformCatalog.platforms.chunked(4).forEach { group ->
+        VodPlatformCatalog.pagePlatforms.chunked(4).forEach { group ->
             val row = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 clipChildren = false
                 clipToPadding = false
             }
             group.forEach { platform ->
+                val open = {
+                    findNavController().navigate(R.id.platform_titles,
+                        Bundle().apply { putString("platformId", platform.id) })
+                    Unit
+                }
                 val tile = LinearLayout(requireContext()).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
-                    isFocusable = true
-                    isClickable = true
-                    contentDescription = "Browse ${platform.label}"
-                    setPadding(dp(6), dp(7), dp(6), dp(7))
+                    clipChildren = false
+                    clipToPadding = false
                 }
-                val badge = VodPlatformBadgeView(requireContext(), platform, small = true)
-                tile.addView(badge, LinearLayout.LayoutParams(dp(106), dp(45)))
-                tile.addView(label(platform.label.substringBefore(" Originals"), 13f).apply {
-                    gravity = Gravity.CENTER
-                    maxLines = 1
-                    isFocusable = false
-                })
-                tile.background = badge.glass(false)
-                tile.setOnFocusChangeListener { _, focused -> tile.background = badge.glass(focused) }
-                tile.setOnClickListener {
-                    findNavController().navigate(R.id.platform_titles,
-                        Bundle().apply { putString("platformId", platform.id) })
-                }
-                row.addView(tile, LinearLayout.LayoutParams(0, dp(110), 1f).apply {
-                    rightMargin = dp(10)
-                    bottomMargin = dp(12)
+                tile.addView(VodPlatformBadgeView(requireContext(), platform).apply {
+                    asRemoteTarget("Browse ${platform.label}", open)
+                }, LinearLayout.LayoutParams(dp(116), dp(80)))
+                tile.addView(VodPlatformBadgeView(requireContext(), platform, pill = true).apply {
+                    asRemoteTarget("View all ${platform.label}", open)
+                }, LinearLayout.LayoutParams(dp(116), dp(32)))
+                row.addView(tile, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    bottomMargin = dp(8)
                 })
             }
             column.addView(row)
         }
     }
 
-    /**
-     * Bounded TMDb network discovery for titles already present in the user's
-     * selected TMDb VOD source. Network credits must never be called Originals.
-     * Results are intentionally not stored in a new long-lived memory cache.
-     */
-    private suspend fun loadNetworkSeries(allowed: List<Show>): Map<String, List<Show>> = coroutineScope {
-        val library = allowed.filterIsInstance<TvShow>()
-            .mapNotNull { show -> show.id.toIntOrNull()?.let { it to show } }.toMap()
-        if (library.isEmpty()) return@coroutineScope emptyMap()
+    private fun artwork(resource: Int) = ImageView(requireContext()).apply {
+        setImageResource(resource)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        isFocusable = false
+    }
 
-        val networkIds = mapOf(
-            "netflix" to TMDb3.Network.NetworkId.NETFLIX.id,
-            "disney" to TMDb3.Network.NetworkId.DISNEY_PLUS.id,
-            "apple" to TMDb3.Network.NetworkId.APPLE_TV.id,
-            "hulu" to TMDb3.Network.NetworkId.HULU.id,
-            "max" to TMDb3.Network.NetworkId.HBO.id,
-            "prime" to TMDb3.Network.NetworkId.AMAZON.id,
-            "paramount" to TMDb3.Network.NetworkId.PARAMOUNT_PLUS.id,
-            "peacock" to TMDb3.Network.NetworkId.PEACOCK.id,
-        )
-        networkIds.map { (platform, networkId) ->
+    private fun showId(show: Show): String = when (show) {
+        is Movie -> "movie:" + show.id
+        is TvShow -> "tv:" + show.id
+    }
+
+    /**
+     * Titles credited to each platform as maker or original network. Every TMDb
+     * result is playable with the TMDb provider, so nothing is filtered against
+     * the much smaller home catalog. Nothing here is cached beyond the page.
+     */
+    private suspend fun discoverPlatformTitles(
+        platforms: List<VodPlatformCatalog.Platform>,
+        language: String,
+        pages: Int,
+    ): Map<String, PlatformTitles> = coroutineScope {
+        platforms.mapNotNull { platform ->
+            val origin = VodPlatformCatalog.origin(platform.id) ?: return@mapNotNull null
             async {
-                val series = mutableListOf<Show>()
-                // Up to three pages per service, five seconds max per query.
-                // Auth/API errors degrade to the curated originals list.
-                for (page in 1..3) {
-                    val response = withTimeoutOrNull(5_000L) {
-                        runCatching {
-                            TMDb3.Discover.tv(mapOf(
-                                TMDb3.Params.Key.WITH_NETWORKS to networkId.toString(),
-                                TMDb3.Params.Key.PAGE to page.toString(),
-                                TMDb3.Params.Key.LANGUAGE to "en-US",
-                            )).results
-                        }.getOrNull()
-                    } ?: break
-                    response.forEach { remote ->
-                        val local = library[remote.id] ?: return@forEach
-                        if (VodPlatformCatalog.find(local) == null && series.none { (it as TvShow).id == local.id }) {
-                            series += local
+                val movies = origin.companies?.let { companies ->
+                    fetchPages(pages) { page ->
+                        TMDb3.Discover.movie(mapOf(
+                            TMDb3.Params.Key.WITH_COMPANIES to companies,
+                            TMDb3.Params.Key.PAGE to page.toString(),
+                            TMDb3.Params.Key.LANGUAGE to language,
+                        )).results.map { remote ->
+                            Movie(
+                                id = remote.id.toString(),
+                                title = remote.title,
+                                overview = remote.overview,
+                                released = remote.releaseDate,
+                                rating = remote.voteAverage.toDouble(),
+                                poster = remote.posterPath?.w500,
+                                banner = remote.backdropPath?.original,
+                            )
                         }
                     }
-                    if (series.size >= 40) break
-                }
-                platform to series.take(40)
+                }.orEmpty()
+                val series = origin.networks?.let { networks ->
+                    fetchPages(pages) { page ->
+                        TMDb3.Discover.tv(mapOf(
+                            TMDb3.Params.Key.WITH_NETWORKS to networks,
+                            TMDb3.Params.Key.PAGE to page.toString(),
+                            TMDb3.Params.Key.LANGUAGE to language,
+                        )).results.map { remote ->
+                            TvShow(
+                                id = remote.id.toString(),
+                                title = remote.name,
+                                overview = remote.overview,
+                                released = remote.firstAirDate,
+                                rating = remote.voteAverage.toDouble(),
+                                poster = remote.posterPath?.w500,
+                                banner = remote.backdropPath?.original,
+                            )
+                        }
+                    }
+                }.orEmpty()
+                platform.id to PlatformTitles(
+                    ParentalControlUtils.filterItems(movies).filterIsInstance<Show>(),
+                    ParentalControlUtils.filterItems(series).filterIsInstance<Show>(),
+                )
             }
         }.awaitAll().toMap()
+    }
+
+    private suspend fun <T> fetchPages(pages: Int, load: suspend (Int) -> List<T>): List<T> {
+        val all = mutableListOf<T>()
+        for (page in 1..pages) {
+            val results = withTimeoutOrNull(5_000L) { runCatching { load(page) }.getOrNull() } ?: break
+            all += results
+        }
+        return all
     }
 
     private fun label(value: String, size: Float): TextView = TextView(requireContext()).apply {
@@ -291,39 +345,40 @@ class VodPlatformsFragment : Fragment() {
         val header = LinearLayout(requireContext()).apply {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(4), dp(15), 0, dp(6))
+            setPadding(dp(4), dp(12), 0, dp(6))
             clipChildren = false
         }
+        val art = VodPlatformArt.of(platform.id)
         val badge = VodPlatformBadgeView(requireContext(), platform, small = true)
-        header.addView(badge, LinearLayout.LayoutParams(dp(116), dp(50)))
-        header.addView(label(rowLabel, 20f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-            leftMargin = dp(14)
+        if (art != null) header.addView(artwork(art.button), LinearLayout.LayoutParams(dp(80), dp(55)))
+        else header.addView(badge, LinearLayout.LayoutParams(dp(104), dp(44)))
+        header.addView(label(rowLabel, 17f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            leftMargin = dp(12)
         })
         if (viewAll) {
-            val button = label("View All  ›", 15f).apply {
-                isFocusable = true
-                isClickable = true
-                setTextColor(Color.WHITE)
-                setTypeface(typeface, Typeface.BOLD)
-                contentDescription = "View all ${platform.label}"
-                elevation = dp(7).toFloat()
-                background = badge.viewAllGlass(false)
-                setPadding(dp(22), dp(12), dp(22), dp(12))
-                onFocusChangeListener = View.OnFocusChangeListener { v, focused ->
-                    // Each button uses its matching platform palette and neon
-                    // glass edge, never a generic purple outline.
-                    v.background = badge.viewAllGlass(focused)
-                    v.animate().cancel()
-                    v.animate().scaleX(if (focused) 1.08f else 1f).scaleY(if (focused) 1.08f else 1f)
-                        .translationZ(if (focused) dp(10).toFloat() else 0f)
-                        .setDuration(140L).start()
-                }
-                setOnClickListener {
-                    findNavController().navigate(R.id.platform_titles,
-                        Bundle().apply { putString("platformId", platform.id) })
-                }
+            val open = View.OnClickListener {
+                findNavController().navigate(R.id.platform_titles,
+                    Bundle().apply { putString("platformId", platform.id) })
             }
-            header.addView(button)
+            if (art != null) {
+                header.addView(VodPlatformBadgeView(requireContext(), platform, pill = true).apply {
+                    asRemoteTarget("View all ${platform.label}", { open.onClick(this) })
+                }, LinearLayout.LayoutParams(dp(112), dp(32)))
+            } else {
+                header.addView(label("View All  ›", 13f).apply {
+                    isFocusable = true
+                    isClickable = true
+                    gravity = Gravity.CENTER
+                    contentDescription = "View all ${platform.label}"
+                    background = badge.viewAllGlass(false)
+                    setPadding(dp(18), dp(8), dp(18), dp(8))
+                    onFocusChangeListener = View.OnFocusChangeListener { v, focused ->
+                        v.background = badge.viewAllGlass(focused)
+                        VodHomeShelf.liftCard(v, focused)
+                    }
+                    setOnClickListener(open)
+                })
+            }
         }
         column.addView(header)
         val posters = RecyclerView(requireContext()).apply {
@@ -332,11 +387,11 @@ class VodPlatformsFragment : Fragment() {
             isFocusable = false
             clipChildren = false
             clipToPadding = false
-            setPadding(dp(6), dp(7), dp(8), dp(13))
+            setPadding(dp(6), dp(9), dp(8), dp(11))
             setHasFixedSize(true)
             overScrollMode = View.OVER_SCROLL_NEVER
         }
-        column.addView(posters, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(223)))
+        column.addView(posters, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(212)))
     }
 
     private inner class PosterAdapter(private val shows: List<Show>) :
@@ -347,22 +402,27 @@ class VodPlatformsFragment : Fragment() {
         override fun getItemCount() = shows.size
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PosterHolder {
+            val resting = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(0xFF2B1B40.toInt())
+                setStroke(dp(1), 0xFF5D3A85.toInt())
+            }
+            val raised = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(0xFF2B1B40.toInt())
+                setStroke(dp(2), Color.WHITE)
+            }
             val f = FrameLayout(parent.context).apply {
                 isFocusable = true
                 isClickable = true
-                clipChildren = false
-                clipToPadding = false
-                background = GradientDrawable().apply {
-                    cornerRadius = dp(14).toFloat()
-                    setColor(0xFF302344.toInt())
-                    setStroke(dp(1), 0xFF704D91.toInt())
-                }
+                background = resting
+                outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+                clipToOutline = true
             }
             val pic = ImageView(parent.context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                clipToOutline = true
             }
-            f.addView(pic, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(172)))
+            f.addView(pic, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(154)))
             val title = TextView(parent.context).apply {
                 setTextColor(Color.WHITE)
                 textSize = 12f
@@ -370,16 +430,13 @@ class VodPlatformsFragment : Fragment() {
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(7), dp(4), dp(7), dp(3))
             }
-            f.addView(title, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(41), Gravity.BOTTOM))
-            f.layoutParams = RecyclerView.LayoutParams(dp(126), dp(215)).apply {
-                rightMargin = dp(13)
+            f.addView(title, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38), Gravity.BOTTOM))
+            f.layoutParams = RecyclerView.LayoutParams(dp(113), dp(192)).apply {
+                rightMargin = dp(12)
             }
             f.onFocusChangeListener = View.OnFocusChangeListener { v, focused ->
-                v.animate().cancel()
-                v.animate().scaleX(if (focused) 1.075f else 1f)
-                    .scaleY(if (focused) 1.075f else 1f)
-                    .translationZ(if (focused) dp(9).toFloat() else 0f)
-                    .setDuration(145L).start()
+                v.background = if (focused) raised else resting
+                VodHomeShelf.liftCard(v, focused)
             }
             return PosterHolder(f, pic, title)
         }
@@ -389,8 +446,8 @@ class VodPlatformsFragment : Fragment() {
             val imageUrl = when(show) { is Movie -> show.poster; is TvShow -> show.poster }
             holder.caption.text = title
             holder.frame.contentDescription = title
-            // Glide owns lifecycle + disk/memory cache; 126x172 avoids full bitmap decode.
-            Glide.with(holder.poster).load(imageUrl).override(dp(126), dp(172)).centerCrop().into(holder.poster)
+            // Decoded at the poster's own size, so a full-size bitmap is never held.
+            Glide.with(holder.poster).load(imageUrl).override(dp(113), dp(154)).centerCrop().into(holder.poster)
             holder.frame.setOnClickListener {
                 val id = if (show is Movie) R.id.movie else R.id.tv_show
                 findNavController().navigate(id, Bundle().apply { putString("id", when(show) {

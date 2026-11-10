@@ -68,8 +68,82 @@ class CharmingPlatformArt(private val id: String) : Drawable() {
         canvas.drawText(text, x, y, brush)
     }
 
+    /** Set by the badge so a wide tile can show its focus outline. */
+    var focused = false
+
+    /** Wide tiles in a 40-unit-tall space, so logos are never squashed. */
+    private fun drawWide(canvas: Canvas) {
+        val save = canvas.save()
+        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
+        val unit = bounds.height() / 40f
+        canvas.scale(unit, unit)
+        val width = bounds.width() / unit
+        val cx = width / 2f
+        // See-through tint with a bright upper reflection, matching every VOD button.
+        brush.style = Paint.Style.FILL
+        brush.color = Color.WHITE
+        brush.shader = LinearGradient(0f, 0f, 0f, 40f,
+            a and 0x00FFFFFF or 0x4D000000, a and 0x00FFFFFF or 0x14000000, Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(0.5f, 0.5f, width - 0.5f, 39.5f, 6f, 6f, brush)
+        brush.shader = LinearGradient(0f, 0f, 0f, 20f, 0x47FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(0.5f, 0.5f, width - 0.5f, 20f, 6f, 6f, brush)
+        stroke(if (focused) Color.WHITE else (a and 0x00FFFFFF or 0xB3000000.toInt()), if (focused) 1.6f else 0.9f)
+        canvas.drawRoundRect(0.5f, 0.5f, width - 0.5f, 39.5f, 6f, 6f, brush)
+        when (id) {
+            "netflix" -> mark(canvas, "NETFLIX", 15f, cx, 26f, 0xFFE50914.toInt())
+            "prime" -> {
+                mark(canvas, "prime video", 11.5f, cx, 20f, 0xFF4CC4F2.toInt())
+                stroke(0xFF1FA8E8.toInt(), 1.6f)
+                canvas.drawArc(RectF(cx - 18f, 14f, cx + 16f, 31f), 30f, 120f, false, brush)
+            }
+            "disney" -> {
+                stroke(Color.WHITE, 0.9f)
+                canvas.drawArc(RectF(cx - 26f, 8f, cx + 26f, 40f), 195f, 150f, false, brush)
+                mark(canvas, "Disney+", 13.5f, cx, 28f, Color.WHITE, false)
+            }
+            "max" -> mark(canvas, "max", 20f, cx, 27f)
+            "hulu" -> mark(canvas, "hulu", 20f, cx, 27f, 0xFF1CE783.toInt())
+            "apple" -> {
+                brush.shader = null
+                brush.style = Paint.Style.FILL
+                brush.color = Color.WHITE
+                canvas.drawCircle(cx - 21f, 21f, 6.5f, brush)
+                canvas.drawOval(RectF(cx - 21f, 9f, cx - 15f, 13f), brush)
+                mark(canvas, "tv+", 20f, cx + 8f, 27f)
+            }
+            "paramount" -> {
+                val peak = Path().apply {
+                    moveTo(cx - 10f, 21f); lineTo(cx, 6f); lineTo(cx + 10f, 21f)
+                    lineTo(cx + 4f, 18f); lineTo(cx, 13f); lineTo(cx - 4f, 18f); close()
+                }
+                brush.shader = null
+                brush.style = Paint.Style.FILL
+                brush.color = Color.WHITE
+                canvas.drawPath(peak, brush)
+                mark(canvas, "Paramount+", 9f, cx, 33f, Color.WHITE, false)
+            }
+            "peacock" -> {
+                mark(canvas, "peacock", 13f, cx - 5f, 25f, Color.WHITE, false)
+                val dots = intArrayOf(0xFFFFD424.toInt(), 0xFFFF913C.toInt(), 0xFFFA2679.toInt(), 0xFF863DF8.toInt(), 0xFF1FC3F7.toInt())
+                brush.shader = null
+                brush.style = Paint.Style.FILL
+                dots.forEachIndexed { index, color ->
+                    brush.color = color
+                    canvas.drawCircle(cx + 27f, 12f + index * 4f, 1.5f, brush)
+                }
+            }
+            "starz" -> mark(canvas, "STARZ", 17f, cx, 26f, 0xFF19C8E8.toInt())
+            "amc" -> mark(canvas, "amc+", 17f, cx, 26f, 0xFF23EFE0.toInt(), false)
+        }
+        canvas.restoreToCount(save)
+    }
+
     override fun draw(canvas: Canvas) {
         if (bounds.isEmpty) return
+        if (bounds.width() > bounds.height() * 1.3f) {
+            drawWide(canvas)
+            return
+        }
         val save = canvas.save()
         canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
         canvas.scale(bounds.width()/100f, bounds.height()/100f)
@@ -132,11 +206,7 @@ class CharmingPlatformArt(private val id: String) : Drawable() {
                 }
             }
             "starz" -> mark(canvas, "STARZ", 32f, 50f, 62f)
-            "amc" -> {
-                stroke(0xFF17F3DD.toInt(),2.1f)
-                canvas.drawRect(19f,33f,82f,72f,brush)
-                mark(canvas, "amc+", 28f, 50f, 61f, 0xFF23EFE0.toInt(), false)
-            }
+            "amc" -> mark(canvas, "amc+", 28f, 50f, 61f, 0xFF23EFE0.toInt(), false)
         }
         stroke(0x77FFFFFF, 1.5f)
         canvas.drawArc(RectF(14f, 12f, 85f, 88f), 196f, 70f, false, brush)

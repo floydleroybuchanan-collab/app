@@ -103,12 +103,14 @@ class CategoryViewHolder(
         onMovieLongClick: ((Movie) -> Unit)?,
         onTvShowLongClick: ((TvShow) -> Unit)?,
     ) {
+        val landscape = (bindingAdapter as? AppAdapter)?.landscapeCards == true
         binding.tvCategoryTitle.text = category.name
         binding.hgvCategory.apply {
             setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT)
 
             val categoryAdapter = (adapter as? AppAdapter) ?: AppAdapter().also { adapter = it }
             categoryAdapter.apply {
+                landscapeCards = landscape
                 this.onMovieClickListener = onMovieClick
                 this.onTvShowClickListener = onTvShowClick
                 this.onMovieLongClickListener = onMovieLongClick
@@ -120,6 +122,7 @@ class CategoryViewHolder(
             isFocusable = true
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
+        if (landscape) com.streamflixreborn.streamflix.charm.VodHomeShelf.styleRow(binding, category)
     }
 
 

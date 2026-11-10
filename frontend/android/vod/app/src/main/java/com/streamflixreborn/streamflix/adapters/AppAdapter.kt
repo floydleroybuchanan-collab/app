@@ -95,6 +95,8 @@ class AppAdapter(
     var onEpisodeClickListener: ((Episode) -> Unit)? = null
     var onSeasonClickListener: ((Season) -> Unit)? = null
     var onProviderClickListener: ((Provider) -> Unit)? = null
+    /** VOD home only: rows use the landscape card style. */
+    var landscapeCards = false
     // ---------------------------------
     interface Item {
         var itemType: Type

@@ -32,15 +32,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Existing provider-backed rows and player/detail navigation are retained. -->
+    <!-- Existing provider-backed rows and player/detail navigation are retained.
+         focusOutFront lets UP leave the first row for the platform buttons and hero. -->
     <androidx.leanback.widget.VerticalGridView
         android:id="@+id/vgv_home"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:clipChildren="false"
-        android:clipToPadding="false"
-        android:paddingTop="2dp"
-        android:paddingBottom="24dp"
+        android:layout_marginTop="4dp"
+        app:focusOutFront="true"
+        android:clipChildren="true"
+        android:clipToPadding="true"
+        android:paddingBottom="4dp"
         app:layout_constraintTop_toBottomOf="@id/charming_vod_dashboard"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"

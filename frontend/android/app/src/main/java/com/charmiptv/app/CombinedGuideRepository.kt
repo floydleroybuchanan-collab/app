@@ -7,7 +7,7 @@ import android.content.Context
  * the native Canvas. Playlist channel ids remain the public keys; custom XMLTV
  * ids are resolved only inside this boundary.
  */
-internal class CombinedGuideRepository(context: Context) {
+internal class CombinedGuideRepository(context: Context, private val descriptionChars: Int = 0) {
   private val appContext = context.applicationContext
   private val primary = EpgDatabase.shared(appContext)
   private val controlDao = EpgControlDatabase.get(appContext).dao()
@@ -35,7 +35,7 @@ internal class CombinedGuideRepository(context: Context) {
     val primaryEnabled = controlDao.source(PRIMARY_SOURCE_ID)?.enabled ?: true
     if (primaryEnabled) {
       val primaryIds = ids.filterNot { it in customOwned }
-      if (primaryIds.isNotEmpty()) result.addAll(primary.queryGuideWindow(startMs, endMs, primaryIds))
+      if (primaryIds.isNotEmpty()) result.addAll(primary.queryGuideWindow(startMs, endMs, primaryIds, descriptionChars))
     }
 
     for ((sourceId, bindings) in bindingsBySource) {
@@ -46,7 +46,7 @@ internal class CombinedGuideRepository(context: Context) {
         playlistByXmltv.getOrPut(xmltvId) { ArrayList() }.add(playlistId)
       }
       val sourceRows = CustomEpgStoreRegistry.database(appContext, sourceId)
-        .queryWindow(startMs, endMs, xmltvByPlaylist.values.toSet())
+        .queryWindow(startMs, endMs, xmltvByPlaylist.values.toSet(), descriptionChars)
       for (program in sourceRows) {
         for (playlistId in playlistByXmltv[program.channelId].orEmpty()) {
           result.add(program.copy(channelId = playlistId))

@@ -1,25 +1,37 @@
 package com.streamflixreborn.streamflix.charm
 
 import android.content.Context
+import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.Drawable
+import android.os.Build
 import android.view.Gravity
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.TextView
 
 /**
- * One lightweight semi-transparent glass badge treatment for ORIGINALS
- * shelves, content detail metadata and the temporary player corner.
- * The colored trim identifies the platform; focus remains purple branded.
- * No extra bitmaps, animations, image decoders or permanent view references.
+ * A platform's glass button artwork. On focus it rises toward the viewer and
+ * glows in the button's own color, staying inside the row that holds it.
  */
 class VodPlatformBadgeView(
     context: Context, val platform: VodPlatformCatalog.Platform,
     private val small: Boolean = false,
+    pill: Boolean = false,
 ) : TextView(context) {
     private val artwork = CharmingPlatformArt(platform.id)
+    private val glassArt: Drawable? = VodPlatformArt.of(platform.id)?.let {
+        context.getDrawable(if (pill) it.viewAll else it.button)
+    }
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var glowLevel = 0f
+    private var glowAnimator: ValueAnimator? = null
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
     init {
         text = ""
@@ -33,29 +45,68 @@ class VodPlatformBadgeView(
         elevation = dp(5).toFloat()
         isFocusable = false
         isClickable = false
-    }
-    override fun onDraw(canvas: Canvas) {
-        artwork.setBounds(0, 0, width, height)
-        artwork.draw(canvas)
-        // The logo artwork is drawn at full badge resolution; no text glyph
-        // or stock platform initial is substituted for the approved mark.
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                val insetX = view.width / 8
+                val insetY = view.height / 8
+                outline.setRoundRect(insetX, insetY, view.width - insetX, view.height - insetY, dp(12).toFloat())
+                outline.alpha = 1f
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            outlineSpotShadowColor = platform.tint
+            outlineAmbientShadowColor = platform.tint
+        }
     }
 
-    fun glass(focused: Boolean): GradientDrawable = GradientDrawable(
-        GradientDrawable.Orientation.TL_BR,
-        if (focused) intArrayOf(0x9A9F63CF.toInt(), 0xAB231A43.toInt(), 0x803B1854.toInt())
-        else intArrayOf(0x6BFFFFFF, 0x85331D54.toInt(), 0x633A225E)
-    ).apply {
-        cornerRadius = dp(if (small) 12 else 17).toFloat()
-        setStroke(dp(if (focused) 2 else 1),
-            if (focused) 0xFFE2B4FF.toInt() else platform.tint)
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w <= 0 || h <= 0) return
+        glowPaint.shader = RadialGradient(
+            w / 2f, h / 2f, maxOf(w, h) * GLOW_REACH,
+            intArrayOf(
+                platform.tint and 0x00FFFFFF or 0xF2000000.toInt(),
+                platform.tint and 0x00FFFFFF or 0x73000000,
+                platform.tint and 0x00FFFFFF,
+            ),
+            floatArrayOf(0.25f, 0.68f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        glassArt?.let { art ->
+            val fit = minOf(w.toFloat() / art.intrinsicWidth, h.toFloat() / art.intrinsicHeight)
+            val drawnW = (art.intrinsicWidth * fit).toInt()
+            val drawnH = (art.intrinsicHeight * fit).toInt()
+            art.setBounds((w - drawnW) / 2, (h - drawnH) / 2, (w + drawnW) / 2, (h + drawnH) / 2)
+        }
     }
+
+    override fun onDraw(canvas: Canvas) {
+        if (glowLevel > 0f && glowPaint.shader != null) {
+            glowPaint.alpha = (255 * glowLevel).toInt()
+            // A flattened halo fades out before the row's edge instead of being cut by it.
+            val reach = maxOf(width, height) * GLOW_REACH
+            canvas.save()
+            canvas.scale(1f, height * GLOW_HEIGHT / reach, width / 2f, height / 2f)
+            canvas.drawCircle(width / 2f, height / 2f, reach, glowPaint)
+            canvas.restore()
+        }
+        val glass = glassArt
+        if (glass != null) {
+            glass.draw(canvas)
+        } else {
+            artwork.setBounds(0, 0, width, height)
+            artwork.draw(canvas)
+        }
+    }
+
+    fun glass(focused: Boolean): Drawable =
+        VodGlass.surface(platform.tint, dp(if (small) 12 else 17).toFloat(), dp(1), focused)
     /**
      * The 'View All' chip follows the *specific platform* glass palette,
      * rather than reusing the generic purple section action.
      * Pair the branded badge and its action without additional bitmaps.
      */
-    fun viewAllGlass(focused: Boolean): GradientDrawable {
+    fun viewAllGlass(focused: Boolean): Drawable {
         val tones = when (platform.id) {
             "netflix" -> intArrayOf(0xFFF82D55.toInt(), 0xFFD11060.toInt(), 0xFF7D124C.toInt())
             "disney" -> intArrayOf(0xFF13CCF4.toInt(), 0xFF056EDB.toInt(), 0xFF203593.toInt())
@@ -69,20 +120,44 @@ class VodPlatformBadgeView(
             "amc" -> intArrayOf(0xFF09E7E4.toInt(), 0xFF047EAE.toInt(), 0xFF2F348C.toInt())
             else -> intArrayOf(platform.tint, 0xFF683A9A.toInt(), 0xFF29183C.toInt())
         }
-        return GradientDrawable(GradientDrawable.Orientation.TL_BR, tones).apply {
-            cornerRadius = dp(17).toFloat()
-            setStroke(dp(if (focused) 2 else 1),
-                if (focused) Color.WHITE else platform.tint)
-            alpha = if (focused) 255 else 230
+        return VodGlass.surface(tones[0], dp(9).toFloat(), dp(1), focused)
+    }
+
+    /** Rises toward the viewer with a shadow and lights up in the button's own color. */
+    fun showFocus(focused: Boolean) {
+        artwork.focused = focused
+        glowAnimator?.cancel()
+        glowAnimator = ValueAnimator.ofFloat(glowLevel, if (focused) 1f else 0f).apply {
+            duration = 170L
+            addUpdateListener {
+                glowLevel = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+        VodHomeShelf.liftCard(this, focused)
+    }
+
+    override fun onDetachedFromWindow() {
+        glowAnimator?.cancel()
+        glowAnimator = null
+        super.onDetachedFromWindow()
+    }
+
+    /** Makes this button a remote target that opens its platform's own screen. */
+    fun asRemoteTarget(description: String, onOpen: () -> Unit, onFocused: (() -> Unit)? = null) {
+        isFocusable = true
+        isClickable = true
+        contentDescription = description
+        setOnClickListener { onOpen() }
+        onFocusChangeListener = OnFocusChangeListener { _, focused ->
+            showFocus(focused)
+            if (focused) onFocused?.invoke()
         }
     }
 
-    fun showFocus(focused: Boolean) {
-        background = glass(focused)
-        animate().cancel()
-        animate().scaleX(if (focused) 1.08f else 1f)
-            .scaleY(if (focused) 1.08f else 1f)
-            .translationZ(if (focused) dp(9).toFloat() else 0f)
-            .setDuration(145L).start()
+    private companion object {
+        const val GLOW_REACH = 0.6f
+        const val GLOW_HEIGHT = 0.55f
     }
 }

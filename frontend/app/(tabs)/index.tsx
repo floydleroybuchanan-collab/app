@@ -264,9 +264,9 @@ function LiveTvHomeScreenContent() {
                 nextFocusLeft={iconRailEntryTag}
                 onFocus={() => {
                   entryFocus.onFocus();
-                  claimLeftEdge("hero-reload");
+                  claimLeftEdge("hero-action");
                 }}
-                onBlur={() => { entryFocus.onBlur(); releaseLeftEdge("hero-reload"); }}
+                onBlur={() => { entryFocus.onBlur(); releaseLeftEdge("hero-action"); }}
                 onPress={() => void hardRefresh()}
                 disabled={loading || refreshing}
                 style={({ focused }: any) => [styles.secondaryButton, focused && styles.focused]}

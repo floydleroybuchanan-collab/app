@@ -21,6 +21,25 @@
         app:layout_constraintTop_toTopOf="parent"
         tools:text="Title" />
 
+    <TextView
+        android:id="@+id/tv_category_view_all"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:clickable="true"
+        android:focusable="false"
+        android:paddingStart="8dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="2dp"
+        android:text="View All  ›"
+        android:textColor="#FFFFFF"
+        android:textSize="11.5sp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/tv_category_title"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/tv_category_title" />
+
     <androidx.leanback.widget.HorizontalGridView
         android:id="@+id/hgv_category"
         android:layout_width="0dp"
@@ -35,5 +54,22 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tv_category_title" />
+
+    <TextView
+        android:id="@+id/tv_category_more"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="2dp"
+        android:elevation="30dp"
+        android:focusable="false"
+        android:text="›"
+        android:textColor="#A335F2"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/hgv_category"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/hgv_category"
+        tools:ignore="HardcodedText" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

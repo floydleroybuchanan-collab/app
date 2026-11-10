@@ -167,7 +167,8 @@ function GuideSelectionPreview({
       (program) => program.start === selected.start && program.stop === selected.stop,
     );
     return {
-      displayedProgram: selected,
+      // The stored row carries the full description; the grid's copy is shortened.
+      displayedProgram: index >= 0 ? programs[index] : selected,
       nextProgram: index >= 0 ? programs[index + 1] : undefined,
     };
   }, [channel, liveCurrent, liveNext, programs, selection]);
@@ -630,7 +631,9 @@ function PurpleGuideScreenContent() {
       expandRunwayKeepSet(orderedFilteredIds, ids, pageSize, 1, filteredIdIndex),
     );
 
-    pendingRunwayPatchRef.current = { ids: dataIds, priorityIds };
+    // The native canvas reads its own rows from SQLite. React needs programmes
+    // only around the selection, so it no longer re-reads the whole runway.
+    pendingRunwayPatchRef.current = { ids: priorityIds.length ? priorityIds : dataIds, priorityIds };
     if (runwayPatchTimer.current) clearTimeout(runwayPatchTimer.current);
     const delay = rapid ? 110 : 0;
     runwayPatchTimer.current = setTimeout(() => {

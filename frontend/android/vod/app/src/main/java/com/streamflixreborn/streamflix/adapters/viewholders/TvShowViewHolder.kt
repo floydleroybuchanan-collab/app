@@ -292,6 +292,10 @@ class TvShowViewHolder(
                 true
             }
             setOnFocusChangeListener { _, hasFocus ->
+                if (landscapeCard) {
+                    com.streamflixreborn.streamflix.charm.VodHomeShelf.focusCard(binding.root, hasFocus)
+                    return@setOnFocusChangeListener
+                }
                 val animation = if (hasFocus) AnimationUtils.loadAnimation(context, R.anim.zoom_in) else AnimationUtils.loadAnimation(context, R.anim.zoom_out)
                 startAnimation(animation)
                 animation.fillAfter = true
@@ -304,7 +308,9 @@ class TvShowViewHolder(
                 }
             }
         }
-        setPoster(binding.ivTvShowPoster)
+        if (landscapeCard) {
+            com.streamflixreborn.streamflix.charm.VodHomeShelf.loadCard(binding.ivTvShowPoster, tvShow.banner, tvShow.poster)
+        } else setPoster(binding.ivTvShowPoster)
         bindRibbons(binding.ivTvShowFavoriteRibbon, binding.ivTvShowWatchedRibbon)
         binding.tvTvShowQuality.apply {
             text = tvShow.quality ?: ""
@@ -321,7 +327,16 @@ class TvShowViewHolder(
         }
         binding.tvTvShowLastEpisode.text = episodeBadgeText()
         binding.tvTvShowTitle.text = tvShow.title
+        if (landscapeCard) {
+            com.streamflixreborn.streamflix.charm.VodHomeShelf.styleCard(
+                binding.root, binding.ivTvShowPoster, binding.tvTvShowTitle,
+                binding.tvTvShowQuality, binding.tvTvShowLastEpisode,
+            )
+        }
     }
+
+    private val landscapeCard: Boolean
+        get() = (bindingAdapter as? AppAdapter)?.landscapeCards == true
 
     private fun displayGridMobileItem(binding: ItemTvShowGridMobileBinding) {
         binding.root.alpha = 1f
