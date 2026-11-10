@@ -22,7 +22,8 @@ test("mount failures retain complete native stack and deepest causes", () => {
   const manager = read("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt");
   assert.match(manager, /Log\.e\(TAG, "Embedded VOD failed to inflate\/mount", e\)/);
   assert.match(manager, /generateSequence\(error\) \{ it\.cause \}/);
-  assert.match(manager, /emit\("CharmVodMountError", failureSummary\(e\)\)/);
+  assert.match(manager, /val message = failureSummary\(e\)/);
+  assert.match(manager, /emit\("CharmVodMountError", message\)/);
   assert.match(manager, /host\.detachVodInput\(this\)/);
 });
 
@@ -44,7 +45,7 @@ test("VOD cache invalidation is scoped to VOD paths and its in-memory catalog", 
   assert.match(cache, /File\(app\.filesDir, "home-cache"\)/);
   assert.doesNotMatch(cache.replace(/\/\/[^\n]*/g, ""), /context\.cacheDir\.deleteRecursively\(\)/);
   assert.match(home, /MAX_MEMORY_PROVIDERS = 2/);
-  assert.match(home, /MAX_MEMORY_ITEMS = 3000/);
+  assert.match(home, /MAX_MEMORY_ITEMS = 1500/);
   assert.match(home, /synchronized\(memoryCache\)/);
   assert.match(home, /fun clearMemory\(\)/);
   assert.match(app, /HomeCacheStore\.clearMemory\(\)/);
@@ -197,4 +198,23 @@ test("VOD warms the retained hero and first posters without blocking app startup
   assert.match(warmer, /\.take\(10\)/);
   assert.match(app, /VodHomePrewarm\.onAppStart\(this\)/);
   assert.match(bridge, /showFailure\(message\)/);
+});
+
+test("VOD catalog and user caches are bounded without discarding watch history", () => {
+  const home = read(vod + "utils/HomeCacheStore.kt");
+  const user = read(vod + "utils/UserDataCache.kt");
+  const model = read(vod + "fragments/home/HomeViewModel.kt");
+  assert.match(home, /MAX_DISK_PROVIDERS = 3/);
+  assert.match(home, /MAX_DISK_BYTES = 24L \* 1024L \* 1024L/);
+  assert.match(home, /pruneOldCatalogs\(context, target\)/);
+  assert.match(home, /gson\.toJson\(payload, writer\)/);
+  assert.doesNotMatch(home, /gson\.toJson\(payload\)\.toByteArray/);
+  assert.match(user, /Collections\.synchronizedMap/);
+  assert.match(user, /size > 2/);
+  assert.match(model, /boundedLookupCache<TvShow>\(24\)/);
+  assert.match(model, /boundedLookupCache<List<Episode>>\(32\)/);
+  assert.doesNotMatch(model, /loadUserDataCache\(initialProvider\)/);
+  assert.match(model, /viewModelScope\.launch\(Dispatchers\.IO\)/);
+  // Do not evict the real user's saved favorites or watch history on a cache trim.
+  assert.doesNotMatch(home.split("private fun pruneOldCatalogs(")[1].split("private fun cacheFile(")[0], /user-data-cache|clearAll\(/);
 });
