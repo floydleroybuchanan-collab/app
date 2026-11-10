@@ -232,8 +232,10 @@ test("unified VOD artwork preserves host Glide and verifies TLS certificates", (
   const glide = read(vod + "ui/GlideCustomModule.kt");
   const loader = read(vod + "ui/AnimeOnlineNinjaCronetUrlLoader.kt");
   assert.match(glide, /registry\.prepend\(GlideUrl::class\.java, InputStream::class\.java, loader\)/);
-  assert.match(glide, /onlySpecialVodImages = !isSeparateVodProcess/);
-  assert.match(loader, /private val onlySpecialVodImages: Boolean = false/);
+  assert.doesNotMatch(glide, /isSeparateVodProcess|CharmVodProcess|registry\.replace\(/);
+  assert.match(glide, /AnimeOnlineNinjaCronetUrlLoader\.Factory\(context, okHttpClient\)/);
+  assert.doesNotMatch(loader, /onlySpecialVodImages|!onlySpecialVodImages/);
+  assert.match(loader, /override fun handles\(model: GlideUrl\): Boolean =/);
   assert.match(loader, /isAnimeOnlineNinja\(model\)/);
   assert.match(loader, /it\.startsWith\("sf_headers="\)/);
   assert.doesNotMatch(glide, /hostnameVerifier|sslSocketFactory|trustAllCerts/);
