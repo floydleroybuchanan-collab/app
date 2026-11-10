@@ -12,6 +12,7 @@ import com.streamflixreborn.streamflix.models.Movie
 import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.providers.AnimeOnlineNinjaProvider
 import com.streamflixreborn.streamflix.providers.Provider
+import com.streamflixreborn.streamflix.charm.VodHomePrewarm
 import com.streamflixreborn.streamflix.ui.UserDataNotifier
 import com.streamflixreborn.streamflix.utils.HomeCacheStore
 import com.streamflixreborn.streamflix.utils.ParentalControlUtils
@@ -439,6 +440,7 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
             val categories = provider.getHome()
             HomeCacheStore.write(appContext, provider, categories)
             _state.emit(State.SuccessLoading(categories))
+            VodHomePrewarm.warm(appContext, categories)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
