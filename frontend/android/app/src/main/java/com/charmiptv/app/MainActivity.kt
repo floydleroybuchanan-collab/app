@@ -141,6 +141,11 @@ class MainActivity : ReactActivity() {
       return true
     }
     if (onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+      // Native VOD buttons are not React focusables. Transfer focus directly
+      // into the existing VOD Fragment instead of relying on an RN guide's
+      // stale nextFocusRight tag or looking only at React children.
+      val vod = vodInputOwner as? CharmVodSurfaceManager.Surface
+      if (vod != null && visible(vod) && vod.restoreNativeFocus()) return true
       focusContentFromRail(root, rail, focus)
       // Failure leaves focus on the rail, never on a hidden/stale node.
       return true
@@ -197,6 +202,16 @@ class MainActivity : ReactActivity() {
     vodKeyHandler = null
     vodBackHandler = null
     vodBackKeyDownConsumed = false
+  }
+
+  /** Synchronous LEFT handoff from native VOD to the active rail control. */
+  fun focusVodRailFromContent(): Boolean {
+    val shell = findTagged(window.decorView, "purple-tv-shell") ?: return false
+    val rail = findTagged(shell, "purple-icon-rail") ?: return false
+    val focused = findTagged(rail, "purple-icon-rail-video-ondemand")
+    val candidate = focused ?: rail.getFocusables(View.FOCUS_FORWARD)
+      .firstOrNull { it !== rail && visible(it) && it.isEnabled }
+    return candidate?.requestFocus(View.FOCUS_LEFT) == true
   }
 
   private fun nativeVodOwnsFocus(): Boolean =
