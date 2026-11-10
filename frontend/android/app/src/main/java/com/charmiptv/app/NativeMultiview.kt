@@ -254,7 +254,10 @@ class MultiviewModule(private val ctx: ReactApplicationContext) : ReactContextBa
   override fun onHostPause() = onMain { NativeMultiview.session?.let(NativeMultiview::suspendSession) }
   override fun onHostResume() = onMain { NativeMultiview.session?.let(NativeMultiview::resumeSession) }
   override fun onHostDestroy() = onMain { NativeMultiview.session?.let(NativeMultiview::end) }
+  @Suppress("OVERRIDE_DEPRECATION")
   override fun onLowMemory() = onMain { NativeMultiview.memoryPressure() }
+  // API 24 and 25 TVs still send legacy trim levels.
+  @Suppress("DEPRECATION")
   override fun onTrimMemory(level: Int) { if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level == ComponentCallbacks2.TRIM_MEMORY_COMPLETE) onLowMemory() }
   override fun onConfigurationChanged(configuration: Configuration) = Unit
   override fun invalidate() { ctx.removeLifecycleEventListener(this); ctx.unregisterComponentCallbacks(this); onHostDestroy(); super.invalidate() }
