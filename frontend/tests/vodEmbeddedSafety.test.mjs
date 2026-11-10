@@ -71,3 +71,31 @@ test("native Back and D-pad navigation remain integrated with host drawer and VO
   assert.match(focus, /KEYCODE_DPAD_LEFT/);
   assert.match(focus, /KEYCODE_DPAD_RIGHT/);
 });
+
+test("unified VOD shows branded loading until native NavHost is ready", () => {
+  const route = read("app/(tabs)/vod.tsx");
+  const manager = read("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt");
+  const root = read(vod + "charm/VodRootFragment.kt");
+  assert.match(route, /<ActivityIndicator/);
+  assert.match(route, /<MediaLabArt/);
+  assert.match(route, /CharmVodRootReady/);
+  assert.match(route, /waitingLong/);
+  assert.match(route, /Retry VOD/);
+  assert.match(route, /await stopAllPlaybackSessions\("superseded"\)/);
+  assert.match(manager, /fun retryHost\(/);
+  assert.match(manager, /postDelayed\(\{ mountIfReady\(\) \}, 200L\)/);
+  assert.match(manager, /emit\("CharmVodRootReady", elapsedMs\.toString\(\)\)/);
+  assert.match(root, /onRootReady\?\.invoke\(\)/);
+  assert.match(root, /CharmVodRoot/);
+});
+
+test("Platforms always opens instantly with accessible choices and bounded discovery", () => {
+  const fragment = read(vod + "charm/VodPlatformsFragment.kt");
+  const nav = read(vod + "charm/VodGlassActionBar.kt");
+  assert.match(nav, /Action\(R\.id\.platforms, "Platforms"/);
+  assert.match(fragment, /addPlatformShortcuts\(column\)/);
+  assert.match(fragment, /findNavController\(\)\.navigate\(R\.id\.platform_titles/);
+  assert.match(fragment, /withTimeoutOrNull\(12_000L\)/);
+  assert.match(fragment, /withTimeoutOrNull\(15_000L\)/);
+  assert.match(fragment, /Catalog lookup took too long or failed/);
+});
