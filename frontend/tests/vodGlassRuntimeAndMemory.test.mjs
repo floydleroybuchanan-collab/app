@@ -66,3 +66,13 @@ test("movie and series detail Sources/My List are real focusable actions mapped 
     assert.match(viewholder, new RegExp('btn' + action + 'Favorite\\.performClick\\(\\)'));
   }
 });
+
+test("VOD cache clear preserves live OkHttp cache journals and Live TV/EPG state", () => {
+  const cache = read(native + "java/com/streamflixreborn/streamflix/utils/CacheUtils.kt");
+  const appGlide = read(native + "java/com/streamflixreborn/streamflix/ui/GlideCustomModule.kt");
+  assert.match(cache, /HomeCacheStore\.clearMemory\(\)/);
+  assert.match(cache, /it\.name != "glide-okhttp-cache"/);
+  assert.match(cache, /vod\.listFiles\(\)\?\.filterTo\(this\)/);
+  assert.doesNotMatch(cache.replace(/\/\/[^\n]*/g, ""), /context\.cacheDir\.deleteRecursively\(\)/);
+  assert.match(appGlide, /Cache\(File\(context\.cacheDir, "vod\/glide-okhttp-cache"\), 10 \* 1024 \* 1024\)/);
+});
