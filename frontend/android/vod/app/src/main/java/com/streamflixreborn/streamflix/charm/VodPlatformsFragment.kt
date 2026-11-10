@@ -138,13 +138,13 @@ class VodPlatformsFragment : Fragment() {
                                                 }.getOrDefault(emptyList())
                                             } ?: emptyList()
                                         }
-                                    }.awaitAll().forEach(found::addAll)
+                                    }.awaitAll().forEach { found.addAll(it) }
                                 }
                                 ParentalControlUtils.filterItems(found).filterIsInstance<Show>()
                             } else emptyList()
                             val matching = if (currentPlatformId != null && searched.isNotEmpty()) {
                                 VodPlatformCatalog.match(searched.asSequence(), maxPerPlatform = 60)
-                                    [currentPlatformId].orEmpty()
+                                    .get(currentPlatformId).orEmpty()
                             } else emptyList()
                             val originals = if (currentPlatformId != null && matching.isNotEmpty()) {
                                 val joined = (verified[currentPlatformId].orEmpty() + matching)
