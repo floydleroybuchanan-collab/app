@@ -76,14 +76,17 @@ test("native Back and D-pad navigation remain integrated with host drawer and VO
   assert.match(focus, /KEYCODE_DPAD_RIGHT/);
 });
 
-test("unified VOD opens native route immediately without a startup loading overlay", () => {
+test("unified VOD mounts the native route promptly with a non-focusable loading indicator until ready", () => {
   const route = read("app/(tabs)/vod.tsx");
   const manager = read("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt");
   const root = read(vod + "charm/VodRootFragment.kt");
   assert.match(route, /<NativeVod/);
   assert.match(route, /CharmVodRootReady/);
   assert.match(route, /void stopAllPlaybackSessions\("superseded"\)/);
-  assert.doesNotMatch(route, /<ActivityIndicator/);
+  assert.match(route, /<ActivityIndicator/);
+  assert.match(route, /isFocused && !mountError && !nativeReady/);
+  assert.match(route, /pointerEvents="none"/);
+  assert.match(route, /setNativeReady\(true\)/);
   assert.doesNotMatch(route, /waitingLong/);
   assert.match(manager, /fun retryHost\(/);
   assert.match(manager, /fun restoreNativeFocus\(/);

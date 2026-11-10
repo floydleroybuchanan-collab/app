@@ -92,7 +92,22 @@ jobs:
           packages: "platform-tools"
 
       - name: Install Android compile SDK and pinned NDK
-        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
+        run: |
+          set -euo pipefail
+          # Hosted Android SDK mirrors occasionally return a truncated NDK ZIP.
+          # Never bypass the pinned toolchain; remove only an incomplete NDK
+          # installation, then fetch the SAME version again.
+          for attempt in 1 2 3; do
+            if sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Pinned Android SDK/NDK installation failed after three attempts" >&2
+              exit 1
+            fi
+            rm -rf "${ANDROID_HOME}/ndk/27.1.12297006"
+            sleep "$((attempt * 5))"
+          done
 
       - name: Install JavaScript dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
