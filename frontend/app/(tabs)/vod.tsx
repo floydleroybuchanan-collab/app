@@ -57,8 +57,10 @@ export default function VideoOnDemandScreen() {
       <View
         style={styles.page}
         onLayout={({ nativeEvent: { layout } }) => {
-          const ready = layout.width > 0 && layout.height > 0;
-          setLayoutReady((current) => current === ready ? current : ready);
+          // Latch after the first valid measurement. Expo Tabs can resize a
+          // retained route to 0x0 while another tab is active; unmounting its
+          // Fragment on blur would destroy the VOD back stack and focus memory.
+          if (layout.width > 0 && layout.height > 0) setLayoutReady(true);
         }}
       >
         {Platform.OS === "android" && !mountError && layoutReady ? (
