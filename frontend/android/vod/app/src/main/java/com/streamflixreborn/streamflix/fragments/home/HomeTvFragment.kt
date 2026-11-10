@@ -4,10 +4,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -21,20 +23,17 @@ import com.streamflixreborn.streamflix.databinding.FragmentHomeTvBinding
 import com.streamflixreborn.streamflix.models.Category
 import com.streamflixreborn.streamflix.models.Episode
 import com.streamflixreborn.streamflix.models.Movie
+import com.streamflixreborn.streamflix.models.Show
 import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.utils.viewModelsFactory
 import kotlinx.coroutines.Runnable
-import com.streamflixreborn.streamflix.utils.CacheUtils
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.streamflixreborn.streamflix.utils.LoggingUtils
 import com.streamflixreborn.streamflix.utils.UserPreferences
-import com.streamflixreborn.streamflix.utils.ProviderChangeNotifier
 
 class HomeTvFragment : Fragment() {
-
-    private var hasAutoCleared409: Boolean = false
 
     private var _binding: FragmentHomeTvBinding? = null
     private val binding get() = _binding!!
@@ -54,6 +53,8 @@ class HomeTvFragment : Fragment() {
 
     private val swiperHandler = Handler(Looper.getMainLooper())
     private var isBackgroundPinned = false
+    private var featuredItem: Show? = null
+    private var catalogFailed = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -68,61 +69,73 @@ class HomeTvFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         initializeHome()
-
-        // Lightweight refresh when provider changes
-        viewLifecycleOwner.lifecycleScope.launch {
-            ProviderChangeNotifier.providerChangeFlow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect {
-                viewModel.getHome()
-            }
+        val dashboard = binding.charmingVodDashboard
+        // Paint real VOD chrome immediately; never gate this screen on provider IO.
+        binding.isLoading.root.visibility = View.GONE
+        dashboard.onFeature = {
+            if (catalogFailed) viewModel.getHome() else openFeaturedTitle()
+        }
+        dashboard.onFavorites = { navigateSection(R.id.favorites) }
+        dashboard.onViewMovies = { navigateSection(R.id.movies) }
+        dashboard.onPlatform = { platformId ->
+            runCatching {
+                findNavController().navigate(R.id.platform_titles, Bundle().apply {
+                    putString("platformId", platformId)
+                })
+            }.onFailure { Log.e("CharmVodHome", "Platform selection failed", it) }
         }
 
-        // Initial load
-        viewModel.getHome()
-
+        // The persistent dashboard is already inflated. Consume the cached raw
+        // catalog immediately, without waiting for favorites/history Room flows.
+        // HomeViewModel itself owns the initial and provider-change refresh.
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
+            viewModel.immediateState
+                .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                .collect { state ->
                 when (state) {
-                    HomeViewModel.State.Loading -> binding.isLoading.apply {
-                        root.visibility = View.VISIBLE
-                        pbIsLoading.visibility = View.VISIBLE
-                        gIsLoadingRetry.visibility = View.GONE
+                    HomeViewModel.State.Loading -> {
+                        // Existing catalog rows and all VOD navigation remain painted.
+                        binding.isLoading.root.visibility = View.GONE
                     }
                     is HomeViewModel.State.SuccessLoading -> {
+                        catalogFailed = false
+                        dashboard.restoreWatchButton()
                         displayHome(state.categories)
                         binding.vgvHome.visibility = View.VISIBLE
                         binding.isLoading.root.visibility = View.GONE
                     }
                     is HomeViewModel.State.FailedLoading -> {
-                        val code = (state.error as? retrofit2.HttpException)?.code()
-                        if (code == 409 && !hasAutoCleared409) {
-                            hasAutoCleared409 = true
-                            CacheUtils.clearAppCache(requireContext())
-                            android.widget.Toast.makeText(requireContext(), getString(com.streamflixreborn.streamflix.R.string.clear_cache_done_409), android.widget.Toast.LENGTH_SHORT).show()
-                            viewModel.getHome()
-                            return@collect
-                        }
+                        // A provider HTTP 409 must never delete the last known
+                        // working home snapshot or its artwork on next entry.
+                        Log.w("CharmVodHome", "Catalog refresh failed; preserving offline home", state.error)
                         Toast.makeText(
                             requireContext(),
                             state.error.message ?: "",
                             Toast.LENGTH_SHORT
                         ).show()
-                        binding.isLoading.apply {
-                            pbIsLoading.visibility = View.GONE
-                            gIsLoadingRetry.visibility = View.VISIBLE
-                            btnIsLoadingRetry.setOnClickListener { viewModel.getHome() }
-                            btnIsLoadingClearCache.setOnClickListener {
-                                CacheUtils.clearAppCache(requireContext())
-                                android.widget.Toast.makeText(requireContext(), getString(com.streamflixreborn.streamflix.R.string.clear_cache_done), android.widget.Toast.LENGTH_SHORT).show()
-                                viewModel.getHome()
-                            }
-                            btnIsLoadingErrorDetails.setOnClickListener {
-                                LoggingUtils.showErrorDialog(requireContext(), state.error)
-                            }
-                            binding.vgvHome.visibility = View.GONE
-                        }
+                        catalogFailed = true
+                        dashboard.reportCatalogError()
+                        // A transient provider failure never paints a blocking
+                        // black screen over the hero, platforms or existing rows.
+                        binding.isLoading.root.visibility = View.GONE
+                        binding.vgvHome.visibility =
+                            if (appAdapter.items.isEmpty()) View.GONE else View.VISIBLE
+
                     }
                 }
             }
+        }
+        // Enriched favorites/watch-history arrive separately and may update
+        // rows after the first catalog paint, never before it.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.state
+                .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                .collect { state ->
+                    if (state is HomeViewModel.State.SuccessLoading) {
+                        displayHome(state.categories)
+                        binding.vgvHome.visibility = View.VISIBLE
+                    }
+                }
         }
     }
     
@@ -175,6 +188,42 @@ class HomeTvFragment : Fragment() {
         syncFeaturedBackground()
     }
 
+    private fun navigateSection(destination: Int) {
+        runCatching { findNavController().navigate(destination) }
+            .onFailure { Log.e("CharmVodHome", "Cannot navigate to $destination", it) }
+    }
+
+    private fun openFeaturedTitle() {
+        val item = featuredItem ?: return
+        val destination = when (item) {
+            is Movie -> R.id.movie
+            is TvShow -> R.id.tv_show
+            else -> return
+        }
+        val id = when (item) {
+            is Movie -> item.id
+            is TvShow -> item.id
+            else -> return
+        }
+        val poster = when (item) {
+            is Movie -> item.poster
+            is TvShow -> item.poster
+            else -> null
+        }
+        val banner = when (item) {
+            is Movie -> item.banner
+            is TvShow -> item.banner
+            else -> null
+        }
+        runCatching {
+            findNavController().navigate(destination, Bundle().apply {
+                putString("id", id)
+                putString("poster", poster)
+                putString("banner", banner)
+            })
+        }.onFailure { Log.e("CharmVodHome", "Featured title navigation failed", it) }
+    }
+
     private fun initializeHome() {
         binding.vgvHome.apply {
             adapter = appAdapter.apply {
@@ -183,10 +232,17 @@ class HomeTvFragment : Fragment() {
             setItemSpacing(resources.getDimension(R.dimen.home_spacing).toInt() * 2)
         }
 
-        binding.root.requestFocus()
+        // Avoid stealing focus from the top navigation while catalog loads.
+        binding.vgvHome.isFocusable = false
     }
 
     private fun displayHome(categories: List<Category>) {
+        val chosen = categories.find { it.name == Category.FEATURED }
+            ?.list?.filterIsInstance<Show>()?.firstOrNull()
+            ?: categories.asSequence().flatMap { it.list.asSequence() }
+                .filterIsInstance<Show>().firstOrNull()
+        featuredItem = chosen
+        binding.charmingVodDashboard.bindFeatured(chosen)
         categories
             .find { it.name == Category.FEATURED }
             ?.also {
@@ -209,7 +265,8 @@ class HomeTvFragment : Fragment() {
                     updateBackground(poster, null)
                 }
                 
-                resetSwiperSchedule()
+                // The dashboard owns the featured carousel, not a second
+                // hidden Leanback hero.
             }
 
         categories
@@ -240,7 +297,7 @@ class HomeTvFragment : Fragment() {
 
         appAdapter.submitList(
             categories
-                .filter { it.list.isNotEmpty() }
+                .filter { it.list.isNotEmpty() && it.name != Category.FEATURED }
                 .onEach { category ->
                     if (category.name != getString(R.string.home_continue_watching)) {
                         category.list.forEach { show ->

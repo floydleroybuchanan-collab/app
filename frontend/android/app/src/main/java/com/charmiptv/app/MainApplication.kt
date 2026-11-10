@@ -50,8 +50,8 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
 
   override fun onCreate() {
     super.onCreate()
-    // The native VOD page is in this APK but does not start React or Live TV decoders.
-    if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
+    // VOD is a child Fragment in MainActivity: one process, one application
+    // lifecycle, one shared cache/trim coordinator and one React runtime.
     // Install before React Native constructs the JS fetch client. The provider's
     // playlist/redirect cookies must also be available to native Media3.
     OkHttpClientProvider.setOkHttpClientFactory {
@@ -65,19 +65,20 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
       ReleaseLevel.STABLE
     }
     loadReactNative(this)
+    // Prime the last saved VOD catalog and first-screen artwork in background.
+    // Navigation, Live TV and startup never wait for this work.
+    com.streamflixreborn.streamflix.charm.VodHomePrewarm.onAppStart(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
     EpgUpdateScheduler.install(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
     ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
   }
 
   override fun onTrimMemory(level: Int) {
     super.onTrimMemory(level)
-    if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
     val trimLevel = when {
       level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
         level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> CharmTrimLevel.CRITICAL
@@ -86,6 +87,10 @@ class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactAp
       else -> null
     } ?: return
     CharmMemoryCoordinator.trim(trimLevel)
+    // The independent VOD home catalog is the first large allocation that
+    // can safely be discarded without touching Live TV/EPG decoder state.
+    com.streamflixreborn.streamflix.utils.HomeCacheStore.clearMemory()
+    com.streamflixreborn.streamflix.utils.UserDataCache.clearMemory()
     val pressure = trimLevel.name.lowercase()
     try {
       reactNativeHost.reactInstanceManager.currentReactContext

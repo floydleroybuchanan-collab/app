@@ -141,6 +141,11 @@ class MainActivity : ReactActivity() {
       return true
     }
     if (onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+      // Native VOD buttons are not React focusables. Transfer focus directly
+      // into the existing VOD Fragment instead of relying on an RN guide's
+      // stale nextFocusRight tag or looking only at React children.
+      val vod = vodInputOwner as? CharmVodSurfaceManager.Surface
+      if (vod != null && visible(vod) && vod.restoreNativeFocus()) return true
       focusContentFromRail(root, rail, focus)
       // Failure leaves focus on the rail, never on a hidden/stale node.
       return true
@@ -174,7 +179,69 @@ class MainActivity : ReactActivity() {
     }
   }
 
+  // The only Android Activity owns native VOD and host remote input together.
+  // The callback belongs to the mounted RN native view and is detached with it.
+  private var vodInputOwner: Any? = null
+  private var vodKeyHandler: ((android.view.KeyEvent) -> Boolean)? = null
+  private var vodBackHandler: (() -> Boolean)? = null
+  private var vodBackKeyDownConsumed = false
+
+  fun attachVodInput(
+    owner: Any,
+    onKey: (android.view.KeyEvent) -> Boolean,
+    onBack: () -> Boolean,
+  ) {
+    vodInputOwner = owner
+    vodKeyHandler = onKey
+    vodBackHandler = onBack
+  }
+
+  fun detachVodInput(owner: Any) {
+    if (vodInputOwner !== owner) return
+    vodInputOwner = null
+    vodKeyHandler = null
+    vodBackHandler = null
+    vodBackKeyDownConsumed = false
+  }
+
+  /** Synchronous LEFT handoff from native VOD to the active rail control. */
+  fun focusVodRailFromContent(): Boolean {
+    // Use the shell containing the actual VOD Surface. Expo Tabs can keep
+    // inactive shells in its view tree; window-wide search can focus a stale
+    // invisible rail in a different tab.
+    var shell: View? = vodInputOwner as? View
+    while (shell != null && testId(shell) != "purple-tv-shell")
+      shell = shell.parent as? View
+    val activeShell = shell?.takeIf { visible(it) } ?: return false
+    val rail = findTagged(activeShell, "purple-icon-rail") ?: return false
+    val focused = findTagged(rail, "purple-icon-rail-video-ondemand")
+    val candidate = focused ?: rail.getFocusables(View.FOCUS_FORWARD)
+      .firstOrNull { it !== rail && visible(it) && it.isEnabled }
+    return candidate?.requestFocus(View.FOCUS_LEFT) == true
+  }
+
+  private fun nativeVodOwnsFocus(): Boolean =
+    (vodInputOwner as? View)?.let { container ->
+      val focused = currentFocus
+      focused != null && within(focused, container)
+    } == true
+
+  override fun onBackPressed() {
+    if (nativeVodOwnsFocus() && vodBackHandler?.invoke() == true) return
+    super.onBackPressed()
+  }
+
   override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+    if (vodBackKeyDownConsumed && event.action == android.view.KeyEvent.ACTION_UP &&
+        event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+      vodBackKeyDownConsumed = false
+      return true
+    }
+    if (nativeVodOwnsFocus() && vodKeyHandler?.invoke(event) == true) {
+      if (event.action == android.view.KeyEvent.ACTION_DOWN && event.keyCode == android.view.KeyEvent.KEYCODE_BACK)
+        vodBackKeyDownConsumed = true
+      return true
+    }
     if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == shellBoundaryKeyDown) {
       shellBoundaryKeyDown = -1
       return true
@@ -505,6 +572,10 @@ class MainActivity : ReactActivity() {
     TvRemoteModule.pointerActive = false
     TvRemoteModule.guideNavigationActive = false
     TvRemoteModule.remoteContext = "default"
+    vodInputOwner = null
+    vodKeyHandler = null
+    vodBackHandler = null
+    vodBackKeyDownConsumed = false
     super.onDestroy()
   }
 

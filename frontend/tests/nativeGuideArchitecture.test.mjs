@@ -124,7 +124,8 @@ test("settings recovery and drawer transition guard are wired", async () => {
   assert.match(settings, /CharmShowAllSettings/);
   assert.match(epg, />All Settings</);
   assert.match(shell, /openedAtRef/);
-  assert.match(shell, /PURPLE_DRAWER_ANIMATION_MS \+ 70/);
+  assert.match(shell, /useNativeDriver: true/);
+  assert.doesNotMatch(shell, /Date\.now\(\) - openedAtRef\.current < PURPLE_DRAWER_ANIMATION_MS/);
 });
 
 test("Settings claims destination focus before swapping tile/detail trees", async () => {

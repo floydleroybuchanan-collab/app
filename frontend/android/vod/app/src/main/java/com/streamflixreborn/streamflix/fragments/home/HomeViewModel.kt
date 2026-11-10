@@ -12,6 +12,7 @@ import com.streamflixreborn.streamflix.models.Movie
 import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.providers.AnimeOnlineNinjaProvider
 import com.streamflixreborn.streamflix.providers.Provider
+import com.streamflixreborn.streamflix.charm.VodHomePrewarm
 import com.streamflixreborn.streamflix.ui.UserDataNotifier
 import com.streamflixreborn.streamflix.utils.HomeCacheStore
 import com.streamflixreborn.streamflix.utils.ParentalControlUtils
@@ -22,20 +23,24 @@ import com.streamflixreborn.streamflix.utils.UserDataCache.toEpisode
 import com.streamflixreborn.streamflix.utils.UserDataCache.toMovie
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import com.streamflixreborn.streamflix.utils.combine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
 
 class HomeViewModel(database: AppDatabase) : ViewModel() {
 
@@ -60,8 +65,20 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     private val _state = MutableStateFlow<State>(State.Loading)
-    private val continueWatchingTvShowCache = ConcurrentHashMap<String, TvShow>()
-    private val continueWatchingSeasonEpisodesCache = ConcurrentHashMap<String, List<Episode>>()
+    // Publish cached catalog without waiting for Room/history enrichment.
+    val immediateState: StateFlow<State> = _state.asStateFlow()
+    private var refreshJob: Job? = null
+    private var refreshingProviderKey: String? = null
+    // Enrichment lookups belong to this ViewModel, not a process-wide growing map.
+    private fun <T> boundedLookupCache(maxEntries: Int): MutableMap<String, T> =
+        Collections.synchronizedMap(object : LinkedHashMap<String, T>(maxEntries, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, T>?): Boolean =
+                size > maxEntries
+        })
+
+    private val continueWatchingTvShowCache = boundedLookupCache<TvShow>(24)
+    private val continueWatchingSeasonEpisodesCache = boundedLookupCache<List<Episode>>(32)
+    private var userDataJob: Job? = null
     private val _userDataCache = MutableStateFlow<UserDataCache.UserData?>(null)
     private var currentProvider: Provider? = null
 
@@ -325,11 +342,8 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
     }
 
     init {
-        val initialProvider = UserPreferences.currentProvider
-        if (initialProvider != null) {
-            currentProvider = initialProvider
-            loadUserDataCache(initialProvider)
-        }
+        // getHome() reads the cached catalog and starts user-data hydration once.
+        // Do not issue the same four Room queries twice on first VOD entry.
         viewModelScope.launch {
             ProviderChangeNotifier.providerChangeFlow.collect {
                 getHome()
@@ -399,11 +413,18 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
         }.awaitAll()
     }
 
-    fun getHome() = viewModelScope.launch(Dispatchers.IO) {
-        val provider = UserPreferences.currentProvider ?: run {
-            _state.emit(State.FailedLoading(IllegalStateException("No provider selected")))
-            return@launch
-        }
+    fun getHome() {
+        val provider = UserPreferences.currentProvider
+        val key = provider?.name
+        // Init, screen entry and provider notifications share one catalog refresh.
+        if (refreshJob?.isActive == true && refreshingProviderKey == key) return
+        refreshJob?.cancel()
+        refreshingProviderKey = key
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
+            if (provider == null) {
+                _state.emit(State.FailedLoading(IllegalStateException("No provider selected")))
+                return@launch
+            }
 
 
         currentProvider = provider
@@ -424,6 +445,9 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
             val categories = provider.getHome()
             HomeCacheStore.write(appContext, provider, categories)
             _state.emit(State.SuccessLoading(categories))
+            VodHomePrewarm.warm(appContext, categories)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("HomeViewModel", "getHome: ", e)
             if (cachedCategories.isNullOrEmpty()) {
@@ -432,14 +456,17 @@ class HomeViewModel(database: AppDatabase) : ViewModel() {
                 _state.emit(State.SuccessLoading(cachedCategories))
             }
         }
+        }
     }
 
     private fun loadUserDataCache(provider: Provider) {
-        val appContext = StreamFlixApp.instance.applicationContext
-        val cached = UserDataCache.read(appContext, provider)
-        _userDataCache.value = cached
-
-        viewModelScope.launch(Dispatchers.IO) {
+        // Never deserialize user-data JSON on the Android UI thread.
+        // Cancel superseded requests when the provider or favorites change.
+        userDataJob?.cancel()
+        userDataJob = viewModelScope.launch(Dispatchers.IO) {
+            val appContext = StreamFlixApp.instance.applicationContext
+            val cached = UserDataCache.read(appContext, provider)
+            _userDataCache.value = cached
             val db = AppDatabase.getInstance(appContext)
             val moviesDeferred = async { db.movieDao().getFavorites().first() }
             val tvShowsDeferred = async { db.tvShowDao().getFavorites().first() }

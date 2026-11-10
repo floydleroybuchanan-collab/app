@@ -62,6 +62,7 @@ import androidx.navigation.fragment.navArgs
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.fragments.player.settings.PlayerSettingsView
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.ContentExoControllerTvBinding
@@ -115,6 +116,8 @@ import org.json.JSONObject
 import java.util.Locale
 import java.util.UUID
 import com.streamflixreborn.streamflix.extractors.TokenManager
+import com.streamflixreborn.streamflix.charm.VodPlatformCatalog
+import com.streamflixreborn.streamflix.charm.VodPlatformBadgeView
 
 class PlayerTvFragment : Fragment() {
     companion object {
@@ -161,6 +164,7 @@ class PlayerTvFragment : Fragment() {
     private var wsServer: BypassWebSocketServer? = null
     private var nextEpisodePrefetchTargetId: String? = null
     private var nextEpisodePrefetchJob: Job? = null
+    private var platformBadgeJob: Job? = null
     private var nextEpisodeOverlayDismissed = false
     private val chooserReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -223,12 +227,24 @@ class PlayerTvFragment : Fragment() {
         player.play()
     }
 
+    // The VOD player is a child of Charming MainActivity: it must not mutate
+    // the Activity's orientation. For standalone VOD only, restore old behavior.
+    private var hostBarsBeforePlayback: Pair<Boolean, Boolean>? = null
+
     override fun onResume() {
         super.onResume()
         if (!isSetupDone) {
-            requireActivity().requestedOrientation =
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = requireActivity().window
+            if (!BuildConfig.CHARM_VOD_EMBEDDED) {
+                requireActivity().requestedOrientation =
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)
+                hostBarsBeforePlayback = if (insets != null) Pair(
+                    insets.isVisible(WindowInsetsCompat.Type.statusBars()),
+                    insets.isVisible(WindowInsetsCompat.Type.navigationBars())
+                ) else null
+            }
             val insetsController = WindowInsetsControllerCompat(window, window.decorView)
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -261,6 +277,7 @@ class PlayerTvFragment : Fragment() {
 
         initializePlayer(false)
         initializeVideo()
+        showTimedPlatformBadgeIfOriginal()
         binding.pvPlayer.onMediaPreviousClicked = ::handleMediaPrevious
         binding.pvPlayer.onMediaNextClicked = ::handleMediaNext
         gestureHelper = PlayerGestureHelper(
@@ -590,8 +607,24 @@ class PlayerTvFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+            // Restore the embedded host's pre-player system bars. No orientation
+            // change is ever requested while using Charming's MainActivity.
+            if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                hostBarsBeforePlayback?.let { (statusWasVisible, navigationWasVisible) ->
+                    val window = requireActivity().window
+                    val bars = WindowInsetsControllerCompat(window, window.decorView)
+                    if (statusWasVisible) bars.show(WindowInsetsCompat.Type.statusBars())
+                    else bars.hide(WindowInsetsCompat.Type.statusBars())
+                    if (navigationWasVisible) bars.show(WindowInsetsCompat.Type.navigationBars())
+                    else bars.hide(WindowInsetsCompat.Type.navigationBars())
+                }
+                hostBarsBeforePlayback = null
+            }
             super.onDestroyView()
             nextEpisodePrefetchJob?.cancel()
+            platformBadgeJob?.cancel()
+            binding.tvPlatformOriginBadge.animate().cancel()
+            binding.tvPlatformOriginBadge.visibility = View.GONE
             clearBypassSession(dismissDialog = true)
             releasePlayer()
             try {
@@ -601,6 +634,41 @@ class PlayerTvFragment : Fragment() {
             _binding = null
             isSetupDone = false
         }
+
+    /**
+     * The service badge is informational, never focusable and never permanent:
+     * show only after actual Media3 playback starts; fade it out 60 seconds later.
+     * The view-lifecycle coroutine is canceled on navigation/decoder release.
+     */
+    private fun showTimedPlatformBadgeIfOriginal() {
+        val platform = when (val type = args.videoType) {
+            is Video.Type.Movie ->
+                VodPlatformCatalog.find(type.title, type.releaseDate.take(4).toIntOrNull())
+            is Video.Type.Episode ->
+                VodPlatformCatalog.find(type.tvShow.title, type.tvShow.releaseDate?.take(4)?.toIntOrNull())
+        } ?: return
+        val badge = binding.tvPlatformOriginBadge
+        badge.visibility = View.GONE
+        badge.text = platform.mark + "  Original"
+        badge.background = VodPlatformBadgeView(requireContext(), platform, small = true).glass(false)
+        badge.alpha = 1f
+        platformBadgeJob?.cancel()
+        platformBadgeJob = viewLifecycleOwner.lifecycleScope.launch {
+            var remainingChecks = 120 // no permanent polling if source never starts
+            while (remainingChecks-- > 0 && (!::player.isInitialized || !player.isPlaying)) {
+                delay(1000L)
+            }
+            if (!::player.isInitialized || !player.isPlaying) return@launch
+            badge.visibility = View.VISIBLE
+            badge.alpha = 1f
+            delay(60_000L)
+            if (badge.isAttachedToWindow) {
+                badge.animate().alpha(0f).setDuration(700L).withEndAction {
+                    badge.visibility = View.GONE
+                }.start()
+            }
+        }
+    }
 
     fun onBackPressed(): Boolean = when {
 
@@ -793,7 +861,12 @@ class PlayerTvFragment : Fragment() {
                 ).show()
             }
 
-            binding.pvPlayer.controller.binding.exoReplay.setOnClickListener {
+            binding.pvPlayer.controller.binding.btnExoStop.setOnClickListener {
+            // navigateUp destroys the player fragment and runs its established
+            // releasePlayer()/prefetch cleanup. Do not keep a decoder alive.
+            findNavController().navigateUp()
+        }
+        binding.pvPlayer.controller.binding.exoReplay.setOnClickListener {
                 player.seekTo(0)
             }
 
@@ -1186,7 +1259,7 @@ class PlayerTvFragment : Fragment() {
                     super.onPlaybackStateChanged(playbackState)
 
                     if (playbackState == Player.STATE_READY) {
-                        binding.pvPlayer.controller.binding.exoPlayPause.nextFocusDownId = -1
+                        binding.pvPlayer.controller.binding.exoPlayPause.nextFocusDownId = R.id.btn_exo_stop
                         val videoFormat = player.videoFormat
                         updatePlayerScale()
                     }
@@ -1723,6 +1796,9 @@ class PlayerTvFragment : Fragment() {
             var tokenLogged = false
             val okHttpClient = OkHttpClient.Builder()
                 .dns(DnsResolver.doh)
+                // WebView/provider clearance cookies must accompany Media3 HLS
+                // playlists, segment and redirect requests as well.
+                .cookieJar(NetworkClient.cookieJar)
                 .addInterceptor { chain ->
                     var request = chain.request()
                     
