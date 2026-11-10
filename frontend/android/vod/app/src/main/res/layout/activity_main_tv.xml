@@ -11,16 +11,6 @@
     tools:deviceIds="tv"
     tools:ignore="MergeRootFrame">
 
-    <com.streamflixreborn.streamflix.charm.VodIconRail
-        android:id="@+id/nav_main"
-        android:visibility="gone"
-        android:focusable="false"
-        android:importantForAccessibility="noHideDescendants"
-        android:layout_width="72dp"
-        android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- TV-first VOD navigation; the wide top bar never traps vertical focus. -->
     <com.streamflixreborn.streamflix.charm.VodGlassActionBar
@@ -29,7 +19,7 @@
         android:layout_height="130dp"
         android:clipChildren="false"
         android:clipToPadding="false"
-        app:layout_constraintStart_toEndOf="@id/nav_main"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -42,21 +32,9 @@
         app:defaultNavHost="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/nav_main"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/vod_glass_actions"
         app:navGraph="@navigation/nav_main_graph_tv" />
 
-    <!-- Finite, skippable Charming MediaLab welcome; catalog loads underneath. -->
-    <com.streamflixreborn.streamflix.charm.CharmVodWelcomeView
-        android:id="@+id/iv_splash_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clickable="true"
-        android:focusable="true"
-        android:visibility="visible"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
