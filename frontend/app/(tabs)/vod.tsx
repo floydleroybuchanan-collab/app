@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
+import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 
 const NativeVod = requireNativeComponent<{ style?: any; startSection?: string; screenActive?: boolean }>("CharmVodSurface");
 
@@ -23,6 +24,8 @@ export default function VideoOnDemandScreen() {
   // A FragmentContainerView inserted into a 0x0 Fabric surface cannot draw.
   const [layoutReady, setLayoutReady] = useState(false);
   const enteredAt = useRef(0);
+  const retryButtonRef = useRef<any>(null);
+  const retryFocusedRef = useRef(false);
 
   useEffect(() => {
     const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawer({ force: true }));
@@ -42,6 +45,21 @@ export default function VideoOnDemandScreen() {
     });
     return () => { back.remove(); rail.remove(); mode.remove(); failure.remove(); mounted.remove(); };
   }, [focusIconRail, openDrawer]);
+
+  // The native Fragment may fail before any focusable child exists. A visible
+  // retry action must take real TV focus; Android should never require a mouse
+  // after a native error. Cancel bounded retries as soon as focus is confirmed.
+  useEffect(() => {
+    if (!isFocused || !mountError) {
+      retryFocusedRef.current = false;
+      return;
+    }
+    return requestNativeFocusWithRetry(
+      () => retryButtonRef.current,
+      [0, 80, 180, 360, 650],
+      () => retryFocusedRef.current,
+    );
+  }, [isFocused, mountError]);
 
   useFocusEffect(useCallback(() => {
     enteredAt.current = Date.now();
@@ -78,7 +96,16 @@ export default function VideoOnDemandScreen() {
             {Platform.OS === "android" ? (
               <Pressable
                 accessibilityLabel="Retry Video OnDemand"
-                onPress={() => { setMountError(null); setAttempt((n) => n + 1); }}
+                ref={retryButtonRef}
+                focusable
+                hasTVPreferredFocus
+                onFocus={() => { retryFocusedRef.current = true; }}
+                onBlur={() => { retryFocusedRef.current = false; }}
+                onPress={() => {
+                  retryFocusedRef.current = false;
+                  setMountError(null);
+                  setAttempt((n) => n + 1);
+                }}
                 style={styles.button}
               ><Text style={styles.buttonText}>Retry VOD</Text></Pressable>
             ) : null}
