@@ -69,7 +69,6 @@ object VodHomePrewarm {
                         when (it) {
                             is Movie -> it.poster ?: it.banner
                             is TvShow -> it.poster ?: it.banner
-                            else -> null
                         }
                     }
                     .distinct()
