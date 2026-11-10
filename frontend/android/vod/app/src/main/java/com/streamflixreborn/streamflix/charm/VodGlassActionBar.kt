@@ -48,13 +48,17 @@ class VodGlassActionBar @JvmOverloads constructor(
 
     init {
         isHorizontalScrollBarEnabled = false
+        isFillViewport = true
         isSmoothScrollingEnabled = true
         isFocusable = false
         clipChildren = false
         clipToPadding = false
         overScrollMode = View.OVER_SCROLL_NEVER
         setBackgroundColor(Color.TRANSPARENT)
-        addView(strip, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        // Match the full-width seven-column header in the approved mockup;
+        // minimum width preserves readable DPAD targets on compact TV displays.
+        strip.minimumWidth = dp(7 * 112)
+        addView(strip, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         actions.forEachIndexed { index, action ->
             val button = LinearLayout(context).apply {
                 id = View.generateViewId()
@@ -103,7 +107,7 @@ class VodGlassActionBar @JvmOverloads constructor(
                     }
                 }
             }
-            strip.addView(button, LinearLayout.LayoutParams(dp(118), dp(110)).apply {
+            strip.addView(button, LinearLayout.LayoutParams(0, dp(110), 1f).apply {
                 rightMargin = if (index == actions.lastIndex) 0 else dp(5)
             })
             buttons[action.id] = button
