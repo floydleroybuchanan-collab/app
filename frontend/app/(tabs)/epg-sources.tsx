@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GlassIcon } from "@/src/components/GlassIcon";
 import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -177,7 +178,7 @@ function EpgSourcesScreenContent() {
     <PurpleTvShell active="/settings">
       <View style={styles.page}><GlassBackdrop />
         <View style={styles.header}>
-          <View><Text style={styles.kicker}>GUIDE CONFIGURATION</Text><Text style={styles.title}>EPG & Playlist</Text></View>
+          <View><Text style={styles.kicker}>GUIDE CONFIGURATION</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="epg" size={34} /><Text style={styles.title}>EPG & Playlist</Text></View></View>
           <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/settings" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>All Settings</Text>
           </Pressable>
@@ -304,7 +305,7 @@ function EpgSourcesScreenContent() {
 }
 
 function Card({ title, icon, children }: { title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode }) {
-  return <View style={styles.card}><View style={styles.cardHeader}><Ionicons name={icon} size={16} color={tvColors.purpleSoft} /><Text style={styles.cardTitle}>{title}</Text></View>{children}</View>;
+  return <View style={styles.card}><View style={styles.cardHeader}><GlassIcon name={icon} size={22} /><Text style={styles.cardTitle}>{title}</Text></View>{children}</View>;
 }
 function SourceRow({ title, subtitle, status, onPress }: { title: string; subtitle: string; status: string; onPress?: () => void }) {
   const content = <><View style={styles.sourceCopy}><Text style={styles.sourceTitle}>{title}</Text><Text style={styles.sourceSub}>{subtitle}</Text></View><Text style={styles.sourceStatus}>{status}</Text><Ionicons name={onPress ? "chevron-forward" : "lock-closed"} size={12} color={tvColors.textMuted} /></>;
@@ -319,7 +320,7 @@ function ChoiceRow<T extends string | number>({ label, value, options, onChange 
   return <View style={styles.choiceBlock}><Text style={styles.settingLabel}>{label}</Text><View style={styles.choices}>{options.map((option) => <Pressable key={String(option.value)} onPress={() => onChange(option.value)} style={({ focused }: any) => [styles.choice, option.value === value && styles.choiceActive, focused && styles.focused]}><Text style={[styles.choiceText, option.value === value && styles.choiceTextActive]}>{option.label}</Text></Pressable>)}</View></View>;
 }
 function Action({ label, icon, onPress, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean }) {
-  return <Pressable accessibilityState={{ busy: Boolean(disabled) }} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}><Ionicons name={icon} size={14} color="#fff" /><Text style={styles.actionText}>{label}</Text></Pressable>;
+  return <Pressable accessibilityState={{ busy: Boolean(disabled) }} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}><GlassIcon name={icon} size={22} /><Text style={styles.actionText}>{label}</Text></Pressable>;
 }
 function Info({ label, value }: { label: string; value: string }) {
   return <View style={styles.infoRow}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View>;

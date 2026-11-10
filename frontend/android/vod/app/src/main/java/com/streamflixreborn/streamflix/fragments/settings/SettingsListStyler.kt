@@ -196,10 +196,10 @@ internal object SettingsListStyler {
             visibility = if (sectionGrid || text.isNullOrBlank()) View.GONE else View.VISIBLE
         }
 
-        icon?.imageTintList = if (sectionGrid || icon?.drawable == null) null else ColorStateList.valueOf(accentColor)
-        if (sectionGrid) icon?.layoutParams = icon?.layoutParams?.apply {
-            width = context.dp(46)
-            height = context.dp(46)
+        if (isTv) icon?.imageTintList = null else icon?.drawable?.let { icon.imageTintList = ColorStateList.valueOf(accentColor) }
+        if (isTv) icon?.layoutParams = icon?.layoutParams?.apply {
+            width = context.dp(if (sectionGrid) 46 else 26)
+            height = context.dp(if (sectionGrid) 46 else 26)
         }
         view.findViewById<android.widget.SeekBar>(androidx.preference.R.id.seekbar)?.apply {
             progressTintList = ColorStateList.valueOf(0xFFD14DFF.toInt())

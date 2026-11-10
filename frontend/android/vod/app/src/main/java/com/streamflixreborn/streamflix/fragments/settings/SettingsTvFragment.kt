@@ -222,7 +222,10 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
 
     /** The first screen is a grid of glass section buttons with their own artwork. */
     private fun applySectionIcons() {
-        if (currentScreenState.rootKey != null) return
+        if (currentScreenState.rootKey != null) {
+            preferenceScreen?.let(::applyRowIcons)
+            return
+        }
         mapOf(
             "screen_vod_sources" to R.drawable.vod_set_sources,
             "screen_content" to R.drawable.vod_set_content,
@@ -236,6 +239,19 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
             findPreference<Preference>(key)?.apply {
                 setIcon(art)
                 widgetLayoutResource = 0
+            }
+        }
+    }
+
+    /** Inner screens: every button gets a glass icon that matches its purpose. */
+    private fun applyRowIcons(group: androidx.preference.PreferenceGroup) {
+        for (index in 0 until group.preferenceCount) {
+            val item = group.getPreference(index)
+            if (item is PreferenceCategory) {
+                applyRowIcons(item)
+            } else {
+                item.setIcon(com.streamflixreborn.streamflix.charm.VodSettingIcons.forSetting(item.key, item.title))
+                item.isIconSpaceReserved = true
             }
         }
     }

@@ -1,4 +1,5 @@
 import { providerGroupDisabled } from "@/src/core/groupVisibility";
+import { GlassIcon } from "@/src/components/GlassIcon";
 import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { providerGroupKey } from "@/src/core/playlistGuideMenu";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -184,7 +185,7 @@ export default function GroupSettingsScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>PHASE 9</Text>
-            <Text style={styles.title}>Playlist & Custom Groups</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="group" size={34} /><Text style={styles.title}>Playlist & Custom Groups</Text></View>
           </View>
           <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={returnToSettings} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" />

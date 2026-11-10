@@ -176,6 +176,11 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 }
             }
             screen.onNeedsLayout = { forceLayoutPass() }
+            screen.onHostGuide = {
+                host.setVodImmersive(false)
+                emit("CharmVodImmersiveChanged", "false")
+                emit("CharmVodOpenGuide", "")
+            }
             screen.onImmersiveChanged = { playing ->
                 host.setVodImmersive(playing)
                 emit("CharmVodImmersiveChanged", if (playing) "true" else "false")
@@ -228,6 +233,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 onHostIconRail = null
                 onImmersiveChanged = null
                 onNeedsLayout = null
+                onHostGuide = null
                 onRootReady = null
                 onRootError = null
             }

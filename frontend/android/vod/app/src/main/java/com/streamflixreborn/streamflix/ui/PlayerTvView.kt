@@ -30,6 +30,37 @@ class PlayerTvView @JvmOverloads constructor(
 
     private var zoomToast: Toast? = null
 
+    override fun onFinishInflate() {
+        super.onFinishInflate()
+        findViewById<android.view.View>(R.id.btn_exo_subtitles)?.setOnClickListener {
+            openSettingsSection(com.streamflixreborn.streamflix.fragments.player.settings.PlayerSettingsView.Settings.Subtitle)
+        }
+        findViewById<android.view.View>(R.id.btn_exo_audio)?.setOnClickListener {
+            openSettingsSection(com.streamflixreborn.streamflix.fragments.player.settings.PlayerSettingsView.Settings.Audio)
+        }
+        findViewById<android.view.View>(R.id.btn_exo_guide)?.setOnClickListener {
+            com.streamflixreborn.streamflix.charm.VodHostActions.openGuide?.invoke()
+        }
+    }
+
+    /** Opens the existing settings panel and steps straight into one of its sections. */
+    private fun openSettingsSection(section: com.streamflixreborn.streamflix.fragments.player.settings.PlayerSettingsView.Settings) {
+        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.performClick()
+        val panel = (parent as? android.view.ViewGroup)?.findViewById<android.view.View>(R.id.settings) ?: return
+        val index = com.streamflixreborn.streamflix.fragments.player.settings.PlayerSettingsView.Settings.listTv.indexOf(section)
+        if (index < 0) return
+        val list = panel.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rv_settings) ?: return
+        var attempts = 0
+        fun press() {
+            val row = list.findViewHolderForAdapterPosition(index)?.itemView
+            when {
+                row != null -> row.performClick()
+                ++attempts < 12 -> list.postDelayed({ press() }, 40L)
+            }
+        }
+        list.post { press() }
+    }
+
     override fun setPlayer(player: Player?) {
         super.setPlayer(player)
         if (player == null) {

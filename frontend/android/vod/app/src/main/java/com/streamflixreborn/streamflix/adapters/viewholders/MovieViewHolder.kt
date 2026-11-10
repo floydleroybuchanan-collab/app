@@ -887,7 +887,7 @@ class MovieViewHolder(
         com.streamflixreborn.streamflix.charm.VodTitleActions.attach(
             binding.btnMovieWatchNow, binding.btnMovieSources, binding.btnMovieMyList, binding.btnMovieTrailer,
             binding.btnMovieSimilar, binding.btnMovieBack, binding.btnMovieFavorite, { movie.isFavorite },
-            heart = binding.btnMovieHeart, panels = binding.llMoviePanels, heartKey = "movie:" + movie.id,
+            heart = binding.btnMovieHeart, panels = binding.llMoviePanels, heartKey = "movie:" + movie.id, heartTitle = movie.title, heartPoster = movie.poster,
         )
         com.streamflixreborn.streamflix.charm.VodTitlePanels.movie(binding.llMoviePanels, movie, binding.btnMovieWatchNow)
         binding.ivMoviePoster.run {

@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { GlassIcon } from "@/src/components/GlassIcon";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -86,7 +87,7 @@ export function TvCalibrationControls() {
           style={({ focused }: any) => [styles.resetButton, focused && styles.focused]}
           testID="settings-tv-calibration-reset"
         >
-          <Ionicons name="refresh" size={17} color="#fff" />
+          <GlassIcon name="refresh" size={18} />
           <Text style={styles.resetText}>Reset draft</Text>
         </Pressable>
       </View>
@@ -145,7 +146,7 @@ export function TvCalibrationControls() {
           ]}
           testID="settings-tv-calibration-save"
         >
-          <Ionicons name={saved ? "checkmark-circle" : "save-outline"} size={18} color="#fff" />
+          {saved ? <Ionicons name="checkmark-circle" size={18} color="#fff" /> : <GlassIcon name="save" size={18} />}
           <Text style={styles.saveText}>{saving ? "Saving…" : saved ? "Applied" : "Save & Apply"}</Text>
         </Pressable>
       </View>

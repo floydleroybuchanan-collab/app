@@ -439,22 +439,6 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
             }
         }
 
-        findPreference<Preference>("p_settings_about")?.apply {
-            val palette = ThemeManager.palette(UserPreferences.selectedTheme)
-            val titleStr = getString(R.string.settings_version_mobile)
-            val spannableTitle = SpannableString(titleStr)
-            spannableTitle.setSpan(ForegroundColorSpan(palette.tvHeaderPrimary), 0, titleStr.length, 0)
-            title = spannableTitle
-            
-            val summaryStr = BuildConfig.VERSION_NAME
-            val spannableSummary = SpannableString(summaryStr)
-            spannableSummary.setSpan(ForegroundColorSpan(palette.tvHeaderSecondary), 0, summaryStr.length, 0)
-            summary = spannableSummary
-            
-            isSelectable = false
-            setOnPreferenceClickListener(null)
-        }
-
         findPreference<SwitchPreference>("AUTOPLAY")?.isChecked = UserPreferences.autoplay
         findPreference<SwitchPreference>("AUTOPLAY")?.setOnPreferenceChangeListener { _, newValue ->
             UserPreferences.autoplay = newValue as Boolean

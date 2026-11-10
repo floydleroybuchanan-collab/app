@@ -17,6 +17,11 @@ object VodSourceRequest {
     fun take(): Boolean = pending.also { pending = false }
 }
 
+/** Lets the VOD player ask the host app for screens it does not own. */
+object VodHostActions {
+    var openGuide: (() -> Unit)? = null
+}
+
 /** The same row of glass buttons on every movie and series page. */
 object VodTitleActions {
     private const val PURPLE = 0xFFA82BF2.toInt()
@@ -62,6 +67,8 @@ object VodTitleActions {
         heart: TextView,
         panels: android.view.ViewGroup,
         heartKey: String,
+        heartTitle: String,
+        heartPoster: String?,
     ) {
         style(watch, R.drawable.vod_action_watch, PURPLE, primary = true)
         style(sources, R.drawable.vod_action_sources, BLUE)
@@ -71,11 +78,10 @@ object VodTitleActions {
         style(back, R.drawable.vod_action_back, GLASS)
         episodes?.let { style(it, R.drawable.vod_action_episodes, BLUE) }
         style(heart, R.drawable.vod_action_favorite, PINK)
-        val saved = heart.context.getSharedPreferences("vod_hearts", android.content.Context.MODE_PRIVATE)
-        fun heartLabel() { heart.text = if (saved.getBoolean(heartKey, false)) "Favorited" else "Favorite" }
+        fun heartLabel() { heart.text = if (VodHearts.contains(heart.context, heartKey)) "Favorited" else "Favorite" }
         heartLabel()
         heart.setOnClickListener {
-            saved.edit().putBoolean(heartKey, !saved.getBoolean(heartKey, false)).apply()
+            VodHearts.toggle(heart.context, heartKey, heartTitle, heartPoster)
             heartLabel()
         }
 
@@ -83,6 +89,11 @@ object VodTitleActions {
         label()
         sources.setOnClickListener {
             if (panels.findViewWithTag<View>(VodTitlePanels.FIRST_SOURCE)?.requestFocus() == true) return@setOnClickListener
+            // A series with nothing queued to watch has no Watch action; offer its episodes instead.
+            if (watch.visibility != View.VISIBLE) {
+                panels.findViewWithTag<View>(VodTitlePanels.FIRST_EPISODE)?.requestFocus()
+                return@setOnClickListener
+            }
             VodSourceRequest.pending = true
             watch.performClick()
         }

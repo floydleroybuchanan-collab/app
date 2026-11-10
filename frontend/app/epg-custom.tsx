@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GlassIcon } from "@/src/components/GlassIcon";
 import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
@@ -293,7 +294,7 @@ export default function CustomEpgScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>PHASE 9 · GUIDE SOURCES</Text>
-            <Text style={styles.title}>{prefs.userName}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="epg" size={34} /><Text style={styles.title}>{prefs.userName}</Text></View>
           </View>
           <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => router.replace("/epg-sources" as any)} style={({ focused }: any) => [styles.back, focused && styles.focused]}>
             <Ionicons name="arrow-back" size={14} color="#fff" />

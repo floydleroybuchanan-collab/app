@@ -46,6 +46,7 @@ export default function VideoOnDemandScreen() {
     };
     const back = DeviceEventEmitter.addListener("CharmVodRootBack", () => openDrawerOrReturnToSettings());
     const rail = DeviceEventEmitter.addListener("CharmVodFocusHostRail", () => focusIconRail());
+    const guide = DeviceEventEmitter.addListener("CharmVodOpenGuide", () => router.replace("/guide" as any));
     const mode = DeviceEventEmitter.addListener("CharmVodImmersiveChanged", (value: string) =>
       setImmersive(value === "true")
     );
@@ -59,7 +60,7 @@ export default function VideoOnDemandScreen() {
       });
       setMountError(null);
     });
-    return () => { back.remove(); rail.remove(); mode.remove(); failure.remove(); mounted.remove(); };
+    return () => { back.remove(); rail.remove(); guide.remove(); mode.remove(); failure.remove(); mounted.remove(); };
   }, [focusIconRail, openDrawer, router]);
 
   useFocusEffect(useCallback(() => {

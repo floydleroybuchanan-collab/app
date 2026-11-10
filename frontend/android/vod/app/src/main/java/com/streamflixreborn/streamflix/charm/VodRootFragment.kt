@@ -42,6 +42,7 @@ class VodRootFragment : Fragment() {
     var onRootReady: (() -> Unit)? = null
     var onRootError: ((String) -> Unit)? = null
     var onNeedsLayout: (() -> Unit)? = null
+    var onHostGuide: (() -> Unit)? = null
     private var rootStartedAt = 0L
     private var readyAttempts = 0
     private var sizeAttempts = 0
@@ -78,6 +79,7 @@ class VodRootFragment : Fragment() {
     override fun onViewCreated(view: View, saved: Bundle?) {
         super.onViewCreated(view, saved)
         requestedSection = arguments?.getString("startSection") ?: "home"
+        VodHostActions.openGuide = { onHostGuide?.invoke() }
         val b = binding
         // The embedded layout contains no rail or splash overlay. Charming MediaLab's
         // React shell is the sole owner of app navigation and rail focus.
@@ -235,6 +237,7 @@ class VodRootFragment : Fragment() {
         onRootReady = null
         onRootError = null
         onNeedsLayout = null
+        VodHostActions.openGuide = null
         _binding = null
         super.onDestroyView()
     }

@@ -114,10 +114,12 @@
             app:argType="string" />
         <argument
             android:name="poster"
+            android:defaultValue="@null"
             app:argType="string"
             app:nullable="true" />
         <argument
             android:name="banner"
+            android:defaultValue="@null"
             app:argType="string"
             app:nullable="true" />
         <action
@@ -177,6 +179,11 @@
         android:id="@+id/platforms"
         android:name="com.streamflixreborn.streamflix.charm.VodPlatformsFragment"
         android:label="Platform Originals" />
+    <fragment
+        android:id="@+id/hearts"
+        android:name="com.streamflixreborn.streamflix.charm.VodHeartsFragment"
+        android:label="Favorites" />
+
     <fragment
         android:id="@+id/platform_titles"
         android:name="com.streamflixreborn.streamflix.charm.VodPlatformsFragment"

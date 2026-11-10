@@ -1,4 +1,5 @@
 import { encodeXtream, decodeXtream } from "@/src/core/xtream";
+import { GlassIcon } from "@/src/components/GlassIcon";
 import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { NativeModules, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -23,7 +24,7 @@ function Action({ label, onPress, disabled = false }: { label: string; onPress: 
   // Keep the current native focus owner mounted and focusable during a refresh.
   // Actions remain inert while disabled; disabling the native view loses D-pad focus.
   return <Pressable accessibilityRole="button" focusable accessibilityState={{ disabled }} onPress={() => { if (!disabled) onPress(); }}
-    style={({ focused }: any) => [styles.button, disabled && styles.disabled, focused && styles.focused]}><Text style={styles.buttonText}>{label}</Text></Pressable>;
+    style={({ focused }: any) => [styles.button, disabled && styles.disabled, focused && styles.focused]}><GlassIcon name={label} /><Text style={styles.buttonText}>{label}</Text></Pressable>;
 }
 
 export default function PlaylistsScreen() {
@@ -75,7 +76,7 @@ export default function PlaylistsScreen() {
   };
   const availableEpg = [{ id: "user", name: legacy.userName || "Custom EPG", enabled: legacy.userEnabled }, ...epgs.sources];
   return <PurpleTvShell active="/settings"><View style={styles.page}><GlassBackdrop />
-    <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><Text style={styles.title}>Playlists</Text></View>
+    <View style={styles.header}><View><Text style={styles.kicker}>CONTENT SOURCES</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><GlassIcon name="playlist" size={34} /><Text style={styles.title}>Playlists</Text></View></View>
       <Pressable ref={entryFocus.targetRef as any} hasTVPreferredFocus={entryFocus.preferredFocus} nextFocusLeft={iconRailEntryTag} onFocus={entryFocus.onFocus} onBlur={entryFocus.onBlur} onPress={() => { if (!busy) back(); }} accessibilityState={{ disabled: busy }} style={({ focused }: any) => [styles.back, busy && styles.disabled, focused && styles.focused]}><Ionicons name="arrow-back" size={14} color="#fff" /><Text style={styles.backText}>{editing === null ? "All Settings" : "Cancel edit"}</Text></Pressable>
     </View>
     {/* The shell boundary includes the fixed header; a nested upward trap blocks it. */}
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
   text: { color: tvColors.text, fontFamily: fonts.regular, fontSize: 8.5, lineHeight: 13 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 11 },
   card: { padding: 11, gap: 7, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   priorityRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7, paddingVertical: 3 }, priorityLabel: { minWidth: 180, flex: 1, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5 },
-  button: { alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  button: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },

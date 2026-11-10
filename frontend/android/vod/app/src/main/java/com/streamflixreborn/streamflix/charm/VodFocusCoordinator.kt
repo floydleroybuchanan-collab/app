@@ -168,7 +168,7 @@ class VodFocusCoordinator(
         }
         lastAnimatedPage = java.lang.ref.WeakReference(page)
         when (destination) {
-            R.id.movies, R.id.tv_shows, R.id.search, R.id.favorites, R.id.season, R.id.genre, R.id.people ->
+            R.id.movies, R.id.tv_shows, R.id.search, R.id.favorites, R.id.season, R.id.genre, R.id.people, R.id.hearts ->
                 page.background = VodMotion.background()
         }
         VodMotion.page(page)

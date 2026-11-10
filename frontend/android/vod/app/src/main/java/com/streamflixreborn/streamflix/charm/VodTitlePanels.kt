@@ -111,13 +111,21 @@ object VodTitlePanels {
         }
     }
 
-    fun show(host: ViewGroup, show: TvShow) {
+    private fun episodeType(show: TvShow, episode: com.streamflixreborn.streamflix.models.Episode, season: com.streamflixreborn.streamflix.models.Season) =
+        Video.Type.Episode(
+            episode.id, episode.number, episode.title, episode.poster, episode.overview,
+            Video.Type.Episode.TvShow(show.id, show.title, show.poster, show.banner, show.released?.format("yyyy-MM-dd"), show.imdbId),
+            Video.Type.Episode.Season(season.number, season.title),
+        )
+
+    fun show(host: ViewGroup, show: TvShow, watch: View) {
         if (!once(host, "tv:" + show.id)) return
         val season = show.episodeToWatch?.season?.let { wanted -> show.seasons.firstOrNull { it.number == wanted.number } }
             ?: show.seasons.firstOrNull() ?: return
         host.post {
             val owner = host.findViewTreeLifecycleOwner() ?: return@post
             owner.lifecycleScope.launch {
+                delay(700L)
                 val episodes = season.episodes.ifEmpty {
                     withContext(Dispatchers.IO) {
                         val provider = UserPreferences.currentProvider ?: return@withContext emptyList()
@@ -133,12 +141,25 @@ object VodTitlePanels {
                             putString("id", episode.id)
                             putString("title", show.title)
                             putString("subtitle", "S${season.number} · E${episode.number}  $name")
-                            putSerializable("videoType", Video.Type.Episode(
-                                episode.id, episode.number, episode.title, episode.poster, episode.overview,
-                                Video.Type.Episode.TvShow(show.id, show.title, show.poster, show.banner, show.released?.format("yyyy-MM-dd"), show.imdbId),
-                                Video.Type.Episode.Season(season.number, season.title),
-                            ))
+                            putSerializable("videoType", episodeType(show, episode, season))
                         })
+                    }
+                }
+                // The Watch button plays this episode, so its sources are the ones offered.
+                val next = show.episodeToWatch ?: return@launch
+                val servers = withContext(Dispatchers.IO) {
+                    val provider = UserPreferences.currentProvider ?: return@withContext emptyList<Video.Server>()
+                    withTimeoutOrNull(8_000L) { runCatching { provider.getServers(next.id, episodeType(show, next, season)) }.getOrNull() }.orEmpty()
+                }
+                if (servers.isNotEmpty()) {
+                    val sources = card(host, "Sources (${servers.size}) · E${next.number}", R.drawable.vod_action_sources)
+                    (sources.layoutParams as LinearLayout.LayoutParams).marginStart = host.px(10)
+                    servers.take(5).forEachIndexed { index, server ->
+                        row(sources, if (index == 0) "◉" else "○", server.name, if (index == 0) "★ Best" else "", if (index == 0) FIRST_SOURCE else null) {
+                            VodSourceRequest.chosen = server.id
+                            VodSourceRequest.pending = true
+                            watch.performClick()
+                        }
                     }
                 }
             }

@@ -531,15 +531,5 @@
         </PreferenceCategory>
     </PreferenceScreen>
 
-    <PreferenceCategory
-        android:title="@string/miscelaneous_title"
-        app:iconSpaceReserved="false">
-
-        <Preference
-            android:icon="@drawable/ic_settings_about"
-            android:key="p_settings_about"
-            android:title="@string/settings_about"
-            app:iconSpaceReserved="false" />
-    </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

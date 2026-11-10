@@ -94,6 +94,9 @@ class FavoritesTvFragment : Fragment() {
             addItemDecoration(SpacingItemDecoration(10.dp(requireContext())))
         }
         binding.btnFavoritesReorder.setOnClickListener { showSortDialog() }
+        binding.btnFavoritesHearts.setOnClickListener {
+            androidx.navigation.fragment.NavHostFragment.findNavController(this).navigate(R.id.hearts)
+        }
         binding.btnFavoritesReorderMode.setOnClickListener { setRearrangeMode(!rearrangeMode) }
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, rearrangeBackCallback)
         setRearrangeMode(false)
