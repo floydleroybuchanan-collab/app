@@ -91,17 +91,27 @@ class VodRootFragment : Fragment() {
         }
     }
 
+    /**
+     * The child NavHost, its destination Fragment XML and nested Settings
+     * preferences all ask the parent for a LayoutInflater. Previously only
+     * the *outer* ActivityMainTvBinding used a Theme.Leanback wrapper, while
+     * destination layouts inherited the host React Activity's AppCompat theme.
+     * That mismatch can leave unresolved ?attr references in XML inflation.
+     * Scope the inflater to VOD at the Fragment boundary, not to MainActivity
+     * and not to a single root binding.
+     */
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
+        val hostInflater = super.onGetLayoutInflater(savedInstanceState)
+        val themed = ContextThemeWrapper(
+            hostInflater.context, ThemeManager.tvThemeRes(UserPreferences.selectedTheme)
+        )
+        return hostInflater.cloneInContext(themed)
+    }
+
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, saved: Bundle?): View {
         rootStartedAt = SystemClock.elapsedRealtime()
         Log.i("CharmVodRoot", "Inflating embedded VOD root")
-        // The original TV layout was built for Theme.Leanback. Keep that theme
-        // scoped to VOD views; never change the shared React Native Activity.
-        // Host AppTheme supplies VOD attribute fallbacks for nested fragments.
-        val themedContext = ContextThemeWrapper(
-            inflater.context, ThemeManager.tvThemeRes(UserPreferences.selectedTheme)
-        )
-        val vodInflater = inflater.cloneInContext(themedContext)
-        _binding = ActivityMainTvBinding.inflate(vodInflater, parent, false)
+        _binding = ActivityMainTvBinding.inflate(inflater, parent, false)
         return binding.root
     }
 
