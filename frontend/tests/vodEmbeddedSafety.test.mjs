@@ -14,7 +14,10 @@ test("embedded VOD uses a scoped Leanback inflater with safe host attributes", (
   ]) assert.match(styles, new RegExp(`name="${name}"`));
   assert.match(root, /ContextThemeWrapper/);
   assert.match(root, /ThemeManager\.tvThemeRes\(UserPreferences\.selectedTheme\)/);
-  assert.match(root, /cloneInContext\(themedContext\)/);
+  assert.match(root, /override fun onGetLayoutInflater\(savedInstanceState: Bundle\?\): LayoutInflater/);
+  assert.match(root, /return hostInflater\.cloneInContext\(themed\)/);
+  assert.match(root, /ActivityMainTvBinding\.inflate\(inflater, parent, false\)/);
+  assert.doesNotMatch(root, /ActivityMainTvBinding\.inflate\(vodInflater/);
   assert.doesNotMatch(root, /requireActivity\(\)\.setTheme\(/);
 });
 
