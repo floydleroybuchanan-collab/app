@@ -65,6 +65,9 @@ test("map 4: native readiness/error events -> JS subscriptions -> owner-safe lif
   assert.match(bridge, /screen.onRootError =/);
   assert.match(bridge, /emit\("CharmVodRootReady"/);
   assert.match(bridge, /emit\("CharmVodMountError"/);
+  assert.doesNotMatch(bridge, /showFailure\(|charm_vod_failure|TextView\(/);
+  assert.match(root, /immersiveDestinationListener\?\.let \{ controller\.removeOnDestinationChangedListener\(it\) \}/);
+  assert.match(root, /immersiveDestinationListener = null/);
   assert.match(route, /DeviceEventEmitter.addListener\("CharmVodRootReady"/);
   assert.match(route, /DeviceEventEmitter.addListener\("CharmVodMountError"/);
   assert.match(route, /back.remove\(\); rail.remove\(\); mode.remove\(\); failure.remove\(\); mounted.remove\(\)/);
