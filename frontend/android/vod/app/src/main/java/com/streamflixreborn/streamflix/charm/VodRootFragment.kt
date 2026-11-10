@@ -1,6 +1,8 @@
 package com.streamflixreborn.streamflix.charm
 
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -36,6 +38,8 @@ class VodRootFragment : Fragment() {
     var onHostBack: (() -> Unit)? = null
     var onHostIconRail: (() -> Boolean)? = null
     var onImmersiveChanged: ((Boolean) -> Unit)? = null
+    var onRootReady: (() -> Unit)? = null
+    private var rootStartedAt = 0L
 
     private var _binding: ActivityMainTvBinding? = null
     private val binding get() = requireNotNull(_binding)
@@ -50,6 +54,8 @@ class VodRootFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, saved: Bundle?): View {
+        rootStartedAt = SystemClock.elapsedRealtime()
+        Log.i("CharmVodRoot", "Inflating embedded VOD root")
         // The original TV layout was built for Theme.Leanback. Keep that theme
         // scoped to VOD views; never change the shared React Native Activity.
         // Host AppTheme supplies VOD attribute fallbacks for nested fragments.
@@ -123,7 +129,13 @@ class VodRootFragment : Fragment() {
                 }
             }
         )
-        b.navMainFragment.post { b.navMainFragment.requestFocus() }
+        b.navMainFragment.post {
+            if (_binding != null && isAdded) {
+                b.navMainFragment.requestFocus()
+                Log.i("CharmVodRoot", "VOD navigation ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
+                onRootReady?.invoke()
+            }
+        }
     }
 
     fun onRemoteKey(event: KeyEvent): Boolean {
@@ -184,6 +196,7 @@ class VodRootFragment : Fragment() {
         coordinator = null
         navigation = null
         onImmersiveChanged?.invoke(false)
+        onRootReady = null
         _binding = null
         super.onDestroyView()
     }
