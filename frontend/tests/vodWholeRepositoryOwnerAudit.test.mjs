@@ -53,6 +53,23 @@ test("removed native Back dispatcher and overlay have no active callers", () => 
   assert.match(read(host), /if \(nativeVodOwnsFocus\(\) && vodKeyHandler\?\.invoke\(event\) == true\)/);
 });
 
+test("obsolete VOD process detector is deleted with every call site", () => {
+  const deleted = "frontend/android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/CharmVodProcess.kt";
+  assert.ok(!names.includes(deleted), "Dead separate-VOD-process class was not deleted");
+  assert.deepEqual(matchPaths(/\bCharmVodProcess\b/), [],
+    "A tracked source still calls the deleted VOD process detector");
+  const module = read("frontend/android/vod/app/src/main/java/com/streamflixreborn/streamflix/ui/GlideCustomModule.kt");
+  const loader = read("frontend/android/vod/app/src/main/java/com/streamflixreborn/streamflix/ui/AnimeOnlineNinjaCronetUrlLoader.kt");
+  const hostModule = read("frontend/android/app/src/main/java/com/charmiptv/app/CharmAppGlideModule.kt");
+  assert.match(module, /registry\.prepend\(GlideUrl::class\.java, InputStream::class\.java, loader\)/);
+  assert.doesNotMatch(module, /registry\.replace\(|isSeparateVodProcess/);
+  assert.doesNotMatch(loader, /onlySpecialVodImages/);
+  assert.match(loader, /isAnimeOnlineNinja\(model\) \|\|/);
+  assert.match(loader, /it\.startsWith\("sf_headers="\)/);
+  assert.match(hostModule, /vodModule\.registerComponents\(context, glide, registry\)/);
+  assert.doesNotMatch(hostModule, /CharmVodProcess|if \(!CharmVodProcess/);
+});
+
 test("every VOD event has one native producer and one React subscriber", () => {
   for (const event of [
     "CharmVodRootBack", "CharmVodFocusHostRail", "CharmVodImmersiveChanged",
