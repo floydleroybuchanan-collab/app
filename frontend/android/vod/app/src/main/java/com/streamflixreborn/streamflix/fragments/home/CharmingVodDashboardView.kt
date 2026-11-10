@@ -160,7 +160,7 @@ class CharmingVodDashboardView @JvmOverloads constructor(
             tile.addView(viewAll, LayoutParams(dp(iconDp), dp(28)).apply { topMargin = dp(4) })
             tiles.addView(tile, LayoutParams(dp(tileDp), -2).apply { rightMargin = dp(1) })
         }
-        scroll.addView(tiles, HorizontalScrollView.LayoutParams(-2, -2))
+        scroll.addView(tiles, FrameLayout.LayoutParams(-2, -2))
         platforms.addView(scroll, LayoutParams(-1, 0, 1f))
         addView(platforms, LayoutParams(-1, dp(platformDp)))
         val moviesHeader = LinearLayout(context).apply {
