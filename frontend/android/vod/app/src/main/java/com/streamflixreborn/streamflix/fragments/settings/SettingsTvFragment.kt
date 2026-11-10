@@ -226,7 +226,7 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         for (index in 0 until group.preferenceCount) {
             val preference = group.getPreference(index)
             if (preference !is PreferenceCategory) {
-                val label = (preference.key.orEmpty() + " " + preference.title.orEmpty() +
+                val label = (preference.key.orEmpty() + " " + preference.title?.toString().orEmpty() +
                     " " + currentScreen).lowercase(Locale.ROOT)
                 val kind = when {
                     listOf("provider", "playlist", "source", "stream", "debrid", "connection")
