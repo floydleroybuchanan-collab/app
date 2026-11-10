@@ -201,7 +201,9 @@ test("VOD warms the retained hero and first posters without blocking app startup
   assert.match(warmer, /REWARM_AFTER_MS = 15L/);
   assert.match(warmer, /Priority\.HIGH/);
   assert.match(app, /VodHomePrewarm\.onAppStart\(this\)/);
-  assert.match(bridge, /showFailure\(message\)/);
+  // One React-owned retry UI; no duplicate native view hiding the real error.
+  assert.doesNotMatch(bridge, /showFailure\(|TextView\(|charm_vod_failure/);
+  assert.match(bridge, /emit\("CharmVodMountError", message\)/);
 });
 
 test("VOD catalog and user caches are bounded without discarding watch history", () => {
