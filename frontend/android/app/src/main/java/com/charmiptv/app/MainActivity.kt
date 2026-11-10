@@ -410,7 +410,7 @@ class MainActivity : ReactActivity() {
           // stored React node before the event arrives and make focus vanish.
           (context == "icon_rail" && (boundaryKey == "LEFT" || boundaryKey == "BACK")) ||
           (context == "drawer_edge" && boundaryKey == "LEFT")
-      if (owned && boundaryKey != null) {
+      if (owned) {
         emitRemoteEvent("TvRemoteKey", boundaryKey)
         return true
       }
