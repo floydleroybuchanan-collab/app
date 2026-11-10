@@ -72,22 +72,33 @@ test("native Back and D-pad navigation remain integrated with host drawer and VO
   assert.match(focus, /KEYCODE_DPAD_RIGHT/);
 });
 
-test("unified VOD shows branded loading until native NavHost is ready", () => {
+test("unified VOD opens native route immediately without a startup loading overlay", () => {
   const route = read("app/(tabs)/vod.tsx");
   const manager = read("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt");
   const root = read(vod + "charm/VodRootFragment.kt");
-  assert.match(route, /<ActivityIndicator/);
-  assert.match(route, /<MediaLabArt/);
+  assert.match(route, /<NativeVod/);
   assert.match(route, /CharmVodRootReady/);
-  assert.match(route, /waitingLong/);
-  assert.match(route, /Retry VOD/);
-  assert.match(route, /await stopAllPlaybackSessions\("superseded"\)/);
+  assert.match(route, /void stopAllPlaybackSessions\("superseded"\)/);
+  assert.doesNotMatch(route, /<ActivityIndicator/);
+  assert.doesNotMatch(route, /waitingLong/);
   assert.match(manager, /fun retryHost\(/);
-  assert.match(manager, /postDelayed\(\{ mountIfReady\(\) \}, 200L\)/);
+  assert.match(manager, /fun restoreNativeFocus\(/);
   assert.match(manager, /emit\("CharmVodRootReady", elapsedMs\.toString\(\)\)/);
-  assert.match(root, /onRootReady\?\.invoke\(\)/);
-  assert.match(root, /CharmVodRoot/);
+  assert.match(root, /fun restoreFocusFromRail\(\)/);
 });
+
+test("VOD native focus leaves RN guide traps and crosses both rail boundaries", () => {
+  const shell = read("src/components/PurpleTvShell.tsx");
+  const activity = read("android/app/src/main/java/com/charmiptv/app/MainActivity.kt");
+  const coordinator = read(vod + "charm/VodFocusCoordinator.kt");
+  assert.match(shell, /active !== "\/vod" && !immersiveContent/);
+  assert.match(shell, /focusIconRail\(\)/);
+  assert.match(activity, /vod\.restoreNativeFocus\(\)/);
+  assert.match(activity, /fun focusVodRailFromContent\(\)/);
+  assert.match(coordinator, /fun restoreFocusFromHost\(\)/);
+  assert.match(coordinator, /binding\.navMainFragment\.requestLayout\(\)/);
+});
+
 
 test("Platforms always opens instantly with accessible choices and bounded discovery", () => {
   const fragment = read(vod + "charm/VodPlatformsFragment.kt");
@@ -98,4 +109,14 @@ test("Platforms always opens instantly with accessible choices and bounded disco
   assert.match(fragment, /withTimeoutOrNull\(12_000L\)/);
   assert.match(fragment, /withTimeoutOrNull\(15_000L\)/);
   assert.match(fragment, /Catalog lookup took too long or failed/);
+});
+
+test("platform View All buttons have platform-specific neon glass styling", () => {
+  const badges = read(vod + "charm/VodPlatformBadgeView.kt");
+  const platforms = read(vod + "charm/VodPlatformsFragment.kt");
+  for (const id of ["netflix", "disney", "apple", "hulu", "max", "prime", "paramount", "peacock"]) {
+    assert.match(badges, new RegExp('"' + id + '" ->'));
+  }
+  assert.match(badges, /fun viewAllGlass\(focused: Boolean\)/);
+  assert.match(platforms, /badge\.viewAllGlass\(focused\)/);
 });
