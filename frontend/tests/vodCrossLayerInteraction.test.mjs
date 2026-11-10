@@ -129,10 +129,11 @@ test("map 8: native Back/Focus traversals remain inside VOD until explicit rail 
   const activity = read(app + "MainActivity.kt");
   assert.match(root, /player\?\.onBackPressed\(\) == true/);
   assert.match(root, /onHostBack\?\.invoke\(\)/);
-  assert.match(root, /OnBackPressedCallback\(hostActive\)/);
-  assert.match(root, /nativeBackCallback\?\.isEnabled = active/);
-  assert.match(root, /nativeBackCallback\?\.remove\(\)/);
-  assert.match(root, /isEnabled = hostActive/);
+  // Delete the redundant Fragment Back listener, not merely disable it.
+  assert.doesNotMatch(root, /OnBackPressedCallback|nativeBackCallback|onBackPressedDispatcher/);
+  assert.match(activity, /override fun onBackPressed\(\)/);
+  assert.match(activity, /nativeVodOwnsFocus\(\) && vodBackHandler\?\.invoke\(\) == true/);
+  assert.match(activity, /if \(nativeVodOwnsFocus\(\) && vodKeyHandler\?\.invoke\(event\) == true\)/);
   assert.match(focus, /VodFocusMemory\.isWithin\(content, current\)/);
   assert.match(focus, /isFirstActionFocused\(current\)/);
   assert.match(focus, /onHostRailFocus\?\.invoke\(\)/);
