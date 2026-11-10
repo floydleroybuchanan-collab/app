@@ -27,17 +27,13 @@ import com.streamflixreborn.streamflix.models.Show
 import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.utils.viewModelsFactory
 import kotlinx.coroutines.Runnable
-import com.streamflixreborn.streamflix.utils.CacheUtils
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.streamflixreborn.streamflix.utils.LoggingUtils
 import com.streamflixreborn.streamflix.utils.UserPreferences
-import com.streamflixreborn.streamflix.utils.ProviderChangeNotifier
 
 class HomeTvFragment : Fragment() {
-
-    private var hasAutoCleared409: Boolean = false
 
     private var _binding: FragmentHomeTvBinding? = null
     private val binding get() = _binding!!
@@ -89,18 +85,13 @@ class HomeTvFragment : Fragment() {
             }.onFailure { Log.e("CharmVodHome", "Platform selection failed", it) }
         }
 
-        // Lightweight refresh when provider changes
+        // The persistent dashboard is already inflated. Consume the cached raw
+        // catalog immediately, without waiting for favorites/history Room flows.
+        // HomeViewModel itself owns the initial and provider-change refresh.
         viewLifecycleOwner.lifecycleScope.launch {
-            ProviderChangeNotifier.providerChangeFlow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect {
-                viewModel.getHome()
-            }
-        }
-
-        // Initial load
-        viewModel.getHome()
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.state.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { state ->
+            viewModel.immediateState
+                .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                .collect { state ->
                 when (state) {
                     HomeViewModel.State.Loading -> {
                         // Existing catalog rows and all VOD navigation remain painted.
@@ -114,14 +105,9 @@ class HomeTvFragment : Fragment() {
                         binding.isLoading.root.visibility = View.GONE
                     }
                     is HomeViewModel.State.FailedLoading -> {
-                        val code = (state.error as? retrofit2.HttpException)?.code()
-                        if (code == 409 && !hasAutoCleared409) {
-                            hasAutoCleared409 = true
-                            CacheUtils.clearAppCache(requireContext())
-                            android.widget.Toast.makeText(requireContext(), getString(com.streamflixreborn.streamflix.R.string.clear_cache_done_409), android.widget.Toast.LENGTH_SHORT).show()
-                            viewModel.getHome()
-                            return@collect
-                        }
+                        // A provider HTTP 409 must never delete the last known
+                        // working home snapshot or its artwork on next entry.
+                        Log.w("CharmVodHome", "Catalog refresh failed; preserving offline home", state.error)
                         Toast.makeText(
                             requireContext(),
                             state.error.message ?: "",
@@ -138,6 +124,18 @@ class HomeTvFragment : Fragment() {
                     }
                 }
             }
+        }
+        // Enriched favorites/watch-history arrive separately and may update
+        // rows after the first catalog paint, never before it.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.state
+                .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED)
+                .collect { state ->
+                    if (state is HomeViewModel.State.SuccessLoading) {
+                        displayHome(state.categories)
+                        binding.vgvHome.visibility = View.VISIBLE
+                    }
+                }
         }
     }
     
