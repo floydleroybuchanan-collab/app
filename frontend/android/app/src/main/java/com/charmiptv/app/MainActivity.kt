@@ -245,6 +245,12 @@ class MainActivity : ReactActivity() {
         vodBackKeyDownConsumed = true
       return true
     }
+    // Native VOD has already received this key via its single coordinator.
+    // Unhandled arrows, OK and player-control keys must now reach Android's
+    // focused native view, NOT the shell's JS drawer/rail/pointer handlers.
+    // Falling through below would route one physical press to two focus trees,
+    // making VOD controls flash, jump into the rail or lose focus entirely.
+    if (nativeVodOwnsFocus()) return super.dispatchKeyEvent(event)
     if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == shellBoundaryKeyDown) {
       shellBoundaryKeyDown = -1
       return true
