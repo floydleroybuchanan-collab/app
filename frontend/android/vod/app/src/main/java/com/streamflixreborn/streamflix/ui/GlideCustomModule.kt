@@ -71,19 +71,11 @@ open class GlideCustomModule : AppGlideModule() {
     override fun registerComponents(
         context: Context, glide: Glide, registry: com.bumptech.glide.Registry
     ) {
-        val isSeparateVodProcess = com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod
         val okHttpClient = getOkHttpClient(context)
-        val loader = AnimeOnlineNinjaCronetUrlLoader.Factory(
-            context, okHttpClient, onlySpecialVodImages = !isSeparateVodProcess
-        )
-        if (isSeparateVodProcess) {
-            registry.replace(GlideUrl::class.java, InputStream::class.java, loader)
-        } else {
-            // The unified app no longer has a :vod process. Only take over VOD
-            // URLs with encoded request headers or special Cronet clearance;
-            // all ordinary Live TV, poster and Expo images use the host loader.
-            registry.prepend(GlideUrl::class.java, InputStream::class.java, loader)
-        }
+        // One process, one Glide registry: intercept only VOD-specific image
+        // requests; leave ordinary Live TV logos and Expo images to their host loader.
+        val loader = AnimeOnlineNinjaCronetUrlLoader.Factory(context, okHttpClient)
+        registry.prepend(GlideUrl::class.java, InputStream::class.java, loader)
         registry.append(
             InputStream::class.java,
             SVG::class.java,
