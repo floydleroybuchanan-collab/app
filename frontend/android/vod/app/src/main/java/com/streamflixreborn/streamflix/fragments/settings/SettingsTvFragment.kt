@@ -27,7 +27,6 @@ import android.widget.TextView
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.constraintlayout.widget.Group
 import androidx.leanback.preference.LeanbackPreferenceFragmentCompat
@@ -92,7 +91,6 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
     private val PREFS_ERROR_VALUE = "PREFS_NOT_INIT_ERROR"
     private var currentScreenState = SettingsScreenState(rootKey = null, title = null)
     private val screenBackStack = ArrayDeque<SettingsScreenState>()
-    private lateinit var settingsBackCallback: OnBackPressedCallback
 
     private lateinit var db: AppDatabase
     private lateinit var movieDao: MovieDao
@@ -182,17 +180,14 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         displaySettings()
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        settingsBackCallback = object : OnBackPressedCallback(false) {
-            override fun handleOnBackPressed() {
-                if (screenBackStack.isEmpty()) return
-                currentScreenState = screenBackStack.removeLast()
-                settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
-                renderCurrentScreen()
-            }
-        }
-        requireActivity().onBackPressedDispatcher.addCallback(this, settingsBackCallback)
+    // MainActivity owns the only physical BACK dispatcher. This nested settings
+    // stack is queried by VodRootFragment while VOD actually holds focus; an
+    // Activity-wide callback here could steal BACK from retained/hidden tabs.
+    fun navigateBackWithinSettings(): Boolean {
+        if (screenBackStack.isEmpty()) return false
+        currentScreenState = screenBackStack.removeLast()
+        renderCurrentScreen()
+        return true
     }
 
     override fun onPreferenceTreeClick(preference: Preference): Boolean {
@@ -202,7 +197,6 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
                 rootKey = preference.key,
                 title = preference.title?.toString(),
             )
-            settingsBackCallback.isEnabled = screenBackStack.isNotEmpty()
             renderCurrentScreen()
             return true
         }
