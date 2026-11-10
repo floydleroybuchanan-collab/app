@@ -49,6 +49,9 @@ class VodRootFragment : Fragment() {
     fun setHostActive(active: Boolean) {
         val changed = hostActive != active
         hostActive = active
+        // Disarm focus restoration BEFORE the player is popped on tab blur;
+        // otherwise its destination callback can reclaim focus from Live TV.
+        coordinator?.setHostActive(active)
         if (!active && changed && navigation?.currentDestination?.id == R.id.player) {
             // Expo Tabs can keep the VOD Fragment RESUMED while it is hidden.
             // Leave playback before another tab starts its Live/Guide decoder:
@@ -58,9 +61,16 @@ class VodRootFragment : Fragment() {
                 if (navigation?.navigateUp() == false) navigation?.navigate(R.id.home)
             }.onFailure { Log.e("CharmVodRoot", "Could not release hidden VOD playback", it) }
         }
-        if (active && changed && !rootReadyReported) {
-            readyAttempts = 0
-            notifyWhenDrawn()
+        if (active && changed) {
+            if (!rootReadyReported) {
+                readyAttempts = 0
+                notifyWhenDrawn()
+            } else {
+                _binding?.root?.post {
+                    if (hostActive && _binding != null && !binding.root.hasFocus())
+                        coordinator?.restoreFocusFromHost()
+                }
+            }
         }
     }
     private var readyCheckPosted = false
@@ -131,6 +141,7 @@ class VodRootFragment : Fragment() {
         coordinator = VodFocusCoordinator(b, navHost, controller).also {
             it.onHostRailFocus = { onHostIconRail?.invoke() == true }
             it.install()
+            it.setHostActive(hostActive)
         }
 
         controller.addOnDestinationChangedListener { _, destination, _ ->
