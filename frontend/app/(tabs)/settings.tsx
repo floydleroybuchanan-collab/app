@@ -7,7 +7,7 @@ import { Alert, Share, DeviceEventEmitter, Linking, Platform, Pressable, ScrollV
 import { supportReport } from "@/src/core/supportReport";
 import { useAppPolicy } from "@/src/core/useAppPolicy";
 import { TvSettingsTextInput as TextInput } from "@/src/components/TvSettingsTextInput";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
@@ -136,6 +136,17 @@ function glassArt(icon: string): number {
   const match = rule.find(([pattern]) => pattern.test(icon));
   return TILE_ART[match ? match[1] : "general"];
 }
+/** The native VOD Settings sections, each opened directly from this page. */
+const VOD_SECTIONS: { key: string; label: string; art: number }[] = [
+  { key: "screen_vod_sources", label: "Sources & Real-Debrid", art: require("../../assets/glass/vod_set_sources.webp") },
+  { key: "screen_content", label: "Content & Safety", art: require("../../assets/glass/vod_set_content.webp") },
+  { key: "screen_playback", label: "Player", art: require("../../assets/glass/vod_set_playback.webp") },
+  { key: "screen_appearance", label: "Appearance", art: require("../../assets/glass/vod_set_appearance.webp") },
+  { key: "screen_network", label: "Connection & Services", art: require("../../assets/glass/vod_set_network.webp") },
+  { key: "screen_provider", label: "Provider", art: require("../../assets/glass/vod_set_provider.webp") },
+  { key: "screen_cloud_sync", label: "Account & Sync", art: require("../../assets/glass/vod_set_cloud.webp") },
+  { key: "screen_backup", label: "Backup & Restore", art: require("../../assets/glass/vod_set_backup.webp") },
+];
 const TILE_ABOUT: Record<string, string> = {
   "general": "Guide layout, channel display and start-up behavior.",
   "player": "Buffering, audio, subtitles and player controls.",
@@ -253,6 +264,9 @@ function SettingsScreenContent() {
   const audioPreferences = useAudioTrackPreferences();
   const latestAudio = getLastAudioDiagnostics();
   const [section, setSection] = useState<Section | null>(null);
+  const routeParams = useLocalSearchParams<{ section?: string }>();
+  // Back from a native VOD Settings section returns to this page's VOD section.
+  useEffect(() => { if (routeParams.section === "vod") setSection("vod"); }, [routeParams.section]);
   const [busy, setBusy] = useState(false);
   const multiviewPrefs = useMultiviewPreferences();
   const [advancedPlayer, setAdvancedPlayer] = useState(false);
@@ -421,7 +435,6 @@ function SettingsScreenContent() {
     setBackupStatus(null);
     setClearFavoritesArmed(false);
     if (id === "playlists") { router.push("/playlists" as any); return; }
-    if (id === "vod") { router.push("/vod?section=settings" as any); return; }
     if (id === "epg") {
       router.push("/epg-sources" as any);
       return;
@@ -647,11 +660,20 @@ function SettingsScreenContent() {
             ) : null}
 
             {section === "vod" ? (
-              <SettingsCard title="Video OnDemand Settings" icon="film-outline">
-                <Text style={styles.help}>Manage VOD source selection, Real-Debrid connections, playback, content, appearance and provider settings in the restored native VOD Settings screen. No preferences are reset.</Text>
-                <Action label="Open VOD Settings" icon="settings-outline"
-                  onPress={() => router.push("/vod?section=settings" as any)} />
-              </SettingsCard>
+              <View style={styles.vodGrid}>
+                {VOD_SECTIONS.map((item, index) => (
+                  <Pressable
+                    key={item.key}
+                    nextFocusLeft={index % 4 === 0 ? iconRailEntryTag : undefined}
+                    onPress={() => router.push(`/vod?section=settings&screen=${item.key}` as any)}
+                    style={({ focused }: any) => [styles.tile, styles.vodTile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 14 }]}
+                    testID={`settings-vod-${item.key}`}
+                  >
+                    <Image source={item.art} style={styles.tileArt} resizeMode="contain" fadeDuration={0} />
+                    <Text style={styles.tileText}>{item.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
             ) : null}
             {section === "general" ? (
               <SettingsCard title="Guide & channels" icon="list-outline">
@@ -1356,6 +1378,8 @@ const styles = StyleSheet.create({
   backButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   tileArt: { width: 58, height: 58 },
+  vodGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, paddingTop: 4 },
+  vodTile: { minHeight: 112 },
   cardArt: { width: 34, height: 34 },
   actionArt: { width: 20, height: 20 },
   hero: { flexDirection: "row", alignItems: "center", gap: 18, padding: 16, marginBottom: 12, borderRadius: 18, borderWidth: 1, borderColor: "rgba(216,178,255,0.34)", backgroundColor: "rgba(150,70,235,0.20)" },

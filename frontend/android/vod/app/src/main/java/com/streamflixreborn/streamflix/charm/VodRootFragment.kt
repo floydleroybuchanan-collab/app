@@ -122,8 +122,8 @@ class VodRootFragment : Fragment() {
         }
         // The graph starts at Home. Do not navigate there again: this used to
         // recreate the first destination and delay/blank the embedded dashboard.
-        if (saved == null && requestedSection == "settings") {
-            controller.navigate(R.id.settings)
+        if (saved == null && requestedSection.startsWith("settings")) {
+            controller.navigate(R.id.settings, settingsArgs(requestedSection))
         }
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
@@ -182,6 +182,13 @@ class VodRootFragment : Fragment() {
         return coordinator?.onKey(event) == true
     }
 
+
+    /** "settings:screen_x" opens VOD Settings directly on that section. */
+    private fun settingsArgs(section: String): Bundle? =
+        section.substringAfter("settings:", "").takeIf { Regex("^screen_[a-z_]+$").matches(it) }?.let {
+            Bundle().apply { putString(androidx.preference.PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, it) }
+        }
+
     fun navigateTo(section: String) {
         requestedSection = section
         val controller = navigation ?: return
@@ -193,10 +200,11 @@ class VodRootFragment : Fragment() {
             "favorites" -> R.id.favorites
             "genres" -> R.id.genre_hub
             "platforms" -> R.id.platforms
-            else -> R.id.home
+            else -> if (section.startsWith("settings:")) R.id.settings else R.id.home
         }
-        if (controller.currentDestination?.id != destination) {
-            controller.navigate(destination, null, navOptions {
+        val args = if (destination == R.id.settings) settingsArgs(section) else null
+        if (controller.currentDestination?.id != destination || args != null) {
+            controller.navigate(destination, args, navOptions {
                 launchSingleTop = true
                 popUpTo(R.id.home) { inclusive = false }
             })

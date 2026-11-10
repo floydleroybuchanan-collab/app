@@ -101,7 +101,7 @@ android {
         applicationId 'com.charmiptv.app.purple.next.vodtest1'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2510
+        versionCode 2511
         versionName "25.7.0-rc.25"
         // IPTV providers commonly use legacy HTTP stream URLs. Keep cleartext
         // compatibility intentionally enabled for release and sideload builds.

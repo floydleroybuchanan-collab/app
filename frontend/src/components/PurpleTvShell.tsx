@@ -414,6 +414,20 @@ export function PurpleTvShell({
     openDrawer();
   }), [isFocused, openDrawer]);
 
+  // A rail removed while it held focus (route change, drawer, idle hide) never
+  // reports blur. Drop its remote claim with it, or LEFT/BACK stay routed to it.
+  const activeRouteRef = useRef(active);
+  activeRouteRef.current = active;
+  useEffect(() => {
+    if (!showIconRail) return;
+    return () => {
+      if (iconRailFocusOwnerRef.current === null) return;
+      iconRailFocusOwnerRef.current = null;
+      const onGuide = activeRouteRef.current === "/guide";
+      if (resetRemoteContextIfOwned("icon_rail", onGuide ? "guide" : "default") && onGuide) setGuideNavigationActive(true);
+    };
+  }, [showIconRail]);
+
   const railCanTakeFocusRef = useRef(false);
   railCanTakeFocusRef.current = active !== "/guide" && railPreferences.ready && railPreferences.enabled && !railTimedOut && !immersiveContent;
 

@@ -104,6 +104,32 @@ class MainActivity : ReactActivity() {
     return next != null && next !== focus && visible(next) && sharesRow(focus, next)
   }
 
+  private fun hasTaggedAncestor(view: View?, id: String): Boolean {
+    var at = view
+    while (at != null) {
+      if (testId(at) == id) return true
+      at = at.parent as? View
+    }
+    return false
+  }
+
+  /**
+   * A rail or edge control that was removed while focused never reports blur, so
+   * its remote claim can outlive it. Such a stale claim must not swallow keys.
+   */
+  private fun ownerMatchesFocus(context: String, key: String): Boolean {
+    val focus = currentFocus ?: return true
+    return when (context) {
+      "icon_rail" -> hasTaggedAncestor(focus, "purple-icon-rail")
+      "drawer_edge" -> key != "LEFT" || run {
+        var page: View? = focus
+        while (page != null && testId(page) != "purple-tv-page") page = page.parent as? View
+        page == null || !hasLeftNeighborInRow(focus, page)
+      }
+      else -> true
+    }
+  }
+
   private fun selectedRailItem(view: View): View? {
     if (view.getTag(com.facebook.react.R.id.view_tag_native_id) == "purple-icon-rail-selected") return view
     if (view is ViewGroup) for (index in 0 until view.childCount) {
@@ -487,7 +513,7 @@ class MainActivity : ReactActivity() {
           // stored React node before the event arrives and make focus vanish.
           (context == "icon_rail" && (boundaryKey == "LEFT" || boundaryKey == "BACK")) ||
           (context == "drawer_edge" && boundaryKey == "LEFT")
-      if (owned && boundaryKey != null) {
+      if (owned && boundaryKey != null && ownerMatchesFocus(context, boundaryKey)) {
         emitRemoteEvent("TvRemoteKey", boundaryKey)
         if (context == "main_drawer" && boundaryKey == "RIGHT") moveFocusOntoPageAfterDrawer()
         return true

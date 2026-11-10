@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useIsFocused } from "@react-navigation/native";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
@@ -14,10 +13,9 @@ const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>
  * Native navigation must never remount the route or cover it with a black overlay.
  */
 export default function VideoOnDemandScreen() {
-  const { section } = useLocalSearchParams<{ section?: string }>();
+  const { section, screen } = useLocalSearchParams<{ section?: string; screen?: string }>();
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
   const router = useRouter();
-  const isFocused = useIsFocused();
   const sectionRef = useRef(section);
   sectionRef.current = section;
   const [immersive, setImmersive] = useState(false);
@@ -39,7 +37,7 @@ export default function VideoOnDemandScreen() {
       // VOD Settings was opened from the Settings page, so Back returns there.
       if (sectionRef.current === "settings") {
         router.setParams({ section: undefined } as any);
-        router.replace("/settings" as any);
+        router.replace("/settings?section=vod" as any);
         return;
       }
       openDrawer({ force: true });
@@ -78,10 +76,12 @@ export default function VideoOnDemandScreen() {
     <PurpleTvShell active="/vod" immersiveContent={immersive}>
       <View style={styles.page}>
         {Platform.OS === "android" && !mountError ? (
-          !isFocused ? null : <NativeVod
+          // Expo Tabs detach inactive screens, so the native view mounts on attach
+          // and tears down on detach without waiting for another JS render.
+          <NativeVod
             key={attempt}
             style={styles.surface}
-            startSection={section === "settings" ? "settings" : "home"}
+            startSection={section !== "settings" ? "home" : screen && /^screen_[a-z_]+$/.test(screen) ? `settings:${screen}` : "settings"}
           />
         ) : (
           <View style={styles.errorBox}>
