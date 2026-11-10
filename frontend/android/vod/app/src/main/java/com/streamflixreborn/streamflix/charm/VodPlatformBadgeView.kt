@@ -1,6 +1,7 @@
 package com.streamflixreborn.streamflix.charm
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -18,20 +19,28 @@ class VodPlatformBadgeView(
     context: Context, val platform: VodPlatformCatalog.Platform,
     private val small: Boolean = false,
 ) : TextView(context) {
+    private val artwork = CharmingPlatformArt(platform.id)
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
     init {
-        text = platform.mark
+        text = ""
         gravity = Gravity.CENTER
         maxLines = 1
         setTextColor(Color.WHITE)
         textSize = if (small) 15f else 20f
         setTypeface(typeface, Typeface.BOLD)
         setPadding(dp(if (small) 12 else 17), 0, dp(if (small) 12 else 17), 0)
-        background = glass(false)
+        background = null
         elevation = dp(5).toFloat()
         isFocusable = false
         isClickable = false
     }
+    override fun onDraw(canvas: Canvas) {
+        artwork.setBounds(0, 0, width, height)
+        artwork.draw(canvas)
+        // The logo artwork is drawn at full badge resolution; no text glyph
+        // or stock platform initial is substituted for the approved mark.
+    }
+
     fun glass(focused: Boolean): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TL_BR,
         if (focused) intArrayOf(0x9A9F63CF.toInt(), 0xAB231A43.toInt(), 0x803B1854.toInt())
