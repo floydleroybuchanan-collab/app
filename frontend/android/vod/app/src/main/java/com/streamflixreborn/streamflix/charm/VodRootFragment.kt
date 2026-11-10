@@ -39,7 +39,10 @@ class VodRootFragment : Fragment() {
     var onHostIconRail: (() -> Boolean)? = null
     var onImmersiveChanged: ((Boolean) -> Unit)? = null
     var onRootReady: (() -> Unit)? = null
+    var onRootError: ((String) -> Unit)? = null
     private var rootStartedAt = 0L
+    private var readyAttempts = 0
+    private var rootReadyReported = false
 
     private var _binding: ActivityMainTvBinding? = null
     private val binding get() = requireNotNull(_binding)
@@ -106,11 +109,10 @@ class VodRootFragment : Fragment() {
         controller.addOnDestinationChangedListener { _, destination, _ ->
             onImmersiveChanged?.invoke(destination.id == R.id.player)
         }
-        if (saved == null) {
-            when {
-                requestedSection == "settings" -> controller.navigate(R.id.settings)
-                UserPreferences.currentProvider != null -> controller.navigate(R.id.home)
-            }
+        // The graph starts at Home. Do not navigate there again: this used to
+        // recreate the first destination and delay/blank the embedded dashboard.
+        if (saved == null && requestedSection == "settings") {
+            controller.navigate(R.id.settings)
         }
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
@@ -125,11 +127,35 @@ class VodRootFragment : Fragment() {
                 }
             }
         )
+        notifyWhenDrawn()
+    }
+
+    /**
+     * NavHost existence is not proof of UI readiness. Require the actual
+     * destination fragment to occupy the screen before reporting success.
+     */
+    private fun notifyWhenDrawn() {
+        val b = _binding ?: return
         b.navMainFragment.post {
-            if (_binding != null && isAdded) {
-                b.navMainFragment.requestFocus()
-                Log.i("CharmVodRoot", "VOD navigation ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
+            if (!isAdded || _binding == null || rootReadyReported) return@post
+            val navHost = childFragmentManager.findFragmentById(b.navMainFragment.id) as? NavHostFragment
+            val destination = navigation?.currentDestination?.id
+            val content = navHost?.childFragmentManager?.primaryNavigationFragment?.view
+            val homeInflated = destination != R.id.home ||
+                content?.findViewById<View>(R.id.charming_vod_dashboard) != null
+            if (b.navMainFragment.width > 0 && b.navMainFragment.height > 0 &&
+                content != null && content.width > 0 && content.height > 0 && homeInflated) {
+                rootReadyReported = true
+                if (!b.root.hasFocus()) b.vodGlassActions.focusLastAction()
+                Log.i("CharmVodRoot", "VOD actual destination ready in ${SystemClock.elapsedRealtime() - rootStartedAt}ms")
                 onRootReady?.invoke()
+            } else if (++readyAttempts <= 45) {
+                b.navMainFragment.postDelayed({ notifyWhenDrawn() }, 100L)
+            } else {
+                val message = "VOD destination did not draw: destination=$destination, " +
+                    "container=${b.navMainFragment.width}x${b.navMainFragment.height}"
+                Log.e("CharmVodRoot", message)
+                onRootError?.invoke(message)
             }
         }
     }
@@ -196,6 +222,7 @@ class VodRootFragment : Fragment() {
         navigation = null
         onImmersiveChanged?.invoke(false)
         onRootReady = null
+        onRootError = null
         _binding = null
         super.onDestroyView()
     }
