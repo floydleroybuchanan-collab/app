@@ -68,7 +68,7 @@ class MainTvActivity : FragmentActivity() {
         applyThemeNavigationChrome()
 
         val navHostFragment = this.supportFragmentManager
-            .findFragmentById(binding.vodGlassActionsFragment.id) as NavHostFragment
+            .findFragmentById(binding.navMainFragment.id) as NavHostFragment
         val navController = navHostFragment.navController
 
         adjustLayoutDelta(null, null)
@@ -99,7 +99,7 @@ class MainTvActivity : FragmentActivity() {
         updateNavigationVisibility()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            binding.vodGlassActionsFragment.isFocusedByDefault = true
+            binding.navMainFragment.isFocusedByDefault = true
         }
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
@@ -157,7 +157,7 @@ class MainTvActivity : FragmentActivity() {
                 }
             }
         })
-        if (savedInstanceState == null) binding.vodGlassActionsFragment.post { binding.vodGlassActionsFragment.requestFocus() }
+        if (savedInstanceState == null) binding.navMainFragment.post { binding.navMainFragment.requestFocus() }
     }
 
     /** A root VOD BACK returns to the host main navigation drawer, not the icon rail. */
