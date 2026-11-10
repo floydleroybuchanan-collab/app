@@ -49,9 +49,13 @@ object CacheUtils {
 
     fun autoClearIfNeeded(context: Context, thresholdMb: Long = 50L) {
         val threshold = thresholdMb.coerceAtLeast(10L) * 1024 * 1024
-        if (getCacheSize(context) > threshold) {
-            Log.i(TAG, "Only VOD-owned caches exceeded the configured limit.")
-            clearAppCache(context)
+        // The persistent home snapshot is not a disposable transient cache.
+        // Automatic housekeeping must never discard the only offline VOD home.
+        val transient = File(context.applicationContext.cacheDir, "vod")
+        if (folderSize(transient) > threshold) {
+            Log.i(TAG, "VOD transient cache exceeded the configured limit.")
+            runCatching { transient.deleteRecursively() }
+                .onFailure { Log.w(TAG, "Transient VOD cleanup failed", it) }
         }
     }
 }
