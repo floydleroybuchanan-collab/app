@@ -35,6 +35,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceGroup
 import androidx.preference.PreferenceManager
 import androidx.preference.PreferenceScreen
 import androidx.preference.SeekBarPreference
@@ -43,6 +44,7 @@ import androidx.preference.SwitchPreferenceCompat
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.charm.VodRootFragment
+import com.streamflixreborn.streamflix.charm.CharmingVodSettingsIcon
 import com.streamflixreborn.streamflix.backup.BackupRestoreManager
 import com.streamflixreborn.streamflix.backup.ProviderBackupContext
 import com.streamflixreborn.streamflix.database.AppDatabase
@@ -214,11 +216,50 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         activity?.title = currentScreenState.title ?: getString(R.string.player_settings_title)
     }
 
+    /**
+     * One theme pass for the entire nested Preference hierarchy. Do not create
+     * a Bitmap per item: each icon is an inexpensive vector Drawable and only
+     * the active RecyclerView rows receive views from Leanback.
+     */
+    private fun stylePreferenceIcons(group: PreferenceGroup) {
+        val currentScreen = currentScreenState.rootKey.orEmpty().lowercase(Locale.ROOT)
+        for (index in 0 until group.preferenceCount) {
+            val preference = group.getPreference(index)
+            if (preference !is PreferenceCategory) {
+                val label = (preference.key.orEmpty() + " " + preference.title.orEmpty() +
+                    " " + currentScreen).lowercase(Locale.ROOT)
+                val kind = when {
+                    listOf("provider", "playlist", "source", "stream", "debrid", "connection")
+                        .any(label::contains) -> "provider"
+                    listOf("playback", "player", "buffer", "autoplay", "video", "audio", "subtitle")
+                        .any(label::contains) -> "playback"
+                    listOf("epg", "guide", "schedule", "refresh", "update interval")
+                        .any(label::contains) -> "epg"
+                    listOf("parental", "security", "pin", "privacy", "password", "lock")
+                        .any(label::contains) -> "security"
+                    listOf("appearance", "theme", "style", "color", "display", "language", "padding")
+                        .any(label::contains) -> "appearance"
+                    listOf("account", "login", "sign", "profile", "supabase")
+                        .any(label::contains) -> "account"
+                    listOf("notification", "reminder", "alert", "message")
+                        .any(label::contains) -> "notifications"
+                    listOf("storage", "cache", "backup", "download", "database", "restore")
+                        .any(label::contains) -> "storage"
+                    else -> "about"
+                }
+                preference.icon = CharmingVodSettingsIcon(kind)
+                preference.isIconSpaceReserved = true
+            }
+            if (preference is PreferenceGroup) stylePreferenceIcons(preference)
+        }
+    }
+
     private fun renderCurrentScreen() {
         setPreferencesFromResource(R.xml.settings_tv, currentScreenState.rootKey)
         if (::backupRestoreManager.isInitialized) {
             displaySettings()
         }
+        preferenceScreen?.let(::stylePreferenceIcons)
         applyScreenTitle()
         view?.post { listView?.requestFocus() }
     }
