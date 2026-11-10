@@ -31,6 +31,8 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   )
 }
 
+// RN TV 0.81 still invokes ReactPackage's legacy native-module discovery.
+@Suppress("OVERRIDE_DEPRECATION")
 class NativeGuidePackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> = emptyList()
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> = listOf(NativeGuideManager())
