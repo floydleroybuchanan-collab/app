@@ -44,6 +44,7 @@ class VodRootFragment : Fragment() {
     private var readyAttempts = 0
     private var rootReadyReported = false
     private var hostActive = false
+    private var nativeBackCallback: OnBackPressedCallback? = null
 
     /** Expo Tabs retain the Fragment; only the currently focused tab may own readiness/focus. */
     fun setHostActive(active: Boolean) {
@@ -52,6 +53,7 @@ class VodRootFragment : Fragment() {
         // Disarm focus restoration BEFORE the player is popped on tab blur;
         // otherwise its destination callback can reclaim focus from Live TV.
         coordinator?.setHostActive(active)
+        nativeBackCallback?.isEnabled = active
         if (!active && changed && navigation?.currentDestination?.id == R.id.player) {
             // Expo Tabs can keep the VOD Fragment RESUMED while it is hidden.
             // Leave playback before another tab starts its Live/Guide decoder:
@@ -152,19 +154,23 @@ class VodRootFragment : Fragment() {
         if (saved == null && requestedSection == "settings") {
             controller.navigate(R.id.settings)
         }
-        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    if (isVisible && _binding?.root?.hasFocus() == true) {
-                        navigateBack()
-                    } else {
-                        isEnabled = false
+        // A retained hidden VOD Fragment must NOT intercept Back from Live TV.
+        val callback = object : OnBackPressedCallback(hostActive) {
+            override fun handleOnBackPressed() {
+                if (hostActive && isVisible && _binding?.root?.hasFocus() == true) {
+                    navigateBack()
+                } else {
+                    isEnabled = false
+                    try {
                         requireActivity().onBackPressedDispatcher.onBackPressed()
-                        isEnabled = true
+                    } finally {
+                        isEnabled = hostActive
                     }
                 }
             }
-        )
+        }
+        nativeBackCallback = callback
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
         // Fabric can attach this nested Fragment before the route receives its
         // first measured viewport. A layout event, not a fixed timer, starts
         // the destination readiness deadline.
@@ -284,6 +290,8 @@ class VodRootFragment : Fragment() {
         readyCheckPosted = false
         rootReadyReported = false
         readyAttempts = 0
+        nativeBackCallback?.remove()
+        nativeBackCallback = null
         coordinator?.dispose()
         coordinator = null
         navigation = null
