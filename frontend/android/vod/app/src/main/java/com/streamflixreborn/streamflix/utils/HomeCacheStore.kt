@@ -100,12 +100,14 @@ object HomeCacheStore {
                     gson.toJson(payload, writer)
                     writer.flush()
                     atomic.finishWrite(stream)
-                    target.setLastModified(System.currentTimeMillis())
-                    pruneOldCatalogs(context, target)
                 } catch (error: Exception) {
                     stream?.let { atomic.failWrite(it) }
                     throw error
                 }
+                // Housekeeping occurs only after the atomic replacement succeeds.
+                // An eviction failure must not roll back a valid catalog snapshot.
+                target.setLastModified(System.currentTimeMillis())
+                pruneOldCatalogs(context, target)
             }
         }.onFailure { Log.w("CharmVodCache", "Could not persist VOD catalog", it) }
     }
