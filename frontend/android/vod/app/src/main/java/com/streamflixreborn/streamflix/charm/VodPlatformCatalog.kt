@@ -49,7 +49,15 @@ object VodPlatformCatalog {
         Triple("1923",2022,"paramount"),Triple("Tulsa King",2022,"paramount"),
         Triple("Halo",2022,"paramount"),Triple("Star Trek: Strange New Worlds",2022,"paramount"),
         Triple("Poker Face",2023,"peacock"),Triple("Twisted Metal",2023,"peacock"),
-        Triple("Bel-Air",2022,"peacock"),Triple("The Traitors",2023,"peacock")
+        Triple("Bel-Air",2022,"peacock"),Triple("The Traitors",2023,"peacock"),
+        // STARZ and AMC+ must have genuine home-network Originals before
+        // any provider search may label a title with the platform name.
+        Triple("Outlander",2014,"starz"),Triple("Power",2014,"starz"),
+        Triple("BMF",2021,"starz"),Triple("P-Valley",2020,"starz"),
+        Triple("Power Book II: Ghost",2020,"starz"),
+        Triple("Breaking Bad",2008,"amc"),Triple("Better Call Saul",2015,"amc"),
+        Triple("Dark Winds",2022,"amc"),Triple("The Walking Dead",2010,"amc"),
+        Triple("Interview with the Vampire",2022,"amc")
     )
     private val index = originals.groupBy { normalize(it.first) }.mapValues { (_, entries) ->
         entries.associate { (_, year, id) -> year to platforms.first { p -> p.id == id } }
@@ -63,6 +71,13 @@ object VodPlatformCatalog {
         is TvShow -> find(show.title, show.released?.get(Calendar.YEAR))
     }
     fun byId(id: String?): Platform? = platforms.firstOrNull { it.id == id }
+
+    /** Bounded title-only probes into the selected user's actual provider.
+     * Every result must still pass the exact title+year Originals matcher.
+     */
+    fun searchSeeds(platformId: String, limit: Int = 6): List<String> =
+        originals.asSequence().filter { it.third == platformId }
+            .map { it.first }.distinct().take(limit.coerceIn(0, 8)).toList()
     private fun normalize(s: String): String =
         s.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]"), "")
     fun match(items: Sequence<Show>, maxPerPlatform: Int = 18): Map<String, List<Show>> {

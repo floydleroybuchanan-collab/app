@@ -94,3 +94,16 @@ test("player Down reveals controls and restores Stop without a second player or 
   assert.match(player, /ref=\{stopButtonRef\}/);
   assert.match(player, /cancelStopFocusRef.current\?\.\(\)/);
 });
+
+test("platform discovery searches only missing verified Originals in a bounded provider window", () => {
+  const catalog = read(charm + "VodPlatformCatalog.kt");
+  const screen = read(charm + "VodPlatformsFragment.kt");
+  assert.match(catalog, /fun searchSeeds\(platformId: String, limit: Int = 6\)/);
+  assert.match(catalog, /Triple\("Outlander",2014,"starz"\)/);
+  assert.match(catalog, /Triple\("Dark Winds",2022,"amc"\)/);
+  assert.match(screen, /verified\[currentPlatformId\]\.isNullOrEmpty\(\)/);
+  assert.match(screen, /searchSeeds\(currentPlatformId\)\.chunked\(3\)/);
+  assert.match(screen, /withTimeoutOrNull\(2_200L\)/);
+  assert.match(screen, /provider\.search\(title, 1\)\.filterIsInstance<Show>\(\)\.take\(40\)/);
+  assert.match(screen, /VodPlatformCatalog\.match\(searched\.asSequence\(\), maxPerPlatform = 60\)/);
+});

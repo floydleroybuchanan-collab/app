@@ -120,9 +120,45 @@ class VodPlatformsFragment : Fragment() {
                                 .filterIsInstance<Show>().take(5000).toList()
                             val allowed = ParentalControlUtils.filterItems(shows).filterIsInstance<Show>()
                             val verified = VodPlatformCatalog.match(allowed.asSequence(), maxPerPlatform = 60)
+                            // Home shelves are a preview, NOT a provider's entire
+                            // VOD library. On a selected, empty Originals page,
+                            // query at most six verified seed titles in two small
+                            // batches. Only exact title+year matches are admitted.
+                            // No image preload, duplicate player or persistent
+                            // cache is created by these optional lookups.
+                            val searched = if (currentPlatformId != null &&
+                                verified[currentPlatformId].isNullOrEmpty()) {
+                                val found = mutableListOf<Show>()
+                                for (batch in VodPlatformCatalog.searchSeeds(currentPlatformId).chunked(3)) {
+                                    batch.map { title ->
+                                        async {
+                                            withTimeoutOrNull(2_200L) {
+                                                runCatching {
+                                                    provider.search(title, 1).filterIsInstance<Show>().take(40)
+                                                }.getOrDefault(emptyList())
+                                            } ?: emptyList()
+                                        }
+                                    }.awaitAll().forEach(found::addAll)
+                                }
+                                ParentalControlUtils.filterItems(found).filterIsInstance<Show>()
+                            } else emptyList()
+                            val matching = if (currentPlatformId != null && searched.isNotEmpty()) {
+                                VodPlatformCatalog.match(searched.asSequence(), maxPerPlatform = 60)
+                                    [currentPlatformId].orEmpty()
+                            } else emptyList()
+                            val originals = if (currentPlatformId != null && matching.isNotEmpty()) {
+                                val joined = (verified[currentPlatformId].orEmpty() + matching)
+                                    .distinctBy { show ->
+                                        when (show) {
+                                            is Movie -> "movie/" + show.id
+                                            is TvShow -> "series/" + show.id
+                                        }
+                                    }.take(60)
+                                verified + (currentPlatformId to joined)
+                            } else verified
                             CatalogSnapshot(
-                                verified,
-                                allowed,
+                                originals,
+                                allowed + searched,
                                 // TMDb IDs are trustworthy only with the TMDb provider.
                                 provider is TmdbProvider && UserPreferences.enableTmdb &&
                                     (BuildConfig.TMDB_API_KEY.isNotBlank() || UserPreferences.tmdbApiKey.isNotBlank()),
