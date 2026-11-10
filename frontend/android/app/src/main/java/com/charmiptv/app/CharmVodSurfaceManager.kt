@@ -63,7 +63,18 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 if (field == value) return
                 field = value
                 fragment?.setHostActive(value)
-                if (value) post { mountIfReady() }
+                if (value) {
+                    // The active tab is the sole native key owner. Re-register
+                    // its existing Fragment callbacks rather than retaining
+                    // dormant hardware input handlers under another screen.
+                    fragment?.let { current ->
+                        activity?.attachVodInput(this, current::onRemoteKey, current::navigateBack)
+                    }
+                    post { mountIfReady() }
+                } else {
+                    // Remove the ownership registration itself on tab exit.
+                    activity?.detachVodInput(this)
+                }
             }
         var startSection: String = "home"
             set(value) {
