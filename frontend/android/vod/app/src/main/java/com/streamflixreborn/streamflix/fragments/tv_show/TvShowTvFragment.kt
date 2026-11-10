@@ -119,6 +119,16 @@ class TvShowTvFragment : Fragment() {
     }
 
     private fun displayTvShow(tvShow: TvShow) {
+        val platform = com.streamflixreborn.streamflix.charm.VodPlatformCatalog.find(tvShow)
+        binding.tvPlatformInfoBadge.apply {
+            visibility = if (platform == null) View.GONE else View.VISIBLE
+            if (platform != null) {
+                text = platform.mark + "  Original"
+                background = com.streamflixreborn.streamflix.charm.VodPlatformBadgeView(
+                    requireContext(), platform, small = true
+                ).glass(false)
+            }
+        }
         binding.ivTvShowBanner.loadTvShowBanner(tvShow) {
             transition(DrawableTransitionOptions.withCrossFade())
         }

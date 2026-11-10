@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -14,13 +15,12 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.navOptions
-import com.tanasi.navigation.widget.setupWithNavController
 import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.R
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.ActivityMainTvBinding
-import com.streamflixreborn.streamflix.databinding.ContentHeaderMenuMainTvBinding
 import com.streamflixreborn.streamflix.fragments.player.PlayerTvFragment
+import com.streamflixreborn.streamflix.charm.VodFocusCoordinator
 import com.streamflixreborn.streamflix.ui.UpdateAppTvDialog
 import com.streamflixreborn.streamflix.providers.IptvProvider
 import com.streamflixreborn.streamflix.providers.Provider
@@ -43,6 +43,7 @@ class MainTvActivity : FragmentActivity() {
     private val viewModel by viewModels<MainViewModel>()
 
     private lateinit var updateAppDialog: UpdateAppTvDialog
+    private var vodFocusCoordinator: VodFocusCoordinator? = null
 
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
@@ -79,12 +80,22 @@ class MainTvActivity : FragmentActivity() {
         }
 
         if (savedInstanceState == null) {
-            UserPreferences.currentProvider?.let {
-                navController.navigate(R.id.home)
+            if (intent.getBooleanExtra("openVodSettings", false)) {
+                navController.navigate(R.id.settings)
+            } else {
+                UserPreferences.currentProvider?.let { navController.navigate(R.id.home) }
             }
         }
 
-        binding.navMain.setupWithNavController(navController)
+        binding.vodGlassActions.onNavigate = { destination ->
+            if (navController.currentDestination?.id != destination) {
+                navController.navigate(destination, null, navOptions {
+                    launchSingleTop = true
+                    popUpTo(R.id.home) { inclusive = false }
+                })
+            }
+        }
+        vodFocusCoordinator = VodFocusCoordinator(binding, navHostFragment, navController).also { it.install() }
         updateNavigationVisibility()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -92,41 +103,13 @@ class MainTvActivity : FragmentActivity() {
         }
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
-            binding.navMain.headerView?.apply {
-                val header = ContentHeaderMenuMainTvBinding.bind(this)
-
-                // Header-specific transparent artwork avoids the old opaque
-                // square and preserves the circular mark at a true aspect fit.
-                header.ivNavigationHeaderIcon.setImageResource(R.drawable.medialab_rail)
-                header.tvNavigationHeaderTitle.text = getString(R.string.app_name)
-                contentDescription = getString(R.string.charm_vod_provider_access)
-                header.tvNavigationHeaderSubtitle.text = getString(R.string.main_menu_change_provider)
-                val palette = ThemeManager.palette(UserPreferences.selectedTheme)
-                header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
-                header.tvNavigationHeaderSubtitle.setTextColor(palette.tvHeaderSecondary)
-                setBackgroundColor(palette.tvNavBackground)
-
-                setOnOpenListener {
-                    header.tvNavigationHeaderTitle.visibility = View.VISIBLE
-                    header.tvNavigationHeaderSubtitle.visibility = View.VISIBLE
-                }
-                setOnCloseListener {
-                    header.tvNavigationHeaderTitle.visibility = View.GONE
-                    header.tvNavigationHeaderSubtitle.visibility = View.GONE
-                }
-
-                setOnClickListener {
-                    // Navigazione manuale per evitare dipendenza da Safe Args Directions non generate
-                    navController.navigate(R.id.providers)
-                }
-            }
-
             when (destination.id) {
-                R.id.search, R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.settings -> {
-                    binding.navMain.visibility = View.VISIBLE
+                R.id.search, R.id.home, R.id.movies, R.id.tv_shows,
+                R.id.favorites, R.id.genre_hub, R.id.platforms, R.id.settings -> {
+                    binding.vodGlassActions.visibility = View.VISIBLE
                     updateNavigationVisibility()
                 }
-                else -> binding.navMain.visibility = View.GONE
+                else -> binding.vodGlassActions.visibility = View.GONE
             }
         }
 
@@ -157,35 +140,41 @@ class MainTvActivity : FragmentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.ivSplashOverlay.visibility == View.VISIBLE) {
-                    binding.ivSplashOverlay.dismiss()
-                    return
-                }
                 when (navController.currentDestination?.id) {
-                    R.id.home -> if (binding.navMain.hasFocus()) finish() else binding.navMain.requestFocus()
-                    R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites -> {
-                        navigateToProviderHome(navController)
-                        binding.navMain.requestFocus()
+                    R.id.home -> finishToMainDrawer()
+                    R.id.settings, R.id.search, R.id.movies, R.id.tv_shows, R.id.favorites,
+                    R.id.genre_hub, R.id.platforms -> {
+                        // These are VOD top-level destinations. BACK exits to
+                        // Charming MediaLab's main drawer, never the icon rail.
+                        // Movie/episode/season/player details below continue to
+                        // use navigateUp() and their saved content focus anchor.
+                        finishToMainDrawer()
                     }
                     else -> {
                         val handled = (getCurrentFragment() as? PlayerTvFragment)?.onBackPressed() ?: false
-                        if (!handled && !navController.navigateUp()) finish()
+                        if (!handled && !navController.navigateUp()) finishToMainDrawer()
                     }
                 }
             }
         })
-        if (savedInstanceState == null) {
-            binding.ivSplashOverlay.play {
-                binding.navMainFragment.requestFocus()
-            }
-        } else {
-            binding.ivSplashOverlay.visibility = View.GONE
-        }
+        if (savedInstanceState == null) binding.navMainFragment.post { binding.navMainFragment.requestFocus() }
     }
 
-    override fun onStop() {
-        binding.ivSplashOverlay.dismiss()
-        super.onStop()
+    /** A root VOD BACK returns to the host main navigation drawer, not the icon rail. */
+    private fun finishToMainDrawer() {
+        setResult(RESULT_OK, Intent().putExtra("openMainDrawer", true))
+        finish()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (vodFocusCoordinator?.onKey(event) == true) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onDestroy() {
+        vodFocusCoordinator?.dispose()
+        vodFocusCoordinator = null
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -197,23 +186,15 @@ class MainTvActivity : FragmentActivity() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
-        binding.navMain.setBackgroundColor(palette.tvNavBackground)
-        binding.navMain.headerView?.let { headerView ->
-            headerView.setBackgroundColor(palette.tvNavBackground)
-            val header = ContentHeaderMenuMainTvBinding.bind(headerView)
-            header.tvNavigationHeaderTitle.setTextColor(palette.tvHeaderPrimary)
-            header.tvNavigationHeaderSubtitle.setTextColor(palette.tvHeaderSecondary)
-        }
+        binding.vodGlassActions.setBackgroundColor(palette.tvNavBackground)
     }
     
     private fun updateNavigationVisibility() {
-        UserPreferences.currentProvider?.let { provider ->
-            binding.navMain.menu.findItem(R.id.movies)?.isVisible = Provider.supportsMovies(provider)
-            val tvShowsItem = binding.navMain.menu.findItem(R.id.tv_shows)
-            tvShowsItem?.isVisible = Provider.supportsTvShows(provider)
-            tvShowsItem?.title = if (provider is IptvProvider)
-                getString(R.string.main_menu_all_channels) else getString(R.string.main_menu_tv_shows)
-        }
+        val provider = UserPreferences.currentProvider
+        binding.vodGlassActions.setAvailable(
+            provider?.let { Provider.supportsMovies(it) } ?: true,
+            provider?.let { Provider.supportsTvShows(it) } ?: true,
+        )
     }
 
     fun adjustLayoutDelta(deltaX: Int?, deltaY: Int?) {

@@ -126,7 +126,7 @@ test("drawer shell boots closed with an icon rail outside the Guide grid", async
   assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
   assert.match(shell, /testID="purple-icon-rail"/);
   assert.match(shell, /showIconRail \? \(/);
-  assert.match(shell, /!drawerOpen && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
+  assert.match(shell, /!drawerOpen && !immersiveContent && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(shell, /onPress=\{\(\) => navigate\(item\.route, "rail"\)\}/);
   assert.match(shell, /setRemoteContext\("icon_rail"\)/);
   assert.match(shell, /isGuideSurfing/);
@@ -153,7 +153,8 @@ test("drawer route changes release drawer focus ownership before mounting the ne
 test("main drawer focus retries ignore EPG group-count and programme churn", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
   assert.match(shell, /const activeGuideGroupName = useMemo/);
-  assert.match(shell, /\[active, isFocused, activeGuideGroupName, consumeFocusDrawerTop, drawerOpen, focusDrawerTop\]/);
+  assert.match(shell, /\[active, isFocused, consumeFocusDrawerTop, drawerOpen, focusDrawerTop\]/);
+  assert.match(shell, /lastMainDrawerGroupName/);
   assert.doesNotMatch(shell, /\[active, activeProgram, consumeFocusDrawerTop, drawerOpen, focusDrawerTop, guideGroups\]/);
 });
 
@@ -288,7 +289,7 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
   ]);
   assert.match(guide, /GuidePreviewRail/);
   assert.match(preview, /onOpenDrawer/);
-  assert.match(guide, /openDrawer\(\)/);
+  assert.match(guide, /openDrawer\(\{ force: true \}\)/);
   assert.match(guide, /focusGuidePreviewSurface\(\)/);
   assert.doesNotMatch(guide, /const onGuideUpBoundary = useCallback\([\s\S]{0,520}setPreviewActionsFocused\(true\)/);
   assert.match(guide, /!previewActionsFocused/);

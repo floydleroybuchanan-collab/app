@@ -385,7 +385,7 @@ function PurpleGuideScreenContent() {
 
   const openDrawerFromPreview = useCallback(() => {
     void Haptics.selectionAsync().catch(() => undefined);
-    openDrawer({ focusTop: true });
+    openDrawer({ focusTop: true, force: true });
   }, [openDrawer]);
 
   const openGuideSources = useCallback(() => {
@@ -407,7 +407,7 @@ function PurpleGuideScreenContent() {
       if (drawerOpen || activeProgram) return false;
       if (groupDrawerOpen) {
         setGroupDrawerOpen(false);
-        openDrawer();
+        openDrawer({ force: true });
         return true;
       }
       setGroupDrawerOpen(true);
@@ -1055,7 +1055,7 @@ function PurpleGuideScreenContent() {
           onFocusIconRail={focusIconRail}
           onOpenMainDrawer={() => {
             setGroupDrawerOpen(false);
-            openDrawer();
+            openDrawer({ force: true });
           }}
         />
       ) : null}
