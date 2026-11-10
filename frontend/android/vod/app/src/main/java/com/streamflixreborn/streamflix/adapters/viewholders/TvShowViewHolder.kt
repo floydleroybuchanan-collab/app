@@ -25,6 +25,7 @@ import com.streamflixreborn.streamflix.providers.IptvProvider
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.streamflixreborn.streamflix.R
+import com.streamflixreborn.streamflix.BuildConfig
 import com.streamflixreborn.streamflix.charm.CharmingVodTopIcon
 import com.streamflixreborn.streamflix.vod.VodPreferences
 import com.streamflixreborn.streamflix.adapters.AppAdapter
@@ -278,7 +279,12 @@ class TvShowViewHolder(
                     return@setOnClickListener
                 }
                 checkProviderAndRun {
-                    if (isIptvProvider()) {
+                    // Picking a TV-series poster always opens its detail and
+                    // season/source actions in the unified app. Only explicitly
+                    // pressing Watch should start Media3 or source discovery.
+                    if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                        findNavController().navigate(R.id.tv_show, tvShowArgs())
+                    } else if (isIptvProvider()) {
                         handleDirectPlay(findNavController())
                     } else {
                         findNavController().navigate(R.id.tv_show, tvShowArgs())
@@ -381,7 +387,12 @@ class TvShowViewHolder(
                     return@setOnClickListener
                 }
                 checkProviderAndRun {
-                    if (isIptvProvider()) {
+                    // Picking a TV-series poster always opens its detail and
+                    // season/source actions in the unified app. Only explicitly
+                    // pressing Watch should start Media3 or source discovery.
+                    if (BuildConfig.CHARM_VOD_EMBEDDED) {
+                        findNavController().navigate(R.id.tv_show, tvShowArgs())
+                    } else if (isIptvProvider()) {
                         handleDirectPlay(findNavController())
                     } else {
                         findNavController().navigate(R.id.tv_show, tvShowArgs())
