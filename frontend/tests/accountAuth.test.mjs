@@ -155,7 +155,7 @@ test("rail focus returns to content and no-information Guide cells remain playab
     source("app/(tabs)/guide.tsx"),
     source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
   ]);
-  assert.match(shell, /nextFocusRight=\{contentReturnTag\}/);
+  assert.match(shell, /nextFocusRight=\{active === "\/vod" \? undefined : contentReturnTag\}/);
   assert.doesNotMatch(shell, /getIconRailReturnTarget/);
   assert.match(live, /focusIconRail\(\)/);
   assert.match(activity, /onRail && key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT/);
