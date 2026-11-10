@@ -26,7 +26,8 @@ test("Genres are virtualized, provider ID-safe, with at most 120 items and origi
   assert.match(hub, /putString\("name", genre\.name\)/);
   assert.match(hub, /override fun onDestroyView\(\)/);
   assert.match(hub, /grid\?\.adapter = null/);
-  assert.doesNotMatch(hub, /new ScrollView\\(|import android\\.widget\\.ScrollView/);
+  assert.ok(!hub.includes("import android.widget.ScrollView"));
+  assert.ok(!hub.includes("ScrollView("));
   assert.match(icon, /class CharmingVodGenreIcon.*Drawable\(\)/s);
   assert.doesNotMatch(icon, /BitmapFactory|BitmapDrawable|Glide\.with|FileInputStream/);
 });
