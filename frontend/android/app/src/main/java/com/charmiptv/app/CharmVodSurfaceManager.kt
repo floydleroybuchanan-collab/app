@@ -87,6 +87,39 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         }
 
+        // React Native Fabric owns the outer Surface's frame, but Fragment views
+        // inserted after reconciliation do not automatically receive a Yoga layout.
+        // Keep the FragmentContainerView sized to that actual frame, rather than
+        // allowing the nested NavHost to stay permanently at 0x0.
+        private fun layoutEmbeddedFragment() {
+            val w = width
+            val h = height
+            if (!isAttachedToWindow || w <= 0 || h <= 0) return
+            val widthSpec = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
+            val heightSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+            if (container.width != w || container.height != h ||
+                container.measuredWidth != w || container.measuredHeight != h) {
+                container.measure(widthSpec, heightSpec)
+                container.layout(0, 0, w, h)
+            }
+            // A FragmentTransaction can add its root *after* the container's
+            // layout pass. Give that newly inserted tree one real measure/layout.
+            fragment?.view?.let { root ->
+                if (root.width != w || root.height != h) {
+                    root.measure(widthSpec, heightSpec)
+                    root.layout(0, 0, w, h)
+                }
+            }
+        }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            if (width > 0 && height > 0) {
+                layoutEmbeddedFragment()
+                if (fragment == null && !mountFailureSent) post { mountIfReady() }
+            }
+        }
+
         override fun onAttachedToWindow() {
             super.onAttachedToWindow()
             // The fragment container must first be attached to the ACTIVITY
@@ -117,6 +150,11 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
 
         private fun mountIfReady() {
             if (!isAttachedToWindow || fragment != null || mountFailureSent) return
+            // Never create a NavHost in an unmeasured/hidden Expo Tabs route.
+            // The next onLayout delivers a real frame and retries the mount.
+            if (width <= 0 || height <= 0) return
+            layoutEmbeddedFragment()
+            if (container.width <= 0 || container.height <= 0) return
             val host = (context as? ThemedReactContext)?.currentActivity as? MainActivity
             if (host == null) {
                 retryHost("Activity not yet available")
@@ -161,6 +199,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 Log.i(TAG, "Mounting VOD fragment after ${SystemClock.elapsedRealtime() - mountStartedAt}ms")
                 fm.beginTransaction().replace(container.id, screen, "charm_unified_vod_" + container.id)
                     .commitNowAllowingStateLoss()
+                // Fragment content was inserted after RN measured this Surface;
+                // explicitly lay it out once before checking render readiness.
+                post { layoutEmbeddedFragment() }
             } catch (e: RuntimeException) {
                 Log.e(TAG, "Embedded VOD failed to inflate/mount", e)
                 // The bridge must not leave stale activity-level key routing
