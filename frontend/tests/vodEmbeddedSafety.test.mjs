@@ -218,3 +218,15 @@ test("VOD catalog and user caches are bounded without discarding watch history",
   // Do not evict the real user's saved favorites or watch history on a cache trim.
   assert.doesNotMatch(home.split("private fun pruneOldCatalogs(")[1].split("private fun cacheFile(")[0], /user-data-cache|clearAll\(/);
 });
+
+test("unified VOD artwork preserves host Glide and verifies TLS certificates", () => {
+  const glide = read(vod + "ui/GlideCustomModule.kt");
+  const loader = read(vod + "ui/AnimeOnlineNinjaCronetUrlLoader.kt");
+  assert.match(glide, /registry\.prepend\(GlideUrl::class\.java, InputStream::class\.java, loader\)/);
+  assert.match(glide, /onlySpecialVodImages = !isSeparateVodProcess/);
+  assert.match(loader, /private val onlySpecialVodImages: Boolean = false/);
+  assert.match(loader, /isAnimeOnlineNinja\(model\)/);
+  assert.match(loader, /it\.startsWith\("sf_headers="\)/);
+  assert.doesNotMatch(glide, /hostnameVerifier|sslSocketFactory|trustAllCerts/);
+  assert.match(glide, /10 \* 1024 \* 1024/);
+});
