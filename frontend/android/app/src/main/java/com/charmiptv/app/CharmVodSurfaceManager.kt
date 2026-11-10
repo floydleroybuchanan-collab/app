@@ -1,5 +1,6 @@
 package com.charmiptv.app
 
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
@@ -52,6 +53,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         private var activity: MainActivity? = null
         private var fragment: VodRootFragment? = null
         private var manager: FragmentManager? = null
+        private var mountStartedAt = 0L
+        private var mountRetryCount = 0
+        private var mountFailureSent = false
         var startSection: String = "home"
             set(value) {
                 field = value
@@ -69,13 +73,40 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             super.onAttachedToWindow()
             // The fragment container must first be attached to the ACTIVITY
             // view tree; the transaction may not run in createViewInstance().
+            mountStartedAt = SystemClock.elapsedRealtime()
+            mountRetryCount = 0
+            mountFailureSent = false
+            Log.i(TAG, "VOD native view attached; awaiting host activity")
             post { mountIfReady() }
         }
 
+        private fun retryHost(reason: String) {
+            if (!isAttachedToWindow || mountFailureSent || fragment != null) return
+            mountRetryCount += 1
+            if (mountRetryCount <= 50) {
+                if (mountRetryCount == 1 || mountRetryCount % 10 == 0) {
+                    Log.w(TAG, "VOD waiting for host: $reason; attempt $mountRetryCount")
+                }
+                postDelayed({ mountIfReady() }, 200L)
+            } else {
+                mountFailureSent = true
+                val message = "VOD could not attach to MainActivity: $reason"
+                Log.e(TAG, message)
+                emit("CharmVodMountError", message)
+            }
+        }
+
         private fun mountIfReady() {
-            if (!isAttachedToWindow || fragment != null) return
-            val host = (context as? ThemedReactContext)?.currentActivity as? MainActivity ?: return
-            if (host.isFinishing || host.isDestroyed) return
+            if (!isAttachedToWindow || fragment != null || mountFailureSent) return
+            val host = (context as? ThemedReactContext)?.currentActivity as? MainActivity
+            if (host == null) {
+                retryHost("Activity not yet available")
+                return
+            }
+            if (host.isFinishing || host.isDestroyed || host.supportFragmentManager.isStateSaved) {
+                retryHost("Activity or FragmentManager not ready")
+                return
+            }
             val fm = host.supportFragmentManager
             val screen = VodRootFragment.create(startSection)
             screen.onHostBack = { emit("CharmVodRootBack", "") }
@@ -86,11 +117,19 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             screen.onImmersiveChanged = { playing ->
                 emit("CharmVodImmersiveChanged", if (playing) "true" else "false")
             }
+            screen.onRootReady = {
+                if (fragment === screen && isAttachedToWindow) {
+                    val elapsedMs = SystemClock.elapsedRealtime() - mountStartedAt
+                    Log.i(TAG, "VOD native NavHost ready in ${elapsedMs}ms")
+                    emit("CharmVodRootReady", elapsedMs.toString())
+                }
+            }
             activity = host
             manager = fm
             fragment = screen
             host.attachVodInput(this, screen::onRemoteKey, screen::navigateBack)
             try {
+                Log.i(TAG, "Mounting VOD fragment after ${SystemClock.elapsedRealtime() - mountStartedAt}ms")
                 fm.beginTransaction().replace(container.id, screen, "charm_unified_vod_" + container.id)
                     .commitNowAllowingStateLoss()
             } catch (e: RuntimeException) {
@@ -111,6 +150,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 onHostBack = null
                 onHostIconRail = null
                 onImmersiveChanged = null
+                onRootReady = null
             }
             val old = fragment
             val fm = manager
