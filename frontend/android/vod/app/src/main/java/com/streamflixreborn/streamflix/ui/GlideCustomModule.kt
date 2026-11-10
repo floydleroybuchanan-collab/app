@@ -15,11 +15,7 @@ import okhttp3.OkHttpClient.Builder
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
 import java.io.InputStream
-import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 // The host's annotated module delegates here and generates one app-wide registry.
 open class GlideCustomModule : AppGlideModule() {
@@ -28,16 +24,6 @@ open class GlideCustomModule : AppGlideModule() {
         val appCache = Cache(File(context.cacheDir, "vod/glide-okhttp-cache"), 10 * 1024 * 1024)
 
         val logging = HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)
-
-        val trustAllCerts = arrayOf<TrustManager>(
-            object : X509TrustManager {
-                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-            }
-        )
-        val sslContext = SSLContext.getInstance("TLS").apply { init(null, trustAllCerts, SecureRandom()) }
-        val trustManager = trustAllCerts[0] as X509TrustManager
 
         return Builder()
             .cache(appCache)
@@ -78,8 +64,6 @@ open class GlideCustomModule : AppGlideModule() {
                 chain.proceed(fixedRequest)
             }
             .addInterceptor(logging)
-            .sslSocketFactory(sslContext.socketFactory, trustManager)
-            .hostnameVerifier { _, _ -> true }
             .dns(DnsResolver.doh)
             .build()
     }
@@ -87,14 +71,11 @@ open class GlideCustomModule : AppGlideModule() {
     override fun registerComponents(
         context: Context, glide: Glide, registry: com.bumptech.glide.Registry
     ) {
-        // Preserve the host's existing image client, TLS validation, and cookie behavior.
-        if (!com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) return
         val okHttpClient = getOkHttpClient(context)
-        registry.replace(
-            GlideUrl::class.java,
-            InputStream::class.java,
-            AnimeOnlineNinjaCronetUrlLoader.Factory(context, okHttpClient),
-        )
+        // One process, one Glide registry: intercept only VOD-specific image
+        // requests; leave ordinary Live TV logos and Expo images to their host loader.
+        val loader = AnimeOnlineNinjaCronetUrlLoader.Factory(context, okHttpClient)
+        registry.prepend(GlideUrl::class.java, InputStream::class.java, loader)
         registry.append(
             InputStream::class.java,
             SVG::class.java,

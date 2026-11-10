@@ -5,6 +5,8 @@ import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
+// RN TV 0.81 requires this compatibility package until TurboModule migration.
+@Suppress("OVERRIDE_DEPRECATION")
 class NativePlaybackPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
     return listOf(NativePlaybackModule(reactContext), MultiviewModule(reactContext), BackupCryptoModule(reactContext))

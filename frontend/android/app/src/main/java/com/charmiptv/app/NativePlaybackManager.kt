@@ -844,7 +844,7 @@ object NativePlaybackManager {
       clipToPadding = false
       setBackgroundColor(Color.TRANSPARENT)
       setShutterBackgroundColor(Color.TRANSPARENT)
-      setUseArtwork(false)
+      setArtworkDisplayMode(PlayerView.ARTWORK_DISPLAY_MODE_OFF)
       setKeepContentOnPlayerReset(true)
       resizeMode = if (surfaceOwner == Owner.FULLSCREEN) fullscreenResizeMode else AspectRatioFrameLayout.RESIZE_MODE_FIT
       visibility = View.VISIBLE

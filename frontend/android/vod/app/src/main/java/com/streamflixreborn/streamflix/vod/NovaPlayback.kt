@@ -102,6 +102,8 @@ class NovaPlayback : DialogFragment(), SurfaceHolder.Callback {
         frame.addView(controls, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         return Dialog(context, theme).apply { setContentView(frame); window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
+    // Old Android TV audio focus API remains necessary below Android 8.
+    @Suppress("DEPRECATION")
     override fun onStart() {
         super.onStart()
         dialog?.window?.setLayout(-1, -1)
@@ -257,6 +259,7 @@ class NovaPlayback : DialogFragment(), SurfaceHolder.Callback {
             after?.invoke()
         }
     }
+    @Suppress("DEPRECATION")
     override fun onStop() { started = false; releaseNative(); audio?.abandonAudioFocus(focus); super.onStop() }
     override fun onDismiss(dialog: android.content.DialogInterface) { super.onDismiss(dialog); if (!leavingForMedia3) closed?.invoke() }
     override fun onDestroy() { releaseNative { thread.quitSafely() }; main.removeCallbacksAndMessages(null); super.onDestroy() }

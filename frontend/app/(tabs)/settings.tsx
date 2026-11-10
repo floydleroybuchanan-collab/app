@@ -87,6 +87,7 @@ const PLAYER_REMOTE_ACTIONS: { label: string; value: PlayerRemoteAction }[] = [
 type Section =
   | "general"
   | "player"
+  | "vod"
   | "remote"
   | "playlists"
   | "epg"
@@ -108,6 +109,7 @@ type Tile = {
 const TILES: Tile[] = [
   { id: "general", label: "General", icon: "settings-outline" },
   { id: "player", label: "Player", icon: "play-circle-outline" },
+  { id: "vod", label: "VOD Settings", icon: "film-outline" },
   { id: "remote", label: "Remote Control", icon: "game-controller-outline" },
   { id: "playlists", label: "Playlists", icon: "list-outline" },
   { id: "epg", label: "EPG", icon: "calendar-outline" },
@@ -574,10 +576,12 @@ function SettingsScreenContent() {
                   onFocus={index === 0 ? tileEntryFocus.onFocus : undefined}
                   onBlur={index === 0 ? tileEntryFocus.onBlur : undefined}
                   onPress={() => choose(tile.id)}
-                  style={({ focused }: any) => [styles.tile, focused && styles.focused]}
+                  style={({ focused }: any) => [styles.tile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 14 }]}
                   testID={`settings-tile-${tile.id}`}
                 >
-                  <View style={styles.tileIcon}><Ionicons name={tile.icon} size={27} color={tvColors.purpleSoft} /></View>
+                  <View style={[styles.tileIcon, { backgroundColor: ["#186F91BB", "#A04A68BB", "#8A4AC8AA", "#337D91BB", "#C57645BB"][index % 5] }]}>
+                    <Ionicons name={tile.icon} size={27} color={["#4BE3FF", "#FF8FA9", "#E8B1FF", "#74FFE6", "#FFD18B"][index % 5]} />
+                  </View>
                   <Text style={styles.tileText}>{tile.label}</Text>
                 </Pressable>
               ))}
@@ -587,6 +591,13 @@ function SettingsScreenContent() {
           <FocusGuide style={styles.detailsWrap}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.details}>
 
+            {section === "vod" ? (
+              <SettingsCard title="Video OnDemand Settings" icon="film-outline">
+                <Text style={styles.help}>Manage VOD source selection, Real-Debrid connections, playback, content, appearance and provider settings in the restored native VOD Settings screen. No preferences are reset.</Text>
+                <Action label="Open VOD Settings" icon="settings-outline"
+                  onPress={() => router.push("/vod?section=settings" as any)} />
+              </SettingsCard>
+            ) : null}
             {section === "general" ? (
               <SettingsCard title="Guide & channels" icon="list-outline">
                 <ChoiceRow<GuideLayout>
@@ -1292,8 +1303,8 @@ const styles = StyleSheet.create({
   tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden" },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 9, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
   detailsWrap: { flex: 1 },
-  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  tileIcon: { width: 48, height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
+  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 17, borderWidth: 1, borderColor: "#9A72BAA8", backgroundColor: "#67477C66", elevation: 5 },
+  tileIcon: { width: 48, height: 48, borderRadius: 15, borderWidth: 1, borderColor: "#FFFFFF55", alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
   tileText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5, textAlign: "center" },
   details: { paddingTop: 10, paddingHorizontal: 24, paddingBottom: 24 },
   card: { backgroundColor: tvColors.panel, borderWidth: 1, borderColor: tvColors.line, borderRadius: radius.md, padding: 14, gap: 9 },
@@ -1365,7 +1376,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   miniActionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: { borderColor: "#F4DFFF", borderWidth: 2, backgroundColor: "#9560BA8C", elevation: 12 },
 });
 
 export default function SettingsScreen() {

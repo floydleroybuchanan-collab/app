@@ -99,6 +99,8 @@ class MainMobileActivity : FragmentActivity() {
         super.attachBaseContext(AppLanguageManager.wrap(newBase))
     }
 
+    // Android 7-14 still rely on Window status/navigation bar colors.
+    @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
 
@@ -577,6 +579,7 @@ class MainMobileActivity : FragmentActivity() {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun applyThemeNavigationChrome() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         val navColors = ColorStateList(

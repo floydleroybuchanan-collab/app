@@ -2,83 +2,65 @@ package com.streamflixreborn.streamflix.utils
 
 import android.content.Context
 import android.util.Log
-import android.webkit.WebView
-import com.bumptech.glide.Glide
 import java.io.File
 
+/**
+ * VOD now shares the MAIN Charming MediaLab process.
+ * Clearing the root application cache or global Glide/WebView caches would
+ * destroy Live TV's EPG, logos, authenticated HTTP and preview state.
+ * VOD clears only its own transient metadata/artwork directory.
+ */
 object CacheUtils {
-    private const val TAG = "CacheUtils"
+    private const val TAG = "VodCacheUtils"
+
+    private fun ownedDirs(context: Context): List<File> {
+        val app = context.applicationContext
+        return listOf(
+            File(app.cacheDir, "vod"),
+            File(app.filesDir, "home-cache"),
+        )
+    }
 
     fun clearAppCache(context: Context) {
-        Log.d(TAG, "Inizio pulizia cache completa...")
-        try {
-            context.applicationContext.cacheDir?.deleteRecursively()
-            Log.d(TAG, "Cache interna eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore eliminazione cache interna: ${e.message}")
-        }
-
-        try {
-            Glide.get(context).clearMemory()
-            Thread {
-                try {
-                    Glide.get(context).clearDiskCache()
-                    Log.d(TAG, "Cache Glide eliminata.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Errore eliminazione cache Glide: ${e.message}")
+        // Clear the same metadata from memory BEFORE deleting the backing JSON.
+        // Do not evict shared Live TV, logo, EPG or WebView caches.
+        HomeCacheStore.clearMemory()
+        ownedDirs(context).forEach { directory ->
+            try {
+                if (directory.exists() && !directory.deleteRecursively()) {
+                    Log.w(TAG, "Could not clear VOD cache directory: " + directory.name)
                 }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore Glide: ${e.message}")
-        }
-
-        try {
-            WebView(context).apply {
-                clearCache(true)
-                destroy()
+            } catch (error: Exception) {
+                Log.w(TAG, "VOD cache cleanup skipped: " + directory.name, error)
             }
-            Log.d(TAG, "Cache WebView eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore WebView: ${e.message}")
         }
+        // Do NOT call Glide.clearMemory(), Glide.clearDiskCache(),
+        // WebView.clearCache() or context.cacheDir.deleteRecursively() here.
+        // Their caches belong to the host and may be in active use.
     }
 
-    fun getCacheSize(context: Context): Long {
-        var size: Long = 0
-        try {
-            size += getFolderSize(context.applicationContext.cacheDir)
-            size += getFolderSize(context.applicationContext.externalCacheDir)
-        } catch (_: Exception) {
-        }
-        return size
-    }
+    fun getCacheSize(context: Context): Long = ownedDirs(context).sumOf { folderSize(it) }
 
-    private fun getFolderSize(file: File?): Long {
-        if (file == null || !file.exists()) return 0
+    private fun folderSize(file: File?): Long {
+        if (file == null || !file.exists()) return 0L
         if (!file.isDirectory) return file.length()
-
-        var size: Long = 0
-        val files = file.listFiles()
-        if (files != null) {
-            for (f in files) {
-                size += if (f.isDirectory) getFolderSize(f) else f.length()
-            }
-        }
-        return size
+        return file.listFiles()?.sumOf { folderSize(it) } ?: 0L
     }
 
-    fun autoClearIfNeeded(context: Context, thresholdMb: Long = 50) {
-        val currentSize = getCacheSize(context)
-        val thresholdBytes = thresholdMb * 1024 * 1024
-        val currentMb = currentSize / (1024 * 1024)
-        
-        Log.d(TAG, "Controllo cache: Attuale = ${currentMb}MB, Soglia = ${thresholdMb}MB")
-        
-        if (currentSize > thresholdBytes) {
-            Log.i(TAG, "Soglia superata! Avvio pulizia automatica...")
-            clearAppCache(context)
-        } else {
-            Log.d(TAG, "Soglia non raggiunta. Nessuna pulizia necessaria.")
+    fun autoClearIfNeeded(context: Context, thresholdMb: Long = 50L) {
+        val threshold = thresholdMb.coerceAtLeast(10L) * 1024 * 1024
+        val managed = File(context.applicationContext.cacheDir, "vod")
+        // The unified app uses an OPEN, bounded OkHttp artwork cache at
+        // vod/glide-okhttp-cache. Deleting its parent directory at startup
+        // invalidates that journal and forces genuine artwork to redownload;
+        // the old 10 MiB TV threshold could trigger this repeatedly.
+        //
+        // Managed Glide/OkHttp caches evict by their configured disk budgets.
+        // Leave them alone while the app is running. The independent
+        // home-cache JSON snapshots have a separate bounded LRU.
+        if (folderSize(managed) > threshold) {
+            Log.i(TAG, "VOD managed image cache exceeds housekeeping threshold; " +
+                "preserving active bounded HTTP cache instead of deleting its journal")
         }
     }
 }

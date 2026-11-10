@@ -33,7 +33,12 @@ class AnimeOnlineNinjaCronetUrlLoader(
         }.getOrDefault(false)
     }
 
-    override fun handles(model: GlideUrl): Boolean = true
+    // In the unified MainActivity process, leave Live TV and Expo image
+    // requests to the host loader; intercept only VOD's specialized URLs.
+    override fun handles(model: GlideUrl): Boolean =
+        isAnimeOnlineNinja(model) ||
+            model.toStringUrl().substringAfter('#', "").split('&')
+                .any { it.startsWith("sf_headers=") }
 
     override fun buildLoadData(
         model: GlideUrl,
@@ -54,7 +59,9 @@ class AnimeOnlineNinjaCronetUrlLoader(
     ) : ModelLoaderFactory<GlideUrl, InputStream> {
         override fun build(multiFactory: MultiModelLoaderFactory): ModelLoader<GlideUrl, InputStream> {
             val fallback = OkHttpUrlLoader.Factory(okHttpClient).build(multiFactory)
-            return AnimeOnlineNinjaCronetUrlLoader(context.applicationContext, fallback)
+            return AnimeOnlineNinjaCronetUrlLoader(
+                context.applicationContext, fallback
+            )
         }
 
         override fun teardown() = Unit

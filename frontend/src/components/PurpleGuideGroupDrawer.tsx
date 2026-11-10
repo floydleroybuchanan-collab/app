@@ -9,6 +9,10 @@ import { addTvKeyListener, addTvLongPressListener, resetRemoteContextIfOwned, se
 
 export const GUIDE_GROUP_DRAWER_WIDTH = 232;
 
+// This drawer is conditionally mounted and unmounted on every guide handoff.
+// Keep only its last small identity token across mounts, never a View reference.
+let lastFocusedGuideGroupName: string | null = null;
+
 export function PurpleGuideGroupDrawer({
   open,
   groups,
@@ -25,6 +29,7 @@ export function PurpleGuideGroupDrawer({
   const refs = useRef(new Map<string, unknown>());
   const activeNameRef = useRef<string | null>(null);
   const focusedNameRef = useRef<string | null>(null);
+  const focusTargetNameRef = useRef<string | null>(null);
   const focusConfirmedRef = useRef(false);
   const emptyRef = useRef<unknown>(null);
   const groupsRef = useRef(groups);
@@ -45,8 +50,8 @@ export function PurpleGuideGroupDrawer({
 
   useEffect(() => {
     if (!open) return;
-    // The groups drawer owns its boundary actions. BACK hands focus to the
-    // permanent icon rail; a second BACK from that rail expands the full menu.
+    // BACK and LEFT enter the immediately adjacent main drawer. Neither
+    // should skip directly to the icon rail when coming from guide groups.
     // Up/Down and OK stay with Android native focus.
     setGuideNavigationActive(false);
     setRemoteContext("guide_groups");
@@ -54,7 +59,7 @@ export function PurpleGuideGroupDrawer({
     focusConfirmedRef.current = false;
     const offKey = addTvKeyListener((key) => {
       if (key === "BACK") {
-        focusIconRailRef.current();
+        openMainDrawerRef.current();
         return;
       }
       if (key === "LEFT") {
@@ -72,9 +77,14 @@ export function PurpleGuideGroupDrawer({
 
     // Claim focus once per drawer entry. After this, Android owns vertical focus
     // movement until the drawer closes; active-group/count updates cannot yank it.
-    const activeName = activeNameRef.current;
-    focusedNameRef.current = activeName;
-    const node = activeName ? refs.current.get(activeName) : emptyRef.current;
+    // BACK and guide-edge LEFT both reopen onto the group that actually
+    // entered the active Guide, not a neighboring row merely browsed in
+    // the drawer before closing it.
+    const selectedName = activeNameRef.current;
+    const targetName = selectedName && groupsRef.current.some((item) => item.name === selectedName)
+      ? selectedName : (lastFocusedGuideGroupName || groupsRef.current[0]?.name || null);
+    focusTargetNameRef.current = targetName;
+    const node = targetName ? refs.current.get(targetName) : emptyRef.current;
     const cancelFocus = requestNativeFocusWithRetry(node, [0, 80, 160, 260, 560], () => focusConfirmedRef.current);
     return () => {
       offKey();
@@ -82,7 +92,7 @@ export function PurpleGuideGroupDrawer({
       cancelFocus?.();
       focusConfirmedRef.current = false;
       setPreferActiveFocus(false);
-      focusedNameRef.current = null;
+      // Preserve the actual cursor across close/reopen and playlist changes.
       // Do not let this outgoing drawer cleanup overwrite a main drawer that
       // already claimed the same physical key transition.
       if (resetRemoteContextIfOwned("guide_groups", "guide")) {
@@ -116,11 +126,12 @@ export function PurpleGuideGroupDrawer({
                 else refs.current.delete(item.name);
               }}
               focusable
-              hasTVPreferredFocus={preferActiveFocus && item.name === activeNameRef.current}
+              hasTVPreferredFocus={preferActiveFocus && item.name === focusTargetNameRef.current}
               onFocus={() => {
                 focusConfirmedRef.current = true;
                 setPreferActiveFocus(false);
                 focusedNameRef.current = item.name;
+                lastFocusedGuideGroupName = item.name;
                 setGuideNavigationActive(false);
                 setRemoteContext("guide_groups");
               }}

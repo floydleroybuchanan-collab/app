@@ -221,7 +221,6 @@ class CategoryViewHolder(
         val poster = when (selected) {
             is Movie -> selected.banner
             is TvShow -> selected.banner
-            else -> null
         }
         
         when (val fragment = context.toActivity()?.getCurrentFragment()) {

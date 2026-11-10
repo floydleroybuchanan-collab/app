@@ -1,0 +1,12 @@
+{
+  "lastConfirmedInstallableRelease": {
+    "githubBuildNumber": 284,
+    "versionCode": 2500,
+    "versionName": "2.2.1-rc.25-sideload",
+    "packageId": "com.charmiptv.app.purple.next.vodtest1.sideload",
+    "githubRunId": 42671064289
+  },
+  "ownerEncryptionPublicKeyGitBlobSha1": "08f1f9e2ee8f84ca7b7f2733a05b6971a8562c6c",
+  "versioningPolicy": "Every new update must increase the actual Android versionCode. RC25 code 2500 was released; 2.2.2-RC25 uses 2501. CI verifies package, owner RSA encryption key and APK signer certificate against published Build 284.",
+  "androidSignerCertificateSha256": "106b3a5591effe179597fc0bfee400e2634eeb669e3f47e1fb1143e85ca623c4"
+}

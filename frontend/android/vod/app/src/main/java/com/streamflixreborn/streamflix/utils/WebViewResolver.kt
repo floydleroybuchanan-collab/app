@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION") // Android 7 compatibility: legacy soft-input resize on WebView challenge dialogs.
+
 package com.streamflixreborn.streamflix.utils
 
 import android.annotation.SuppressLint
@@ -148,7 +150,6 @@ class WebViewResolver(private val context: Context) {
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
-                databaseEnabled = true
                 userAgentString = NetworkClient.USER_AGENT
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 loadWithOverviewMode = true
