@@ -23,7 +23,7 @@ abstract class SerienStreamDatabase: RoomDatabase() {
                     SerienStreamDatabase::class.java,
                     "serien_stream.db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 .also { instance = it }
             }
