@@ -19,6 +19,9 @@ import com.facebook.react.modules.network.OkHttpClientProvider
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
+// Expo SDK 54 / RN TV 0.81 still require ReactNativeHostWrapper as the
+// compatibility bridge; avoid dropping the fallback until Expo supports ReactHost-only.
+@Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 class MainApplication : com.streamflixreborn.streamflix.StreamFlixApp(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
