@@ -7,6 +7,14 @@ import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 
 const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>("CharmVodSurface");
 
+/** Native start section: Home, a Settings pane, or a title page from Live TV. */
+function startSectionFor(section?: string, pane?: string): string {
+  if (section && VOD_TITLE_LINK.test(section)) return section;
+  if (section !== "settings") return "home";
+  return pane && /^screen_[a-z_]+$/.test(pane) ? `settings:${pane}` : "settings";
+}
+const VOD_TITLE_LINK = /^(movie|tv_show):[^\s]{1,300}$/;
+
 /**
  * VOD is a built-in screen of ONE MainActivity, not a second app or splash.
  * Mount the native NavHost immediately instead of gating it on Live TV cleanup.
@@ -71,6 +79,11 @@ export default function VideoOnDemandScreen() {
         routeMs: Date.now() - enteredAt.current, nativeMs: elapsed,
       });
       setMountError(null);
+      // A title link is one-shot: the next rail visit to VOD opens Home.
+      // (The native view reads startSection only when it is created.)
+      if (sectionRef.current && VOD_TITLE_LINK.test(sectionRef.current)) {
+        router.setParams({ section: undefined } as any);
+      }
     });
     return () => { back.remove(); rail.remove(); guide.remove(); mode.remove(); failure.remove(); mounted.remove(); };
   }, [focusIconRail, openDrawer, router]);
@@ -97,7 +110,7 @@ export default function VideoOnDemandScreen() {
           <NativeVod
             key={attempt}
             style={styles.surface}
-            startSection={section !== "settings" ? "home" : pane && /^screen_[a-z_]+$/.test(pane) ? `settings:${pane}` : "settings"}
+            startSection={startSectionFor(section, pane)}
           />
         ) : (
           <View style={styles.errorBox}>

@@ -269,6 +269,9 @@ function ChannelsScreenContent() {
             </Pressable>
           </View>
         ) : (
+          // Rounded glass panel on a wrapper View: border/radius styling on the
+          // FlatList itself made Android (Fabric) draw no rows.
+          <View style={styles.listPanel}>
           <FlatList
             data={ordered}
             keyExtractor={(item) => item.id}
@@ -278,7 +281,7 @@ function ChannelsScreenContent() {
             windowSize={7}
             removeClippedSubviews={false}
             showsVerticalScrollIndicator={false}
-            style={styles.listPanel}
+            style={styles.listFill}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => (
               <ChannelListRow
@@ -298,6 +301,7 @@ function ChannelsScreenContent() {
               />
             )}
           />
+          </View>
         )}
       </View>
     </PurpleTvShell>
@@ -321,8 +325,9 @@ const styles = StyleSheet.create({
   retryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 6 },
   retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
   // Glass rows inside one panel; still a plain FlatList, nothing extra per row.
-  listPanel: { flex: 1, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
-  list: { padding: 6, paddingBottom: 20 },
+  listPanel: { flex: 1, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
+  listFill: { flex: 1 },
+  list: { padding: 2, paddingBottom: 20 },
   rowShell: { flexDirection: "row", alignItems: "stretch", gap: 6, marginBottom: 5 },
   row: { flex: 1, minWidth: 0, minHeight: 50, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", paddingHorizontal: 8, borderRadius: 12 },
   rowEditing: { backgroundColor: "rgba(124,58,237,0.16)" },

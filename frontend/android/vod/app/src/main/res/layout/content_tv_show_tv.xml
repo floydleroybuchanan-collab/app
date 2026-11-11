@@ -5,6 +5,26 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
+    <!-- Readability glass: from just right of the poster to the screen edge,
+         just under the VOD top bar down to just above the buttons. Both ends
+         are constrained, so it grows with long titles/descriptions. -->
+    <View
+        android:id="@+id/v_tv_show_info_glass"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/vod_info_glass"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        app:layout_constraintBottom_toTopOf="@id/btn_tv_show_watch_now"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_goneMarginStart="54dp" />
+
     <ImageView
         android:id="@+id/iv_tv_show_poster"
         android:layout_width="170dp"
@@ -29,6 +49,8 @@
         android:textColor="#FFFFFF"
         android:textStyle="bold"
         android:textSize="30sp"
+        android:maxLines="2"
+        android:ellipsize="end"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/iv_tv_show_poster"
         app:layout_constraintTop_toTopOf="parent"
@@ -124,6 +146,8 @@
 
     <TextView
         android:id="@+id/tv_tv_show_overview"
+        android:textColor="#EDE3FF"
+        android:lineSpacingExtra="2dp"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="40dp"

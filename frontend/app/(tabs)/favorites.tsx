@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,7 +14,7 @@ import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
-import { nextFavoriteFolderName } from "@/src/core/favoriteFolders";
+import { MAX_FOLDER_NAME_LEN, nextNewFolderName } from "@/src/core/favoriteFolders";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { addTvLongPressListener } from "@/src/utils/tvRemote";
 
@@ -164,12 +164,44 @@ function FavoritesScreenContent() {
     });
   }, [isFocused, isTV, onLongPress]);
 
-  const onRenameSelectedFolder = useCallback(() => {
-    if (!folderMode) return;
-    const nextName = nextFavoriteFolderName(favoriteFolders, folderId);
-    renameFavoriteFolder(folderId, nextName);
+  // Folder editing: Rename types a real name; Delete asks once before removing.
+  // Only one of the two bars is open at a time and both close on save/cancel.
+  const [folderEdit, setFolderEdit] = useState<null | "rename" | "delete">(null);
+  const [draftName, setDraftName] = useState("");
+  const selectedFolder = folderMode ? favoriteFolders.find((f) => f.id === folderId) : undefined;
+
+  useEffect(() => {
+    // Leaving the folder (or it disappearing) closes any open edit bar.
+    setFolderEdit(null);
+  }, [folderId]);
+
+  const startRename = useCallback(() => {
+    if (!selectedFolder) return;
+    setDraftName(selectedFolder.name);
+    setFolderEdit("rename");
+  }, [selectedFolder]);
+
+  const saveRename = useCallback(() => {
+    const clean = draftName.trim();
+    if (selectedFolder && clean && clean !== selectedFolder.name) {
+      renameFavoriteFolder(selectedFolder.id, clean);
+      void Haptics.selectionAsync().catch(() => undefined);
+    }
+    setFolderEdit(null);
+  }, [draftName, renameFavoriteFolder, selectedFolder]);
+
+  const confirmDelete = useCallback(() => {
+    if (!selectedFolder) return;
+    setFolderId("all");
+    removeFavoriteFolder(selectedFolder.id);
+    setFolderEdit(null);
     void Haptics.selectionAsync().catch(() => undefined);
-  }, [favoriteFolders, folderId, folderMode, renameFavoriteFolder]);
+  }, [removeFavoriteFolder, selectedFolder]);
+
+  const addFolder = useCallback(() => {
+    const created = addFavoriteFolder(nextNewFolderName(favoriteFolders));
+    if (created) setFolderId(created.id);
+  }, [addFavoriteFolder, favoriteFolders]);
 
   return (
     <PurpleTvShell active="/favorites">
@@ -182,7 +214,7 @@ function FavoritesScreenContent() {
                 <GlassPageTitle page="All Favorites" kicker="My Channels" />
                 <Text numberOfLines={2} style={styles.addHint}>
                   {folderMode
-                    ? "Long-press a channel to add or remove it from this folder. Use Rename to cycle the folder name."
+                    ? "Long-press a channel to add or remove it from this folder. Rename or Delete the folder with the buttons above the list."
                     : "Long-press removes a favorite. Select a folder, then long-press to assign."}
                 </Text>
               </View>
@@ -212,32 +244,70 @@ function FavoritesScreenContent() {
             <Pressable
               key={folder.id}
               onPress={() => setFolderId(folder.id)}
-              onLongPress={() => {
-                if (folderId === folder.id) setFolderId("all");
-                removeFavoriteFolder(folder.id);
-              }}
               style={({ focused }: any) => [styles.folderChip, folderId === folder.id && styles.folderActive, focused && styles.focused]}
+              testID={`favorites-folder-${folder.id}`}
             >
               <Text style={styles.folderText}>{folder.name}</Text>
             </Pressable>
           ))}
           {folderMode ? (
-            <Pressable onPress={onRenameSelectedFolder} style={({ focused }: any) => [styles.folderChip, focused && styles.focused]}>
-              <Text style={styles.folderText}>Rename</Text>
-            </Pressable>
+            <>
+              <Pressable onPress={startRename} style={({ focused }: any) => [styles.folderChip, folderEdit === "rename" && styles.folderActive, focused && styles.focused]} testID="favorites-folder-rename">
+                <Text style={styles.folderText}>Rename</Text>
+              </Pressable>
+              <Pressable onPress={() => setFolderEdit("delete")} style={({ focused }: any) => [styles.folderChip, styles.folderDanger, focused && styles.focused]} testID="favorites-folder-delete">
+                <Text style={styles.folderText}>Delete</Text>
+              </Pressable>
+            </>
           ) : null}
-          <Pressable
-            onPress={() => {
-              const created = addFavoriteFolder(`Folder ${favoriteFolders.length + 1}`);
-              if (created) setFolderId(created.id);
-            }}
-            style={({ focused }: any) => [styles.folderChip, focused && styles.focused]}
-          >
+          <Pressable onPress={addFolder} style={({ focused }: any) => [styles.folderChip, focused && styles.focused]} testID="favorites-folder-add">
             <Text style={styles.folderText}>+ Folder</Text>
           </Pressable>
         </View>
 
+        {folderEdit === "rename" && selectedFolder ? (
+          <View style={styles.editBar}>
+            <Text style={styles.editLabel}>Folder name</Text>
+            <TextInput
+              value={draftName}
+              onChangeText={setDraftName}
+              onSubmitEditing={saveRename}
+              autoFocus
+              selectTextOnFocus
+              maxLength={MAX_FOLDER_NAME_LEN}
+              returnKeyType="done"
+              placeholder="Folder name"
+              placeholderTextColor={tvColors.textMuted}
+              style={styles.editInput}
+              testID="favorites-folder-name-input"
+            />
+            <Pressable onPress={saveRename} style={({ focused }: any) => [styles.editButton, styles.editPrimary, focused && styles.focused]} testID="favorites-folder-save">
+              <Text style={styles.folderText}>Save</Text>
+            </Pressable>
+            <Pressable onPress={() => setFolderEdit(null)} style={({ focused }: any) => [styles.editButton, focused && styles.focused]}>
+              <Text style={styles.folderText}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {folderEdit === "delete" && selectedFolder ? (
+          <View style={styles.editBar}>
+            <Text numberOfLines={1} style={[styles.editLabel, styles.editQuestion]}>
+              Delete folder “{selectedFolder.name}”? Its channels stay in your favorites.
+            </Text>
+            <Pressable hasTVPreferredFocus onPress={() => setFolderEdit(null)} style={({ focused }: any) => [styles.editButton, focused && styles.focused]} testID="favorites-folder-delete-cancel">
+              <Text style={styles.folderText}>Keep</Text>
+            </Pressable>
+            <Pressable onPress={confirmDelete} style={({ focused }: any) => [styles.editButton, styles.folderDanger, focused && styles.focused]} testID="favorites-folder-delete-confirm">
+              <Text style={styles.folderText}>Delete</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {items.length ? (
+          // The rounded glass panel lives on a wrapper View. Putting border /
+          // radius styling on the FlatList itself made Android (Fabric) draw
+          // no rows while the count above still showed them.
+          <View style={styles.listPanel}>
           <FlatList
             data={items}
             keyExtractor={(item) => item.id}
@@ -245,7 +315,7 @@ function FavoritesScreenContent() {
             maxToRenderPerBatch={10}
             windowSize={7}
             removeClippedSubviews={false}
-            style={styles.listPanel}
+            style={styles.listFill}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => (
               <FavoriteRow
@@ -261,6 +331,7 @@ function FavoritesScreenContent() {
               />
             )}
           />
+          </View>
         ) : (
           <View style={styles.empty}>
             <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={30} color="#fff" /></View>
@@ -290,8 +361,17 @@ const styles = StyleSheet.create({
   folderChip: { minHeight: 26, justifyContent: "center", paddingHorizontal: 13, borderRadius: 13, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
   folderActive: { borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.80)" },
   folderText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
-  listPanel: { flex: 1, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
-  list: { padding: 6, paddingBottom: 20 },
+  folderDanger: { borderColor: "rgba(255,150,170,0.55)", backgroundColor: "rgba(150,24,64,0.55)" },
+  editBar: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, padding: 6, borderRadius: 14, borderWidth: 1, borderColor: glass.edge, backgroundColor: glass.panelStrong },
+  editLabel: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: 8.5 },
+  editQuestion: { flex: 1, minWidth: 0, color: "#fff", fontSize: 9 },
+  editInput: { flex: 1, minWidth: 0, height: 32, paddingHorizontal: 10, paddingVertical: 0, borderRadius: 10, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: "rgba(20,8,42,0.85)", color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
+  editButton: { minHeight: 30, justifyContent: "center", paddingHorizontal: 14, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  editPrimary: { borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.80)" },
+  // Panel styling on a plain View; the FlatList inside only fills it.
+  listPanel: { flex: 1, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
+  listFill: { flex: 1 },
+  list: { padding: 2, paddingBottom: 20 },
   row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 8, marginBottom: 5, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", borderRadius: 12 },
   focused: glassFocus,
   number: { width: 22, color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 9, textAlign: "right" },

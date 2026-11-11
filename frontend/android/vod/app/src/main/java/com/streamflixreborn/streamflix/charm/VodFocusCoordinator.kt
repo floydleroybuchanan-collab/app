@@ -35,7 +35,31 @@ class VodFocusCoordinator(
     private var disposed = false
     private var layoutListenerAttached = false
 
+    /**
+     * Opening a title from a page replaces the focused card with a loading
+     * page that has nothing focusable. Android then gave focus to the first
+     * view in the window — the app rail's Live TV item — so the next OK left
+     * VOD for Live TV (it looked like VOD crashed). Until the new page can take
+     * focus, keep it parked on the VOD top bar, then move it into the page.
+     */
+    private var parkedDestination: Int? = null
+    private var parkUntil = 0L
+    private var parkListenerAttached = false
+    private var reclaimPosted = false
+
+    private val parkLayoutListener = ViewTreeObserver.OnGlobalLayoutListener { focusParkedContent() }
+
     private val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, new ->
+        if (!disposed && parkedDestination != null && new != null && !reclaimPosted &&
+            SystemClock.uptimeMillis() <= parkUntil &&
+            !VodFocusMemory.isWithin(binding.root, new) && binding.root.isShown) {
+            // Focus slipped out of VOD without a remote key: take it back.
+            reclaimPosted = true
+            binding.root.post {
+                reclaimPosted = false
+                if (parkedDestination != null && !disposed) parkOnBar()
+            }
+        }
         // Default Android focus on a newly mounted fragment is not the
         // user's previous selection. Never overwrite a pending bookmark.
         if (disposed || restoring || pendingDestination != null || new == null) return@OnGlobalFocusChangeListener
@@ -56,6 +80,22 @@ class VodFocusCoordinator(
     }
 
     private val destinationListener = NavController.OnDestinationChangedListener { _, destination, _ ->
+        // Navigation started from page content (a card, a poster, Back on a
+        // detail page): the focused view is about to be removed. Park focus on
+        // the top bar *now*, while the old view is still attached, so Android
+        // never hands it to the app rail. The player owns its own focus.
+        cancelParking()
+        val prior = binding.root.findFocus()
+        val fromContent = prior != null && !VodFocusMemory.isWithin(binding.vodGlassActions, prior)
+        if (fromContent && destination.id != R.id.player && destination.id != R.id.providers) {
+            parkedDestination = destination.id
+            parkUntil = SystemClock.uptimeMillis() + PARK_TIMEOUT_MS
+            parkOnBar()
+            if (!parkListenerAttached) {
+                binding.navMainFragment.viewTreeObserver.addOnGlobalLayoutListener(parkLayoutListener)
+                parkListenerAttached = true
+            }
+        }
         // All VOD browse/detail pages can reach the glass navigation with Up.
         // The video player and the provider selector remain full-screen.
         binding.vodGlassActions.visibility = if (destination.id == R.id.player ||
@@ -119,6 +159,9 @@ class VodFocusCoordinator(
             // A stale layout callback must never undo the user's movement.
             cancelPendingRestore()
         }
+        // Any key means the user is steering again (including LEFT/BACK to the
+        // app rail), so focus parking for a loading page ends here.
+        cancelParking()
         if (binding.vodGlassActions.visibility != View.VISIBLE) return false
         val current = binding.root.findFocus() ?: return false
         val inBar = VodFocusMemory.isWithin(binding.vodGlassActions, current)
@@ -222,6 +265,60 @@ class VodFocusCoordinator(
     private fun currentContentRoot(): View? =
         navHost.childFragmentManager.primaryNavigationFragment?.view
 
+    /**
+     * A title opened directly (from Live TV's recently watched row) arrives
+     * with focus still on the app's React side. Bring it into VOD and onto
+     * the title page as soon as the page has buttons.
+     */
+    fun focusIncomingPage() {
+        val destination = navigation.currentDestination?.id ?: return
+        cancelParking()
+        parkedDestination = destination
+        parkUntil = SystemClock.uptimeMillis() + PARK_TIMEOUT_MS
+        binding.navMainFragment.viewTreeObserver.addOnGlobalLayoutListener(parkLayoutListener)
+        parkListenerAttached = true
+        binding.root.post {
+            if (parkedDestination == destination && !disposed) {
+                parkOnBar()
+                focusParkedContent()
+            }
+        }
+    }
+
+    /** Focus the top bar without recording it as the page's chosen zone. */
+    private fun parkOnBar() {
+        if (binding.vodGlassActions.visibility != View.VISIBLE) return
+        restoring = true
+        try { binding.vodGlassActions.focusLastAction() } finally { restoring = false }
+    }
+
+    /** Once the parked page has laid out its content, move focus into it. */
+    private fun focusParkedContent() {
+        val destination = parkedDestination ?: return
+        if (disposed || navigation.currentDestination?.id != destination ||
+            SystemClock.uptimeMillis() > parkUntil) {
+            cancelParking()
+            return
+        }
+        // A bookmarked page (Back) is restored by attemptRestore instead.
+        if (pendingDestination == destination) return
+        val content = currentContentRoot() ?: return
+        if (content.findFocus() != null) { cancelParking(); return }
+        // Only leave the bar while focus is still parked there (no key since).
+        val focused = binding.root.findFocus()
+        if (focused != null && !VodFocusMemory.isWithin(binding.vodGlassActions, focused)) return
+        if (!content.hasFocusable()) return
+        if (content.requestFocus(View.FOCUS_DOWN)) cancelParking()
+    }
+
+    private fun cancelParking() {
+        parkedDestination = null
+        if (parkListenerAttached) {
+            binding.navMainFragment.viewTreeObserver.removeOnGlobalLayoutListener(parkLayoutListener)
+            parkListenerAttached = false
+        }
+    }
+
     private fun attachLayoutListener() {
         if (layoutListenerAttached) return
         binding.navMainFragment.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
@@ -261,9 +358,15 @@ class VodFocusCoordinator(
         disposed = true
         lastAnimatedPage.clear()
         cancelPendingRestore()
+        cancelParking()
         binding.vodGlassActions.onNavigate = null
         onHostRailFocus = null
         navigation.removeOnDestinationChangedListener(destinationListener)
         binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(focusListener)
+    }
+
+    private companion object {
+        /** Slow providers can take several seconds before a title page has buttons. */
+        const val PARK_TIMEOUT_MS = 12_000L
     }
 }

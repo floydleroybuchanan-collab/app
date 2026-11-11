@@ -1,7 +1,8 @@
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { loadVodRecent, sameVodRecent, vodTitleSection, type VodRecentItem } from "@/src/core/vodRecent";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -72,6 +73,33 @@ function RecentChannelCard({
     </Pressable>
   );
 }
+
+const VodRecentCard = React.memo(function VodRecentCard({ item, onOpen }: { item: VodRecentItem; onOpen: (item: VodRecentItem) => void }) {
+  return (
+    <Pressable
+      onPress={() => onOpen(item)}
+      style={({ focused }: any) => [styles.vodCard, focused && styles.focused]}
+      testID={`home-vod-recent-${item.kind}-${item.id}`}
+    >
+      <View style={styles.vodArt}>
+        {item.image ? (
+          // Decoded at the card's size (resizeMethod), never full resolution.
+          <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} resizeMode="cover" resizeMethod="resize" />
+        ) : (
+          <Ionicons name={item.kind === "movie" ? "film-outline" : "tv-outline"} size={30} color={tvColors.purpleSoft} />
+        )}
+        <View style={styles.vodKind}><Text style={styles.vodKindText}>{item.kind === "movie" ? "MOVIE" : "SERIES"}</Text></View>
+        {item.progress > 0 && item.progress < 100 ? (
+          <View style={styles.vodTrack}><View style={[styles.vodFill, { width: `${item.progress}%` }]} /></View>
+        ) : null}
+      </View>
+      <Text numberOfLines={1} style={styles.channelName}>{item.title}</Text>
+      <Text numberOfLines={1} style={styles.channelProgram}>
+        {item.progress > 0 && item.progress < 100 ? `Resume · ${item.progress}% watched` : "Open in Video OnDemand"}
+      </Text>
+    </Pressable>
+  );
+});
 
 function LiveTvHomeScreenContent() {
   const router = useRouter();
@@ -192,6 +220,23 @@ function LiveTvHomeScreenContent() {
     [addRecent, router],
   );
 
+  // Recently watched VOD titles (read from VOD's own history each time Live TV
+  // is shown; at most 10 small rows, nothing kept while Live TV is hidden).
+  const [vodRecent, setVodRecent] = useState<VodRecentItem[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void loadVodRecent().then((items) => {
+        if (alive) setVodRecent((current) => (sameVodRecent(current, items) ? current : items));
+      });
+      return () => { alive = false; };
+    }, []),
+  );
+  const openVodTitle = useCallback((item: VodRecentItem) => {
+    void Haptics.selectionAsync().catch(() => undefined);
+    router.replace({ pathname: "/vod", params: { section: vodTitleSection(item) } } as any);
+  }, [router]);
+
   return (
     <PurpleTvShell active="/">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
@@ -302,7 +347,7 @@ function LiveTvHomeScreenContent() {
           <Text style={styles.sectionTitle}>Recently Watched Channels</Text>
           <Text style={styles.sectionHint}>Currently airing on channels you watched</Text>
         </View>
-        <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+        <ScrollView horizontal style={styles.rowScroll} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
           {recentLive.map((channel, index) => (
             <RecentChannelCard
               key={channel.id}
@@ -321,6 +366,20 @@ function LiveTvHomeScreenContent() {
             />
           ))}
         </ScrollView>
+
+        {vodRecent.length ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recently Watched On Demand</Text>
+              <Text style={styles.sectionHint}>Movies and shows from Video OnDemand</Text>
+            </View>
+            <ScrollView horizontal style={styles.rowScroll} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+              {vodRecent.map((item) => (
+                <VodRecentCard key={`${item.kind}:${item.id}`} item={item} onOpen={openVodTitle} />
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
       </ScrollView>
     </PurpleTvShell>
   );
@@ -359,7 +418,14 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 },
   sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 13, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
   sectionHint: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: 8.5 },
+  rowScroll: { flexGrow: 0 },
   recentRow: { gap: 9, paddingBottom: 2, paddingTop: 2, alignItems: "flex-start" },
+  vodCard: { width: 170, minHeight: 132, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
+  vodArt: { height: 88, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6, backgroundColor: "rgba(40,14,84,0.75)" },
+  vodKind: { position: "absolute", top: 5, left: 5, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, backgroundColor: "rgba(26,11,51,0.85)" },
+  vodKindText: { color: "#fff", fontFamily: fonts.bold, fontSize: 6.5, letterSpacing: 0.8 },
+  vodTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(255,255,255,0.18)" },
+  vodFill: { height: 3, backgroundColor: glass.pink },
   channelCard: { width: 150, minHeight: 116, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
   channelCardArt: { height: 64, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6 },
   channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9.5 },

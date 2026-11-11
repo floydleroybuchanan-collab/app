@@ -73,6 +73,16 @@ export function renameFavoriteFolder(folders: FavoriteFolder[], folderId: string
   return folders.map((folder) => (folder.id === folderId ? { ...folder, name: clean } : folder));
 }
 
+/** Name for a new folder: the first "Folder N" not already used. */
+export function nextNewFolderName(folders: FavoriteFolder[]): string {
+  const used = new Set(folders.map((f) => f.name.toLowerCase()));
+  for (let n = 1; n <= MAX_FAVORITE_FOLDERS + 1; n++) {
+    const name = `Folder ${n}`;
+    if (!used.has(name.toLowerCase())) return name;
+  }
+  return `Folder ${Date.now().toString(36).slice(-4)}`;
+}
+
 /** Next rename candidate for TV (cycle presets, then Folder N). */
 export function nextFavoriteFolderName(folders: FavoriteFolder[], folderId: string): string {
   const current = folders.find((f) => f.id === folderId)?.name || "";

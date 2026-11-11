@@ -125,6 +125,14 @@ class VodRootFragment : Fragment() {
         if (saved == null && requestedSection.startsWith("settings")) {
             controller.navigate(R.id.settings, settingsArgs(requestedSection))
         }
+        // "movie:<id>" / "tv_show:<id>" opens that title's page over Home
+        // (Live TV's "Recently Watched On Demand" row). Back returns to Home.
+        if (saved == null) titleDestination(requestedSection)?.let { (destination, id) ->
+            runCatching {
+                controller.navigate(destination, Bundle().apply { putString("id", id) })
+                coordinator?.focusIncomingPage()
+            }.onFailure { Log.e("CharmVodRoot", "Cannot open requested title", it) }
+        }
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
@@ -184,6 +192,18 @@ class VodRootFragment : Fragment() {
         return coordinator?.onKey(event) == true
     }
 
+
+    /** "movie:<id>" or "tv_show:<id>" → the title page to open, else null. */
+    private fun titleDestination(section: String): Pair<Int, String>? {
+        val kind = section.substringBefore(':', "")
+        val id = section.substringAfter(':', "").trim()
+        if (id.isEmpty() || id.length > 300) return null
+        return when (kind) {
+            "movie" -> R.id.movie to id
+            "tv_show" -> R.id.tv_show to id
+            else -> null
+        }
+    }
 
     /** "settings:screen_x" opens VOD Settings directly on that section. */
     private fun settingsArgs(section: String): Bundle? =

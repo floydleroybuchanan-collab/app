@@ -26,6 +26,36 @@ import { getAppPolicy } from "@/src/core/appPolicy";
 
 const Surface = Platform.OS === "android" && multiview ? requireNativeComponent<ViewProps & { slot: number; session: string }>("CharmMultiviewSurface") : View;
 let sequence = 0;
+
+type ChooserRow = { key: string; label: string; count: number };
+// Fixed row heights let FlatList skip measuring thousands of rows while
+// scrolling with the D-pad (the old unbounded list measured every row).
+const PICKER_ROW_HEIGHT = 56;
+const PICKER_ROW_GAP = 4;
+const CHOOSER_ROW_HEIGHT = 44;
+const CHOOSER_ROW_GAP = 4;
+const channelRowLayout = (_: unknown, index: number) => ({ length: PICKER_ROW_HEIGHT + PICKER_ROW_GAP, offset: (PICKER_ROW_HEIGHT + PICKER_ROW_GAP) * index, index });
+const chooserRowLayout = (_: unknown, index: number) => ({ length: CHOOSER_ROW_HEIGHT + CHOOSER_ROW_GAP, offset: (CHOOSER_ROW_HEIGHT + CHOOSER_ROW_GAP) * index, index });
+
+const PickerChannelRow = React.memo(function PickerChannelRow({ channel, onChoose }: { channel: Channel; onChoose: (channel: Channel) => void }) {
+  return <Pressable onPress={() => onChoose(channel)} style={({ focused }: any) => [styles.row, focused && styles.focus]}>
+    <Text numberOfLines={1} style={styles.rowName}>{channel.name}</Text>
+    <Text numberOfLines={1} style={styles.rowMeta}>{channel.playlist_name} · {channel.source_group || channel.group}</Text>
+  </Pressable>;
+});
+
+/** Scrollable playlist / group list for the pop-up box; opens on the current entry. */
+function ChooserList({ rows, current, focusRef, onPick }: { rows: ChooserRow[]; current: string; focusRef: React.MutableRefObject<any>; onPick: (key: string) => void }) {
+  const selectedIndex = Math.max(0, rows.findIndex(row => row.key === current));
+  return <FlatList data={rows} keyExtractor={row => row.key} style={styles.chooserList}
+    getItemLayout={chooserRowLayout} initialScrollIndex={selectedIndex > 2 ? selectedIndex - 2 : undefined}
+    initialNumToRender={14} maxToRenderPerBatch={10} windowSize={5}
+    renderItem={({ item, index }) => <Pressable ref={index === selectedIndex ? focusRef : undefined} hasTVPreferredFocus={index === selectedIndex}
+      onPress={() => onPick(item.key)} style={({ focused }: any) => [styles.chooserRow, item.key === current && styles.chooserCurrent, focused && styles.focus]}>
+      <Text numberOfLines={1} style={styles.chooserText}>{item.key === current ? "✓ " : ""}{item.label}</Text>
+      <Text style={styles.chooserCount}>{item.count}</Text>
+    </Pressable>} />;
+}
 export default function MultiviewScreen() {
   const router = useRouter();
   const appPolicy = useAppPolicy();
@@ -55,6 +85,14 @@ export default function MultiviewScreen() {
   const [audible, setAudible] = useState(-1);
   const audibleRef = useRef(-1);
   const [picker, setPicker] = useState<number | null>(null);
+  const pickerRef = useRef<number | null>(null); pickerRef.current = picker;
+  // Playlist / group pop-up list inside the channel picker. Selecting a
+  // playlist opens its groups next; selecting a group returns to the channels.
+  const [chooser, setChooser] = useState<null | "playlist" | "group">(null);
+  const [chooserReturn, setChooserReturn] = useState<null | "playlist" | "group">(null);
+  const chooserFocus = useRef<any>(null);
+  const playlistButton = useRef<any>(null);
+  const groupButton = useRef<any>(null);
   const [query, setQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [notice, setNotice] = useState("");
@@ -202,7 +240,8 @@ export default function MultiviewScreen() {
   },[appPolicy,ready,token,writePanes]);
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (picker != null) { setPicker(null); setQuery(""); setMenu(true); }
+      if (chooser) { setChooserReturn(chooser); setChooser(null); }
+      else if (picker != null) { setPicker(null); setQuery(""); setMenu(true); }
       else if (menu) setMenu(false);
       else if (swapFrom != null) setSwapFrom(null);
       else if (enlarged != null) setEnlarged(null);
@@ -210,7 +249,7 @@ export default function MultiviewScreen() {
       return true;
     });
     return () => sub.remove();
-  }, [exit, picker, menu, swapFrom, enlarged]);
+  }, [chooser, exit, picker, menu, swapFrom, enlarged]);
   useEffect(() => {
     if (!sleepTimerMinutes || sleepTimerMinutes <= 0) return;
     const timer = setTimeout(() => { setSleepTimerMinutes(0); void exitRef.current(); }, sleepTimerMinutes * 60_000);
@@ -233,10 +272,31 @@ export default function MultiviewScreen() {
     // Only the visible owner may request focus. Resolve refs at retry time:
     // the new picker/menu may not have mounted on the first frame.
     return requestNativeFocusWithRetry(
-      () => picker != null ? firstPicker.current : menu ? firstMenu.current : paneNodes.current[selected],
+      () => picker != null
+        ? chooser ? chooserFocus.current
+          : chooserReturn === "group" ? groupButton.current
+          : chooserReturn === "playlist" ? playlistButton.current
+          : firstPicker.current
+        : menu ? firstMenu.current : paneNodes.current[selected],
       [0, 80, 160, 300, 560], () => focusConfirmed.current,
     );
-  }, [menu, picker, enlarged, selected, ready]);
+  }, [menu, picker, chooser, chooserReturn, enlarged, selected, ready]);
+  useEffect(() => { if (picker == null) { setChooser(null); setChooserReturn(null); } }, [picker]);
+  const openChooser = (kind: "playlist" | "group") => { setChooserReturn(null); setChooser(kind); };
+  const pickChooser = (key: string) => {
+    if (chooser === "playlist") {
+      setSourceFilter(key); setGroupFilter("all");
+      // Same flow as the player's guide: playlist first, then its groups.
+      setChooser("group");
+    } else {
+      setGroupFilter(key);
+      setChooserReturn("group"); setChooser(null);
+    }
+  };
+  const chooseRow = useCallback((item: Channel) => {
+    const slot = pickerRef.current;
+    if (slot != null) void choose(slot, item);
+  }, [choose]);
   const confirmOverlayFocus = () => { focusConfirmed.current = true; setPreferOverlayFocus(false); };
   useEffect(() => {
     setLabels(true);
@@ -256,8 +316,39 @@ export default function MultiviewScreen() {
   const positions = multiviewLayout(visible, enlarged);
   const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
   const recentIds = useMemo(() => new Set(recent.map(item => item.id)), [recent]);
-  const sources = useMemo(() => Array.from(new Map(channels.map(c => [c.playlist_id || "charm-primary", c.playlist_name || "Playlist 1"])).entries()), [channels]);
-  const groups = useMemo(() => Array.from(new Set(channels.filter(c => sourceFilter === "all" || (c.playlist_id || "charm-primary") === sourceFilter).map(c => c.source_group || c.group || "Other"))).sort(), [channels, sourceFilter]);
+  // One pass each, no per-channel tuple arrays (playlists hold thousands).
+  const playlistRows = useMemo<ChooserRow[]>(() => {
+    const names = new Map<string, string>();
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const c of channels) {
+      if (!c.url || hidden.has(c.id)) continue;
+      const id = c.playlist_id || "charm-primary";
+      if (!names.has(id)) names.set(id, c.playlist_name || "Playlist 1");
+      counts.set(id, (counts.get(id) || 0) + 1);
+      total++;
+    }
+    const rows: ChooserRow[] = [{ key: "all", label: "All playlists", count: total }];
+    names.forEach((label, key) => rows.push({ key, label, count: counts.get(key) || 0 }));
+    return rows;
+  }, [channels, hidden]);
+  const groupRows = useMemo<ChooserRow[]>(() => {
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const c of channels) {
+      if (!c.url || hidden.has(c.id)) continue;
+      if (sourceFilter !== "all" && (c.playlist_id || "charm-primary") !== sourceFilter) continue;
+      const group = c.source_group || c.group || "Other";
+      counts.set(group, (counts.get(group) || 0) + 1);
+      total++;
+    }
+    const rows: ChooserRow[] = [];
+    counts.forEach((count, key) => rows.push({ key, label: key, count }));
+    rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }));
+    return [{ key: "all", label: "All groups", count: total }, ...rows];
+  }, [channels, hidden, sourceFilter]);
+  const playlistLabel = playlistRows.find(row => row.key === sourceFilter)?.label || "All playlists";
+  const groupLabel = groupFilter === "all" ? "All groups" : groupFilter;
   const results = useMemo(() => channels.filter(c => c.url && !hidden.has(c.id) &&
     (sourceFilter === "all" || (c.playlist_id || "charm-primary") === sourceFilter) &&
     (groupFilter === "all" || (c.source_group || c.group || "Other") === groupFilter) &&
@@ -271,7 +362,7 @@ export default function MultiviewScreen() {
   const action = (label: string, run: () => void, disabled = false, pickerEntry = false, controlKey = label) => {
     const menuEntry = label === "Change channel" || label === "Add channel";
     return <Pressable key={pickerEntry ? "picker-entry" : controlKey} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
-      focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && (pickerEntry || (picker == null && menuEntry))}
+      focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && ((pickerEntry && !chooserReturn) || (picker == null && menuEntry))}
       disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
   };
   return <View style={styles.page}>
@@ -313,19 +404,37 @@ export default function MultiviewScreen() {
       {action("Return to TV Guide", () => void exit())}
       </ScrollView>
     </FocusGuide>}
-    {picker != null && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
+    {picker != null && !chooser && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
       <Text style={styles.title}>Channel for screen {picker+1}</Text>
       <TextInput accessibilityLabel="Search channels" value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
       <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All",name))}</View>
-      {action(`Playlist: ${sources.find(([id])=>id===sourceFilter)?.[1] || "All Playlists"}`, () => {const ids=["all",...sources.map(([id])=>id)];setSourceFilter(ids[(ids.indexOf(sourceFilter)+1)%ids.length]);setGroupFilter("all");},false,false,"playlist-filter")}
-      {action(`Group: ${groupFilter === "all" ? "All groups" : groupFilter}`, () => {const ids=["all",...groups];setGroupFilter(ids[(ids.indexOf(groupFilter)+1)%ids.length]);},false,false,"group-filter")}
+      {/* Drop-down buttons: OK opens a scrollable list instead of cycling. */}
+      <View style={styles.dropRow}>
+        <Pressable ref={playlistButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "playlist"} onPress={() => openChooser("playlist")}
+          style={({ focused }: any) => [styles.button, styles.dropPlaylist, focused && styles.focus]} testID="multiview-playlist-dropdown">
+          <Text numberOfLines={1} style={styles.dropText}>▤ {playlistLabel} ▾</Text>
+        </Pressable>
+        <Pressable ref={groupButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "group"} onPress={() => openChooser("group")}
+          style={({ focused }: any) => [styles.button, styles.dropGroup, focused && styles.focus]} testID="multiview-group-dropdown">
+          <Text numberOfLines={1} style={styles.dropText}>☰ {groupLabel} ▾</Text>
+        </Pressable>
+      </View>
       <Text style={styles.notice}>{results.length} channels · Each screen uses a provider connection</Text>
+      {/* Bounded list (flex:1 inside the panel): the last channel ends at the
+          panel bottom, and only the visible rows plus a small window mount. */}
       <FlatList data={results} keyExtractor={channel => channel.id} keyboardShouldPersistTaps="handled"
-        initialNumToRender={10} maxToRenderPerBatch={10} windowSize={5}
+        style={styles.pickerList} getItemLayout={channelRowLayout}
+        initialNumToRender={9} maxToRenderPerBatch={8} updateCellsBatchingPeriod={40} windowSize={5}
         ListEmptyComponent={<Text style={styles.text}>No matching channels. Try All or another playlist.</Text>}
-        renderItem={({item}) => <Pressable onPress={() => {void choose(picker,item);}} style={({focused}: any) => [styles.row,focused && styles.focus]}><Text style={styles.text}>{item.name}</Text><Text style={styles.notice}>{item.playlist_name} · {item.source_group || item.group}</Text></Pressable>} />
-      <Text style={styles.notice}>{notice}</Text>
+        renderItem={({item}) => <PickerChannelRow channel={item} onChoose={chooseRow} />} />
+      {!!notice && <Text numberOfLines={1} style={styles.notice}>{notice}</Text>}
       {action("Cancel", () => {setPicker(null);setQuery("");setMenu(true);})}
+    </FocusGuide>}
+    {picker != null && chooser && <FocusGuide key={`chooser-${chooser}`} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.chooser}>
+      <Text style={styles.title}>{chooser === "playlist" ? "Choose a playlist" : `${playlistLabel} · Channel groups`}</Text>
+      <ChooserList rows={chooser === "playlist" ? playlistRows : groupRows} current={chooser === "playlist" ? sourceFilter : groupFilter}
+        focusRef={chooserFocus} onPick={pickChooser} />
+      <Text style={styles.notice}>Back returns to the channel list</Text>
     </FocusGuide>}
   </View>;
 }
@@ -342,5 +451,18 @@ const styles = StyleSheet.create({
   filterRow:{flexDirection:"row",flexWrap:"wrap",gap:4},
   button:{paddingHorizontal:12,paddingVertical:10,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,marginBottom:4,backgroundColor:"rgba(40,18,78,0.70)"},
   focus:{borderColor:"#FFFFFF",backgroundColor:glass.focus,shadowColor:glass.glow,elevation:12},disabled:{opacity:.4},
-  search:{backgroundColor:"rgba(20,8,42,0.80)",color:"#fff",padding:12,borderWidth:2,borderColor:glass.edge,borderRadius:12,fontSize:17},row:{padding:12,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,marginBottom:4,backgroundColor:"rgba(36,16,70,0.55)"}
+  search:{backgroundColor:"rgba(20,8,42,0.80)",color:"#fff",padding:12,borderWidth:2,borderColor:glass.edge,borderRadius:12,fontSize:17},
+  row:{height:PICKER_ROW_HEIGHT,marginBottom:PICKER_ROW_GAP,paddingHorizontal:12,justifyContent:"center",borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,backgroundColor:"rgba(36,16,70,0.55)"},
+  rowName:{color:"#fff",fontSize:16,fontFamily:fonts.medium},rowMeta:{color:"#D9C8F5",fontSize:12,marginTop:2},
+  pickerList:{flex:1,minHeight:0},
+  dropRow:{flexDirection:"row",gap:6},
+  dropPlaylist:{flex:2,minWidth:0,marginBottom:0},dropGroup:{flex:3,minWidth:0,marginBottom:0},
+  dropText:{color:"#fff",fontSize:15,fontFamily:fonts.semibold},
+  // Pop-up list box: glass panel at 70% opacity over the video, bounded top
+  // and bottom so the last entry ends inside the box, never off-screen.
+  chooser:{position:"absolute",left:"20%",right:"20%",top:"7%",bottom:"7%",padding:16,borderRadius:18,borderWidth:1,borderColor:glass.edge,backgroundColor:"rgba(30,12,60,0.70)"},
+  chooserList:{flex:1,minHeight:0,marginBottom:8},
+  chooserRow:{height:CHOOSER_ROW_HEIGHT,marginBottom:CHOOSER_ROW_GAP,flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingHorizontal:14,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,backgroundColor:"rgba(40,18,78,0.62)"},
+  chooserCurrent:{borderColor:glass.selectedEdge,backgroundColor:"rgba(140,70,240,0.55)"},
+  chooserText:{flex:1,minWidth:0,color:"#fff",fontSize:16,fontFamily:fonts.medium},chooserCount:{color:"#D9C8F5",fontSize:13,marginLeft:10},
 });
