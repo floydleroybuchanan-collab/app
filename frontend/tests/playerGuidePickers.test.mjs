@@ -49,3 +49,10 @@ test("LEFT on a group in the Guide playlist panel jumps to its playlist header f
   assert.match(panel, /item\.kind === "playlist" && focusedName\.startsWith\(`\$\{item\.name\}:`\)/);
   assert.match(panel, /if \(!focused \|\| focused\.kind !== "group"\) return null;/);
 });
+
+test("a doubled select press cannot open and immediately close a Guide playlist", () => {
+  const guide = read("app/(tabs)/guide.tsx");
+  assert.match(guide, /const PLAYLIST_TOGGLE_DEBOUNCE_MS = 500;/);
+  assert.match(guide, /if \(last && last\.id === id && now - last\.at < PLAYLIST_TOGGLE_DEBOUNCE_MS\) return;/);
+  assert.match(guide, /togglePlaylistExpanded\(section\.id\)/);
+});

@@ -78,6 +78,7 @@ import { focusGuidePreviewSurface } from "@/src/utils/guidePreviewFocus";
 // Session-only guide position survives the root player route unmounting tabs.
 // Do not persist to disk: this is navigation state, not a user preference.
 let guideSessionGroup = "All";
+const PLAYLIST_TOGGLE_DEBOUNCE_MS = 500;
 let guideSessionChannelId: string | null = null;
 const guideSessionChannelByGroup = new Map<string, string>();
 const MAX_REMEMBERED_GUIDE_GROUPS = 128;
@@ -998,14 +999,26 @@ function PurpleGuideScreenContent() {
     chooseGroup(next);
   }, [chooseGroup, quiesceGuideForTransition]);
 
+  // One physical select must toggle a playlist exactly once. After playback some
+  // remotes/keyboards (BlueStacks Enter) deliver the press twice, which opened
+  // and immediately closed the playlist so it looked stuck.
+  const lastPlaylistToggleRef = useRef<{ id: string; at: number } | null>(null);
+  const togglePlaylistExpanded = useCallback((id: string) => {
+    const now = Date.now();
+    const last = lastPlaylistToggleRef.current;
+    if (last && last.id === id && now - last.at < PLAYLIST_TOGGLE_DEBOUNCE_MS) return;
+    lastPlaylistToggleRef.current = { id, at: now };
+    setExpandedPlaylists((previous) => {
+      const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next;
+    });
+  }, []);
+
   const playlistDrawerRows = useMemo<PurpleGuideGroup[]>(() => playlistMenu.flatMap((section) => {
     const expanded = expandedPlaylists.has(section.id);
     const rows: PurpleGuideGroup[] = [{
       name: `playlist:${section.id}`, label: section.label, kind: "playlist", expanded,
       count: section.count, active: activePlaylist === section.id && !expanded,
-      onPress: () => { if(section.id === "all") { choosePlaylistGroup("all","All"); return; } setExpandedPlaylists((previous) => {
-        const next = new Set(previous); if (next.has(section.id)) next.delete(section.id); else next.add(section.id); return next;
-      }); },
+      onPress: () => { if(section.id === "all") { choosePlaylistGroup("all","All"); return; } togglePlaylistExpanded(section.id); },
     }];
     if (expanded) {
       for (const item of section.groups) rows.push({
@@ -1023,7 +1036,7 @@ function PurpleGuideScreenContent() {
       }
     }
     return rows;
-  }), [activePlaylist, channels, choosePlaylistGroup, customGuideGroups.byName, customGuideGroups.groups, expandedPlaylists, group, hiddenIdSet, hiddenGroups, tabPrefs.hiddenSet, pinnedGroups, playlistMenu, togglePinGroup]);
+  }), [activePlaylist, channels, choosePlaylistGroup, customGuideGroups.byName, customGuideGroups.groups, expandedPlaylists, group, hiddenIdSet, hiddenGroups, tabPrefs.hiddenSet, pinnedGroups, playlistMenu, togglePinGroup, togglePlaylistExpanded]);
 
   return (
     <PurpleTvShell
