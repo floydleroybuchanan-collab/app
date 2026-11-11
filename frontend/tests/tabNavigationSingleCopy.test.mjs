@@ -53,6 +53,16 @@ test("a closed drawer is not drawn, so it can never show open with unfocusable r
   assert.match(shell, /if \(finished && !drawerOpenRef\.current\) \{\s*drawerVisibleRef\.current = false;\s*setDrawerVisible\(false\);/);
 });
 
+test("a remote key with no focused view re-enters the open drawer or the visible page", async () => {
+  const activity = await source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt");
+  const helper = activity.slice(activity.indexOf("private fun restoreLostFocus"), activity.indexOf("private fun focusLeftNeighborInRow"));
+  assert.match(helper, /currentFocus != null\) return false/);
+  assert.match(helper, /context == "player" \|\| context == "modal"\) return false/);
+  assert.ok(helper.indexOf("purple-main-drawer") < helper.indexOf("purple-tv-page"), "drawer before page");
+  const dispatch = activity.slice(activity.indexOf("override fun dispatchKeyEvent"));
+  assert.ok(dispatch.indexOf("restoreLostFocus(event)") < dispatch.indexOf("routeShellBoundary(event)"));
+});
+
 test("VOD Settings buttons pass their section in a param React Navigation keeps", async () => {
   const settings = await source("app/(tabs)/settings.tsx");
   const vod = await source("app/(tabs)/vod.tsx");

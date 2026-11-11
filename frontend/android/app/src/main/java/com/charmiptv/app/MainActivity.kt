@@ -110,6 +110,46 @@ class MainActivity : ReactActivity() {
    * under the rail (0-257px), so it beat real neighbours such as the page's own
    * Drawer button and focus was lost on an invisible list.
    */
+  /**
+   * A page can come back with no focused view (returning from the player while
+   * its preferred-focus request raced the closing screen, a drawer row removed
+   * while focused) and then every key seems dead. The first D-pad/OK press
+   * re-enters the visible page: its focus guide restores the last-focused
+   * control, or the first one. Never while the player or a modal owns the remote.
+   */
+  private fun restoreLostFocus(event: android.view.KeyEvent): Boolean {
+    if (event.action != android.view.KeyEvent.ACTION_DOWN || currentFocus != null) return false
+    if (vodImmersive || TvRemoteModule.pointerActive) return false
+    val context = TvRemoteModule.remoteContext
+    if (context == "player" || context == "modal") return false
+    when (event.keyCode) {
+      android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+      android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+      android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> Unit
+      else -> return false
+    }
+    val shell = findTagged(window?.decorView ?: return false, "purple-tv-shell") ?: return false
+    // An open drawer owns the remote; it exists only while open or sliding shut.
+    val containers = listOfNotNull(
+      findTagged(shell, "purple-main-drawer"),
+      findTagged(shell, "purple-tv-guide-page") ?: findTagged(shell, "purple-tv-page"),
+    )
+    for (container in containers) {
+      // Same physical walk as focusContentFromRail: never ask a focus guide to
+      // restore a remembered row that may be clipped behind the viewport.
+      fun usable(view: View?): Boolean = view != null && view !== container && visible(view) &&
+        view.isEnabled && view.isFocusable && within(view, container) &&
+        !(view is ReactViewGroup && view.isTVFocusGuide) &&
+        view !is android.widget.ScrollView && view !is android.widget.HorizontalScrollView
+      val targets = TvFocusTraversal.targets(container, { view ->
+        if (!visible(view) || (view is ViewGroup && view.descendantFocusability == ViewGroup.FOCUS_BLOCK_DESCENDANTS)) emptyList()
+        else if (view is ViewGroup) (0 until view.childCount).map(view::getChildAt) else emptyList()
+      }, ::usable)
+      if (TvFocusTraversal.transfer(targets.take(3), { it.requestFocus() }, { usable(currentFocus) }, {})) return true
+    }
+    return false
+  }
+
   private fun focusLeftNeighborInRow(focus: View, page: View): Boolean {
     if (nativeVodOwnsFocus()) return false
     val next = FocusFinder.getInstance().findNextFocus(page as? ViewGroup ?: return false, focus, View.FOCUS_LEFT)
@@ -363,6 +403,10 @@ class MainActivity : ReactActivity() {
     }
     if (event.action == android.view.KeyEvent.ACTION_UP && event.keyCode == shellBoundaryKeyDown) {
       shellBoundaryKeyDown = -1
+      return true
+    }
+    if (restoreLostFocus(event)) {
+      shellBoundaryKeyDown = event.keyCode
       return true
     }
     if (routeShellBoundary(event)) {
