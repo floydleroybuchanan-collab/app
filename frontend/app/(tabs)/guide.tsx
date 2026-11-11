@@ -1208,7 +1208,8 @@ const styles = StyleSheet.create({
   unsupportedPreview: { position: "absolute", left: 7, top: 7, bottom: 7, width: 278, justifyContent: "center", alignItems: "center", gap: 7, padding: 12, backgroundColor: "#05050B" },
   unsupportedPreviewTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
   unsupportedPreviewText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, textAlign: "center" },
-  page: { flex: 1, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, gap: 3 },
+  // Flush with the rail and drawers: no outer band on the top, right, bottom or left.
+  page: { flex: 1, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, gap: 3 },
   body: { flex: 1, minHeight: 0, flexDirection: "column", gap: 6 },
   gridPanel: { flex: 1, minWidth: 0, minHeight: 0 },
   pinCard: { width: 340, maxWidth: "100%", borderRadius: 10, backgroundColor: tvColors.panel, padding: 16, gap: 10 },
