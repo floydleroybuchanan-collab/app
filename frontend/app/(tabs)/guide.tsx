@@ -543,10 +543,15 @@ function PurpleGuideScreenContent() {
   ], [activePlaylist, customGuideGroups.groups, playlistMenu]);
   const overflowGroups = useMemo<string[]>(() => [], []);
 
+  // Expand a playlist when it becomes the one being watched, not on every panel
+  // open: a playlist the viewer collapsed stays collapsed (its header row is then
+  // the active row, so the panel still has a focus target).
+  const autoExpandedForRef = useRef(activePlaylist);
   useEffect(() => {
-    if (!drawerOpen && !groupDrawerOpen) return;
+    if (autoExpandedForRef.current === activePlaylist) return;
+    autoExpandedForRef.current = activePlaylist;
     setExpandedPlaylists((previous) => previous.has(activePlaylist) ? previous : new Set([...previous, activePlaylist]));
-  }, [activePlaylist, drawerOpen, groupDrawerOpen]);
+  }, [activePlaylist]);
 
   useEffect(() => {
     if (startPreferenceAppliedRef.current || !isFocused || !channels.length) return;
