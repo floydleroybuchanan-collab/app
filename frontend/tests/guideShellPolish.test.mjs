@@ -474,7 +474,9 @@ test("fullscreen guide return clears retained focus blockers and drawer focus re
   for (const release of ['closeDrawer({ force: true })', 'setGroupDrawerOpen(false)', 'setPreviewActionsFocused(false)', 'setQuickActionsOpen(false)']) {
     assert.ok(jump.indexOf(release) > 0 && jump.indexOf(release) < restore, release);
   }
-  const drawer = shell.slice(shell.indexOf('<FocusGuide style={styles.sidebar}'), shell.indexOf('<SmallBrand />'));
+  const drawerStart = shell.indexOf('<FocusGuide style={styles.sidebar}');
+  const drawer = shell.slice(drawerStart, shell.indexOf('{contextActions?.length', drawerStart));
+  assert.ok(drawer.length > 0 && drawer.length < 2000);
   assert.match(drawer, /if \(!isFocused \|\| !drawerOpen\) return/);
   assert.match(drawer, /setRemoteContext\("main_drawer"\)/);
   const retry = native.slice(native.indexOf('private val focusEntryRunnable'), native.indexOf('private fun requestEntryFocus'));

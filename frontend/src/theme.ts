@@ -35,6 +35,41 @@ export const tvColors = {
   scrim: "rgba(4,3,10,0.78)",
 };
 
+/**
+ * Neon-glass look shared by every TV page (same values the Settings and VOD
+ * redesign uses). Plain colors only: no blur, no extra views, so a page costs
+ * the same to draw as before the facelift.
+ */
+export const glass = {
+  page: "#120826",
+  rail: "#1A0B33",
+  drawer: "#1E0C3C",
+  panel: "rgba(122,62,214,0.13)",
+  panelStrong: "rgba(122,62,214,0.22)",
+  edge: "rgba(216,178,255,0.30)",
+  edgeSoft: "rgba(216,178,255,0.16)",
+  button: "rgba(150,90,235,0.18)",
+  buttonEdge: "rgba(226,190,255,0.40)",
+  selected: "rgba(124,58,237,0.34)",
+  selectedEdge: "rgba(200,150,255,0.55)",
+  focus: "rgba(178,70,255,0.62)",
+  focusEdge: "#FFFFFF",
+  glow: "#E04DFF",
+  pink: "#E879F9",
+  live: "#E11D48",
+  liveEdge: "#FF6B8B",
+  kicker: "#C4A6F0",
+};
+
+/** Focus that matches Settings: bright violet fill, white edge, soft glow. */
+export const glassFocus = {
+  backgroundColor: glass.focus,
+  borderColor: glass.focusEdge,
+  borderWidth: 2,
+  shadowColor: glass.glow,
+  elevation: 14,
+} as const;
+
 export const fonts = {
   display: "Fraunces",
   regular: "Geist",

@@ -10,7 +10,8 @@ import { PurpleDrawerButton } from "@/src/components/PurpleDrawerButton";
 import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { nextFavoriteFolderName } from "@/src/core/favoriteFolders";
@@ -71,7 +72,7 @@ const FavoriteRow = memo(function FavoriteRow({
             color={inFolder ? tvColors.purpleBright : tvColors.textMuted}
           />
         ) : (
-          <Ionicons name="heart" size={17} color={tvColors.purpleBright} />
+          <Ionicons name="heart" size={17} color={glass.pink} />
         )}
       </View>
     </Pressable>
@@ -177,9 +178,8 @@ function FavoritesScreenContent() {
           <View style={styles.headerLeft}>
             <PurpleDrawerButton testID="favorites-open-drawer" />
             <View style={styles.headerCopy}>
-              <Text style={styles.kicker}>MY CHANNELS</Text>
               <View style={styles.titleRow}>
-                <Text style={styles.title}>All Favorites</Text>
+                <GlassPageTitle page="All Favorites" kicker="My Channels" />
                 <Text numberOfLines={2} style={styles.addHint}>
                   {folderMode
                     ? "Long-press a channel to add or remove it from this folder. Use Rename to cycle the folder name."
@@ -199,7 +199,7 @@ function FavoritesScreenContent() {
               style={({ focused }: any) => [styles.searchHit, focused && styles.focused]}
               testID="favorites-open-search"
             >
-              <Ionicons name="search-outline" size={15} color={tvColors.textMuted} />
+              <Ionicons name="search-outline" size={15} color="#fff" />
             </Pressable>
           </View>
         </View>
@@ -245,6 +245,7 @@ function FavoritesScreenContent() {
             maxToRenderPerBatch={10}
             windowSize={7}
             removeClippedSubviews={false}
+            style={styles.listPanel}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => (
               <FavoriteRow
@@ -262,7 +263,7 @@ function FavoritesScreenContent() {
           />
         ) : (
           <View style={styles.empty}>
-            <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
+            <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={30} color="#fff" /></View>
             <Text style={styles.emptyTitle}>No favorites yet</Text>
             <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
             <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
@@ -276,37 +277,36 @@ function FavoritesScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 14 },
-  header: { minHeight: 54, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, gap: 14 },
+  page: { flex: 1, padding: 14, backgroundColor: glass.page },
+  header: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
   headerLeft: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 },
   headerCopy: { flex: 1, minWidth: 0 },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 12, minWidth: 0 },
-  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  addHint: { flex: 1, maxWidth: 360, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 10.5, marginTop: 2 },
+  addHint: { flex: 1, maxWidth: 360, color: "#C9B5EE", fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 10.5, marginTop: 2 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },
-  searchHit: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
-  folderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingTop: 10, paddingBottom: 4 },
-  folderChip: { minHeight: 28, justifyContent: "center", paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panel },
-  folderActive: { borderColor: tvColors.purpleBright, backgroundColor: tvColors.purpleDeep },
+  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 9 },
+  searchHit: { width: 34, height: 30, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  folderRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingTop: 4, paddingBottom: 8 },
+  folderChip: { minHeight: 26, justifyContent: "center", paddingHorizontal: 13, borderRadius: 13, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  folderActive: { borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.80)" },
   folderText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
-  list: { paddingTop: 7, paddingBottom: 20 },
-  row: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 7, borderWidth: 2, borderColor: "transparent", borderBottomColor: tvColors.line, borderRadius: radius.sm },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  listPanel: { flex: 1, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
+  list: { padding: 6, paddingBottom: 20 },
+  row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 8, marginBottom: 5, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", borderRadius: 12 },
+  focused: glassFocus,
   number: { width: 22, color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 9, textAlign: "right" },
   name: { width: 135, color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
   programBlock: { flex: 1, minWidth: 0 },
   program: { color: "rgba(255,255,255,0.9)", fontFamily: fonts.medium, fontSize: 9.5 },
-  track: { height: 2, backgroundColor: "rgba(255,255,255,0.10)", borderRadius: 1, overflow: "hidden", marginTop: 7 },
-  fill: { height: 2, backgroundColor: tvColors.purpleBright },
+  track: { height: 3, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 2, overflow: "hidden", marginTop: 7 },
+  fill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
   time: { width: 104, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, textAlign: "right" },
   heart: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 40 },
-  emptyIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep },
+  empty: { alignSelf: "center", marginTop: "auto", marginBottom: "auto", width: 380, maxWidth: "100%", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 26, borderRadius: 18, borderWidth: 1, borderColor: glass.edge, backgroundColor: glass.panelStrong },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,58,237,0.85)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", shadowColor: glass.glow, elevation: 12 },
   emptyTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 14 },
-  emptyText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, textAlign: "center" },
-  guideButton: { minHeight: 32, justifyContent: "center", paddingHorizontal: 14, borderRadius: 5, backgroundColor: tvColors.purple, borderWidth: 2, borderColor: "transparent", marginTop: 4 },
+  emptyText: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: 9, textAlign: "center" },
+  guideButton: { minHeight: 32, justifyContent: "center", paddingHorizontal: 16, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 4 },
   guideText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
 });
 

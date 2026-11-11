@@ -16,7 +16,7 @@ import * as Haptics from "expo-haptics";
 import { useStore } from "@/src/store";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { addTvQuickActionsListener, emitPlayerQuickCommand, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext, type PlayerQuickCommand, type TvQuickActionsContext } from "@/src/utils/tvRemote";
 import { getGuideSelection } from "@/src/core/guideSelectionStore";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -489,7 +489,7 @@ function Action({
       onPress={onPress}
       style={({ focused }: any) => [styles.row, disabled && styles.disabled, focused && styles.focused]}
     >
-      <Ionicons name={icon} size={17} color={tvColors.purpleSoft} />
+      <View style={styles.iconTile}><Ionicons name={icon} size={14} color="#F0ABFC" /></View>
       <Text numberOfLines={1} style={styles.rowText}>{label}</Text>
       {value ? <Text numberOfLines={1} style={styles.value}>{value}</Text> : null}
       <Ionicons name="chevron-forward" size={13} color={tvColors.textMuted} />
@@ -499,18 +499,19 @@ function Action({
 
 const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, zIndex: 10000, flexDirection: "row", justifyContent: "flex-end" },
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
-  drawer: { width: 390, maxWidth: "46%", height: "100%", backgroundColor: "rgba(12,10,25,0.985)", borderLeftWidth: 1, borderLeftColor: tvColors.lineStrong, paddingTop: 24, paddingHorizontal: 14, paddingBottom: 18 },
-  header: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: tvColors.line },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 0.8 },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6,2,16,0.50)" },
+  drawer: { width: 390, maxWidth: "46%", height: "100%", backgroundColor: glass.drawer, borderLeftWidth: 1, borderLeftColor: glass.edge, borderTopLeftRadius: 18, borderBottomLeftRadius: 18, paddingTop: 24, paddingHorizontal: 14, paddingBottom: 18 },
+  header: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: glass.edgeSoft },
+  kicker: { color: glass.pink, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.8 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 3 },
-  subtitle: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, marginTop: 3 },
+  subtitle: { color: "#C9B5EE", fontFamily: fonts.regular, fontSize: 9, marginTop: 3 },
   close: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   list: { gap: 5, paddingVertical: 10, paddingBottom: 28 },
-  row: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: "rgba(255,255,255,0.035)" },
+  row: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 12, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,18,78,0.60)" },
+  iconTile: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,58,237,0.38)", borderWidth: 1, borderColor: glass.edge },
   rowText: { flex: 1, minWidth: 0, color: "#fff", fontFamily: fonts.medium, fontSize: 10.5 },
-  value: { maxWidth: 145, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, textTransform: "capitalize" },
-  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
+  value: { maxWidth: 145, color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 8.5, textTransform: "capitalize" },
+  focused: glassFocus,
   disabled: { opacity: 0.42 },
   status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9.5, lineHeight: 14, padding: 8 },
   sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, marginTop: 4, marginBottom: 4 },

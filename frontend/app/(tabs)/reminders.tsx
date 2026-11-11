@@ -15,7 +15,8 @@ import * as Haptics from "expo-haptics";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore, type Reminder } from "@/src/store";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, radius, tvColors } from "@/src/theme";
+import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { fmtDayTime } from "@/src/utils/time";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
@@ -186,14 +187,13 @@ function RemindersScreenContent() {
               <Ionicons name="menu-outline" size={14} color="#fff" />
               <Text style={styles.returnText}>Drawer</Text>
             </Pressable>
+            <GlassPageTitle page="My Reminders" kicker="Your Watchlist" style={{ marginLeft: 6 }} />
           </View>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{upcoming.length} UPCOMING</Text>
           </View>
         </View>
 
-        <Text style={styles.kicker}>YOUR WATCHLIST</Text>
-        <Text style={styles.title}>My Reminders</Text>
         <Text style={styles.help}>
           Never miss what you’re waiting for. Set reminders from the Guide — cards appear here
           instantly and disappear the moment you cancel.
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 10,
-    backgroundColor: tvColors.canvas,
+    backgroundColor: glass.page,
   },
   topBar: {
     flexDirection: "row",
@@ -247,32 +247,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 1,
+    minWidth: 0,
   },
   returnButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    minHeight: 36,
+    minHeight: 32,
     paddingHorizontal: 12,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: "transparent",
-    backgroundColor: tvColors.panel,
+    borderColor: glass.buttonEdge,
+    backgroundColor: glass.button,
   },
-  returnFocused: {
-    borderColor: "#fff",
-    backgroundColor: tvColors.purpleDeep,
-  },
+  returnFocused: glassFocus,
   returnText: {
     color: "#fff",
     fontFamily: fonts.semibold,
-    fontSize: 11,
+    fontSize: 10,
   },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.pill,
-    backgroundColor: tvColors.purpleDeep,
+    borderWidth: 1,
+    borderColor: tvColors.purpleSoft,
+    backgroundColor: "rgba(124,58,237,0.55)",
   },
   badgeText: {
     color: "#F3E8FF",
@@ -280,24 +281,12 @@ const styles = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 0.6,
   },
-  kicker: {
-    color: tvColors.purpleSoft,
-    fontFamily: fonts.semibold,
-    fontSize: 8,
-    letterSpacing: 1.4,
-  },
-  title: {
-    color: "#fff",
-    fontFamily: fonts.bold,
-    fontSize: 26,
-    marginTop: 2,
-  },
   help: {
-    color: tvColors.textMuted,
+    color: "#D9C8F5",
     fontFamily: fonts.regular,
     fontSize: 10,
-    marginTop: 6,
-    marginBottom: 14,
+    marginTop: 0,
+    marginBottom: 12,
     maxWidth: 720,
   },
   list: {
@@ -309,10 +298,10 @@ const styles = StyleSheet.create({
   emptyWrap: {
     marginTop: 28,
     padding: 18,
-    borderRadius: radius.md,
-    backgroundColor: tvColors.panel,
+    borderRadius: 16,
+    backgroundColor: glass.panelStrong,
     borderWidth: 1,
-    borderColor: tvColors.line,
+    borderColor: glass.edge,
   },
   emptyTitle: {
     color: "#fff",
@@ -321,16 +310,16 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   empty: {
-    color: tvColors.textMuted,
+    color: "#D9C8F5",
     fontFamily: fonts.regular,
     fontSize: 10,
     lineHeight: 16,
   },
   card: {
-    backgroundColor: tvColors.panel,
-    borderRadius: radius.md,
+    backgroundColor: glass.panelStrong,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: tvColors.lineStrong,
+    borderColor: glass.edge,
     padding: 12,
     minHeight: 210,
     justifyContent: "space-between",
@@ -364,7 +353,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
   },
   etaValue: {
-    color: "#FDE68A",
+    color: "#F0ABFC",
     fontFamily: fonts.bold,
   },
   programTitle: {
@@ -374,7 +363,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   description: {
-    color: tvColors.textMuted,
+    color: "#C9B5EE",
     fontFamily: fonts.regular,
     fontSize: 9,
     lineHeight: 13,
@@ -383,21 +372,18 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     marginTop: 12,
-    minHeight: 34,
-    borderRadius: radius.sm,
+    minHeight: 30,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: "transparent",
-    backgroundColor: tvColors.purpleDeep,
+    borderColor: glass.buttonEdge,
+    backgroundColor: glass.button,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     paddingHorizontal: 8,
   },
-  cancelFocused: {
-    borderColor: "#fff",
-    backgroundColor: tvColors.purple,
-  },
+  cancelFocused: glassFocus,
   cancelText: {
     color: "#fff",
     fontFamily: fonts.semibold,

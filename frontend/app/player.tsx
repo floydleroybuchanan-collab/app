@@ -26,7 +26,7 @@ import {
   type PlayerScaleMode,
 } from "@/src/components/StreamPlayer";
 import { useStore } from "@/src/store";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext, setGuideNavigationActive } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
 import { getTvSafeInsets } from "@/src/utils/tvLayout";
@@ -774,9 +774,9 @@ const styles = StyleSheet.create({
   errorOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.54)" },
   errorTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 13 },
   errorText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5 },
-  retry: { minHeight: 31, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.purple },
+  retry: { minHeight: 31, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, borderRadius: 12, borderWidth: 2, borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.85)" },
   retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8.5 },
-  notice: { position: "absolute", top: "47%", alignSelf: "center", maxWidth: "70%", minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 18, backgroundColor: "rgba(10,8,22,0.88)", borderWidth: 1, borderColor: tvColors.lineStrong },
+  notice: { position: "absolute", top: "47%", alignSelf: "center", maxWidth: "70%", minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 18, backgroundColor: "rgba(26,11,51,0.92)", borderWidth: 1, borderColor: glass.edge },
   noticeText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9 },
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0, minHeight: 82, flexDirection: "row", alignItems: "flex-start", paddingBottom: 18 },
   channelIdentity: { flexDirection: "row", alignItems: "center", gap: 9 },
@@ -789,16 +789,16 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "flex-end" },
   programCopy: { maxWidth: "62%" },
   liveLine: { flexDirection: "row", alignItems: "center", gap: 7 },
-  livePill: { backgroundColor: tvColors.purple, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  livePill: { backgroundColor: glass.live, borderColor: glass.liveEdge, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   livePillText: { color: "#fff", fontFamily: fonts.bold, fontSize: 6.5 },
-  programTime: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
+  programTime: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 8 },
   programTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 14, marginTop: 3 },
   descriptionViewport: { height: 26, overflow: "hidden" },
   description: { color: "rgba(255,255,255,0.76)", fontFamily: fonts.regular, fontSize: 8.5, lineHeight: 12, marginTop: 2 },
   progressRow: { height: 20, flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
-  edgeTime: { width: 42, color: "#fff", fontFamily: fonts.medium, fontSize: 7.5 },
+  edgeTime: { width: 42, color: "#F0ABFC", fontFamily: fonts.bold, fontSize: 7.5, letterSpacing: 0.8 },
   track: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },
-  fill: { height: 3, backgroundColor: tvColors.purpleBright },
+  fill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
   controlsRow: { minHeight: 42, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   textControl: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 11, borderRadius: 11, borderWidth: 1, borderColor: "rgba(226,190,255,0.42)", backgroundColor: "rgba(150,90,235,0.20)" },
   controlActive: { backgroundColor: tvColors.purpleDeep },
@@ -807,11 +807,11 @@ const styles = StyleSheet.create({
   iconControl: { width: 44, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "rgba(226,190,255,0.42)", backgroundColor: "rgba(150,90,235,0.20)" },
   pauseControl: { width: 50, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 2, borderColor: "#F0D6FF", backgroundColor: "rgba(168,60,255,0.72)", shadowColor: "#D14DFF", elevation: 14 },
   channelStrip: { gap: 6, paddingTop: 5 },
-  tracksPanel: { maxHeight: 160, marginTop: 6, padding: 8, borderRadius: radius.sm, backgroundColor: "rgba(16,16,30,0.94)", gap: 4 },
-  trackRow: { minHeight: 28, justifyContent: "center", paddingHorizontal: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
+  tracksPanel: { maxHeight: 160, marginTop: 6, padding: 8, borderRadius: 14, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(30,12,60,0.94)", gap: 4 },
+  trackRow: { minHeight: 28, justifyContent: "center", paddingHorizontal: 9, borderRadius: 10, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,18,78,0.60)" },
   trackUnsupported: { opacity: 0.45 },
-  channelCard: { width: 96, minHeight: 54, alignItems: "center", justifyContent: "center", gap: 3, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: "rgba(16,16,30,0.94)", padding: 4 },
-  channelCardActive: { backgroundColor: tvColors.purpleDeep, borderColor: tvColors.purpleBright },
+  channelCard: { width: 96, minHeight: 54, alignItems: "center", justifyContent: "center", gap: 3, borderRadius: 12, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(30,12,60,0.90)", padding: 4 },
+  channelCardActive: { backgroundColor: "rgba(124,58,237,0.55)", borderColor: glass.selectedEdge },
   channelCardName: { color: "#fff", fontFamily: fonts.medium, fontSize: 7.5, textAlign: "center" },
-  focused: { borderColor: "#fff", borderWidth: 2, backgroundColor: "rgba(178,70,255,0.62)", shadowColor: "#D14DFF", elevation: 16 },
+  focused: { ...glassFocus, elevation: 16 },
 });

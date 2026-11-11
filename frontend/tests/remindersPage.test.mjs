@@ -17,7 +17,7 @@ test("My Reminders page uses six-wide cards with live ETA and cancel", async () 
   assert.match(source, /ETA :/);
   assert.match(source, /setInterval\(\(\) => setNowMs\(Date\.now\(\)\), 1000\)/);
   // Match Guide / Live TV canvas — no separate bright page panel or permanent rail.
-  assert.match(source, /backgroundColor: tvColors\.canvas/);
+  assert.match(source, /backgroundColor: glass\.page/);
   assert.doesNotMatch(source, /PAGE_BG|#2B0B4A/);
   assert.match(source, /removeReminder/);
   assert.match(source, /active="\/reminders"/);

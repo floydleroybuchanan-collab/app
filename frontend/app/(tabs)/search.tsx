@@ -11,7 +11,8 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { Channel, Program } from "@/src/api";
 import { useStore } from "@/src/store";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { requestGuideJump } from "@/src/core/guideSearchJump";
 import { searchNativeEpg } from "@/src/nativeEpg";
@@ -224,17 +225,14 @@ function SearchScreenContent() {
             <View onFocus={() => { focusZoneRef.current = "header"; }}>
               <PurpleDrawerButton testID="search-open-drawer" />
             </View>
-            <View>
-              <Text style={styles.kicker}>FIND CHANNELS & PROGRAMS</Text>
-              <Text style={styles.title}>Search</Text>
-            </View>
+            <GlassPageTitle page="Search" kicker="Find Channels & Programs" />
           </View>
         </View>
 
         <View style={styles.body}>
           <View style={styles.keyboardPanel}>
             <View style={styles.searchBox}>
-              <Ionicons name="search" size={15} color={tvColors.textMuted} />
+              <Ionicons name="search" size={15} color={glass.pink} />
               {isTV ? (
                 <View style={styles.caretField} testID="search-input">
                   {!query ? (
@@ -414,33 +412,31 @@ function SearchScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 14 },
-  header: { minHeight: 50, justifyContent: "center", borderBottomWidth: 1, borderBottomColor: tvColors.line },
+  page: { flex: 1, padding: 14, backgroundColor: glass.page },
+  header: { minHeight: 44, justifyContent: "center" },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
-  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  body: { flex: 1, flexDirection: "row", gap: 16, paddingTop: 18 },
+  body: { flex: 1, flexDirection: "row", gap: 16, paddingTop: 10 },
   keyboardPanel: { flex: 1.15, maxWidth: 520 },
-  searchBox: { height: 42, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: tvColors.lineStrong, borderRadius: radius.sm, paddingHorizontal: 10, backgroundColor: tvColors.panel },
+  searchBox: { height: 42, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: glass.edge, borderRadius: 14, paddingHorizontal: 12, backgroundColor: glass.panelStrong },
   input: { flex: 1, color: "#fff", fontFamily: fonts.regular, fontSize: 11, padding: 0 },
   caretField: { flex: 1, minWidth: 0, justifyContent: "center" },
   caretText: { color: "#fff", fontFamily: fonts.regular, fontSize: 11 },
   caret: { color: tvColors.purpleBright, fontFamily: fonts.bold, fontSize: 12 },
   placeholder: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 11 },
   keys: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
-  key: { width: 42, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  navKey: { backgroundColor: "rgba(124,58,237,0.35)" },
+  key: { width: 42, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 9, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,18,78,0.70)" },
+  navKey: { backgroundColor: "rgba(124,58,237,0.42)", borderColor: glass.edge },
   wideKey: { width: 58 },
   spaceKey: { width: 110 },
-  searchKey: { backgroundColor: tvColors.purple, width: 52 },
+  searchKey: { backgroundColor: "rgba(140,70,240,0.85)", borderColor: glass.selectedEdge, width: 52 },
   keyText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9 },
-  resultsPanel: { flex: 0.85, borderLeftWidth: 1, borderLeftColor: tvColors.line, paddingLeft: 18 },
-  resultsTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10.5, marginBottom: 7, marginTop: 4 },
-  suggestion: { minHeight: 31, justifyContent: "center", paddingHorizontal: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent" },
-  suggestionText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
+  resultsPanel: { flex: 0.85, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: glass.panelStrong, paddingHorizontal: 12, paddingTop: 8 },
+  resultsTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 11, marginBottom: 8, marginTop: 4, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
+  suggestion: { minHeight: 31, justifyContent: "center", paddingHorizontal: 10, marginBottom: 5, borderRadius: 10, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)" },
+  suggestionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
   resultsScroll: { paddingBottom: 20 },
   resultBlock: { marginBottom: 6, gap: 5, flexDirection: "row", alignItems: "stretch" },
-  resultRow: { flex: 1, minWidth: 0, minHeight: 42, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 6, backgroundColor: tvColors.panel },
+  resultRow: { flex: 1, minWidth: 0, minHeight: 42, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 2, borderColor: glass.edgeSoft, paddingHorizontal: 6, backgroundColor: "rgba(36,16,70,0.55)" },
   guideAction: {
     width: 104,
     minHeight: 42,
@@ -449,17 +445,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 5,
     paddingHorizontal: 7,
-    borderRadius: 5,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: "transparent",
-    backgroundColor: tvColors.panelRaised,
+    borderColor: glass.buttonEdge,
+    backgroundColor: glass.button,
   },
   guideActionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8, textAlign: "center" },
   resultName: { flex: 1, color: "#fff", fontFamily: fonts.medium, fontSize: 9 },
-  resultSub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, marginTop: 2 },
+  resultSub: { color: "#C9B5EE", fontFamily: fonts.regular, fontSize: 7.5, marginTop: 2 },
   noResults: { alignItems: "center", gap: 8, paddingTop: 45 },
   noResultsText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: glassFocus,
 });
 
 export default function SearchScreen() {

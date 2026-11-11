@@ -11,7 +11,8 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { nowNext } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 
@@ -43,7 +44,7 @@ const Card = memo(function Card({
       testID={`collection-${channel.id}`}
     >
       <View style={styles.art}>
-        <LinearGradient colors={["rgba(124,58,237,0.44)", "#111020"]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={["rgba(168,85,247,0.46)", "rgba(30,12,60,0.96)"]} style={StyleSheet.absoluteFill} />
         <ChannelLogo name={channel.name} logo={channel.logo} disabled={!logos} size={58} />
       </View>
       <Text numberOfLines={2} style={styles.name}>{channel.name}</Text>
@@ -104,10 +105,7 @@ export function PurpleChannelCollection({
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <PurpleDrawerButton testID={`${active.slice(1)}-open-drawer`} />
-            <View>
-              <Text style={styles.kicker}>{subtitle.toUpperCase()}</Text>
-              <Text style={styles.title}>{title}</Text>
-            </View>
+            <GlassPageTitle page={title} kicker={subtitle} />
           </View>
           <Text style={styles.count}>{items.length} available channels</Text>
         </View>
@@ -169,20 +167,18 @@ export function PurpleChannelCollection({
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 14 },
-  header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
-  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },
-  section: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11.5, marginTop: 10, marginBottom: 7 },
-  grid: { paddingBottom: 20 },
-  row: { gap: 8, marginBottom: 8 },
-  card: { flex: 1, minWidth: 0, maxWidth: 220, minHeight: 158, backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", padding: 6 },
-  art: { height: 96, borderRadius: 5, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  name: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9.5, lineHeight: 12, marginTop: 6, minHeight: 24 },
-  program: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, marginTop: 2 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  page: { flex: 1, padding: 14, backgroundColor: glass.page },
+  header: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 },
+  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 9 },
+  section: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, marginTop: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
+  grid: { paddingBottom: 20, paddingTop: 2 },
+  row: { gap: 9, marginBottom: 9 },
+  card: { flex: 1, minWidth: 0, maxWidth: 220, minHeight: 158, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 6 },
+  art: { height: 96, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  name: { color: "#fff", fontFamily: fonts.bold, fontSize: 9.5, lineHeight: 12, marginTop: 6, minHeight: 24 },
+  program: { color: "#C9B5EE", fontFamily: fonts.medium, fontSize: 7.5, letterSpacing: 0.4, marginTop: 2 },
+  focused: glassFocus,
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 40 },
   emptyTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 14 },
   emptyText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, textAlign: "center", maxWidth: 420 },
@@ -193,10 +189,10 @@ const styles = StyleSheet.create({
     gap: 7,
     justifyContent: "center",
     paddingHorizontal: 14,
-    borderRadius: 5,
-    backgroundColor: tvColors.purple,
+    borderRadius: 12,
+    backgroundColor: "rgba(140,70,240,0.80)",
     borderWidth: 2,
-    borderColor: "transparent",
+    borderColor: glass.selectedEdge,
     marginTop: 4,
   },
   emptyButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },

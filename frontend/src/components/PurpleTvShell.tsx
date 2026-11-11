@@ -1,8 +1,9 @@
-import { MediaLabArt, MediaLabBackdrop } from "@/src/components/MediaLabBrand";
+import { MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
+  Image,
   DeviceEventEmitter,
   findNodeHandle,
   Platform,
@@ -19,7 +20,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
-import { fonts, radius, spacing, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, radius, spacing, tvColors } from "@/src/theme";
 import { combineTvEdgeInsets, getTvSafeInsets } from "@/src/utils/tvLayout";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { useStore } from "@/src/store";
@@ -46,7 +47,8 @@ type Route =
 type NavItem = {
   route: Route;
   label: string;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
+  /** Glass artwork shared by the rail and the drawer (one decoded bitmap each). */
+  art: number;
 };
 
 type FooterAction = {
@@ -77,17 +79,23 @@ export type PurpleGuideGroup = {
 };
 
 const NAV: NavItem[] = [
-  { route: "/", label: "Live TV", icon: "tv-outline" },
-  { route: "/guide", label: "TV Guide", icon: "calendar-outline" },
-  { route: "/vod", label: "Video OnDemand", icon: "play-circle-outline" },
-  { route: "/favorites", label: "Favorites", icon: "heart-outline" },
-  { route: "/reminders", label: "My Reminders", icon: "notifications-outline" },
-  { route: "/channels", label: "Channels", icon: "list-outline" },
-  { route: "/movies", label: "Movies", icon: "film-outline" },
-  { route: "/series", label: "Series", icon: "albums-outline" },
-  { route: "/search", label: "Search", icon: "search-outline" },
-  { route: "/settings", label: "Settings", icon: "settings-outline" },
+  { route: "/", label: "Live TV", art: require("../../assets/glass/nav_home.png") },
+  { route: "/guide", label: "TV Guide", art: require("../../assets/glass/settings_epg.png") },
+  { route: "/vod", label: "Video OnDemand", art: require("../../assets/glass/nav_movies.png") },
+  { route: "/favorites", label: "Favorites", art: require("../../assets/glass/nav_favorites.png") },
+  { route: "/reminders", label: "My Reminders", art: require("../../assets/glass/settings_notifications.png") },
+  { route: "/channels", label: "Channels", art: require("../../assets/glass/settings_provider.png") },
+  { route: "/movies", label: "Movies", art: require("../../assets/glass/vod_set_playback.webp") },
+  { route: "/series", label: "Series", art: require("../../assets/glass/nav_shows.png") },
+  { route: "/search", label: "Search", art: require("../../assets/glass/nav_search.png") },
+  { route: "/settings", label: "Settings", art: require("../../assets/glass/settings_gear.png") },
 ];
+const RAIL_CROWN = require("../../assets/medialab/medialab_crown.png");
+
+/** Decorative glass icon: never a remote stop (Android maps Image accessible to focusable). */
+function NavArt({ source, size }: { source: number; size: number }) {
+  return <Image accessible={false} source={source} fadeDuration={0} resizeMode="contain" style={{ width: size, height: size }} />;
+}
 
 // Each route renders its own PurpleTvShell. Keep focus identity outside that
 // short-lived component so returning from VOD/Guide preserves the cursor.
@@ -233,10 +241,6 @@ export function usePurpleTvDrawer(): DrawerContextValue {
   const value = useContext(DrawerContext);
   if (!value) throw new Error("usePurpleTvDrawer must be used inside PurpleTvDrawerProvider");
   return value;
-}
-
-function SmallBrand() {
-  return <View pointerEvents="none" style={{ alignItems: "center", marginBottom: 8 }}><MediaLabArt kind="wordmark" width={122} height={60} /></View>;
 }
 
 function WatchingDot({ testID }: { testID?: string }) {
@@ -683,14 +687,11 @@ export function PurpleTvShell({
         testID={`purple-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <View style={styles.navIconWrap}>
-          <Ionicons
-            name={selected ? (item.icon.replace("-outline", "") as any) : item.icon}
-            size={15}
-            color={selected ? "#fff" : tvColors.textMuted}
-          />
+          <NavArt source={item.art} size={21} />
           {showWatching ? <WatchingDot testID="purple-nav-live-watching" /> : null}
         </View>
         <Text numberOfLines={1} style={[styles.navText, selected && styles.navTextSelected]}>{item.label}</Text>
+        {selected ? <View style={styles.navCurrentDot} /> : null}
       </Pressable>
     );
   };
@@ -735,7 +736,6 @@ export function PurpleTvShell({
           setDrawerAutoFocus(false);
           setDrawerPreferredRoute(null);
         }}>
-          <SmallBrand />
 
           {contextActions?.length ? (
             <View style={styles.contextActions}>
@@ -855,8 +855,8 @@ export function PurpleTvShell({
           trapFocusLeft
           testID="purple-icon-rail"
         >
-          <MediaLabBackdrop quiet /><View style={styles.iconRailBrand}>
-            <MediaLabArt kind="rail" width={43} height={59} />
+          <MediaLabBackdrop quiet /><View style={styles.iconRailBrand} pointerEvents="none">
+            <Image accessible={false} accessibilityLabel="Charming MediaLab" source={RAIL_CROWN} fadeDuration={0} resizeMode="contain" style={styles.iconRailCrown} />
           </View>
           <View style={styles.iconRailItems}>
             {NAV.map((item) => {
@@ -882,11 +882,7 @@ export function PurpleTvShell({
                   ]}
                   testID={`purple-icon-rail-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                 >
-                  <Ionicons
-                    name={selected ? (item.icon.replace("-outline", "") as any) : item.icon}
-                    size={17}
-                    color={selected ? "#fff" : tvColors.textMuted}
-                  />
+                  <NavArt source={item.art} size={20} />
                   {item.route === "/" && isWatching ? <WatchingDot /> : null}
                 </Pressable>
               );
@@ -933,7 +929,7 @@ export function PurpleTvShell({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", backgroundColor: tvColors.canvas, overflow: "hidden" },
+  root: { flex: 1, flexDirection: "row", backgroundColor: glass.page, overflow: "hidden" },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
   railPlaceholder: { width: PURPLE_ICON_RAIL_WIDTH, height: "100%", flexShrink: 0 },
   guideDrawerLayer: { position: "absolute", zIndex: 15 },
@@ -942,38 +938,38 @@ const styles = StyleSheet.create({
     height: "100%",
     flexShrink: 0,
     alignItems: "center",
-    backgroundColor: "#150B21",
+    backgroundColor: glass.rail,
     borderRightWidth: 1,
-    borderRightColor: tvColors.line,
+    borderRightColor: glass.edgeSoft,
     paddingTop: 10,
     paddingBottom: 8,
   },
+  iconRailCrown: { width: 44, height: 50 },
   iconRailBrand: {
     width: 48,
-    height: 62,
+    height: 56,
     borderRadius: 0,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
     marginBottom: 4,
   },
-  iconRailItems: { flex: 1, minHeight: 0, alignItems: "center", gap: 2 },
+  iconRailItems: { flex: 1, minHeight: 0, alignItems: "center", gap: 3 },
   iconRailItem: {
-    width: 36,
-    minHeight: 31,
-    borderRadius: 6,
+    width: 38,
+    minHeight: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "transparent",
-    borderLeftWidth: 3,
-    borderLeftColor: "transparent",
   },
-  iconRailItemSelected: { backgroundColor: tvColors.purple, borderLeftColor: tvColors.purpleBright },
-  iconRailItemFocused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  iconRailItemSelected: { backgroundColor: "rgba(140,70,240,0.72)", borderColor: glass.selectedEdge, shadowColor: glass.glow, elevation: 8 },
+  iconRailItemFocused: glassFocus,
   iconRailPower: {
-    width: 36,
-    minHeight: 31,
+    width: 38,
+    minHeight: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -984,9 +980,9 @@ const styles = StyleSheet.create({
   sidebar: {
     width: PURPLE_SIDEBAR_WIDTH,
     height: "100%",
-    backgroundColor: "#150B21",
+    backgroundColor: glass.drawer,
     borderRightWidth: 1,
-    borderRightColor: tvColors.line,
+    borderRightColor: glass.edge,
     paddingHorizontal: 10,
     paddingTop: 12,
     paddingBottom: 8,
@@ -1055,21 +1051,22 @@ const styles = StyleSheet.create({
   navSections: { flex: 1, minHeight: 0, overflow: "hidden" },
   primaryNavSection: { flex: 1, minHeight: 0, overflow: "hidden" },
   primaryNavList: { flex: 1, minHeight: 0 },
-  navListContent: { gap: 2, paddingBottom: 2 },
+  navListContent: { gap: 3, paddingBottom: 2 },
   navRow: {
-    minHeight: 34,
-    borderRadius: radius.sm,
+    minHeight: 35,
+    borderRadius: 11,
     borderWidth: 2,
     borderColor: "transparent",
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
+    gap: 10,
     paddingHorizontal: 9,
   },
-  navRowSelected: { backgroundColor: tvColors.purple },
-  navRowActiveMark: { borderLeftWidth: 3, borderLeftColor: tvColors.purpleBright, paddingLeft: 6 },
-  navRowFocused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
-  navIconWrap: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
+  navRowSelected: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
+  navRowActiveMark: { borderWidth: 1 },
+  navRowFocused: glassFocus,
+  navIconWrap: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
+  navCurrentDot: { width: 5, height: 5, borderRadius: 3, marginLeft: "auto", backgroundColor: glass.pink, shadowColor: glass.glow, elevation: 4 },
   watchingDot: {
     position: "absolute",
     top: -1,
@@ -1079,23 +1076,25 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: tvColors.purpleBright,
   },
-  navText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 10.5 },
+  navText: { color: "#E9DCFF", fontFamily: fonts.medium, fontSize: 11.5 },
   navTextSelected: { color: "#fff", fontFamily: fonts.semibold },
   sidebarFooter: {
     flexShrink: 0,
     borderTopWidth: 1,
-    borderTopColor: tvColors.line,
+    borderTopColor: glass.edgeSoft,
     paddingTop: 6,
-    backgroundColor: "#150B21",
+    backgroundColor: glass.drawer,
   },
   sidebarFooterRow: { flexDirection: "row", gap: 4 },
   power: {
     minHeight: 30,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: "transparent",
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: glass.buttonEdge,
+    backgroundColor: glass.button,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingHorizontal: 9,
   },
@@ -1115,6 +1114,6 @@ const styles = StyleSheet.create({
   },
   footerCompactText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
   footerDisabled: { opacity: 0.5 },
-  content: { flex: 1, backgroundColor: tvColors.canvas },
+  content: { flex: 1, backgroundColor: glass.page },
   headerRight: { position: "absolute", top: 10, right: spacing.lg },
 });

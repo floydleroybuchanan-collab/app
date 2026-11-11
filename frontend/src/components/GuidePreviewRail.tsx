@@ -13,7 +13,7 @@ import {
   noteGuidePreviewFocus,
   registerGuidePreviewNode,
 } from "@/src/utils/guidePreviewFocus";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { fmtTime, progressPct } from "@/src/utils/time";
 
 type Props = {
@@ -222,18 +222,19 @@ export function GuidePreviewRail({
 }
 
 const styles = StyleSheet.create({
-  panel: { height: 174, flexShrink: 0, flexDirection: "row", alignItems: "stretch", backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.line, overflow: "visible" },
-  previewColumn: { width: 292, flexShrink: 0, padding: 7, justifyContent: "center", borderRightWidth: 1, borderRightColor: tvColors.line },
-  preview: { width: "100%", aspectRatio: 16 / 9, maxHeight: 158, flexShrink: 0, backgroundColor: "#05050B", overflow: "visible" },
-  fallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: tvColors.purpleDeep, gap: 6, paddingHorizontal: 8 },
+  // Top of the screen: flush top edge, rounded glass bottom corners.
+  panel: { height: 174, flexShrink: 0, flexDirection: "row", alignItems: "stretch", backgroundColor: "#22104A", borderBottomLeftRadius: 14, borderBottomRightRadius: 14, borderWidth: 1, borderTopWidth: 0, borderColor: glass.edge, overflow: "visible" },
+  previewColumn: { width: 292, flexShrink: 0, padding: 7, justifyContent: "center", borderRightWidth: 1, borderRightColor: glass.edgeSoft },
+  preview: { width: "100%", aspectRatio: 16 / 9, maxHeight: 158, flexShrink: 0, backgroundColor: "#0C0520", borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.22)", overflow: "hidden" },
+  fallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#2A1060", gap: 6, paddingHorizontal: 8 },
   fallbackHint: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, textAlign: "center" },
-  liveTag: { position: "absolute", left: 6, bottom: 6, backgroundColor: "rgba(124,58,237,0.92)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+  liveTag: { position: "absolute", left: 6, bottom: 6, backgroundColor: "rgba(124,58,237,0.92)", borderColor: tvColors.purpleSoft, borderWidth: 1, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 },
   liveTagText: { color: "#fff", fontFamily: fonts.bold, fontSize: 6 },
-  codecChip: { position: "absolute", right: 6, top: 6, maxWidth: "70%", backgroundColor: "rgba(0,0,0,0.72)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+  codecChip: { position: "absolute", right: 6, top: 6, maxWidth: "70%", backgroundColor: "rgba(10,4,24,0.78)", borderColor: "rgba(255,255,255,0.35)", borderWidth: 1, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 },
   codecText: { color: "#fff", fontFamily: fonts.medium, fontSize: 7 },
-  hiddenPreview: { flex: 1, minHeight: 80, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 2, borderColor: "transparent", borderRadius: 5 },
+  hiddenPreview: { flex: 1, minHeight: 80, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderColor: glass.buttonEdge, backgroundColor: glass.button, borderRadius: 10 },
   hiddenPreviewText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
-  actionGrid: { width: 138, flexShrink: 0, padding: 7, borderRightWidth: 1, borderRightColor: tvColors.line },
+  actionGrid: { width: 138, flexShrink: 0, padding: 7, borderRightWidth: 1, borderRightColor: glass.edgeSoft },
   actionColumn: { flex: 1, minWidth: 0, gap: 3 },
   copy: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 9 },
   channelName: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 10 },
@@ -241,15 +242,15 @@ const styles = StyleSheet.create({
   nowNextRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
   timeText: { flex: 1, minWidth: 0, color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9 },
   endsIn: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 9 },
-  progressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 2, overflow: "hidden", marginTop: 7 },
-  progressFill: { height: 4, backgroundColor: tvColors.purpleBright },
+  progressTrack: { height: 4, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 2, overflow: "hidden", marginTop: 7 },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: glass.pink },
   nextTitle: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9, marginTop: 5 },
-  descLabel: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 0.7, marginTop: 7, marginBottom: 3 },
+  descLabel: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.6, marginTop: 7, marginBottom: 3 },
   description: { color: "rgba(255,255,255,0.86)", fontFamily: fonts.regular, fontSize: 9.5, lineHeight: 13 },
-  watchButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 4 },
+  watchButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: "rgba(140,70,240,0.72)", borderRadius: 9, borderWidth: 1, borderColor: glass.selectedEdge, paddingHorizontal: 4 },
   watchText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 7.5 },
-  secondaryButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.panelRaised, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 3 },
+  secondaryButton: { flex: 1, minWidth: 0, minHeight: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: glass.button, borderRadius: 9, borderWidth: 1, borderColor: glass.buttonEdge, paddingHorizontal: 3 },
   secondaryText: { color: "#fff", fontFamily: fonts.medium, fontSize: 7.2 },
   disabledButton: { opacity: 0.45 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: glassFocus,
 });

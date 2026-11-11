@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useIconRailFocusBoundary, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus } from "@/src/theme";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 
 /** Consistent, explicit Drawer entry for full-bleed TV pages. */
@@ -66,23 +66,20 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 36,
+    minHeight: 32,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: "transparent",
-    backgroundColor: tvColors.panel,
+    borderColor: glass.buttonEdge,
+    backgroundColor: glass.button,
   },
-  focused: {
-    borderColor: "#fff",
-    backgroundColor: tvColors.purpleDeep,
-  },
+  focused: glassFocus,
   text: {
     color: "#fff",
     fontFamily: fonts.semibold,
-    fontSize: 11,
+    fontSize: 10,
   },
 });

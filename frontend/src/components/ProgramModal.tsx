@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import dayjs from "dayjs";
-import { colors, fonts, radius, spacing } from "@/src/theme";
+import { colors, fonts, glass, radius, spacing } from "@/src/theme";
 import { useStore } from "@/src/store";
 import { reminderKey } from "@/src/utils/time";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
@@ -187,42 +187,42 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(6,2,16,0.62)",
     justifyContent: "flex-end",
   },
   card: {
-    backgroundColor: colors.surfaceSecondary,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
+    backgroundColor: glass.drawer,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.xl,
     paddingBottom: spacing.xxxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: glass.edge,
     gap: spacing.sm,
   },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  channel: { color: colors.brandSecondary, fontFamily: fonts.semibold, fontSize: 13 },
-  title: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 24 },
+  channel: { color: "#E9B8FF", fontFamily: fonts.semibold, fontSize: 13 },
+  title: { color: colors.onSurface, fontFamily: fonts.bold, fontSize: 24 },
   time: { color: colors.onSurfaceSecondary, fontFamily: fonts.medium, fontSize: 13 },
-  category: { color: colors.onSurfaceTertiary, fontFamily: fonts.regular, fontSize: 12 },
+  category: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 1.2 },
   descBox: { maxHeight: 138, marginTop: 4 },
-  desc: { color: colors.onSurfaceTertiary, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
+  desc: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: 13, lineHeight: 19 },
   msg: { color: colors.success, fontFamily: fonts.medium, fontSize: 12, marginTop: 4 },
   actions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
   closeBtn: { padding: 4, borderRadius: radius.sm },
-  btnFocused: { borderWidth: 2, borderColor: "#fff" },
+  btnFocused: { borderWidth: 2, borderColor: "#fff", backgroundColor: glass.focus, shadowColor: glass.glow, elevation: 14 },
   btn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: 14,
     flex: 1,
   },
-  watchBtn: { backgroundColor: colors.brand },
+  watchBtn: { backgroundColor: "rgba(140,70,240,0.85)", borderWidth: 1, borderColor: glass.selectedEdge },
   watchText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 14 },
-  remindBtn: { backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border },
+  remindBtn: { backgroundColor: glass.button, borderWidth: 1, borderColor: glass.buttonEdge },
   remindCancel: { borderColor: "#FACC15", backgroundColor: "rgba(250,204,21,0.12)" },
   remindText: { color: colors.onSurface, fontFamily: fonts.semibold, fontSize: 14 },
   remindCancelText: { color: "#FACC15" },

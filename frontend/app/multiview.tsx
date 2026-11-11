@@ -8,7 +8,7 @@ import { multiviewLayout } from "@/src/core/multiviewLayout";
 import { useMultiviewPreferences, loadMultiviewPreferences, getMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import { useStore } from "@/src/store";
 import type { Channel } from "@/src/api";
-import { tvColors } from "@/src/theme";
+import { fonts, glass } from "@/src/theme";
 import { multiview, listenMultiview, type MultiviewEvent } from "@/src/multiview";
 import { MAX_MULTIVIEW_PANES, multiviewAdmission, nextAudiblePane, type MultiviewPane } from "@/src/core/multiviewPolicy";
 import { beginSession, isSessionCurrent, registerSessionStop, stopAllPlaybackSessions, stopFullscreenSession } from "@/src/core/playbackSession";
@@ -331,15 +331,16 @@ export default function MultiviewScreen() {
 }
 const styles = StyleSheet.create({
   page:{flex:1,backgroundColor:"#000"},grid:{flex:1,overflow:"hidden"},pane:{position:"absolute",backgroundColor:"#000",overflow:"hidden"},
-  outline:{...StyleSheet.absoluteFillObject,borderWidth:1,borderColor:tvColors.purple,zIndex:2},
-  channel:{position:"absolute",left:0,right:0,top:0,color:"#fff",fontSize:16,padding:8,backgroundColor:"#100b20bb"},
-  status:{position:"absolute",left:12,right:12,top:"40%",color:"#ffcf90",fontSize:16,backgroundColor:"#100b20dd",padding:12},
-  title:{color:"#fff",fontSize:22,fontWeight:"700",marginBottom:8},text:{color:"#fff",fontSize:17},notice:{color:"#d0c7dc",fontSize:14},
-  hint:{position:"absolute",bottom:8,left:12,right:12,color:"#fff",fontSize:14,padding:6,backgroundColor:"#100b20bb"},
-  menu:{position:"absolute",right:12,top:12,bottom:12,width:"40%",maxWidth:440,minWidth:260,padding:16,backgroundColor:"#140e22f5",borderRadius:12,borderColor:tvColors.purple,borderWidth:1},
-  picker:{position:"absolute",right:0,top:0,bottom:0,width:"46%",minWidth:300,maxWidth:640,padding:16,gap:8,backgroundColor:"#140e22f5"},
+  // Neon-glass overlays; pane geometry is unchanged.
+  outline:{...StyleSheet.absoluteFillObject,borderWidth:3,borderColor:"#F6E9FF",zIndex:2},
+  channel:{position:"absolute",left:0,right:0,top:0,color:"#fff",fontSize:16,fontFamily:fonts.semibold,padding:8,backgroundColor:"rgba(26,11,51,0.82)"},
+  status:{position:"absolute",left:12,right:12,top:"40%",color:"#F0ABFC",fontSize:16,backgroundColor:"rgba(26,11,51,0.90)",padding:12,borderRadius:12},
+  title:{color:"#fff",fontSize:22,fontFamily:fonts.bold,marginBottom:8},text:{color:"#fff",fontSize:17,fontFamily:fonts.medium},notice:{color:"#D9C8F5",fontSize:14},
+  hint:{position:"absolute",bottom:8,left:12,right:12,color:"#fff",fontSize:14,padding:8,borderRadius:12,borderWidth:1,borderColor:glass.edge,backgroundColor:"rgba(26,11,51,0.86)"},
+  menu:{position:"absolute",right:12,top:12,bottom:12,width:"40%",maxWidth:440,minWidth:260,padding:16,backgroundColor:"rgba(30,12,60,0.97)",borderRadius:18,borderColor:glass.edge,borderWidth:1},
+  picker:{position:"absolute",right:0,top:0,bottom:0,width:"46%",minWidth:300,maxWidth:640,padding:16,gap:8,backgroundColor:"rgba(30,12,60,0.98)",borderTopLeftRadius:18,borderBottomLeftRadius:18,borderLeftWidth:1,borderColor:glass.edge},
   filterRow:{flexDirection:"row",flexWrap:"wrap",gap:4},
-  button:{paddingHorizontal:12,paddingVertical:10,borderWidth:2,borderColor:"transparent",borderRadius:8,marginBottom:4,backgroundColor:"#272035"},
-  focus:{borderColor:tvColors.purple,backgroundColor:"#403052"},disabled:{opacity:.4},
-  search:{backgroundColor:"#272035",color:"#fff",padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8,fontSize:17},row:{padding:12,borderWidth:2,borderColor:"transparent",borderRadius:8}
+  button:{paddingHorizontal:12,paddingVertical:10,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,marginBottom:4,backgroundColor:"rgba(40,18,78,0.70)"},
+  focus:{borderColor:"#FFFFFF",backgroundColor:glass.focus,shadowColor:glass.glow,elevation:12},disabled:{opacity:.4},
+  search:{backgroundColor:"rgba(20,8,42,0.80)",color:"#fff",padding:12,borderWidth:2,borderColor:glass.edge,borderRadius:12,fontSize:17},row:{padding:12,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,marginBottom:4,backgroundColor:"rgba(36,16,70,0.55)"}
 });

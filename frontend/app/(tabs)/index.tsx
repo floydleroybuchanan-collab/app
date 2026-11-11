@@ -1,4 +1,4 @@
-import { MediaLabArt } from "@/src/components/MediaLabBrand";
+import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -12,7 +12,7 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore } from "@/src/store";
 import { Channel } from "@/src/api";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
@@ -60,7 +60,7 @@ function RecentChannelCard({
     >
       <View style={styles.channelCardArt}>
         <LinearGradient
-          colors={["rgba(124,58,237,0.40)", "rgba(16,16,30,0.96)"]}
+          colors={["rgba(168,85,247,0.38)", "rgba(30,12,60,0.96)"]}
           style={StyleSheet.absoluteFill}
         />
         <ChannelLogo name={channel.name} logo={channel.logo} disabled={!isFocused || !channelLogos} size={46} />
@@ -196,23 +196,23 @@ function LiveTvHomeScreenContent() {
     <PurpleTvShell active="/">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
         <View style={styles.topbar}>
-          <View style={{ flex: 1 }}><MediaLabArt width={420} height={110} /></View>
+          <GlassPageTitle page="Live TV" style={{ flex: 1 }} />
           <View style={styles.topRight}>
             <Pressable
               onPress={() => router.replace("/search" as any)}
               style={({ focused }: any) => [styles.searchHit, focused && styles.focused]}
               testID="home-open-search"
             >
-              <Ionicons name="search-outline" size={16} color={tvColors.textMuted} />
+              <Ionicons name="search-outline" size={14} color="#fff" />
+              <Text style={styles.searchText}>Search</Text>
             </Pressable>
             <Text style={styles.clock}>{fmtTime(now.toISOString())}</Text>
-            <View style={styles.statusDot} />
           </View>
         </View>
 
         <View style={styles.hero}>
           <LinearGradient
-            colors={["rgba(124,58,237,0.18)", "rgba(12,10,27,0.80)", "#090914"]}
+            colors={["rgba(168,85,247,0.34)", "rgba(52,20,104,0.86)", "#1A0B38"]}
             start={{ x: 1, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={StyleSheet.absoluteFill}
@@ -327,44 +327,44 @@ function LiveTvHomeScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 18, paddingBottom: 26, gap: 12 },
-  topbar: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  page: { padding: 18, paddingBottom: 26, gap: 12, flexGrow: 1, backgroundColor: glass.page },
+  topbar: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   eyebrow: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.2, marginTop: 2 },
   pageTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 28 },
   topRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  clock: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
-  statusDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: tvColors.purpleBright },
-  hero: { minHeight: 224, flexDirection: "row", borderRadius: radius.md, borderWidth: 1, borderColor: tvColors.line, overflow: "hidden" },
+  clock: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12 },
+  hero: { minHeight: 224, flexDirection: "row", borderRadius: 16, borderWidth: 1, borderColor: glass.edge, overflow: "hidden" },
   heroCopy: { flex: 1.1, padding: 18, justifyContent: "center", alignItems: "flex-start" },
-  heroLabel: { color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 0.9 },
+  heroLabel: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.8 },
   heroTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 22, marginTop: 4, maxWidth: "95%" },
   heroMetaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 },
-  livePill: { backgroundColor: tvColors.purple, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  livePill: { backgroundColor: glass.live, borderColor: glass.liveEdge, borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   livePillText: { color: "#fff", fontFamily: fonts.bold, fontSize: 7 },
   heroMeta: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 10 },
   heroProgram: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, marginTop: 6, maxWidth: "94%" },
   heroDescription: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9.5, lineHeight: 13, marginTop: 4, maxWidth: "94%" },
-  heroProgressTrack: { width: "70%", height: 3, backgroundColor: "rgba(255,255,255,0.12)", marginTop: 8, borderRadius: 2, overflow: "hidden" },
-  heroProgressFill: { height: 3, backgroundColor: tvColors.purpleBright },
-  primaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, borderRadius: 6, backgroundColor: tvColors.purple, borderWidth: 2, borderColor: "transparent", marginTop: 11 },
+  heroProgressTrack: { width: "70%", height: 3, backgroundColor: "rgba(255,255,255,0.14)", marginTop: 8, borderRadius: 2, overflow: "hidden" },
+  heroProgressFill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
+  primaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 11 },
   primaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  secondaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, borderRadius: 6, backgroundColor: tvColors.panelRaised, borderWidth: 2, borderColor: "transparent", marginTop: 8 },
+  secondaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: glass.button, borderWidth: 2, borderColor: glass.buttonEdge, marginTop: 8 },
   secondaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  searchHit: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
-  heroArtwork: { flex: 0.9, alignItems: "center", justifyContent: "center", gap: 7, overflow: "hidden", borderWidth: 2, borderColor: "transparent", margin: 8, borderRadius: radius.sm },
-  heroArtworkFocused: { borderColor: "#fff", backgroundColor: "rgba(124,58,237,0.16)" },
-  heroGlow: { position: "absolute", width: 205, height: 205, borderRadius: 103, backgroundColor: "rgba(124,58,237,0.18)" },
+  searchHit: { minHeight: 30, flexDirection: "row", gap: 6, paddingHorizontal: 12, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  searchText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
+  heroArtwork: { flex: 0.9, alignItems: "center", justifyContent: "center", gap: 7, overflow: "hidden", borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,14,84,0.55)", margin: 10, borderRadius: 14 },
+  heroArtworkFocused: { borderColor: "#fff", backgroundColor: "rgba(124,58,237,0.30)" },
+  heroGlow: { position: "absolute", width: 205, height: 205, borderRadius: 103, backgroundColor: "rgba(168,85,247,0.26)" },
   heroArtName: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, maxWidth: "84%" },
   heroArtNow: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, maxWidth: "84%" },
   sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 },
-  sectionTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 13 },
-  sectionHint: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5 },
-  recentRow: { gap: 9, paddingBottom: 2 },
-  channelCard: { width: 150, minHeight: 116, backgroundColor: tvColors.panel, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", padding: 7 },
-  channelCardArt: { height: 64, borderRadius: 5, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6 },
+  sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 13, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
+  sectionHint: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: 8.5 },
+  recentRow: { gap: 9, paddingBottom: 2, paddingTop: 2 },
+  channelCard: { width: 150, minHeight: 116, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
+  channelCardArt: { height: 64, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6 },
   channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9.5 },
   channelProgram: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, marginTop: 2 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: glassFocus,
 });
 
 export default function LiveTvHomeScreen() {

@@ -12,7 +12,8 @@ import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { addTvLongPressListener } from "@/src/utils/tvRemote";
@@ -74,7 +75,7 @@ const ChannelListRow = memo(function ChannelListRow({
           {current ? `${fmtTime(current.start)}${current.stop ? ` - ${fmtTime(current.stop)}` : ""}` : "LIVE"}
         </Text>
         <View style={styles.heart} pointerEvents="none">
-          <Ionicons name={favorite ? "heart" : "heart-outline"} size={17} color={favorite ? tvColors.purpleBright : tvColors.textMuted} />
+          <Ionicons name={favorite ? "heart" : "heart-outline"} size={17} color={favorite ? glass.pink : "#C9B5EE"} />
         </View>
       </Pressable>
       {editMode ? (
@@ -215,10 +216,7 @@ function ChannelsScreenContent() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <PurpleDrawerButton testID="channels-open-drawer" />
-            <View>
-              <Text style={styles.kicker}>LIVE TV</Text>
-              <Text style={styles.title}>{editMode ? "Arrange Guide Channels" : "All Channels"}</Text>
-            </View>
+            <GlassPageTitle page={editMode ? "Arrange Guide Channels" : "Channels"} kicker="Live TV" />
           </View>
           <View style={styles.headerRight}>
             <Text style={styles.count}>{ordered.length} channels</Text>
@@ -245,7 +243,7 @@ function ChannelsScreenContent() {
               style={({ focused }: any) => [styles.searchHit, focused && styles.focused]}
               testID="channels-open-search"
             >
-              <Ionicons name="search-outline" size={16} color={tvColors.textMuted} />
+              <Ionicons name="search-outline" size={15} color="#fff" />
             </Pressable>
           </View>
         </View>
@@ -280,6 +278,7 @@ function ChannelsScreenContent() {
             windowSize={7}
             removeClippedSubviews={false}
             showsVerticalScrollIndicator={false}
+            style={styles.listPanel}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => (
               <ChannelListRow
@@ -306,40 +305,40 @@ function ChannelsScreenContent() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 14 },
-  header: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, paddingBottom: 8 },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
-  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
+  page: { flex: 1, padding: 14, backgroundColor: glass.page },
+  header: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 8 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },
-  headerAction: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  headerActionActive: { backgroundColor: tvColors.purple },
-  headerActionText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8 },
-  searchHit: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" },
-  editHint: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8, lineHeight: 11, paddingVertical: 6 },
+  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 9 },
+  headerAction: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  headerActionActive: { backgroundColor: "rgba(140,70,240,0.80)", borderColor: glass.selectedEdge },
+  headerActionText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8.5 },
+  searchHit: { width: 34, height: 30, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  editHint: { color: glass.kicker, fontFamily: fonts.medium, fontSize: 8, lineHeight: 11, paddingVertical: 6 },
   empty: { flex: 1, alignItems: "flex-start", justifyContent: "center", gap: 8, paddingHorizontal: 4 },
   emptyTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 14 },
   emptyMessage: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, maxWidth: 420 },
-  retryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, borderRadius: 6, backgroundColor: tvColors.purple, borderWidth: 2, borderColor: "transparent", marginTop: 6 },
+  retryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 6 },
   retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  list: { paddingTop: 7, paddingBottom: 20 },
-  rowShell: { flexDirection: "row", alignItems: "stretch", gap: 6, marginBottom: 1 },
-  row: { flex: 1, minWidth: 0, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 2, borderColor: "transparent", borderBottomColor: tvColors.line, paddingHorizontal: 7, borderRadius: radius.sm },
-  rowEditing: { backgroundColor: "rgba(124,58,237,0.08)" },
+  // Glass rows inside one panel; still a plain FlatList, nothing extra per row.
+  listPanel: { flex: 1, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
+  list: { padding: 6, paddingBottom: 20 },
+  rowShell: { flexDirection: "row", alignItems: "stretch", gap: 6, marginBottom: 5 },
+  row: { flex: 1, minWidth: 0, minHeight: 50, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", paddingHorizontal: 8, borderRadius: 12 },
+  rowEditing: { backgroundColor: "rgba(124,58,237,0.16)" },
   orderActions: { width: 130, flexDirection: "row", gap: 5 },
-  orderButton: { flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", gap: 2, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
+  orderButton: { flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", gap: 2, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
   orderText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 7.5 },
   disabled: { opacity: 0.35 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: glassFocus,
   number: { width: 24, color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 9.5, textAlign: "right" },
   nameBlock: { width: 138, minWidth: 0 },
   channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  group: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, marginTop: 2 },
+  group: { color: "#C9B5EE", fontFamily: fonts.medium, fontSize: 7.5, letterSpacing: 0.4, marginTop: 2 },
   programBlock: { flex: 1, minWidth: 0, paddingHorizontal: 5 },
   program: { color: "rgba(255,255,255,0.90)", fontFamily: fonts.medium, fontSize: 9.5 },
-  progressTrack: { height: 2, backgroundColor: "rgba(255,255,255,0.10)", borderRadius: 1, marginTop: 7, overflow: "hidden" },
-  progressFill: { height: 2, backgroundColor: tvColors.purpleBright },
+  progressTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 2, marginTop: 7, overflow: "hidden" },
+  progressFill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
   time: { width: 102, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, textAlign: "right" },
   heart: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
 });

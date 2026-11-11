@@ -129,6 +129,15 @@ function releaseLoadSlot(): void {
   drainQueue();
 }
 
+// Neon medallion tones for channels without artwork; chosen from the name so a
+// channel keeps the same color everywhere. One plain View, no gradient layers.
+const MEDALLION_TONES = ["#6D28D9", "#A21CAF", "#4F46E5", "#BE123C", "#C2410C", "#0F766E"];
+function medallionTone(name: string): string {
+  let sum = 0;
+  for (let i = 0; i < name.length && i < 24; i += 1) sum += name.charCodeAt(i);
+  return MEDALLION_TONES[sum % MEDALLION_TONES.length];
+}
+
 function initials(name: string): string {
   const parts = name.replace(/[^a-zA-Z0-9 ]/g, "").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "?";
@@ -312,7 +321,7 @@ function ChannelLogoComponent({
   }
 
   return (
-    <View style={[styles.fallback, { width: size, height: size }]}>
+    <View style={[styles.fallback, { width: size, height: size, borderRadius: Math.max(6, Math.round(size * 0.22)), backgroundColor: medallionTone(name) }]}>
       <Text style={[styles.initials, { fontSize: Math.max(10, Math.round(size * 0.34)) }]}>
         {initials(name)}
       </Text>
@@ -326,8 +335,10 @@ const styles = StyleSheet.create({
   fallback: {
     backgroundColor: colors.brandTertiary,
     borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.30)",
     alignItems: "center",
     justifyContent: "center",
   },
-  initials: { color: colors.onBrandTertiary, fontFamily: fonts.bold },
+  initials: { color: "#FFFFFF", fontFamily: fonts.bold },
 });

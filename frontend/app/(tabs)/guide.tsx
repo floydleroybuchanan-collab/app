@@ -66,7 +66,7 @@ import {
 } from "@/src/core/streamFailureRegistry";
 import { consumeGuideJump, peekGuideJump } from "@/src/core/guideSearchJump";
 import { consumeGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
-import { fonts, spacing, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, spacing, tvColors } from "@/src/theme";
 import { nowNext } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
@@ -1080,9 +1080,7 @@ function PurpleGuideScreenContent() {
     >
       <View style={styles.page}>
         <EpgProgressBar />
-        <Pressable accessibilityLabel="Choose playlists" onPress={() => setGroupDrawerOpen(true)} style={({focused}: any) => [{paddingHorizontal:14,paddingVertical:7,backgroundColor:tvColors.panelRaised,borderWidth:1,borderColor:focused?tvColors.purple:"transparent"}]}>
-          <Text style={{color:tvColors.text,fontSize:16}}>{activePlaylist === "all" ? "All Playlists" : playlists.find(p=>p.id===activePlaylist)?.name} ▾ · {playlists.filter(p=>p.enabled).length} enabled · {visiblePlaylistChannels.length} channels{epgGuideFilter !== "all" ? ` · Filter: ${epgGuideFilter}` : ""}</Text>
-        </Pressable>
+        {/* Nothing sits above the preview: the playlist panel opens with LEFT from the grid. */}
         {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
           <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>
           <Pressable focusable onPress={() => router.push("/playlists" as any)} style={({ focused }: any) => [styles.retryButton, focused && styles.focused]}>
@@ -1216,10 +1214,10 @@ const styles = StyleSheet.create({
   unsupportedPreviewTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11, textAlign: "center" },
   unsupportedPreviewText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 14, textAlign: "center" },
   // Flush with the rail and drawers: no outer band on the top, right, bottom or left.
-  page: { flex: 1, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, gap: 3 },
+  page: { flex: 1, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, gap: 3, backgroundColor: glass.page },
   body: { flex: 1, minHeight: 0, flexDirection: "column", gap: 6 },
   gridPanel: { flex: 1, minWidth: 0, minHeight: 0 },
-  pinCard: { width: 340, maxWidth: "100%", borderRadius: 10, backgroundColor: tvColors.panel, padding: 16, gap: 10 },
+  pinCard: { width: 340, maxWidth: "100%", borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: glass.drawer, padding: 16, gap: 10 },
   overlayTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 16, textAlign: "center" },
   watchButton: { flex: 1, minWidth: 0, minHeight: 27, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: tvColors.purple, borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 3 },
   watchText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 7.5 },
@@ -1230,14 +1228,14 @@ const styles = StyleSheet.create({
   pinDigits: { color: "#fff", fontFamily: fonts.bold, fontSize: 22, letterSpacing: 8, textAlign: "center", marginVertical: 4 },
   pinError: { color: "#f87171", fontFamily: fonts.medium, fontSize: 10, textAlign: "center" },
   pinPad: { flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" },
-  pinKey: { width: 44, minHeight: 36, alignItems: "center", justifyContent: "center", borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
+  pinKey: { width: 44, minHeight: 36, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 2, borderColor: "transparent", backgroundColor: glass.button },
   pinKeyText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 14 },
   pinActions: { flexDirection: "row", gap: 8, marginTop: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
   centerText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 11, textAlign: "center", maxWidth: 320 },
-  retryButton: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, borderRadius: 6, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.purple, marginTop: 4 },
+  retryButton: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, borderRadius: 12, borderWidth: 2, borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.72)", marginTop: 4 },
   retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: glassFocus,
 });
 
 export default function PurpleGuideScreen() {

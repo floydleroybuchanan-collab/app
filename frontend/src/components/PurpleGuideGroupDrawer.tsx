@@ -3,7 +3,7 @@ import { DeviceEventEmitter, Platform, Pressable, ScrollView, StyleSheet, Text, 
 import { Ionicons } from "@expo/vector-icons";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import type { PurpleGuideGroup } from "@/src/components/PurpleTvShell";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { addTvKeyListener, addTvLongPressListener, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
 
@@ -187,15 +187,15 @@ const styles = StyleSheet.create({
     width: GUIDE_GROUP_DRAWER_WIDTH,
     height: "100%",
     flexShrink: 0,
-    backgroundColor: "rgba(12,7,26,0.98)",
+    backgroundColor: glass.drawer,
     borderRightWidth: 1,
-    borderRightColor: tvColors.line,
+    borderRightColor: glass.edge,
   },
   drawer: { flex: 1, paddingHorizontal: 12, paddingVertical: 10 },
   list: { gap: 3, paddingBottom: 18 },
   row: {
     minHeight: 34,
-    borderRadius: radius.sm,
+    borderRadius: 11,
     paddingHorizontal: 9,
     flexDirection: "row",
     alignItems: "center",
@@ -203,13 +203,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  playlistRow: { borderBottomColor: tvColors.line, marginBottom: 4 },
+  playlistRow: { backgroundColor: glass.panel, borderColor: glass.edgeSoft, marginBottom: 4 },
   groupRow: { paddingLeft: 28 },
-  activeRow: { backgroundColor: "rgba(115,70,195,0.23)" },
-  pinnedRow: { borderColor: "rgba(168,132,245,0.22)" },
-  focused: { borderColor: tvColors.purpleBright, backgroundColor: "rgba(126,84,218,0.36)" },
+  activeRow: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
+  pinnedRow: { borderColor: "rgba(232,121,249,0.40)" },
+  focused: glassFocus,
   rowLabel: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7 },
-  name: { flex: 1, color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 11 },
+  name: { flex: 1, color: "#E9DCFF", fontFamily: fonts.medium, fontSize: 11 },
   activeName: { color: "#fff" },
   count: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9, marginLeft: 6 },
 });

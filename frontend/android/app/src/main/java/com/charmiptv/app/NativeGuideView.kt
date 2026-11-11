@@ -136,16 +136,22 @@ class NativeGuideView(context: Context) : View(context) {
   private val liveWindowHistoryMs = 60L * 60_000L
   private val liveWindowAdvanceThresholdMs = 60_000L
 
-  private val background = Paint().apply { color = Color.rgb(8, 7, 13) }
-  private val header = Paint().apply { color = Color.rgb(22, 18, 33) }
-  private val channel = Paint().apply { color = Color.rgb(26, 22, 38) }
-  private val rowSurface = Paint().apply { color = Color.rgb(18, 16, 28) }
-  private val cell = Paint().apply { color = Color.rgb(31, 27, 45) }
-  private val selected = Paint().apply { color = Color.rgb(119, 74, 219) }
-  private val divider = Paint().apply { color = Color.rgb(53, 45, 72); strokeWidth = density }
-  private val nowPaint = Paint().apply { color = Color.rgb(197, 158, 255); strokeWidth = 2f * density }
+  // Neon-glass palette shared with the rest of the app. Plain fills and one
+  // stroke: rounded cells cost the same as the old rectangles to paint.
+  private val background = Paint().apply { color = Color.rgb(18, 8, 38) }
+  private val header = Paint().apply { color = Color.rgb(30, 14, 60) }
+  private val channel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CHANNEL_COLOR }
+  private val rowSurface = Paint().apply { color = Color.rgb(20, 9, 42) }
+  private val cell = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(44, 22, 84) }
+  private val selected = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = SELECTED_COLOR }
+  private val selectedEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.5f * density }
+  private val divider = Paint().apply { color = Color.rgb(58, 34, 98); strokeWidth = density }
+  private val nowPaint = Paint().apply { color = Color.rgb(232, 121, 249); strokeWidth = 2f * density }
   private val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13f * density }
-  private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(183, 174, 204); textSize = 11f * density }
+  private val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(196, 166, 240); textSize = 11f * density }
+  private val cellRadius = 6f * density
+  // Reused for every cell so a repaint allocates nothing.
+  private val cellRect = RectF()
   private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
   private val tickDate = Date()
   private var use24HourClock = false
@@ -743,11 +749,12 @@ class NativeGuideView(context: Context) : View(context) {
       val rowIndex = firstVisibleRow + slot
       val row = rows.getOrNull(rowIndex) ?: break
       val top = headerHeight + slot * rowHeight
-      channel.color = if (rowIndex == selectedRow && channelRailSelected) Color.rgb(119, 74, 219) else Color.rgb(26, 22, 38)
+      val channelChosen = rowIndex == selectedRow && channelRailSelected
+      channel.color = if (channelChosen) SELECTED_COLOR else CHANNEL_COLOR
       // Setting a color resets alpha, so the channel column's opacity is applied per row.
       channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected))
         (255f * (1f - 0.01f * channelTransparencyLevel)).toInt().coerceIn(0, 255) else 255
-      canvas.drawRect(0f, top, channelWidth, top + rowHeight - density, channel)
+      paintCell(canvas, density, top + density, channelWidth - density, top + rowHeight - 2f * density, channel, channelChosen)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)
 
@@ -761,7 +768,7 @@ class NativeGuideView(context: Context) : View(context) {
         val right = min(width.toFloat(), timeToX(end, visibleStartMs, visibleEndMs)) - density
         if (right <= left) return
         val chosen = !channelRailSelected && rowIndex == selectedRow && selectedTimeMs >= start && selectedTimeMs < end
-        canvas.drawRect(left, top + density, right, top + rowHeight - 2f * density, if (chosen) selected else cell)
+        paintCell(canvas, left, top + density, right, top + rowHeight - 2f * density, if (chosen) selected else cell, chosen)
         drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
       }
       for (program in list) {
@@ -775,10 +782,7 @@ class NativeGuideView(context: Context) : View(context) {
         if (program.startMs > gapStart) paintGap(gapStart, program.startMs)
         gapStart = max(gapStart, program.endMs)
         val chosen = !channelRailSelected && rowIndex == selectedRow && program.startMs <= selectedTimeMs && program.endMs > selectedTimeMs
-        canvas.drawRect(
-          RectF(clippedLeft + density, top + density, clippedRight - density, top + rowHeight - 2f * density),
-          if (chosen) selected else cell,
-        )
+        paintCell(canvas, clippedLeft + density, top + density, clippedRight - density, top + rowHeight - 2f * density, if (chosen) selected else cell, chosen)
         drawClippedText(canvas, program.title, clippedLeft + pad, top + rowHeight * .60f, clippedRight - pad, title)
       }
       if (!paintedProgramme) {
@@ -788,10 +792,8 @@ class NativeGuideView(context: Context) : View(context) {
         val left = channelWidth + density
         val right = width.toFloat() - density
         if (right > left) {
-          canvas.drawRect(
-            RectF(left, top + density, right, top + rowHeight - 2f * density),
-            if (!channelRailSelected && rowIndex == selectedRow) selected else cell,
-          )
+          val fill = if (!channelRailSelected && rowIndex == selectedRow) selected else cell
+          paintCell(canvas, left, top + density, right, top + rowHeight - 2f * density, fill, fill === selected)
           drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
         }
       }
@@ -819,6 +821,17 @@ class NativeGuideView(context: Context) : View(context) {
     }
   }
 
+  private fun paintCell(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, fill: Paint, chosen: Boolean) {
+    if (right <= left) return
+    cellRect.set(left, top, right, bottom)
+    canvas.drawRoundRect(cellRect, cellRadius, cellRadius, fill)
+    if (chosen) {
+      val inset = selectedEdge.strokeWidth / 2f
+      cellRect.inset(inset, inset)
+      canvas.drawRoundRect(cellRect, cellRadius, cellRadius, selectedEdge)
+    }
+  }
+
   private fun drawClippedText(canvas: Canvas, value: String, x: Float, baseline: Float, right: Float, paint: Paint) {
     if (right <= x) return
     canvas.save(); canvas.clipRect(x, baseline - rowHeight, right, baseline + pad)
@@ -826,6 +839,8 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   companion object {
+    private val CHANNEL_COLOR = Color.rgb(34, 16, 68)
+    private val SELECTED_COLOR = Color.rgb(160, 72, 245)
     private const val LIVE_CLOCK_TICK_MS = 30_000L
     private const val COVERAGE_TTL_MS = 60_000L
     // The grid paints titles only. This short text covers the preview until the
