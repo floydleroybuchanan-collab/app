@@ -30,10 +30,14 @@ test("an unavailable source favorite cannot migrate to another provider by match
   assert.equal(noCross.ids[0], "station");
 });
 
-test("empty, partially invalid and truncated imports are rejected before activation", () => {
-  for (const parsed of [{ channels: [], rejected: 0, truncated: false }, { channels: [channel()], rejected: 1, truncated: false }, { channels: [channel()], rejected: 0, truncated: true }]) {
+test("empty and truncated imports are rejected before activation", () => {
+  for (const parsed of [{ channels: [], rejected: 0, truncated: false }, { channels: [channel()], rejected: 0, truncated: true }]) {
     assert.throws(() => catalog.validatePlaylistImport(parsed));
   }
+});
+
+test("a playlist with some invalid lines still imports its valid channels", () => {
+  assert.doesNotThrow(() => catalog.validatePlaylistImport({ channels: [channel()], rejected: 3, truncated: false }));
 });
 
 test("recovery shares one request per provider without waiting for an unrelated provider", async () => {

@@ -87,7 +87,8 @@ export function scopePlaylistChannels(source: PlaylistRecord, rows: Channel[]): 
 export function validatePlaylistImport(result: { channels: Channel[]; rejected: number; truncated: boolean }): void {
   if (!result.channels.length) throw new Error("No playable channels found; previous channels kept.");
   if (result.truncated) throw new Error("Playlist exceeds the import limit; previous channels kept.");
-  if (result.rejected > 0) throw new Error("Playlist contains invalid entries; previous channels kept. Correct the playlist before importing.");
+  // Invalid lines (a name with no stream link, an unsupported link type) are
+  // skipped like other IPTV players do; the valid channels still import.
 }
 
 export function combinePlaylistCatalogs(sources: PlaylistRecord[], catalogs: ReadonlyMap<string, Channel[]>): Channel[] {
