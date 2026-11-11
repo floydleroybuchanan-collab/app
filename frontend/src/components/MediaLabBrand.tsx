@@ -14,7 +14,9 @@ export function MediaLabArt({ kind = "banner", width = 320, height }: {
   kind?: keyof typeof art; width?: number; height?: number;
 }) {
   const ratio = kind === "banner" ? 3 : kind === "wordmark" ? 2 : kind === "rail" ? 700 / 960 : 1;
-  return <Image accessible accessibilityLabel="Charming MediaLab" source={art[kind]}
+  // Android maps Image `accessible` straight to focusable: the logo became an
+  // invisible remote stop (UP/LEFT on Live TV landed on it and focus vanished).
+  return <Image accessible={false} accessibilityLabel="Charming MediaLab" source={art[kind]}
     resizeMode="contain" style={{ width, height: height ?? width / ratio, maxWidth: "100%" }} />;
 }
 

@@ -63,6 +63,12 @@ test("a remote key with no focused view re-enters the open drawer or the visible
   assert.ok(dispatch.indexOf("restoreLostFocus(event)") < dispatch.indexOf("routeShellBoundary(event)"));
 });
 
+test("decorative images are never remote focus stops (Android maps Image accessible to focusable)", async () => {
+  const brand = await source("src/components/MediaLabBrand.tsx");
+  assert.match(brand, /<Image accessible=\{false\} accessibilityLabel="Charming MediaLab"/);
+  assert.doesNotMatch(brand, /<Image accessible accessibilityLabel/);
+});
+
 test("VOD Settings buttons pass their section in a param React Navigation keeps", async () => {
   const settings = await source("app/(tabs)/settings.tsx");
   const vod = await source("app/(tabs)/vod.tsx");
