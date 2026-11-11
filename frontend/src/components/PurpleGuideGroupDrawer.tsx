@@ -19,6 +19,15 @@ const REMAINING_ROWS_DELAY_MS = 260;
 // Keep only its last small identity token across mounts, never a View reference.
 let lastFocusedGuideGroupName: string | null = null;
 
+/** Header row of the playlist a group row belongs to ("playlist:<id>" for "playlist:<id>:<group>"). */
+export function playlistHeaderFor(focusedName: string | null, groups: readonly PurpleGuideGroup[]): string | null {
+  if (!focusedName) return null;
+  const focused = groups.find((item) => item.name === focusedName);
+  if (!focused || focused.kind !== "group") return null;
+  const header = groups.find((item) => item.kind === "playlist" && focusedName.startsWith(`${item.name}:`));
+  return header?.name || null;
+}
+
 export function PurpleGuideGroupDrawer({
   open,
   groups,
@@ -70,6 +79,17 @@ export function PurpleGuideGroupDrawer({
         return;
       }
       if (key === "LEFT") {
+        // Inside a long expanded playlist, LEFT first jumps up to that
+        // playlist's header so it can be collapsed with OK (with two large
+        // playlists open the header could be 150+ presses away). LEFT on a
+        // header, or with nothing to jump to, still opens the main drawer.
+        const header = playlistHeaderFor(focusedNameRef.current, groupsRef.current);
+        const node = header ? refs.current.get(header) : null;
+        if (header && node) {
+          const cancel = requestNativeFocusWithRetry(node, [0, 60, 160], () => focusedNameRef.current === header);
+          void cancel;
+          return;
+        }
         openMainDrawerRef.current();
         return;
       }

@@ -40,3 +40,12 @@ test("guide grids draw channel logos for nearby rows only, with bounded bitmaps"
   assert.match(read("app/(tabs)/guide.tsx"), /showLogos=\{channelLogos && !surfLogosSuppressed\}/);
   assert.match(read("src/components/PlayerGuidePanel.tsx"), /showLogos=\{showLogos\}/);
 });
+
+test("LEFT on a group in the Guide playlist panel jumps to its playlist header first", () => {
+  const panel = read("src/components/PurpleGuideGroupDrawer.tsx");
+  const left = panel.slice(panel.indexOf('if (key === "LEFT")'), panel.indexOf('if (key === "RIGHT")'));
+  assert.match(left, /playlistHeaderFor\(focusedNameRef\.current, groupsRef\.current\)/);
+  assert.ok(left.indexOf("requestNativeFocusWithRetry") < left.indexOf("openMainDrawerRef.current()"));
+  assert.match(panel, /item\.kind === "playlist" && focusedName\.startsWith\(`\$\{item\.name\}:`\)/);
+  assert.match(panel, /if \(!focused \|\| focused\.kind !== "group"\) return null;/);
+});
