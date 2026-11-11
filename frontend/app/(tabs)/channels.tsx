@@ -326,7 +326,10 @@ const styles = StyleSheet.create({
   retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
   // Glass rows inside one panel; still a plain FlatList, nothing extra per row.
   listPanel: { flex: 1, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
-  listFill: { flex: 1 },
+  // Pinned to the panel's edges. `flex: 1` measured the list 1px tall here
+  // (the tab sits inside a scroll container, so flex height never resolved):
+  // the count showed but every row was clipped away.
+  listFill: { position: "absolute", top: 4, left: 4, right: 4, bottom: 4 },
   list: { padding: 2, paddingBottom: 20 },
   rowShell: { flexDirection: "row", alignItems: "stretch", gap: 6, marginBottom: 5 },
   row: { flex: 1, minWidth: 0, minHeight: 50, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", paddingHorizontal: 8, borderRadius: 12 },

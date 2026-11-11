@@ -11,7 +11,8 @@ test("Channels and Favorites lists keep panel styling off the FlatList", () => {
     assert.match(source, /<View style=\{styles\.listPanel\}>\s*<FlatList/, page);
     assert.match(source, /style=\{styles\.listFill\}/, page);
     assert.doesNotMatch(source, /<FlatList[^>]*style=\{styles\.listPanel\}/, page);
-    assert.match(source, /listFill: \{ flex: 1 \}/, page);
+    // flex:1 resolved to a 1px-tall list on device; pin it to the panel edges.
+    assert.match(source, /listFill: \{ position: "absolute", top: 4, left: 4, right: 4, bottom: 4 \}/, page);
   }
 });
 

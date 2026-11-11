@@ -20,7 +20,7 @@ android {
         minSdk 24
         consumerProguardFiles 'nova-consumer-rules.pro'
         buildConfigField 'String', 'APPLICATION_ID', '"com.charmiptv.app.purple.next.vodtest1"'
-        buildConfigField 'int', 'VERSION_CODE', '2527'
+        buildConfigField 'int', 'VERSION_CODE', '2528'
         buildConfigField 'String', 'VERSION_NAME', '"25.7.0-rc.25"'
         buildConfigField 'String', 'APP_LAYOUT', '"tv"'
         buildConfigField 'boolean', 'CHARM_VOD_EMBEDDED', 'true'

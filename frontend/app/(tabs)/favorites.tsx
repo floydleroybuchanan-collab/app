@@ -370,7 +370,10 @@ const styles = StyleSheet.create({
   editPrimary: { borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.80)" },
   // Panel styling on a plain View; the FlatList inside only fills it.
   listPanel: { flex: 1, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
-  listFill: { flex: 1 },
+  // Pinned to the panel's edges. `flex: 1` measured the list 1px tall here
+  // (the tab sits inside a scroll container, so flex height never resolved):
+  // the count showed but every row was clipped away.
+  listFill: { position: "absolute", top: 4, left: 4, right: 4, bottom: 4 },
   list: { padding: 2, paddingBottom: 20 },
   row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 8, marginBottom: 5, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", borderRadius: 12 },
   focused: glassFocus,
