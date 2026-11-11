@@ -778,7 +778,9 @@ function PurpleGuideScreenContent() {
   }, [channelById, safePreviewMode]);
 
   const guideTopPanelWidth = useMemo(
-    () => Math.max(0, screenWidth - 24),
+    // The Guide page has no side padding any more, so the preview row spans the
+    // full width and ends flush on the right like the grid below it.
+    () => Math.max(0, screenWidth),
     [screenWidth],
   );
   const armPreviewForChannel = useCallback(
