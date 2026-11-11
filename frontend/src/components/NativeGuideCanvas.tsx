@@ -12,6 +12,8 @@ type Props = {
   transparencyLevel?: number;
   channelTransparencyLevel?: number;
   enableUpBoundary?: boolean;
+  /** Draw channel logos in the channel column (only rows near the cursor are sent). */
+  showLogos?: boolean;
   channelNumberById: Record<string, number>;
   onChannelFocus: (channel: Channel, settled: boolean) => void;
   onProgramFocus: (program: Program, channel: Channel, settled: boolean) => void;
@@ -23,6 +25,22 @@ type Props = {
   onUpBoundary: () => void;
 };
 const Native = Platform.OS === "android" ? requireNativeComponent<any>("CharmNativeGuide") : null;
+const EMPTY_LOGOS: Record<string, string> = {};
+const MAX_LOGO_ROWS = 160;
+
+/** Same address rules as ChannelLogo: protocol-relative becomes https; only web URLs. */
+function guideLogoUri(logo?: string): string {
+  const value = (logo || "").trim();
+  if (value.startsWith("//")) return `https:${value}`;
+  return value.startsWith("http://") || value.startsWith("https://") ? value : "";
+}
+
+function sameLogos(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const key of keys) if (a[key] !== b[key]) return false;
+  return true;
+}
 
 export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   channels,
@@ -38,6 +56,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   channelTransparencyLevel = 75,
   // The full Guide always routes Up at its top row to its preview actions.
   enableUpBoundary = true,
+  showLogos = false,
   channelNumberById,
   onChannelFocus,
   onProgramFocus,
@@ -135,10 +154,30 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
     }
   }, [channelById, onChannelFocus, onChannelPress, onProgramFocus, onProgramPress]);
 
+  // Logos travel to native only for the runway rows (a few dozen), never the
+  // full catalog, so the one big channel payload above stays lean.
+  const [visibleLogos, setVisibleLogos] = useState<Record<string, string>>(EMPTY_LOGOS);
+  const lastRunwayIdsRef = useRef<string[]>([]);
+  const updateLogos = useCallback((ids: string[]) => {
+    if (!showLogos) { setVisibleLogos(EMPTY_LOGOS); return; }
+    const next: Record<string, string> = {};
+    let count = 0;
+    for (const id of ids) {
+      const uri = guideLogoUri(channelById.get(id)?.logo);
+      if (!uri) continue;
+      next[id] = uri;
+      if (++count >= MAX_LOGO_ROWS) break;
+    }
+    setVisibleLogos((previous) => sameLogos(previous, next) ? previous : (count ? next : EMPTY_LOGOS));
+  }, [channelById, showLogos]);
+  useEffect(() => { updateLogos(lastRunwayIdsRef.current); }, [updateLogos]);
+
   const handleRunwayChange = useCallback((event: NativeSyntheticEvent<RunwayEvent>) => {
     const value = event.nativeEvent;
+    lastRunwayIdsRef.current = value.ids || [];
+    updateLogos(lastRunwayIdsRef.current);
     onViewportChannelIds(value.ids || [], value.priorityIds || [], value.pageSize || 8, Math.max(0, value.velocity || 0));
-  }, [onViewportChannelIds]);
+  }, [onViewportChannelIds, updateLogos]);
 
   const bindNativeGuideRef = useCallback((node: unknown) => {
     const tag = node ? findNodeHandle(node as any) : null;
@@ -162,6 +201,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       transparencyLevel={transparencyLevel}
       channelTransparencyLevel={channelTransparencyLevel}
       enableUpBoundary={enableUpBoundary}
+      visibleLogos={visibleLogos}
       clock24h={clock24h}
       onSelectionChange={handleSelectionChange}
       onRunwayChange={handleRunwayChange}

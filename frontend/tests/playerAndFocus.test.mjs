@@ -92,19 +92,16 @@ test("closed main drawer consumes first Back and opens only on a bounded second 
   assert.match(shell, /decision === "open-drawer"[\s\S]*?openDrawer\(\{ focusTop: true \}\)[\s\S]*?return true/);
 });
 
-test("Guide action strip walks all six actions before returning to the native Guide", async () => {
+test("Guide preview row has no button column between the preview and the program info", async () => {
   const rail = await source("src/components/GuidePreviewRail.tsx");
-  const actionStripBeforeHide = rail.slice(rail.indexOf("ref={playFocus.setRef}"), rail.indexOf("ref={hideFocus.setRef}"));
-  assert.match(rail, /testID="guide-preview-play"/);
-  assert.match(rail, /testID="guide-preview-favorite"/);
-  assert.match(rail, /testID="guide-preview-remind"/);
-  assert.match(rail, /testID="guide-preview-drawer"/);
-  assert.match(rail, /testID="guide-preview-mute"/);
-  assert.match(rail, /testID="guide-preview-hide"/);
-  assert.doesNotMatch(actionStripBeforeHide, /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
-  assert.match(rail.slice(rail.lastIndexOf("ref={hideFocus.setRef}")), /nextFocusDown=\{guideFocusTag \|\| undefined\}/);
-  assert.match(rail, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(rail, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
+  for (const id of ["play", "favorite", "remind", "drawer", "mute", "hide"]) {
+    assert.doesNotMatch(rail, new RegExp(`testID="guide-preview-${id}"`), id);
+  }
+  assert.doesNotMatch(rail, /styles\.actionGrid|FocusGuide/);
+  // Only "Show preview" (while hidden) can take focus, and Down returns to the Guide.
+  assert.match(rail, /testID="guide-preview-show"/);
+  assert.match(rail, /usePreviewFocusNode\("show-preview", true\)/);
+  assert.match(rail, /hasTVPreferredFocus=\{preferShowFocus\}[\s\S]{0,80}nextFocusDown=\{guideFocusTag \|\| undefined\}/);
 });
 
 test("active native Guide claims initial focus when its first channel rows arrive", async () => {

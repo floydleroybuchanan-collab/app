@@ -288,36 +288,31 @@ test("guide top strip is focusable while Left remains drawer-owned with conveyor
     source("src/utils/tvFocus.ts"),
   ]);
   assert.match(guide, /GuidePreviewRail/);
-  assert.match(preview, /onOpenDrawer/);
+  // The preview row's button column was removed: the drawer opens from LEFT.
+  assert.doesNotMatch(preview, /onOpenDrawer/);
   assert.match(guide, /openDrawer\(\{ force: true \}\)/);
   assert.match(guide, /focusGuidePreviewSurface\(\)/);
   assert.doesNotMatch(guide, /const onGuideUpBoundary = useCallback\([\s\S]{0,520}setPreviewActionsFocused\(true\)/);
   assert.match(guide, /!previewActionsFocused/);
-  assert.match(preview, /onActionsFocusChange\(true\)/);
-  assert.match(preview, /onFocusLost=\{\(\) => onActionsFocusChange\(false\)\}/);
+  assert.doesNotMatch(preview, /onActionsFocusChange/);
   assert.match(guide, /setPreviewFocusRequestToken\(\(value\) => value \+ 1\)/);
   assert.match(guide, /focusRequestToken=\{previewFocusRequestToken\}/);
-  assert.match(preview, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(preview, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
+  assert.match(preview, /hasTVPreferredFocus=\{preferShowFocus\}/);
   assert.match(guide, /requestAnimationFrame\(\(\) => \{[\s\S]{0,160}focusGuidePreviewSurface\(\)/);
   assert.match(focus, /typeof focus === "function"/);
   assert.match(focus, /dispatchViewManagerCommand/);
-  assert.match(guide, /onOpenReminders=/);
+  assert.doesNotMatch(guide, /onOpenReminders=/);
   for (const action of ["play", "favorite", "remind", "drawer", "mute", "hide"]) {
-    assert.match(preview, new RegExp(`testID="guide-preview-${action}"`));
+    assert.doesNotMatch(preview, new RegExp(`testID="guide-preview-${action}"`));
   }
-  for (const handler of ["onPlay", "onFavorite", "onOpenReminders", "onOpenDrawer", "onToggleMute", "onHideToggle"]) {
-    assert.match(preview, new RegExp(`onPress=\\{${handler}\\}`));
-  }
+  assert.match(preview, /onPress=\{onHideToggle\}/);
   assert.match(guide, /expandRunwayKeepSet/);
   assert.match(guide, /MAX_REMEMBERED_GUIDE_GROUPS = 128/);
   assert.match(guide, /retainGuideSlidingCache/);
   assert.doesNotMatch(guide, /focusPurpleIconRail/);
   assert.match(guide, /buildPlaylistMenu/);
   assert.doesNotMatch(guide, /NowPlayingBar/);
-  assert.match(preview, /width: 138/);
-  assert.match(preview, /actionColumn: \{ flex: 1, minWidth: 0, gap: 3 \}/);
-  assert.doesNotMatch(preview, /actionPlaceholder/);
+  assert.doesNotMatch(preview, /width: 138|actionColumn|actionPlaceholder/);
 });
 
 test("custom XMLTV ownership and user tabs stay isolated from provider parser rows", async () => {

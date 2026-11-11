@@ -302,7 +302,7 @@ function LiveTvHomeScreenContent() {
           <Text style={styles.sectionTitle}>Recently Watched Channels</Text>
           <Text style={styles.sectionHint}>Currently airing on channels you watched</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+        <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
           {recentLive.map((channel, index) => (
             <RecentChannelCard
               key={channel.id}
@@ -353,13 +353,13 @@ const styles = StyleSheet.create({
   searchText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
   heroArtwork: { flex: 0.9, alignItems: "center", justifyContent: "center", gap: 7, overflow: "hidden", borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,14,84,0.55)", margin: 10, borderRadius: 14 },
   heroArtworkFocused: { borderColor: "#fff", backgroundColor: "rgba(124,58,237,0.30)" },
-  heroGlow: { position: "absolute", width: 205, height: 205, borderRadius: 103, backgroundColor: "rgba(168,85,247,0.26)" },
+  heroGlow: { position: "absolute", width: 168, height: 168, borderRadius: 84, backgroundColor: "rgba(168,85,247,0.26)" },
   heroArtName: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, maxWidth: "84%" },
   heroArtNow: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, maxWidth: "84%" },
   sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 },
   sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 13, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
   sectionHint: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: 8.5 },
-  recentRow: { gap: 9, paddingBottom: 2, paddingTop: 2 },
+  recentRow: { gap: 9, paddingBottom: 2, paddingTop: 2, alignItems: "flex-start" },
   channelCard: { width: 150, minHeight: 116, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
   channelCardArt: { height: 64, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6 },
   channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9.5 },

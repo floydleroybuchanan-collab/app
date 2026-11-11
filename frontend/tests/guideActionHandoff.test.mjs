@@ -18,10 +18,10 @@ test("Guide serializes Quick Actions PIN and Program Details modal ownership", a
   assert.match(boundary, /setPreviewFocusRequestToken\(\(value\) => value \+ 1\)/);
   assert.match(boundary, /focusGuidePreviewSurface\(\)/);
   assert.doesNotMatch(boundary, /setPreviewActionsFocused\(true\)/);
-  assert.match(rail, /const \[preferPlayFocus, setPreferPlayFocus\] = useState\(false\)/);
-  assert.match(rail, /hasTVPreferredFocus=\{preferPlayFocus\}/);
-  assert.match(rail, /onFocusCapture=\{\(\) => setPreferPlayFocus\(false\)\}/);
-  assert.match(rail, /onActionsFocusChange\(true\)/);
+  // Up from the top Guide row can only reach "Show preview" (when hidden).
+  assert.match(rail, /const \[preferShowFocus, setPreferShowFocus\] = useState\(false\)/);
+  assert.match(rail, /hasTVPreferredFocus=\{preferShowFocus\}/);
+  assert.doesNotMatch(rail, /onActionsFocusChange/);
   assert.match(guide, /active=\{isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused\}/);
   assert.match(guide, /previewId=\{safePreviewMode === "off" \|\| drawerOpen \|\| groupDrawerOpen \|\| !!activeProgram \|\| !!pinPromptGroup \|\| quickActionsOpen \|\| !isFocused \? null : previewId\}/);
   assert.match(guide, /const pinModalOwnedRef = useRef\(false\)/);

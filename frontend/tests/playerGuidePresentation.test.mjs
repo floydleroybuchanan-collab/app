@@ -28,7 +28,7 @@ test("60% transparent overlay at default setting; preview has fully opaque panel
   assert.match(native, /if \(overlayMode\) 0 else 255/);
   assert.match(native, /rowSurface\.alpha = if \(overlayMode\) 0 else 255/);
   assert.match(native, /setBackgroundColor\(if \(overlayMode\) Color\.TRANSPARENT/);
-  assert.match(panel, /backgroundColor: "#0C0E12"/);
+  assert.match(panel, /backgroundColor: "#1A0B33"/);
 });
 
 test("player guide includes group navigation, date selection, program detail and D-pad boundaries", () => {

@@ -1,15 +1,21 @@
 package com.charmiptv.app
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.Drawable
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import com.facebook.react.bridge.Arguments
+import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.events.RCTEventEmitter
 import java.text.SimpleDateFormat
@@ -152,6 +158,86 @@ class NativeGuideView(context: Context) : View(context) {
   private val cellRadius = 6f * density
   // Reused for every cell so a repaint allocates nothing.
   private val cellRect = RectF()
+
+  // Channel logos. JS sends logo addresses only for the rows near the cursor
+  // (never the whole catalog); Glide decodes each at a small fixed size and at
+  // most MAX_LOGO_BITMAPS stay referenced here, so memory stays bounded.
+  private val logoUrlById = HashMap<String, String>()
+  private val logoBox = 34f * density
+  private val logoPx = (logoBox * 1.25f).toInt().coerceIn(48, 128)
+  private val logoBacking = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(235, 255, 255, 255) }
+  private val logoPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+  private val logoRect = RectF()
+  private inner class LogoTarget : CustomTarget<Bitmap>(logoPx, logoPx) {
+    var bitmap: Bitmap? = null
+    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) { bitmap = resource; invalidate() }
+    override fun onLoadCleared(placeholder: Drawable?) { bitmap = null }
+    override fun onLoadFailed(errorDrawable: Drawable?) { bitmap = null }
+  }
+  private val logoTargets = object : LinkedHashMap<String, LogoTarget>(32, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LogoTarget>): Boolean {
+      if (size <= MAX_LOGO_BITMAPS) return false
+      releaseLogo(eldest.value)
+      return true
+    }
+  }
+
+  private fun releaseLogo(target: LogoTarget) {
+    target.bitmap = null
+    try { Glide.with(context.applicationContext).clear(target) } catch (_: Throwable) {}
+  }
+
+  private fun releaseAllLogos() {
+    for (target in logoTargets.values) releaseLogo(target)
+    logoTargets.clear()
+  }
+
+  fun setVisibleLogos(value: ReadableMap?) {
+    logoUrlById.clear()
+    if (value != null) {
+      val iterator = value.keySetIterator()
+      while (iterator.hasNextKey()) {
+        val id = iterator.nextKey()
+        val url = value.getString(id)
+        if (!url.isNullOrBlank()) logoUrlById[id] = url
+      }
+    }
+    if (logoUrlById.isEmpty()) releaseAllLogos()
+    invalidate()
+  }
+
+  private fun logoFor(url: String): Bitmap? {
+    logoTargets[url]?.let { return it.bitmap }
+    if (disposed) return null
+    val target = LogoTarget()
+    logoTargets[url] = target
+    try {
+      Glide.with(context.applicationContext).asBitmap().load(url).fitCenter().into(target)
+    } catch (_: Throwable) {}
+    return null
+  }
+
+  /** Draws the logo on a light tile (dark logos stay readable); returns the space it used. */
+  private fun drawRowLogo(canvas: Canvas, rowId: String, top: Float): Float {
+    val url = logoUrlById[rowId] ?: return 0f
+    val size = min(logoBox, rowHeight - 12f * density)
+    if (size <= 8f * density) return 0f
+    val left = pad
+    val boxTop = top + (rowHeight - density - size) / 2f
+    logoRect.set(left, boxTop, left + size, boxTop + size)
+    canvas.drawRoundRect(logoRect, 6f * density, 6f * density, logoBacking)
+    val bitmap = logoFor(url)
+    if (bitmap != null && !bitmap.isRecycled && bitmap.width > 0 && bitmap.height > 0) {
+      val inset = 3f * density
+      val maxW = size - 2f * inset
+      val scale = min(maxW / bitmap.width, maxW / bitmap.height)
+      val w = bitmap.width * scale
+      val h = bitmap.height * scale
+      logoRect.set(left + (size - w) / 2f, boxTop + (size - h) / 2f, left + (size + w) / 2f, boxTop + (size + h) / 2f)
+      canvas.drawBitmap(bitmap, null, logoRect, logoPaint)
+    }
+    return size + pad
+  }
   private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
   private val tickDate = Date()
   private var use24HourClock = false
@@ -487,6 +573,7 @@ class NativeGuideView(context: Context) : View(context) {
     moveVelocity = 0
     generation += 1
     pendingQuery = null
+    releaseAllLogos()
     super.onDetachedFromWindow()
   }
 
@@ -515,6 +602,8 @@ class NativeGuideView(context: Context) : View(context) {
     generation += 1
     pendingQuery = null
     programs = emptyMap()
+    releaseAllLogos()
+    logoUrlById.clear()
     unregisterMemoryListener()
     io.shutdownNow()
     // Shared EPG databases remain process-owned; Guide disposal only stops its reader.
@@ -756,7 +845,8 @@ class NativeGuideView(context: Context) : View(context) {
         (255f * (1f - 0.01f * channelTransparencyLevel)).toInt().coerceIn(0, 255) else 255
       paintCell(canvas, density, top + density, channelWidth - density, top + rowHeight - 2f * density, channel, channelChosen)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
-      drawClippedText(canvas, row.label, pad, top + rowHeight * .62f, channelWidth - pad, title)
+      val logoSpace = drawRowLogo(canvas, row.id, top)
+      drawClippedText(canvas, row.label, pad + logoSpace, top + rowHeight * .62f, channelWidth - pad, title)
 
       val list = programs[row.id].orEmpty()
       // Every stretch of the row is painted: a hole in the EPG data shows a
@@ -839,6 +929,7 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   companion object {
+    private const val MAX_LOGO_BITMAPS = 28
     private val CHANNEL_COLOR = Color.rgb(34, 16, 68)
     private val SELECTED_COLOR = Color.rgb(160, 72, 245)
     private const val LIVE_CLOCK_TICK_MS = 30_000L

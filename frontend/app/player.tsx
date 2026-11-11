@@ -660,7 +660,7 @@ export default function PlayerScreen() {
         <>
           <LinearGradient colors={["rgba(5,4,13,0.92)", "rgba(5,4,13,0.42)", "transparent"]} style={[styles.topOverlay, { paddingTop: insets.top + safe.top + 8, paddingLeft: safe.left + 14, paddingRight: safe.right + 14 }]}>
             <View style={styles.channelIdentity}>
-              {channel ? <ChannelLogo name={channel.name} logo={channel.logo} disabled={!channelLogos} size={34} /> : null}
+              {channel ? <View style={styles.identityLogo}><ChannelLogo name={channel.name} logo={channel.logo} disabled={!channelLogos} size={38} /></View> : null}
               <View>
                 <Text style={styles.channelTitle}>{channel ? `${channelNumbers ? `${numberById[channel.id] || ""}  ` : ""}${channel.name}` : "Live TV"}</Text>
                 <Text numberOfLines={1} style={styles.nowText}>{current?.title || "Live channel"}</Text>
@@ -743,6 +743,7 @@ export default function PlayerScreen() {
           previewHeight={guidePreviewHeight}
           channels={overlayGuideChannels}
           favoriteIds={favorites}
+          initialGroup={String(params.returnGuideGroup || "")}
           playingChannel={channel}
           playingCurrent={current}
           playingNext={next}
@@ -779,7 +780,8 @@ const styles = StyleSheet.create({
   notice: { position: "absolute", top: "47%", alignSelf: "center", maxWidth: "70%", minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 18, backgroundColor: "rgba(26,11,51,0.92)", borderWidth: 1, borderColor: glass.edge },
   noticeText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9 },
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0, minHeight: 82, flexDirection: "row", alignItems: "flex-start", paddingBottom: 18 },
-  channelIdentity: { flexDirection: "row", alignItems: "center", gap: 9 },
+  channelIdentity: { flexDirection: "row", alignItems: "center", gap: 10 },
+  identityLogo: { padding: 3, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.92)" },
   channelTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 15 },
   nowText: { color: "rgba(255,255,255,0.78)", fontFamily: fonts.regular, fontSize: 8.5, marginTop: 2, maxWidth: 360 },
   topSpacer: { flex: 1 },

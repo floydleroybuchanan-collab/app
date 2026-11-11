@@ -110,20 +110,13 @@ function GuideSelectionPreview({
   channelNumberById,
   showChannelNumbers,
   showLogos,
-  favoriteSet,
   hidePreview,
   muted,
-  onToggleMute,
   previewId,
   previewStatus,
   previewEpoch,
   onPreviewStatus,
-  onPlay,
-  onFavorite,
-  onOpenReminders,
   onHideToggle,
-  onOpenDrawer,
-  onActionsFocusChange,
   focusRequestToken,
   guideFocusTag,
 }: {
@@ -134,20 +127,13 @@ function GuideSelectionPreview({
   channelNumberById: Record<string, number>;
   showChannelNumbers: boolean;
   showLogos: boolean;
-  favoriteSet: ReadonlySet<string>;
   hidePreview: boolean;
   muted: boolean;
-  onToggleMute: () => void;
   previewId: string | null;
   previewStatus: StreamStatus;
   previewEpoch: number;
   onPreviewStatus: (status: StreamStatus) => void;
-  onPlay: (channel: Channel) => void;
-  onFavorite: (channelId: string) => void;
-  onOpenReminders: () => void;
   onHideToggle: () => void;
-  onOpenDrawer: () => void;
-  onActionsFocusChange: (focused: boolean) => void;
   focusRequestToken: number;
   guideFocusTag?: number | null;
 }) {
@@ -190,19 +176,12 @@ function GuideSelectionPreview({
         channelNumber={channel ? channelNumberById[channel.id] : undefined}
         showChannelNumbers={showChannelNumbers}
         showLogos={showLogos}
-        isFavorite={!!channel && favoriteSet.has(channel.id)}
         hidePreview={hidePreview}
         muted={muted}
-        onToggleMute={onToggleMute}
         previewVisible={previewVisible}
         previewEpoch={previewEpoch}
         onPreviewStatus={onPreviewStatus}
-        onPlay={() => channel && onPlay(channel)}
-        onFavorite={() => channel && onFavorite(channel.id)}
-        onOpenReminders={onOpenReminders}
         onHideToggle={onHideToggle}
-        onOpenDrawer={onOpenDrawer}
-        onActionsFocusChange={onActionsFocusChange}
         focusRequestToken={focusRequestToken}
         guideFocusTag={guideFocusTag}
       />
@@ -256,7 +235,6 @@ function PurpleGuideScreenContent() {
     recentIds,
     lastChannelId,
     channelById,
-    toggleFavorite,
     guideDensity,
     safePreviewMode,
     channelNumbers,
@@ -276,7 +254,6 @@ function PurpleGuideScreenContent() {
     startGroup,
     setPinnedGroups,
     setHidePreview,
-    setMutePreview,
     hiddenGroups,
   } = useGuideUiPreferences();
   const customGuideGroups = useCustomGuideGroups();
@@ -383,11 +360,6 @@ function PurpleGuideScreenContent() {
   useEffect(() => {
     if (activeProgram) hadProgramModalRef.current = true;
   }, [activeProgram]);
-
-  const openDrawerFromPreview = useCallback(() => {
-    void Haptics.selectionAsync().catch(() => undefined);
-    openDrawer({ focusTop: true, force: true });
-  }, [openDrawer]);
 
   const openGuideSources = useCallback(() => {
     closeDrawer();
@@ -1124,23 +1096,13 @@ function PurpleGuideScreenContent() {
               channelNumberById={channelNumberById}
               showChannelNumbers={channelNumbers}
               showLogos={isFocused && channelLogos && !surfLogosSuppressed}
-              favoriteSet={favoriteSet}
               hidePreview={hidePreview}
               muted={mutePreview}
-              onToggleMute={() => setMutePreview(!mutePreview)}
               previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
               previewStatus={previewStatus}
               previewEpoch={previewEpoch}
               onPreviewStatus={onPreviewStatus}
-              onPlay={play}
-              onFavorite={toggleFavorite}
-              onOpenReminders={() => {
-                quiesceGuideForTransition(true);
-                router.replace("/reminders" as any);
-              }}
               onHideToggle={() => setHidePreview(!hidePreview)}
-              onOpenDrawer={openDrawerFromPreview}
-              onActionsFocusChange={setPreviewActionsFocused}
               focusRequestToken={previewFocusRequestToken}
               guideFocusTag={nativeGuideFocusTag}
             />
@@ -1148,6 +1110,7 @@ function PurpleGuideScreenContent() {
             <View style={styles.gridPanel}>
               <NativeGuideCanvas
                 channels={filtered}
+                showLogos={channelLogos && !surfLogosSuppressed}
                 windowStart={windowStart}
                 windowEnd={windowEnd}
                 active={isFocused && !activeProgram && !pinPromptGroup && !quickActionsOpen && !drawerOpen && !groupDrawerOpen && !previewActionsFocused}

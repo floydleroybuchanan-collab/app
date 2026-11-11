@@ -5,7 +5,10 @@ import type { Channel, Program } from "@/src/api";
 import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
-import { fonts, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { usePlaylists } from "@/src/core/playlistRegistry";
+import { playlistOwner } from "@/src/core/playlistCatalog";
+import { buildPlaylistMenu, providerGroupKey } from "@/src/core/playlistGuideMenu";
 import { fmtTime, progressPct } from "@/src/utils/time";
 import { availableGuideDays, guidePanelOpacity, MAX_GUIDE_TRANSPARENCY, type GuidePresentationMode } from "@/src/core/guidePresentation";
 
@@ -24,6 +27,8 @@ type Props = {
   previewHeight: number;
   channels: Channel[];
   favoriteIds: readonly string[];
+  /** Guide group the player was launched from (same key format as the Guide). */
+  initialGroup?: string;
   playingChannel?: Channel;
   playingCurrent?: Program;
   playingNext?: Program;
@@ -45,12 +50,26 @@ type Props = {
 export function PlayerGuidePanel({
   mode, transparency, channelTransparency, animationEnabled, autoplayOnFocus, stayInGuide,
   safeLeft, safeRight, safeTop, safeBottom, previewWidth, previewHeight,
-  channels, favoriteIds, playingChannel, playingCurrent, playingNext,
-  windowStart, windowEnd, channelNumbers,
+  channels, favoriteIds, initialGroup, playingChannel, playingCurrent, playingNext,
+  windowStart, windowEnd, channelNumbers, showLogos,
   onTune, onDismiss, onModeChange, onTransparencyChange, onChannelTransparencyChange, onAutoplayChange, onStayChange, onRunway,
 }: Props) {
-  const [group, setGroup] = useState("All");
+  const sources = usePlaylists();
+  const favoriteSetForMenu = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  // Same playlist -> group menu the Guide uses, built once per catalog change.
+  const menu = useMemo(() => buildPlaylistMenu(sources, channels, favoriteSetForMenu, EMPTY_SET),
+    [channels, favoriteSetForMenu, sources]);
+  // Open on the playlist and group the viewer launched from: the Guide group
+  // when started from the Guide, otherwise the playing channel's own group.
+  const [playlist, setPlaylist] = useState(() => (playingChannel ? playlistOwner(playingChannel) : "all"));
+  const [group, setGroup] = useState(() => {
+    const launched = String(initialGroup || "").trim();
+    if (launched && launched !== "All") return launched;
+    return playingChannel?.group ? providerGroupKey(playingChannel.group) : "All";
+  });
   const [groupsOpen, setGroupsOpen] = useState(false);
+  const [playlistsOpen, setPlaylistsOpen] = useState(false);
+  const [reloadGeneration, setReloadGeneration] = useState(0);
   const [daysOpen, setDaysOpen] = useState(false);
   const [detail, setDetail] = useState<{ channel: Channel; program: Program } | null>(null);
   const [focus, setFocus] = useState<{ channel: Channel; program?: Program } | null>(null);
@@ -61,32 +80,26 @@ export function PlayerGuidePanel({
   const groupRef = useRef<any>(null);
   const focusRetry = useRef<(() => void) | null>(null);
   const tuneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
-  const groupCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const channel of channels) {
-      const name = channel.group?.trim();
-      if (name) counts.set(name, (counts.get(name) || 0) + 1);
-    }
-    counts.set("All", channels.length);
-    counts.set("Favorites", channels.reduce((count, channel) => count + Number(favoriteSet.has(channel.id)), 0));
-    return counts;
-  }, [channels, favoriteSet]);
-  const groups = useMemo(() => {
-    const distinct = new Set<string>();
-    for (const channel of channels) if (channel.group?.trim()) distinct.add(channel.group.trim());
-    return ["All", "Favorites", ...distinct].filter((name, index, list) => list.indexOf(name) === index);
-  }, [channels]);
-  const filtered = useMemo(() => group === "All" ? channels :
-    group === "Favorites" ? channels.filter((channel) => favoriteSet.has(channel.id)) :
-      channels.filter((channel) => channel.group?.trim() === group), [channels, favoriteSet, group]);
+  const favoriteSet = favoriteSetForMenu;
+  const section = menu.find((item) => item.id === playlist) || menu[0];
+  const groups = section?.groups || EMPTY_GROUPS;
+  const currentGroup = groups.find((item) => item.key === group) || groups[0];
+  const groupKey = currentGroup?.key || "All";
+  const filtered = useMemo(() => {
+    const inPlaylist = !section || section.id === "all" ? channels : channels.filter((channel) => playlistOwner(channel) === section.id);
+    if (groupKey === "All") return inPlaylist;
+    if (groupKey === "Favorites") return inPlaylist.filter((channel) => favoriteSet.has(channel.id));
+    return inPlaylist.filter((channel) => providerGroupKey(channel.group || "") === groupKey);
+  }, [channels, favoriteSet, groupKey, section]);
+  const groupIndex = Math.max(0, groups.findIndex((item) => item.key === groupKey));
+  const playlistIndex = Math.max(0, menu.findIndex((item) => item.id === section?.id));
   const days = useMemo(() => availableGuideDays(windowStart, windowEnd), [windowEnd, windowStart]);
-  const active = !groupsOpen && !daysOpen && detail === null;
+  const active = !groupsOpen && !playlistsOpen && !daysOpen && detail === null;
   const visibleChannel = focus?.channel || playingChannel;
   const visibleProgram = focus?.program || playingCurrent;
   const panelAlpha = guidePanelOpacity(mode, transparency);
   const progress = visibleProgram ? progressPct(visibleProgram, new Date()) : 0;
-  const panelBackground = `rgba(12,14,18,${panelAlpha.toFixed(3)})`;
+  const panelBackground = `rgba(26,11,51,${panelAlpha.toFixed(3)})`;
   const requestGridFocus = useCallback(() => {
     focusRetry.current?.();
     focusRetry.current = requestNativeFocusWithRetry(nativeTag ?? undefined);
@@ -106,8 +119,20 @@ export function PlayerGuidePanel({
     setGroup(name);
     setFocus(null);
     setRestoreChannelId(playingChannel?.id || null);
+    setReloadGeneration((value) => value + 1);
     setGroupsOpen(false);
   }, [playingChannel?.id]);
+
+  // Picking a playlist goes straight on to that playlist's groups.
+  const selectPlaylist = useCallback((id: string) => {
+    if (tuneTimer.current) clearTimeout(tuneTimer.current);
+    setPlaylist(id);
+    setGroup("All");
+    setFocus(null);
+    setReloadGeneration((value) => value + 1);
+    setPlaylistsOpen(false);
+    setGroupsOpen(true);
+  }, []);
 
   const selectDay = useCallback((at: number) => {
     setRestoreTimeMs(Math.max(Date.parse(windowStart), Math.min(Date.parse(windowEnd) - 1, at + 30 * 60_000)));
@@ -141,13 +166,15 @@ export function PlayerGuidePanel({
       if (detail) { setDetail(null); return true; }
       if (daysOpen) { setDaysOpen(false); return true; }
       if (groupsOpen) { setGroupsOpen(false); return true; }
+      if (playlistsOpen) { setPlaylistsOpen(false); return true; }
       return false;
     });
     return () => sub.remove();
-  }, [daysOpen, detail, groupsOpen]);
+  }, [daysOpen, detail, groupsOpen, playlistsOpen]);
 
-  const openDays = useCallback(() => { setGroupsOpen(false); setDaysOpen(true); }, []);
-  const openGroups = useCallback(() => { setDaysOpen(false); setGroupsOpen(true); }, []);
+  const openDays = useCallback(() => { setGroupsOpen(false); setPlaylistsOpen(false); setDaysOpen(true); }, []);
+  const openGroups = useCallback(() => { setDaysOpen(false); setPlaylistsOpen(false); setGroupsOpen(true); }, []);
+  const openPlaylists = useCallback(() => { setDaysOpen(false); setGroupsOpen(false); setPlaylistsOpen(true); }, []);
   const dayLabel = restoreTimeMs != null
     ? days.find((day) => restoreTimeMs >= day.at && restoreTimeMs < day.at + 86400000)?.label || "Date"
     : "Today";
@@ -166,7 +193,7 @@ export function PlayerGuidePanel({
           <View pointerEvents="none" style={{ width: previewWidth, height: previewHeight, backgroundColor: "transparent", borderColor: tvColors.lineStrong, borderWidth: 1 }}>
             <View style={styles.liveBadge}><Text style={styles.badgeText}>LIVE PREVIEW</Text></View>
           </View>
-          <View style={[styles.previewInfo, { backgroundColor: "#0C0E12" }]}>
+          <View style={[styles.previewInfo, { backgroundColor: "#1A0B33" }]}>
             <Text numberOfLines={1} style={styles.infoChannel}>{visibleChannel?.name || "Live TV"}</Text>
             <Text numberOfLines={2} style={styles.infoTitle}>{visibleProgram?.title || "No program information"}</Text>
             <Text numberOfLines={1} style={styles.infoTime}>{visibleProgram
@@ -177,10 +204,14 @@ export function PlayerGuidePanel({
           </View>
         </View>
       ) : null}
-      <View style={[styles.toolbar, { backgroundColor: mode === "preview" ? "#1B1E25" : panelBackground }]}>
+      <View style={[styles.toolbar, { backgroundColor: mode === "preview" ? "#1E0C3C" : panelBackground }]}>
+        <Pressable testID="player-guide-playlists" onPress={openPlaylists}
+          style={({ focused }: any) => [styles.action, styles.pickerAction, focused && styles.focused]}>
+          <Ionicons name="albums-outline" color="#fff" size={14}/><Text numberOfLines={1} style={[styles.actionText, styles.pickerText]}>{section?.label || "All Playlists"} ▾</Text>
+        </Pressable>
         <Pressable ref={groupRef} testID="player-guide-groups" onPress={openGroups}
-          style={({ focused }: any) => [styles.action, focused && styles.focused]}>
-          <Ionicons name="list-outline" color="#fff" size={14}/><Text numberOfLines={1} style={styles.actionText}>{group} ▾</Text>
+          style={({ focused }: any) => [styles.action, styles.groupAction, focused && styles.focused]}>
+          <Ionicons name="list-outline" color="#fff" size={14}/><Text numberOfLines={1} style={[styles.actionText, styles.pickerText]}>{currentGroup?.label || "All Channels"} ▾</Text>
         </Pressable>
         <Pressable ref={dayRef} testID="player-guide-day-picker" onPress={openDays}
           style={({ focused }: any) => [styles.action, focused && styles.focused]}>
@@ -234,10 +265,12 @@ export function PlayerGuidePanel({
       <View style={[styles.grid, mode === "preview" && styles.opaqueGrid]}>
         <NativeGuideCanvas
           channels={filtered}
+          showLogos={showLogos}
           windowStart={windowStart}
           windowEnd={windowEnd}
           restoreTimeMs={restoreTimeMs}
           restoreChannelId={restoreChannelId}
+          reloadGeneration={reloadGeneration}
           overlayMode={mode === "overlay"}
           transparencyLevel={transparency}
           channelTransparencyLevel={channelTransparency}
@@ -254,17 +287,40 @@ export function PlayerGuidePanel({
           onUpBoundary={() => requestNativeFocusWithRetry(dayRef.current)}
         />
       </View>
-      {groupsOpen ? (
-        <View style={[styles.layer, { backgroundColor: mode === "preview" ? "#171B23" : panelBackground }]}>
-          <Text style={styles.layerTitle}>CHANNEL GROUPS</Text>
+      {playlistsOpen ? (
+        <View style={styles.layer}>
+          <Text style={styles.layerTitle}>PLAYLISTS</Text>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.layerContent}>
-            <FlatList data={groups} keyExtractor={(item) => item} style={{ flex: 1 }} initialNumToRender={18}
+            <FlatList data={menu} keyExtractor={(item) => item.id} style={styles.layerList} initialNumToRender={12}
+              removeClippedSubviews={false}
+              getItemLayout={(_, index) => ({ length: LIST_ROW_HEIGHT, offset: LIST_ROW_HEIGHT * index, index })}
+              renderItem={({ item, index }) => <Pressable testID={`player-guide-playlist-${item.id}`} hasTVPreferredFocus={index === playlistIndex}
+                onPress={() => selectPlaylist(item.id)}
+                style={({ focused }: any) => [styles.listEntry, section?.id === item.id && styles.current, focused && styles.focused]}>
+                <Text numberOfLines={1} style={styles.entryText}>{item.label}</Text>
+                <Text style={styles.count}>{item.count}</Text>
+              </Pressable>}
+            />
+            <Pressable onPress={() => setPlaylistsOpen(false)} style={({ focused }: any) => [styles.action, focused && styles.focused]}>
+              <Text style={styles.actionText}>Back to guide</Text>
+            </Pressable>
+          </FocusGuide>
+        </View>
+      ) : null}
+      {groupsOpen ? (
+        <View style={styles.layer}>
+          <Text style={styles.layerTitle}>{(section?.label || "All Playlists").toUpperCase()} · CHANNEL GROUPS</Text>
+          <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.layerContent}>
+            {/* The current group is mounted and focused first so OK on it never lands nowhere. */}
+            <FlatList data={groups} keyExtractor={(item) => item.key} style={styles.layerList} initialNumToRender={18}
+              initialScrollIndex={groupIndex > 6 ? groupIndex - 3 : undefined}
               maxToRenderPerBatch={12} windowSize={5} removeClippedSubviews={false}
               getItemLayout={(_, index) => ({ length: LIST_ROW_HEIGHT, offset: LIST_ROW_HEIGHT * index, index })}
-              renderItem={({ item }) => <Pressable testID={`player-guide-group-${item}`} onPress={() => selectGroup(item)}
-                style={({ focused }: any) => [styles.listEntry, group === item && styles.current, focused && styles.focused]}>
-                <Text style={styles.entryText}>{item}</Text>
-                <Text style={styles.count}>{groupCounts.get(item) || 0}</Text>
+              renderItem={({ item, index }) => <Pressable testID={`player-guide-group-${item.label}`} hasTVPreferredFocus={index === groupIndex}
+                onPress={() => selectGroup(item.key)}
+                style={({ focused }: any) => [styles.listEntry, groupKey === item.key && styles.current, focused && styles.focused]}>
+                <Text numberOfLines={1} style={styles.entryText}>{item.label}</Text>
+                <Text style={styles.count}>{item.count}</Text>
               </Pressable>}
             />
             <Pressable onPress={() => setGroupsOpen(false)} style={({ focused }: any) => [styles.action, focused && styles.focused]}>
@@ -274,10 +330,10 @@ export function PlayerGuidePanel({
         </View>
       ) : null}
       {daysOpen ? (
-        <View style={[styles.layer, { backgroundColor: mode === "preview" ? "#171B23" : panelBackground }]}>
+        <View style={styles.layer}>
           <Text style={styles.layerTitle}>SELECT GUIDE DAY</Text>
           <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.layerContent}>
-            <FlatList data={days} keyExtractor={(item) => item.key} initialNumToRender={10} removeClippedSubviews={false}
+            <FlatList data={days} keyExtractor={(item) => item.key} style={styles.layerList} initialNumToRender={10} removeClippedSubviews={false}
               renderItem={({ item }) => <Pressable onPress={() => selectDay(item.at)} style={({ focused }: any) => [styles.listEntry, focused && styles.focused]}>
                 <Text style={styles.entryText}>{item.label}</Text></Pressable>}
             />
@@ -288,7 +344,7 @@ export function PlayerGuidePanel({
         </View>
       ) : null}
       {detail ? (
-        <View style={[styles.layer, { backgroundColor: "#171B23" }]}>
+        <View style={styles.layer}>
           <Text style={styles.layerTitle}>{detail.program.title || "Program information"}</Text>
           <Text style={styles.detailDescription}>{detail.channel.name}</Text>
           <Text style={styles.detailDescription}>{fmtTime(detail.program.start)} – {detail.program.stop ? fmtTime(detail.program.stop) : "LIVE"}</Text>
@@ -309,6 +365,8 @@ export function PlayerGuidePanel({
 }
 
 const LIST_ROW_HEIGHT = 46;
+const EMPTY_SET: ReadonlySet<string> = new Set();
+const EMPTY_GROUPS: { key: string; label: string; count: number }[] = [];
 
 const styles = StyleSheet.create({
   frame: { position: "absolute", zIndex: 40, gap: 0, overflow: "hidden" },
@@ -319,30 +377,35 @@ const styles = StyleSheet.create({
   infoTime: { fontFamily: fonts.medium, color: tvColors.textMuted, fontSize: 12 },
   infoDescription: { fontFamily: fonts.regular, color: "#D4D8E1", fontSize: 11 },
   progressTrack: { height: 3, width: "100%", backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden", borderRadius: 2 },
-  progressFill: { height: 3, backgroundColor: tvColors.purpleBright },
+  progressFill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
   overlayInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 9, paddingVertical: 5, gap: 12 },
   overlayInfoTitle: { flex: 1, color: "#fff", fontFamily: fonts.medium, fontSize: 11 },
   overlayInfoTime: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 10 },
-  liveBadge: { position: "absolute", bottom: 7, left: 7, backgroundColor: "rgba(124,58,237,0.92)", paddingHorizontal: 8, paddingVertical: 4 },
+  liveBadge: { position: "absolute", bottom: 7, left: 7, backgroundColor: "rgba(124,58,237,0.92)", borderColor: tvColors.purpleSoft, borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   badgeText: { color: "#fff", fontFamily: fonts.bold, fontSize: 10 },
   toolbar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5, padding: 5, minHeight: 42 },
-  action: { minHeight: 32, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, borderColor: "transparent", borderWidth: 2, borderRadius: 5, backgroundColor: "rgba(45,37,65,0.55)" },
+  action: { minHeight: 32, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center", paddingHorizontal: 9, borderColor: glass.buttonEdge, borderWidth: 2, borderRadius: 11, backgroundColor: "rgba(60,26,112,0.62)" },
   actionText: { fontFamily: fonts.medium, color: "#fff", fontSize: 11 },
+  // Group picker is twice as wide as before so long group names fit.
+  groupAction: { width: 230, justifyContent: "flex-start" },
+  pickerAction: { width: 150, justifyContent: "flex-start" },
+  pickerText: { flexShrink: 1 },
   transparencyControls: { gap: 2 },
   adjustRow: { flexDirection: "row", alignItems: "center", gap: 3, height: 20 },
   adjustLabel: { width: 48, color: "#fff", fontFamily: fonts.medium, fontSize: 9 },
-  step: { height: 20, width: 24, borderColor: "transparent", borderWidth: 2, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(45,37,65,0.55)" },
+  step: { height: 20, width: 24, borderColor: glass.edgeSoft, borderWidth: 2, borderRadius: 6, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(60,26,112,0.62)" },
   opacityText: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
   grid: { flex: 1, minHeight: 0, backgroundColor: "transparent" },
-  opaqueGrid: { backgroundColor: "#0C0E12" },
-  layer: { ...StyleSheet.absoluteFillObject, zIndex: 50, padding: 13 },
-  layerTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 17, marginBottom: 10 },
+  opaqueGrid: { backgroundColor: "#120826" },
+  layer: { ...StyleSheet.absoluteFillObject, zIndex: 50, padding: 13, backgroundColor: "rgba(30,12,60,0.97)", borderRadius: 16, borderWidth: 1, borderColor: glass.edge },
+  layerTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 15, letterSpacing: 0.6, marginBottom: 10 },
   layerContent: { flex: 1, minHeight: 0, gap: 8 },
-  listEntry: { height: 42, paddingHorizontal: 10, marginVertical: 2, flexDirection: "row", alignItems: "center", borderColor: "transparent", borderWidth: 2, borderRadius: 6, backgroundColor: "rgba(75,68,96,0.45)" },
-  current: { backgroundColor: tvColors.purpleDeep },
+  layerList: { flexGrow: 1, flexShrink: 1, minHeight: LIST_ROW_HEIGHT * 3 },
+  listEntry: { height: 42, paddingHorizontal: 10, marginVertical: 2, flexDirection: "row", alignItems: "center", borderColor: glass.edgeSoft, borderWidth: 2, borderRadius: 11, backgroundColor: "rgba(40,18,78,0.70)" },
+  current: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
   entryText: { color: "#fff", flex: 1, fontFamily: fonts.medium, fontSize: 13 },
   count: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 11 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: glassFocus,
   detailDescription: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 12, marginBottom: 8 },
   detailActions: { flexDirection: "row", gap: 8, marginTop: 16 },
 });

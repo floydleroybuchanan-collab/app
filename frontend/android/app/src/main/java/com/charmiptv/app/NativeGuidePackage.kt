@@ -25,6 +25,7 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   @ReactProp(name = "restoreGeneration", defaultInt = 0) fun restoreGeneration(view: NativeGuideView, value: Int) = view.setRestoreGeneration(value)
   @ReactProp(name = "restoreTimeMs", defaultDouble = 0.0) fun restoreTime(view: NativeGuideView, value: Double) = view.restoreTime(value)
   @ReactProp(name = "reloadGeneration", defaultInt = 0) fun reload(view: NativeGuideView, value: Int) = view.setReloadGeneration(value)
+  @ReactProp(name = "visibleLogos") fun visibleLogos(view: NativeGuideView, value: com.facebook.react.bridge.ReadableMap?) = view.setVisibleLogos(value)
   override fun onDropViewInstance(view: NativeGuideView) {
     view.dispose()
     super.onDropViewInstance(view)
