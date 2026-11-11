@@ -56,3 +56,11 @@ test("a doubled select press cannot open and immediately close a Guide playlist"
   assert.match(guide, /if \(last && last\.id === id && now - last\.at < PLAYLIST_TOGGLE_DEBOUNCE_MS\) return;/);
   assert.match(guide, /togglePlaylistExpanded\(section\.id\)/);
 });
+
+test("OK on a channel name in either guide plays that channel", () => {
+  const canvas = read("src/components/NativeGuideCanvas.tsx");
+  const pressed = canvas.slice(canvas.indexOf("if (value.pressed)"), canvas.indexOf("}, [channelById, onChannelFocus"));
+  assert.match(pressed, /else onChannelPress\(channel\);/);
+  assert.match(read("app/(tabs)/guide.tsx"), /onChannelPress=\{play\}/);
+  assert.match(read("src/components/PlayerGuidePanel.tsx"), /onChannelPress=\{tuneChannel\}/);
+});

@@ -173,7 +173,8 @@ test("native Guide resolves short versus held Select before opening a programme"
   assert.match(keys, /event\.repeatCount == 0[\s\S]*selectKeyDown = true/);
   assert.match(keys, /event\.repeatCount[\s\S]*selectLongPressSeen = true/);
   assert.match(keys, /val shortPress = selectKeyDown && !selectLongPressSeen/);
-  assert.match(keys, /if \(shortPress\) emitSelection\(true, pressed = !channelRailSelected\)/);
+  // A short select on the channel name now plays it too (JS routes by surface).
+  assert.match(keys, /if \(shortPress\) emitSelection\(true, pressed = true\)/);
   assert.doesNotMatch(keys, /KEYCODE_DPAD_CENTER[^\n]*emitSelection\(true, pressed = true\)/);
   assert.match(activity, /private val selectHoldHandler = Handler\(Looper\.getMainLooper\(\)\)/);
   assert.match(activity, /selectHoldHandler\.postDelayed\([\s\S]{0,160}ViewConfiguration\.getLongPressTimeout\(\)\.toLong\(\)/);

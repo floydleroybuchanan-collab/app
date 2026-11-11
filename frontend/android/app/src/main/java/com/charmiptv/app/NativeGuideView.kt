@@ -698,7 +698,9 @@ class NativeGuideView(context: Context) : View(context) {
       val shortPress = selectKeyDown && !selectLongPressSeen
       selectKeyDown = false
       selectLongPressSeen = false
-      if (shortPress) emitSelection(true, pressed = !channelRailSelected)
+      // OK plays from both surfaces: a programme cell (details/watch) and the
+      // channel name itself, now that the preview row has no Play button.
+      if (shortPress) emitSelection(true, pressed = true)
       return true
     }
     return super.onKeyUp(keyCode, event)

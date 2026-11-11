@@ -151,6 +151,8 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
     if (value.pressed) {
       if (value.surface !== "channel" && program) onProgramPress(program, channel);
       else if (value.surface !== "channel") onChannelPress(channel);
+      // OK on the channel name plays that channel.
+      else onChannelPress(channel);
     }
   }, [channelById, onChannelFocus, onChannelPress, onProgramFocus, onProgramPress]);
 
