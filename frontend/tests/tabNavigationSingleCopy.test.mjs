@@ -45,6 +45,14 @@ test("LEFT to a same-row page neighbour is moved natively, never left to the win
   assert.match(helper, /findNextFocus\(page as\? ViewGroup/);
 });
 
+test("a closed drawer is not drawn, so it can never show open with unfocusable rows", async () => {
+  const shell = await source("src/components/PurpleTvShell.tsx");
+  assert.match(shell, /\{isFocused && \(drawerOpen \|\| drawerVisible\) \? <Animated\.View/);
+  assert.doesNotMatch(shell, /active !== "\/vod" \|\| drawerOpen\) \? <Animated\.View/);
+  assert.match(shell, /if \(!drawerVisibleRef\.current\) drawerProgress\.setValue\(0\);/);
+  assert.match(shell, /if \(finished && !drawerOpenRef\.current\) \{\s*drawerVisibleRef\.current = false;\s*setDrawerVisible\(false\);/);
+});
+
 test("VOD Settings buttons pass their section in a param React Navigation keeps", async () => {
   const settings = await source("app/(tabs)/settings.tsx");
   const vod = await source("app/(tabs)/vod.tsx");

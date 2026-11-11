@@ -109,6 +109,8 @@ export type OpenDrawerOptions = {
 
 type DrawerContextValue = {
   drawerOpen: boolean;
+  /** True while open or sliding closed; a closed drawer is not drawn at all. */
+  drawerVisible: boolean;
   drawerProgress: Animated.Value;
   openDrawer: (options?: OpenDrawerOptions) => void;
   closeDrawer: (options?: { force?: boolean }) => void;
@@ -146,15 +148,22 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const drawerOpenRef = useRef(false);
   const openedAtRef = useRef(0);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const drawerVisibleRef = useRef(false);
 
   const openDrawer = useCallback((options?: OpenDrawerOptions) => {
     if (isGuideScreenActive() && isGuideSurfing() && !options?.force) return;
     if (drawerOpenRef.current) return;
     drawerOpenRef.current = true;
     openedAtRef.current = Date.now();
+    // A drawer that is drawn fresh starts fully closed, never from a stale
+    // animated value left by another page's drawer.
+    if (!drawerVisibleRef.current) drawerProgress.setValue(0);
+    drawerVisibleRef.current = true;
+    setDrawerVisible(true);
     setFocusDrawerTop(!!options?.focusTop);
     setDrawerOpen(true);
-  }, []);
+  }, [drawerProgress]);
 
   const closeDrawer = useCallback((options?: { force?: boolean }) => {
     if (!drawerOpenRef.current) return;
@@ -187,13 +196,23 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       duration: PURPLE_DRAWER_ANIMATION_MS,
       useNativeDriver: true,
     });
-    animation.start();
+    animation.start(({ finished }) => {
+      // Remove the drawer once it has slid away. Every page used to keep its own
+      // closed drawer laid out under the rail: it could be drawn open from a
+      // stale animated value after a page change (stuck open, no focusable row)
+      // and it competed for LEFT focus.
+      if (finished && !drawerOpenRef.current) {
+        drawerVisibleRef.current = false;
+        setDrawerVisible(false);
+      }
+    });
     return () => animation.stop();
   }, [drawerOpen, drawerProgress]);
 
   const value = useMemo(
     () => ({
       drawerOpen,
+      drawerVisible,
       drawerProgress,
       openDrawer,
       closeDrawer,
@@ -204,7 +223,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       focusDrawerTop,
       consumeFocusDrawerTop,
     }),
-    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag],
+    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, drawerVisible, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
@@ -262,6 +281,7 @@ export function PurpleTvShell({
   const railRevealPendingRef = useRef(false);
   const {
     drawerOpen,
+    drawerVisible,
     drawerProgress,
     openDrawer,
     closeDrawer,
@@ -695,7 +715,7 @@ export function PurpleTvShell({
         },
       ]}
     >
-      {isFocused && (active !== "/vod" || drawerOpen) ? <Animated.View
+      {isFocused && (drawerOpen || drawerVisible) ? <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
