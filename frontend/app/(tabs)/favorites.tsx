@@ -304,10 +304,6 @@ function FavoritesScreenContent() {
         ) : null}
 
         {items.length ? (
-          // The rounded glass panel lives on a wrapper View. Putting border /
-          // radius styling on the FlatList itself made Android (Fabric) draw
-          // no rows while the count above still showed them.
-          <View style={styles.listPanel}>
           <FlatList
             data={items}
             keyExtractor={(item) => item.id}
@@ -315,7 +311,6 @@ function FavoritesScreenContent() {
             maxToRenderPerBatch={10}
             windowSize={7}
             removeClippedSubviews={false}
-            style={styles.listFill}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => (
               <FavoriteRow
@@ -331,7 +326,6 @@ function FavoritesScreenContent() {
               />
             )}
           />
-          </View>
         ) : (
           <View style={styles.empty}>
             <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={30} color="#fff" /></View>
@@ -368,13 +362,7 @@ const styles = StyleSheet.create({
   editInput: { flex: 1, minWidth: 0, height: 32, paddingHorizontal: 10, paddingVertical: 0, borderRadius: 10, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: "rgba(20,8,42,0.85)", color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
   editButton: { minHeight: 30, justifyContent: "center", paddingHorizontal: 14, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
   editPrimary: { borderColor: glass.selectedEdge, backgroundColor: "rgba(140,70,240,0.80)" },
-  // Panel styling on a plain View; the FlatList inside only fills it.
-  listPanel: { flex: 1, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(74,32,134,0.22)" },
-  // Pinned to the panel's edges. `flex: 1` measured the list 1px tall here
-  // (the tab sits inside a scroll container, so flex height never resolved):
-  // the count showed but every row was clipped away.
-  listFill: { position: "absolute", top: 4, left: 4, right: 4, bottom: 4 },
-  list: { padding: 2, paddingBottom: 20 },
+  list: { paddingTop: 4, paddingBottom: 20 },
   row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 8, marginBottom: 5, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", borderRadius: 12 },
   focused: glassFocus,
   number: { width: 22, color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 9, textAlign: "right" },

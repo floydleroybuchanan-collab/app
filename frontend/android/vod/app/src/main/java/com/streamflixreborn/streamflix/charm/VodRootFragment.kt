@@ -186,6 +186,9 @@ class VodRootFragment : Fragment() {
     /** Native RIGHT from the unified app rail restores focus inside VOD. */
     fun restoreFocusFromRail(): Boolean = coordinator?.restoreFocusFromHost() == true
 
+    /** The VOD player page is on screen (the host must send every key here). */
+    fun isPlayerShown(): Boolean = isVisible && coordinator?.isPlayerShown() == true
+
     fun onRemoteKey(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
             event.keyCode == KeyEvent.KEYCODE_BACK) return navigateBack()
@@ -212,8 +215,23 @@ class VodRootFragment : Fragment() {
         }
 
     fun navigateTo(section: String) {
+        val previous = requestedSection
         requestedSection = section
         val controller = navigation ?: return
+        // A title link from Live TV ("movie:<id>") arrives here when the VOD
+        // view is already alive. Open that title over Home (Back returns Home).
+        titleDestination(section)?.let { (destination, id) ->
+            runCatching {
+                controller.navigate(destination, Bundle().apply { putString("id", id) }, navOptions {
+                    popUpTo(R.id.home) { inclusive = false }
+                })
+                coordinator?.focusIncomingPage()
+            }.onFailure { Log.e("CharmVodRoot", "Cannot open requested title", it) }
+            return
+        }
+        // React clears the one-shot title link afterwards ("home"); that must
+        // not pull the user off the title page they just opened.
+        if (section == "home" && titleDestination(previous) != null) return
         val destination = when (section) {
             "settings" -> R.id.settings
             "search" -> R.id.search

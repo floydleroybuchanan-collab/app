@@ -250,6 +250,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         fun restoreNativeFocus(): Boolean =
             isAttachedToWindow && fragment?.restoreFocusFromRail() == true
 
+        /** True while this surface shows the VOD player page. */
+        fun playerShown(): Boolean = isAttachedToWindow && isShown && fragment?.isPlayerShown() == true
+
         fun dispose() {
             activity?.detachVodInput(this)
             fragment?.apply {

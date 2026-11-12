@@ -641,6 +641,10 @@ class PlayerTvFragment : Fragment() {
      * The view-lifecycle coroutine is canceled on navigation/decoder release.
      */
     private fun showTimedPlatformBadgeIfOriginal() {
+        // The owner asked for no "N Original" badge over playback; keep it hidden.
+        binding.tvPlatformOriginBadge.visibility = View.GONE
+        platformBadgeJob?.cancel()
+        if (binding.tvPlatformOriginBadge.visibility == View.GONE) return
         val platform = when (val type = args.videoType) {
             is Video.Type.Movie ->
                 VodPlatformCatalog.find(type.title, type.releaseDate.take(4).toIntOrNull())
@@ -1712,8 +1716,8 @@ class PlayerTvFragment : Fragment() {
             controllerBinding.exoSettings.nextFocusUpId = if (overlayVisible) overlayActionId else View.NO_ID
             controllerBinding.btnExoAspectRatio.nextFocusUpId = if (overlayVisible) overlayActionId else View.NO_ID
             controllerBinding.exoProgress.nextFocusUpId = View.NO_ID
-            controllerBinding.btnCustomNext.nextFocusDownId = R.id.exo_progress
-            controllerBinding.exoPlayPause.nextFocusDownId = R.id.exo_progress
+            controllerBinding.btnCustomNext.nextFocusDownId = R.id.btn_exo_stop
+            controllerBinding.exoPlayPause.nextFocusDownId = R.id.btn_exo_stop
 
             controllerBinding.btnSkipIntro.nextFocusLeftId = if (overlayVisible) overlayActionId else View.NO_ID
             controllerBinding.btnSkipIntro.nextFocusUpId = if (overlayVisible) overlayActionId else View.NO_ID
@@ -1734,7 +1738,9 @@ class PlayerTvFragment : Fragment() {
                 else controllerBinding.exoSettings.id
         }
 
-        private fun showSkipIntroButton(show: Boolean) {
+        private fun showSkipIntroButton(requested: Boolean) {
+            // Skip intro is removed at the owner's request: never shown.
+            val show = requested && false
             val btnSkipIntro = binding.pvPlayer.controller.binding.btnSkipIntro
             if (show && btnSkipIntro.isGone) {
                 val fadeIn = android.view.animation.AnimationUtils.loadAnimation(

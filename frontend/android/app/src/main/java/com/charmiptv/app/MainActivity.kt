@@ -393,7 +393,11 @@ class MainActivity : ReactActivity() {
       return true
     }
     // Media3 hides its controls by clearing focus; the next key must still reach it.
-    if (vodImmersive && event.action == android.view.KeyEvent.ACTION_DOWN && !nativeVodOwnsFocus()) {
+    // Also ask the surface directly: after a few plays the immersive flag could
+    // be stale, so keys went to the app instead and the controls never returned.
+    val vodPlayerOnScreen = vodImmersive ||
+      (vodInputOwner as? CharmVodSurfaceManager.Surface)?.playerShown() == true
+    if (vodPlayerOnScreen && event.action == android.view.KeyEvent.ACTION_DOWN && !nativeVodOwnsFocus()) {
       (vodInputOwner as? CharmVodSurfaceManager.Surface)?.restoreNativeFocus()
     }
     if (nativeVodOwnsFocus() && vodKeyHandler?.invoke(event) == true) {

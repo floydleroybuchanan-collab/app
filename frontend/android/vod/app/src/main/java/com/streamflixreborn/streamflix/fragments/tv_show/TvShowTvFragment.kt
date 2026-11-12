@@ -115,6 +115,7 @@ class TvShowTvFragment : Fragment() {
                 stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY
             }
             setItemSpacing(80)
+            com.streamflixreborn.streamflix.charm.VodTitleBadge.hideWhenScrolled(this, binding.tvPlatformInfoBadge)
         }
     }
 

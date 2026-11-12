@@ -4,16 +4,19 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Channels and Favorites lists keep panel styling off the FlatList", () => {
+test("Channels and Favorites lists use the same plain FlatList as Movies/Series", () => {
   for (const page of ["app/(tabs)/channels.tsx", "app/(tabs)/favorites.tsx"]) {
     const source = read(page);
-    // Border/radius on the FlatList itself drew no rows on Android (Fabric).
-    assert.match(source, /<View style=\{styles\.listPanel\}>\s*<FlatList/, page);
-    assert.match(source, /style=\{styles\.listFill\}/, page);
-    assert.doesNotMatch(source, /<FlatList[^>]*style=\{styles\.listPanel\}/, page);
-    // flex:1 resolved to a 1px-tall list on device; pin it to the panel edges.
-    assert.match(source, /listFill: \{ position: "absolute", top: 4, left: 4, right: 4, bottom: 4 \}/, page);
+    // On device a panel wrapper or a style on the list left it 1px tall (rows
+    // clipped away). The Movies/Series grid, with no list style, renders.
+    const list = source.slice(source.indexOf("<FlatList"), source.indexOf("renderItem=", source.indexOf("<FlatList")));
+    assert.ok(list.length > 0, page);
+    assert.doesNotMatch(list, /\n\s*style=/, page);
+    assert.doesNotMatch(source, /listPanel|listFill/, page);
   }
+  const movies = read("src/components/PurpleChannelCollection.tsx");
+  const grid = movies.slice(movies.indexOf("<FlatList"), movies.indexOf("renderItem=", movies.indexOf("<FlatList")));
+  assert.doesNotMatch(grid, /\n\s*style=/);
 });
 
 test("favorite folders rename by typing and delete only after confirming", () => {
@@ -75,4 +78,35 @@ test("VOD title pages put a readable glass panel behind the details", () => {
     assert.match(xml, /android:textSize="30sp"\s+android:maxLines="2"\s+android:ellipsize="end"/, file);
     assert.match(xml, new RegExp(String.raw`id="@\+id/tv_${p}_overview"\s+android:textColor="#EDE3FF"`), file);
   }
+});
+
+test("VOD player: keys always reach the player, no badge or Skip intro, sane D-pad", () => {
+  const coordinator = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodFocusCoordinator.kt");
+  assert.match(coordinator, /if \(navigation\.currentDestination\?\.id == R\.id\.player\) \{[\s\S]{0,700}playerView\.requestFocus\(\)\s*playerView\.showController\(\)/);
+  assert.match(coordinator, /if \(destination == R\.id\.player\) return playerView\(\)\?\.requestFocus\(\) == true/);
+  assert.match(coordinator, /if \(destination == R\.id\.player\) return@OnGlobalFocusChangeListener/);
+  assert.match(coordinator, /PARK_TICK_MS = 250L/);
+  const activity = read("android/app/src/main/java/com/charmiptv/app/MainActivity.kt");
+  assert.match(activity, /val vodPlayerOnScreen = vodImmersive \|\|\s*\(vodInputOwner as\? CharmVodSurfaceManager\.Surface\)\?\.playerShown\(\) == true/);
+  const player = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt");
+  assert.match(player, /val show = requested && false/);
+  assert.match(player, /binding\.tvPlatformOriginBadge\.visibility = View\.GONE\s*platformBadgeJob\?\.cancel\(\)/);
+  assert.match(player, /exoPlayPause\.nextFocusDownId = R\.id\.btn_exo_stop/);
+  const similar = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodPlayerSimilar.kt");
+  assert.match(similar, /for \(id in TRANSPORT\) controls\.findViewById<View>\(id\)\?\.nextFocusUpId = rail\.id/);
+  assert.doesNotMatch(similar, /nextFocusDownId = rail\.id/);
+});
+
+test("VOD pages: title links reuse the live view, readable episodes, UP finds the row above", () => {
+  const root = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt");
+  assert.match(root, /fun navigateTo\(section: String\) \{[\s\S]{0,400}titleDestination\(section\)\?\.let/);
+  assert.match(root, /if \(section == "home" && titleDestination\(previous\) != null\) return/);
+  const episode = read("android/vod/app/src/main/res/layout/item_episode_tv.xml");
+  assert.match(episode, /tv_episode_info"\s+android:textColor="#D9C8F5"/);
+  assert.match(episode, /tv_episode_released"\s+android:textColor="#C9B5EE"/);
+  assert.match(episode, /app:layout_constraintTop_toBottomOf="@id\/tv_episode_released"/);
+  const coordinator = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodFocusCoordinator.kt");
+  assert.match(coordinator, /val above = nearestAbove\(content, current\)/);
+  for (const page of ["fragments/tv_show/TvShowTvFragment.kt", "fragments/movie/MovieTvFragment.kt"])
+    assert.match(read(`android/vod/app/src/main/java/com/streamflixreborn/streamflix/${page}`), /VodTitleBadge\.hideWhenScrolled\(this, binding\.tvPlatformInfoBadge\)/);
 });

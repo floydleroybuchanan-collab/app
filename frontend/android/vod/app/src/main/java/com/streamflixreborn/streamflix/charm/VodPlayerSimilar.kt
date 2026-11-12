@@ -53,18 +53,19 @@ object VodPlayerSimilar {
     }
 
     private fun show(rail: RecyclerView, titles: List<Show>, navigation: NavController) {
-        val stop = R.id.btn_exo_stop
         rail.layoutManager = LinearLayoutManager(rail.context, RecyclerView.HORIZONTAL, false)
         rail.adapter = Cards(titles, navigation)
         rail.visibility = View.VISIBLE
-        // D-pad order becomes playback buttons, then this rail, then Stop.
-        fun link(view: View) {
-            if (view.nextFocusDownId == stop) view.nextFocusDownId = rail.id
-            (view as? ViewGroup)?.let { group -> (0 until group.childCount).forEach { link(group.getChildAt(it)) } }
-        }
-        (rail.parent as? View)?.let(::link)
-        (rail.parent as? View)?.findViewById<View>(stop)?.nextFocusUpId = rail.id
+        // The rail sits ABOVE the playback buttons. It used to be wired as
+        // their DOWN target, so DOWN jumped up into the posters (or seemed
+        // dead) and the button row below could not be reached. Now: UP from
+        // the playback buttons enters the rail, DOWN from the rail returns to
+        // Play/Pause, and DOWN from the playback buttons stays on the bottom row.
+        val controls = rail.parent as? View ?: return
+        for (id in TRANSPORT) controls.findViewById<View>(id)?.nextFocusUpId = rail.id
     }
+
+    private val TRANSPORT = intArrayOf(R.id.btn_custom_prev, R.id.exo_replay, R.id.exo_play_pause, R.id.btn_custom_next)
 
     private class Holder(val card: FrameLayout, val art: ImageView, val name: TextView) : RecyclerView.ViewHolder(card)
 
@@ -105,6 +106,7 @@ object VodPlayerSimilar {
             }
             holder.name.text = title
             holder.card.contentDescription = title
+            holder.card.nextFocusDownId = R.id.exo_play_pause
             Glide.with(holder.art).load(image?.replace("/original/", "/w500/")).centerCrop().into(holder.art)
             holder.card.setOnClickListener {
                 navigation.navigate(if (show is Movie) R.id.movie else R.id.tv_show, Bundle().apply { putString("id", id) })

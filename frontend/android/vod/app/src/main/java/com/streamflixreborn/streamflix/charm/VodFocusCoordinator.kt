@@ -64,6 +64,8 @@ class VodFocusCoordinator(
         // user's previous selection. Never overwrite a pending bookmark.
         if (disposed || restoring || pendingDestination != null || new == null) return@OnGlobalFocusChangeListener
         val destination = navigation.currentDestination?.id ?: return@OnGlobalFocusChangeListener
+        // Never bookmark inside the player: each play builds a new player view.
+        if (destination == R.id.player) return@OnGlobalFocusChangeListener
         val content = currentContentRoot()
         when {
             VodFocusMemory.isWithin(binding.vodGlassActions, new) ->
@@ -95,6 +97,7 @@ class VodFocusCoordinator(
                 binding.navMainFragment.viewTreeObserver.addOnGlobalLayoutListener(parkLayoutListener)
                 parkListenerAttached = true
             }
+            startParkTick()
         }
         // All VOD browse/detail pages can reach the glass navigation with Up.
         // The video player and the provider selector remain full-screen.
@@ -162,6 +165,25 @@ class VodFocusCoordinator(
         // Any key means the user is steering again (including LEFT/BACK to the
         // app rail), so focus parking for a loading page ends here.
         cancelParking()
+        // VOD playback: Media3 drops focus when it hides its controls. If a key
+        // arrives while focus is anywhere but the player view, give focus back
+        // to the player and show the controls (after a few plays the saved
+        // focus spot could point at an old player's view, so they never came back).
+        if (navigation.currentDestination?.id == R.id.player) {
+            if (key == KeyEvent.KEYCODE_BACK) return false
+            val playerView = playerView() ?: return false
+            val page = currentContentRoot()
+            val focused = binding.root.findFocus()
+            // Settings panel / next-episode box may hold focus legitimately.
+            val focusUsable = focused != null && focused.isShown &&
+                page != null && VodFocusMemory.isWithin(page, focused)
+            if (!focusUsable) {
+                playerView.requestFocus()
+                playerView.showController()
+                return true
+            }
+            return false
+        }
         if (binding.vodGlassActions.visibility != View.VISIBLE) return false
         val current = binding.root.findFocus() ?: return false
         val inBar = VodFocusMemory.isWithin(binding.vodGlassActions, current)
@@ -188,6 +210,17 @@ class VodFocusCoordinator(
         if (key == KeyEvent.KEYCODE_DPAD_DOWN &&
             VodFocusMemory.isWithin(binding.vodGlassActions, current)) {
             return focusContent()
+        }
+        // UP from far along a horizontal row (e.g. "You may also like"): the
+        // row above often has no card laid out straight overhead, so Android
+        // found nothing and focus stayed put until the user went back left.
+        // Fall back to the nearest card in the row above.
+        if (key == KeyEvent.KEYCODE_DPAD_UP && inContent && content != null) {
+            val native = current.focusSearch(View.FOCUS_UP)
+            if (native == null || native === current || !isAbove(native, current)) {
+                val above = nearestAbove(content, current)
+                if (above != null && above.requestFocus()) return true
+            }
         }
         if (key == KeyEvent.KEYCODE_DPAD_UP &&
             VodFocusMemory.isWithin(binding.navMainFragment, current)) {
@@ -226,6 +259,40 @@ class VodFocusCoordinator(
         return false
     }
 
+    private fun isAbove(candidate: View, from: View): Boolean {
+        val a = IntArray(2).also(candidate::getLocationOnScreen)
+        val b = IntArray(2).also(from::getLocationOnScreen)
+        return a[1] + candidate.height <= b[1] + from.height / 2
+    }
+
+    /** Closest shown focusable whose bottom is above [from]'s top: nearest row first, then nearest x. */
+    private fun nearestAbove(content: View, from: View): View? {
+        val origin = IntArray(2).also(from::getLocationOnScreen)
+        val fromTop = origin[1]
+        val fromCenterX = origin[0] + from.width / 2
+        val candidates = ArrayList<View>()
+        content.addFocusables(candidates, View.FOCUS_UP)
+        var best: View? = null
+        var bestRowGap = Int.MAX_VALUE
+        var bestDx = Int.MAX_VALUE
+        val spot = IntArray(2)
+        for (view in candidates) {
+            if (view === from || !view.isShown || view.width == 0 || view.height == 0) continue
+            view.getLocationOnScreen(spot)
+            val bottom = spot[1] + view.height
+            if (bottom > fromTop + 2) continue
+            val rowGap = fromTop - bottom
+            val dx = kotlin.math.abs(spot[0] + view.width / 2 - fromCenterX)
+            // Same row band (within 24px) counts as one row: pick nearest x there.
+            if (rowGap < bestRowGap - 24 || (kotlin.math.abs(rowGap - bestRowGap) <= 24 && dx < bestDx)) {
+                best = view
+                bestRowGap = rowGap
+                bestDx = dx
+            }
+        }
+        return best
+    }
+
     private fun sharesRow(a: View, b: View): Boolean {
         val first = IntArray(2).also(a::getLocationOnScreen)
         val second = IntArray(2).also(b::getLocationOnScreen)
@@ -243,6 +310,9 @@ class VodFocusCoordinator(
     fun restoreFocusFromHost(): Boolean {
         if (disposed) return false
         val destination = navigation.currentDestination?.id ?: return focusBar()
+        // During playback the player view is the only right owner: it shows the
+        // controls on the next key. A remembered spot may belong to an old player.
+        if (destination == R.id.player) return playerView()?.requestFocus() == true
         if (lastZoneWasBar[destination] == true && focusBar()) return true
         val content = currentContentRoot()
         if (content != null && focusMemory.restore(destination, content)) return true
@@ -265,6 +335,13 @@ class VodFocusCoordinator(
     private fun currentContentRoot(): View? =
         navHost.childFragmentManager.primaryNavigationFragment?.view
 
+    /** The current player's view while the VOD player page is shown. */
+    private fun playerView(): androidx.media3.ui.PlayerView? =
+        currentContentRoot()?.findViewById(R.id.pv_player)
+
+    /** True while the VOD player page is the current page. */
+    fun isPlayerShown(): Boolean = !disposed && navigation.currentDestination?.id == R.id.player
+
     /**
      * A title opened directly (from Live TV's recently watched row) arrives
      * with focus still on the app's React side. Bring it into VOD and onto
@@ -277,6 +354,7 @@ class VodFocusCoordinator(
         parkUntil = SystemClock.uptimeMillis() + PARK_TIMEOUT_MS
         binding.navMainFragment.viewTreeObserver.addOnGlobalLayoutListener(parkLayoutListener)
         parkListenerAttached = true
+        startParkTick()
         binding.root.post {
             if (parkedDestination == destination && !disposed) {
                 parkOnBar()
@@ -300,7 +378,10 @@ class VodFocusCoordinator(
             cancelParking()
             return
         }
-        // A bookmarked page (Back) is restored by attemptRestore instead.
+        // A bookmarked page (Back) is first given to attemptRestore. When that
+        // gives up (the page reloads its data, often longer than its window),
+        // the tick below still lands focus on the page. Before, focus stayed on
+        // the top bar's Home button, so the next OK left the title for Home.
         if (pendingDestination == destination) return
         val content = currentContentRoot() ?: return
         if (content.findFocus() != null) { cancelParking(); return }
@@ -308,10 +389,31 @@ class VodFocusCoordinator(
         val focused = binding.root.findFocus()
         if (focused != null && !VodFocusMemory.isWithin(binding.vodGlassActions, focused)) return
         if (!content.hasFocusable()) return
-        if (content.requestFocus(View.FOCUS_DOWN)) cancelParking()
+        if (!content.requestFocus(View.FOCUS_DOWN)) return
+        // A still-empty list (page loading) is not a landing spot: keep waiting.
+        val landed = binding.root.findFocus()
+        if (landed is androidx.recyclerview.widget.RecyclerView && landed.childCount == 0) {
+            parkOnBar()
+            return
+        }
+        cancelParking()
+    }
+
+    private val parkTick = object : Runnable {
+        override fun run() {
+            if (disposed || parkedDestination == null) return
+            focusParkedContent()
+            if (parkedDestination != null) binding.root.postDelayed(this, PARK_TICK_MS)
+        }
+    }
+
+    private fun startParkTick() {
+        binding.root.removeCallbacks(parkTick)
+        binding.root.postDelayed(parkTick, PARK_TICK_MS)
     }
 
     private fun cancelParking() {
+        binding.root.removeCallbacks(parkTick)
         parkedDestination = null
         if (parkListenerAttached) {
             binding.navMainFragment.viewTreeObserver.removeOnGlobalLayoutListener(parkLayoutListener)
@@ -367,6 +469,8 @@ class VodFocusCoordinator(
 
     private companion object {
         /** Slow providers can take several seconds before a title page has buttons. */
-        const val PARK_TIMEOUT_MS = 12_000L
+        const val PARK_TIMEOUT_MS = 20_000L
+        /** How often a parked page re-checks for something to focus (cheap). */
+        const val PARK_TICK_MS = 250L
     }
 }
