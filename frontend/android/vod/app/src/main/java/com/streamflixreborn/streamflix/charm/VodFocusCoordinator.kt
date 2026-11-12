@@ -215,9 +215,15 @@ class VodFocusCoordinator(
         // row above often has no card laid out straight overhead, so Android
         // found nothing and focus stayed put until the user went back left.
         // Fall back to the nearest card in the row above.
+        // Android's own pick is kept only when it is an item on the page above
+        // this one; if it would leave the page (the VOD top bar) while the page
+        // still has something above (Watch, Episodes, Seasons, another row),
+        // the nearest of those wins. The top bar is reached from the top row.
         if (key == KeyEvent.KEYCODE_DPAD_UP && inContent && content != null) {
             val native = current.focusSearch(View.FOCUS_UP)
-            if (native == null || native === current || !isAbove(native, current)) {
+            val nativeOnPage = native != null && native !== current &&
+                VodFocusMemory.isWithin(content, native) && isAbove(native, current)
+            if (!nativeOnPage) {
                 val above = nearestAbove(content, current)
                 if (above != null && above.requestFocus()) return true
             }

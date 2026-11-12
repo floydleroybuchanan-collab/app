@@ -41,6 +41,39 @@ class PlayerTvView @JvmOverloads constructor(
         findViewById<android.view.View>(R.id.btn_exo_guide)?.setOnClickListener {
             com.streamflixreborn.streamflix.charm.VodHostActions.openGuide?.invoke()
         }
+        // Showing the controls only requests a layout. Inside the embedded VOD
+        // host that request can stop at an ancestor and never run: the controls
+        // were VISIBLE but 0x0 (seen on device), so they "never came back".
+        setControllerVisibilityListener(ControllerVisibilityListener { visibility ->
+            if (visibility == android.view.View.VISIBLE) scheduleLayoutPass()
+        })
+    }
+
+    private var layoutPassPosted = false
+    private val layoutPass = Runnable {
+        layoutPassPosted = false
+        // Lay out the whole player page (controls, settings panel, overlays)
+        // at its current size. A cheap exact measure; never changes the size.
+        val page = parent as? android.view.View ?: this
+        if (!page.isAttachedToWindow || page.width <= 0 || page.height <= 0) return@Runnable
+        page.measure(
+            MeasureSpec.makeMeasureSpec(page.width, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(page.height, MeasureSpec.EXACTLY),
+        )
+        page.layout(page.left, page.top, page.right, page.bottom)
+    }
+
+    /** Runs one layout pass on the next frame (coalesced). */
+    fun scheduleLayoutPass() {
+        if (layoutPassPosted) return
+        layoutPassPosted = true
+        post(layoutPass)
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(layoutPass)
+        layoutPassPosted = false
+        super.onDetachedFromWindow()
     }
 
     /** Opens the existing settings panel and steps straight into one of its sections. */
@@ -103,6 +136,9 @@ class PlayerTvView @JvmOverloads constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Whatever this key opened (controls, settings panel, a pop-up) gets
+        // laid out on the next frame even if its layout request was swallowed.
+        if (event.action == KeyEvent.ACTION_UP) scheduleLayoutPass()
         if (isManualZoomEnabled) {
             if (event.action == KeyEvent.ACTION_DOWN) {
                 // RIPRISTINATA LOGICA ORIGINALE: Scaliamo solo il videoSurfaceView.

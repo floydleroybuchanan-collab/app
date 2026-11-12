@@ -110,3 +110,17 @@ test("VOD pages: title links reuse the live view, readable episodes, UP finds th
   for (const page of ["fragments/tv_show/TvShowTvFragment.kt", "fragments/movie/MovieTvFragment.kt"])
     assert.match(read(`android/vod/app/src/main/java/com/streamflixreborn/streamflix/${page}`), /VodTitleBadge\.hideWhenScrolled\(this, binding\.tvPlatformInfoBadge\)/);
 });
+
+test("VOD player lays out its controls when they show (0x0 controls on device)", () => {
+  const view = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/ui/PlayerTvView.kt");
+  assert.match(view, /setControllerVisibilityListener\(ControllerVisibilityListener \{ visibility ->\s*if \(visibility == android\.view\.View\.VISIBLE\) scheduleLayoutPass\(\)/);
+  assert.match(view, /if \(event\.action == KeyEvent\.ACTION_UP\) scheduleLayoutPass\(\)/);
+  assert.match(view, /page\.measure\(\s*MeasureSpec\.makeMeasureSpec\(page\.width, MeasureSpec\.EXACTLY\)/);
+  assert.match(view, /override fun onDetachedFromWindow\(\) \{\s*removeCallbacks\(layoutPass\)/);
+});
+
+test("UP prefers the nearest item on the page over leaving for the VOD top bar", () => {
+  const coordinator = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodFocusCoordinator.kt");
+  assert.match(coordinator, /val nativeOnPage = native != null && native !== current &&\s*VodFocusMemory\.isWithin\(content, native\) && isAbove\(native, current\)/);
+  assert.match(coordinator, /if \(!nativeOnPage\) \{\s*val above = nearestAbove\(content, current\)/);
+});

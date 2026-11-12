@@ -60,7 +60,7 @@ import {
   type SubtitleBg,
   type SubtitleSize,
 } from "@/src/core/subtitlePreferences";
-import { fonts, tvColors } from "@/src/theme";
+import { fonts, glass, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useAudioTrackPreferences } from "@/src/core/audioTrackPreferences";
 import { PREFERRED_AUDIO_LANGUAGE_OPTIONS } from "@/src/core/preferredAudioLanguages";
@@ -1371,7 +1371,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   page: { flex: 1, minWidth: 0, padding: 14, overflow: "hidden", backgroundColor: "transparent" },
-  header: { minHeight: 52, flexShrink: 0, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, backgroundColor: tvColors.canvas },
+  // Was a solid black bar; now the rail's deep purple glass (content scrolls under it).
+  header: { minHeight: 52, flexShrink: 0, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: glass.edgeSoft, backgroundColor: "rgba(26,11,51,0.94)", borderRadius: 14 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
