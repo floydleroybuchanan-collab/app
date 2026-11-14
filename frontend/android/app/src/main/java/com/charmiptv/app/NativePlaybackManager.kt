@@ -189,6 +189,9 @@ object NativePlaybackManager {
   private var resolvedUri: String? = null
   private var probeHttpResponseCode: Int? = null
   private var probeReason: String? = null
+  private var sourceFrameRate = 0f
+  private var droppedFrameWindow = 0
+  private var droppedFrameWindowMs = 0L
   private var videoMimeType: String? = null
   private var videoCodecs: String? = null
   private var audioMimeType: String? = null
@@ -252,6 +255,8 @@ object NativePlaybackManager {
       "suppression" to (instance?.playbackSuppressionReason ?: 0),
       "videoMime" to safeCode(videoMimeType), "audioMime" to safeCode(audioMimeType),
       "videoDecoder" to safeCode(videoDecoder), "audioDecoder" to safeCode(audioDecoder),
+      "sourceFps" to sourceFrameRate, "displayHz" to (activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f),
+      "droppedInWindow" to droppedFrameWindow, "dropWindowMs" to droppedFrameWindowMs,
       "videoOutputs" to outputs, "droppedVideo" to (counters?.droppedBufferCount ?: 0),
       "videoQuietMs" to (if (lastVideoAdvanceMs > 0) now - lastVideoAdvanceMs else 0L),
       "width" to (videoWidth ?: 0), "height" to (videoHeight ?: 0),
@@ -609,11 +614,8 @@ object NativePlaybackManager {
       // support but produces silence. Video remains on MediaCodec hardware.
       .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
       .setEnableDecoderFallback(true)
-      // Onn Google TV (Amlogic) often emits no video frames with forced async
-      // MediaCodec queueing while audio continues. Disable async so hardware
-      // video can paint; FFmpeg remains the audio extension fallback.
-      .forceDisableMediaCodecAsynchronousQueueing()
-    return ExoPlayer.Builder(context, renderers)
+      // Device-specific codec compatibility is applied by the shared factory.
+    return com.streamflixreborn.streamflix.charm.MediaLabPlayback.builder(context, renderers, DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())), loadControl)
       .setLoadControl(loadControl)
       .setMediaSourceFactory(DefaultMediaSourceFactory(createDataSourceFactory(emptyMap())))
       .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -709,9 +711,16 @@ object NativePlaybackManager {
     }
     playbackListener = nextListener
     created.addListener(nextListener)
+    sourceFrameRate = 0f; droppedFrameWindow = 0; droppedFrameWindowMs = 0L
     val nextAnalytics = object : AnalyticsListener {
+      override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+        if (!isCurrent()) return
+        droppedFrameWindow = droppedFrames; droppedFrameWindowMs = elapsedMs
+        captureHealth("dropped-video-frames", created)
+      }
       override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
         if (!isCurrent()) return
+        sourceFrameRate = format.frameRate.takeIf { it > 0f } ?: 0f
         videoMimeType = format.sampleMimeType
         videoCodecs = format.codecs
         if (format.width > 0) videoWidth = format.width

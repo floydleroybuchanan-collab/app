@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { AppState } from "react-native";
+import { AppState, NativeModules } from "react-native";
 
 import {
   generateReferralInvite,
@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearLocalSession = useCallback(async (message?: string) => {
     tokenRef.current = null;
     clearManagedContentAccess();
+    NativeModules.CharmVod?.clearSession?.();
     lastValidatedAtRef.current = 0;
     setUser(null);
     setNotice(message || null);

@@ -17,30 +17,25 @@
         app:layout_constraintBottom_toTopOf="@+id/bnv_main"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/charm_header"
         app:navGraph="@navigation/nav_main_graph_mobile" />
 
-    <ImageButton
-        android:id="@+id/btn_main_search"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="8dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/main_menu_search"
-        android:elevation="8dp"
-        android:padding="12dp"
-        android:src="@drawable/ic_search_white"
-        android:visibility="gone"
-        app:tint="@android:color/white"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <LinearLayout android:id="@+id/charm_header" android:layout_width="0dp" android:layout_height="56dp"
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="8dp" android:paddingEnd="8dp"
+        android:background="#10101E" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent">
+        <Button android:id="@+id/charm_back" android:layout_width="48dp" android:layout_height="48dp" android:minWidth="0dp" android:padding="0dp" android:text="‹" android:textSize="28sp" android:contentDescription="Back" android:textColor="#FFFFFF" android:background="@drawable/bg_button_secondary_mobile" />
+        <Button android:id="@+id/btn_main_menu" android:layout_width="wrap_content" android:layout_height="48dp" android:minWidth="64dp" android:text="Menu" android:textColor="#FFFFFF" android:backgroundTint="#3B1768" />
+        <ImageView android:layout_width="40dp" android:layout_height="40dp" android:layout_marginStart="8dp" android:layout_marginEnd="8dp" android:src="@drawable/medialab_rail" android:scaleType="fitCenter" android:contentDescription="Charming MediaLab" />
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Charming MediaLab" android:textColor="#FFFFFF" android:textSize="16sp" android:maxLines="1" android:ellipsize="end" />
+        <ImageButton android:id="@+id/btn_main_search" android:layout_width="48dp" android:layout_height="48dp" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Search" android:padding="12dp" android:src="@drawable/ic_search_white" app:tint="#FFFFFF" />
+    </LinearLayout>
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bnv_main"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:theme="@style/Theme.AppCompat"
+        android:background="#10101E"
+        app:itemRippleColor="#3B1768"
         app:itemIconTint="@color/nav_item_app"
         app:itemTextColor="@color/nav_item_app"
         app:itemTextAppearanceActive="@style/BottomNavLabelStyle"

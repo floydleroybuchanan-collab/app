@@ -24,18 +24,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 open class StreamFlixApp : Application(), androidx.work.Configuration.Provider {
-    // Android's startup provider runs only in the main process. On-demand setup
-    // also lets the internal VOD process enqueue work without an uninitialized singleton.
+    // One WorkManager configuration for the combined application.
     override val workManagerConfiguration: androidx.work.Configuration
         get() = androidx.work.Configuration.Builder().setDefaultProcessName(packageName).build()
-    // VOD cache maintenance must never delete the host's guide/logo caches.
-    override fun getCacheDir(): java.io.File = if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod)
-        java.io.File(super.getCacheDir(), "vod").also { it.mkdirs() } else super.getCacheDir()
-
-    override fun getExternalCacheDir(): java.io.File? = super.getExternalCacheDir()?.let {
-        if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) java.io.File(it, "vod").also { dir -> dir.mkdirs() } else it
-    }
-
     companion object {
         lateinit var instance: StreamFlixApp
             private set
@@ -80,16 +71,7 @@ open class StreamFlixApp : Application(), androidx.work.Configuration.Provider {
             }
         })
 
-        // 0. Initialize Conscrypt for modern SSL on old Android
-        if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) {
-            if (android.os.Build.VERSION.SDK_INT >= 28) android.webkit.WebView.setDataDirectorySuffix("vod")
-            Security.insertProviderAt(Conscrypt.newProvider(), 1)
-        }
-
-        // 1. Install ISRG Root X1 globally for Let's Encrypt. On Android < 7 (API 24)
-        // network_security_config.xml is not supported so the certificate must be injected manually.
-        if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) IsrgRootTrustProvider.install()
-
+        // Networking uses the host TLS provider; VOD no longer boots a separate process.
         // 2. Inizializzazione preferenze (con applicationContext)
         UserPreferences.setup(this)
         com.streamflixreborn.streamflix.charm.CharmVodDefaults.apply()
@@ -106,16 +88,9 @@ open class StreamFlixApp : Application(), androidx.work.Configuration.Provider {
             SerienStreamProvider.initialize(appContext)
             AniWorldProvider.initialize(appContext)
             ArtworkRepairScheduler.schedule(appContext, UserPreferences.currentProvider)
-            if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod) {
-                CacheUtils.autoClearIfNeeded(appContext, thresholdMb = threshold)
-            }
+            CacheUtils.autoClearIfNeeded(appContext, thresholdMb = threshold)
         }
     }
 
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        if (com.streamflixreborn.streamflix.charm.CharmVodProcess.isVod && level >= TRIM_MEMORY_RUNNING_LOW) {
-            CacheUtils.clearAppCache(this)
-        }
-    }
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level) }
 }

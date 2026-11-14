@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -33,6 +34,7 @@ const Card = memo(function Card({
   preferredFocus?: boolean;
 }) {
   const programs = useGuidePrograms(channel.id);
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const current = nowNext(programs, now).current;
   return (
     <Pressable
@@ -64,10 +66,11 @@ export function PurpleChannelCollection({
   matcher: (channel: Channel) => boolean;
 }) {
   const router = useRouter();
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const isFocused = useIsFocused();
   const { width } = useWindowDimensions();
   const { channels, addRecent, channelLogos, hardRefresh, loading, refreshing, error } = useStore();
-  const columns = width >= 1500 ? 6 : width >= 1050 ? 5 : 4;
+  const columns = width >= 1500 ? 6 : width >= 1050 ? 5 : width >= 700 ? 4 : 2;
   const [now, setNow] = useState(() => new Date());
   const [preferInitialFocus, setPreferInitialFocus] = useState(true);
 
@@ -115,6 +118,7 @@ export function PurpleChannelCollection({
           <>
             <Text style={styles.section}>Available Now</Text>
             <FlatList
+              key={columns}
               data={items}
               numColumns={columns}
               keyExtractor={(item) => item.id}
@@ -168,7 +172,7 @@ export function PurpleChannelCollection({
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -201,3 +205,5 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
 });
+
+const mobileStyles = { header: { flexWrap: "wrap" as const, paddingBottom: 8, gap: 8 }, headerLeft: { flexShrink: 1 }, card: { minHeight: 190 }, emptyButton: { minHeight: 48 }, empty: { paddingHorizontal: 12 } };

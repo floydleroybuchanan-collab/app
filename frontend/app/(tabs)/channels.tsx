@@ -1,3 +1,4 @@
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -47,6 +48,7 @@ const ChannelListRow = memo(function ChannelListRow({
   preferredFocus?: boolean;
 }) {
   const programs = useGuidePrograms(channel.id);
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const current = nowNext(programs, now).current;
   const progress = current ? progressPct(current, now) : 0;
   return (
@@ -104,6 +106,7 @@ const ChannelListRow = memo(function ChannelListRow({
 });
 
 function ChannelsScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const router = useRouter();
   const isFocused = useIsFocused();
   const { channels, favorites, toggleFavorite, addRecent, channelLogos, hardRefresh, loading, refreshing, error, clock24h } = useStore();
@@ -305,7 +308,7 @@ function ChannelsScreenContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, paddingBottom: 8 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -351,3 +354,5 @@ export default function ChannelsScreen() {
     </FocusedTabMount>
   );
 }
+
+const mobileStyles = { header: { flexWrap: "wrap" as const, gap: 8 }, headerAction: { minHeight: 48 }, searchHit: { width: 48, height: 48 }, row: { minHeight: 72, gap: 6 }, nameBlock: { flex: 1, width: undefined }, programBlock: { display: "none" as const }, time: { display: "none" as const }, number: { width: 24 }, orderActions: { width: 96 }, retryButton: { minHeight: 48 } };

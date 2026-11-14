@@ -29,32 +29,10 @@ object ThemeManager {
     )
 
     @StyleRes
-    fun mobileThemeRes(theme: String): Int = when (theme) {
-        NERO_AMOLED_OLED -> R.style.AppTheme_Mobile_NeroAmoledOled
-        SUNSET_CINEMA -> R.style.AppTheme_Mobile_SunsetCinema
-        STEEL_BLUE -> R.style.AppTheme_Mobile_SteelBlue
-        FOREST_NIGHT -> R.style.AppTheme_Mobile_ForestNight
-        CRIMSON_NOIR -> R.style.AppTheme_Mobile_CrimsonNoir
-        MIDNIGHT_VIOLET -> R.style.AppTheme_Mobile_MidnightViolet
-        NORD_FROST -> R.style.AppTheme_Mobile_NordFrost
-        EMERALD_LUXE -> R.style.AppTheme_Mobile_EmeraldLuxe
-        RETRO_NEON -> R.style.AppTheme_Mobile_RetroNeon
-        else -> R.style.AppTheme_Mobile
-    }
+    fun mobileThemeRes(theme: String): Int = R.style.AppTheme_CharmingMobile
 
     @StyleRes
-    fun tvThemeRes(theme: String): Int = when (theme) {
-        NERO_AMOLED_OLED -> R.style.AppTheme_NeroAmoledOled
-        SUNSET_CINEMA -> R.style.AppTheme_SunsetCinema
-        STEEL_BLUE -> R.style.AppTheme_SteelBlue
-        FOREST_NIGHT -> R.style.AppTheme_ForestNight
-        CRIMSON_NOIR -> R.style.AppTheme_CrimsonNoir
-        MIDNIGHT_VIOLET -> R.style.AppTheme_MidnightViolet
-        NORD_FROST -> R.style.AppTheme_NordFrost
-        EMERALD_LUXE -> R.style.AppTheme_EmeraldLuxe
-        RETRO_NEON -> R.style.AppTheme_RetroNeon
-        else -> R.style.AppTheme_Tv
-    }
+    fun tvThemeRes(theme: String): Int = R.style.AppTheme_Tv
 
     @StringRes
     fun titleRes(theme: String): Int = when (theme) {
@@ -70,7 +48,7 @@ object ThemeManager {
         else -> R.string.theme_default
     }
 
-    fun palette(theme: String): Palette = when (theme) {
+    fun palette(theme: String): Palette = when (DEFAULT) {
         NERO_AMOLED_OLED -> Palette(
             mobileNavBackground = color("#000000"),
             mobileNavActive = color("#FFFFFF"),

@@ -110,37 +110,6 @@ internal object SettingsListStyler {
         }
         val titleText = title.text?.toString().orEmpty()
         val hasChevron = view.findViewById<View>(R.id.settings_chevron) != null
-        if (!hasChevron) {
-            layoutParams?.setMargins(
-                defaults.marginLeft,
-                defaults.marginTop,
-                defaults.marginRight,
-                defaults.marginBottom,
-            )
-            view.layoutParams = layoutParams
-            view.background = defaults.background
-            view.minimumHeight = defaults.minHeight
-            view.setPadding(
-                defaults.paddingLeft,
-                defaults.paddingTop,
-                defaults.paddingRight,
-                defaults.paddingBottom,
-            )
-
-            title.setTextColor(defaults.titleColor)
-            title.setTextSize(TypedValue.COMPLEX_UNIT_PX, defaults.titleSizePx)
-            title.typeface = Typeface.DEFAULT
-            title.letterSpacing = 0f
-
-            summary?.apply {
-                visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
-                defaults.summaryColor?.let(::setTextColor)
-                defaults.summarySizePx?.let { setTextSize(TypedValue.COMPLEX_UNIT_PX, it) }
-            }
-            icon?.imageTintList = null
-            return
-        }
-
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         val surfaceColor = resolveThemeColor(view, R.attr.app_background_color, 0xFF181818.toInt())
         val titleColor = palette.tvHeaderPrimary

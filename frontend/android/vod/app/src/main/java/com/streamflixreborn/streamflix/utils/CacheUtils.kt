@@ -12,42 +12,19 @@ object CacheUtils {
     fun clearAppCache(context: Context) {
         Log.d(TAG, "Inizio pulizia cache completa...")
         try {
-            context.applicationContext.cacheDir?.deleteRecursively()
+            File(context.applicationContext.cacheDir, "vod").deleteRecursively()
             Log.d(TAG, "Cache interna eliminata.")
         } catch (e: Exception) {
             Log.e(TAG, "Errore eliminazione cache interna: ${e.message}")
         }
 
-        try {
-            Glide.get(context).clearMemory()
-            Thread {
-                try {
-                    Glide.get(context).clearDiskCache()
-                    Log.d(TAG, "Cache Glide eliminata.")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Errore eliminazione cache Glide: ${e.message}")
-                }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore Glide: ${e.message}")
-        }
-
-        try {
-            WebView(context).apply {
-                clearCache(true)
-                destroy()
-            }
-            Log.d(TAG, "Cache WebView eliminata.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Errore WebView: ${e.message}")
-        }
     }
 
     fun getCacheSize(context: Context): Long {
         var size: Long = 0
         try {
-            size += getFolderSize(context.applicationContext.cacheDir)
-            size += getFolderSize(context.applicationContext.externalCacheDir)
+            size += getFolderSize(File(context.applicationContext.cacheDir, "vod"))
+            size += getFolderSize(context.applicationContext.externalCacheDir?.let { File(it, "vod") })
         } catch (_: Exception) {
         }
         return size

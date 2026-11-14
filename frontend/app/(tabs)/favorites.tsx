@@ -1,3 +1,5 @@
+import { MediaLibraryShelf } from "@/src/components/MediaLibraryShelf";
+import { useAdaptiveStyles } from "@/src/utils/useAdaptiveStyles";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -43,6 +45,7 @@ const FavoriteRow = memo(function FavoriteRow({
   onFocusChannel: (id: string | null) => void;
 }) {
   const programmes = useGuidePrograms(channel.id);
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const current = nowNext(programmes, now).current;
   const isTV = Platform.OS !== "web" && Platform.isTV;
   const progress = current ? progressPct(current, now) : 0;
@@ -79,6 +82,7 @@ const FavoriteRow = memo(function FavoriteRow({
 });
 
 function FavoritesScreenContent() {
+  const styles = useAdaptiveStyles(baseStyles, mobileStyles);
   const router = useRouter();
   const isFocused = useIsFocused();
   const {
@@ -173,13 +177,15 @@ function FavoritesScreenContent() {
   return (
     <PurpleTvShell active="/favorites">
       <View style={styles.page}>
+        <FlatList data={items} keyExtractor={item => item.id} initialNumToRender={12} maxToRenderPerBatch={10} windowSize={7} removeClippedSubviews={false} contentContainerStyle={styles.list}
+        ListHeaderComponent={<>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <PurpleDrawerButton testID="favorites-open-drawer" />
             <View style={styles.headerCopy}>
-              <Text style={styles.kicker}>MY CHANNELS</Text>
+              <Text style={styles.kicker}>SAVED & FAVORITES</Text>
               <View style={styles.titleRow}>
-                <Text style={styles.title}>All Favorites</Text>
+                <Text style={styles.title}>Your Library</Text>
                 <Text numberOfLines={2} style={styles.addHint}>
                   {folderMode
                     ? "Long-press a channel to add or remove it from this folder. Use Rename to cycle the folder name."
@@ -204,6 +210,7 @@ function FavoritesScreenContent() {
           </View>
         </View>
 
+        <MediaLibraryShelf kind="favorites" />
         <View style={styles.folderRow}>
           <Pressable hasTVPreferredFocus={preferInitialFocus && items.length > 0} onFocus={() => setPreferInitialFocus(false)} onPress={() => setFolderId("all")} style={({ focused }: any) => [styles.folderChip, folderId === "all" && styles.folderActive, focused && styles.focused]}>
             <Text style={styles.folderText}>All</Text>
@@ -237,15 +244,16 @@ function FavoritesScreenContent() {
           </Pressable>
         </View>
 
-        {items.length ? (
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.id}
-            initialNumToRender={12}
-            maxToRenderPerBatch={10}
-            windowSize={7}
-            removeClippedSubviews={false}
-            contentContainerStyle={styles.list}
+
+        </>}
+        ListEmptyComponent={<View style={styles.empty}>
+            <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
+            <Text style={styles.emptyTitle}>No favorites yet</Text>
+            <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
+            <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
+              <Text style={styles.guideText}>Open TV Guide</Text>
+            </Pressable>
+          </View>}
             renderItem={({ item, index }) => (
               <FavoriteRow
                 channel={item}
@@ -259,23 +267,13 @@ function FavoritesScreenContent() {
                 onFocusChannel={noteChannelFocus}
               />
             )}
-          />
-        ) : (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}><Ionicons name="heart-outline" size={28} color={tvColors.purpleSoft} /></View>
-            <Text style={styles.emptyTitle}>No favorites yet</Text>
-            <Text style={styles.emptyText}>Long-press a channel in the guide or Channels list to add one.</Text>
-            <Pressable hasTVPreferredFocus={preferInitialFocus} onFocus={() => setPreferInitialFocus(false)} onPress={() => router.replace("/guide" as any)} style={({ focused }: any) => [styles.guideButton, focused && styles.focused]}>
-              <Text style={styles.guideText}>Open TV Guide</Text>
-            </Pressable>
-          </View>
-        )}
+        />
       </View>
     </PurpleTvShell>
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   page: { flex: 1, padding: 14 },
   header: { minHeight: 54, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line, gap: 14 },
   headerLeft: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 },
@@ -317,3 +315,5 @@ export default function FavoritesScreen() {
     </FocusedTabMount>
   );
 }
+
+const mobileStyles = { header: { flexWrap: "wrap" as const, gap: 8 }, titleRow: { flexWrap: "wrap" as const }, addHint: { display: "none" as const }, searchHit: { width: 48, height: 48 }, folderChip: { minHeight: 48 }, row: { minHeight: 72, gap: 6 }, name: { flex: 1, width: undefined }, programBlock: { display: "none" as const }, time: { display: "none" as const }, guideButton: { minHeight: 48 }, empty: { paddingHorizontal: 12 } };

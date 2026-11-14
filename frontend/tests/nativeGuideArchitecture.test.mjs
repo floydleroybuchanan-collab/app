@@ -54,7 +54,7 @@ test("Guide logical resets force a bounded native reload without remounting", as
 
 test("native Guide timeline uses real program duration and queries the visible runway", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
-  assert.match(view, /visibleWindowMs = 3L \* 60L \* 60_000L/);
+  assert.match(view, /visibleWindowMs get\(\) = \(if \(width \/ density < 600\) 1L else 3L\)/);
   assert.match(view, /private fun timeToX\(timeMs: Long, visibleStartMs: Long, visibleEndMs: Long\)/);
   assert.match(view, /val left = timeToX\(program\.startMs, visibleStartMs, visibleEndMs\)/);
   assert.match(view, /val right = timeToX\(program\.endMs, visibleStartMs, visibleEndMs\)/);
@@ -110,8 +110,8 @@ test("Startup V4 uses ordered milestones and exits at eight seconds", async () =
   assert.match(startup, /const mayEnter = sequenceComplete/);
   assert.match(startup, /Starting EPG in background/);
   assert.match(startup, /let completedForSession = false/);
-  assert.match(startup, /if \(mayEnter\) completedForSession = true/);
-  assert.match(startup, /if \(completedForSession\) return null/);
+  assert.match(startup, /if \(mayEnter \|\| completedForSession\)/);
+  assert.match(startup, /if \(completedForSession \|\| mayEnter\) return null/);
 });
 
 test("settings recovery and drawer transition guard are wired", async () => {

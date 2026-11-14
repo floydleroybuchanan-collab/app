@@ -6,13 +6,13 @@
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt": {
     "upstream": "567f17a971b1bef0ff4e9607031c0bcb4f5ddb20348c9a512ad97b61459ccca2",
-    "sha256": "5ddfb1edf4d659739b33aa2f1fff1f558505fb5f6b6efe59ab89e06519354b2e",
-    "reason": "Visible source picker, bounded fallback, source resume and optional embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
+    "sha256": "a959972c2361cb158693d3954d5e1eba910cc66e9d625a91353d8f28be68f20b",
+    "reason": "Combined app integration: shared Media3 construction, buffer and language settings; retire separate Nova engine selection. Source resolution and watch history retained."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt": {
     "upstream": "38267867288505ef6e249339e086db5459d973bc4bb461403f88746afdf502a7",
-    "sha256": "42eeef238432583436750f41df24a6eb78d627c9227ce879e67030ce9faa3878",
-    "reason": "TV source picker and focus integration, bounded fallback, resume and embedded Nova handoff. RC9: one fresh resolution for expired debrid playback links; retain resume, bounded fallback and source selection."
+    "sha256": "b9948e73ac768d404ce92044bcc82a994391c704aa1eb66116709ba12328f41e",
+    "reason": "Combined app integration: shared Media3 construction, buffer and language settings; retire separate Nova engine selection. Source resolution and watch history retained."
   },
   "app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerViewModel.kt": {
     "upstream": "818d91dcbd2989c2f9a0f100ab53227ada9dfb3d76a7a188ca8cbc688e37f04f",

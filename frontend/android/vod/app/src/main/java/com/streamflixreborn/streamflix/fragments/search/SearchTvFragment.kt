@@ -83,6 +83,11 @@ class SearchTvFragment : Fragment() {
         ).show()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("medialab.searchQuery", viewModel.query)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
@@ -92,6 +97,8 @@ class SearchTvFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        val hostQuery = savedInstanceState?.getString("medialab.searchQuery") ?: requireActivity().intent.getStringExtra("medialab.section")?.takeIf { it.startsWith("search:") }?.substringAfter(":")
+        if (!hostQuery.isNullOrBlank() && viewModel.query != hostQuery) view.post { if (_binding != null && isAdded) { binding.etSearch.setText(hostQuery); viewModel.search(hostQuery) } }
 
         initializeSearch()
 
@@ -160,6 +167,7 @@ class SearchTvFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        appAdapter.onSaveInstanceState(binding.vgvSearch)
         voiceHelper.stopRecognition()
         _binding = null
     }
@@ -186,6 +194,11 @@ class SearchTvFragment : Fragment() {
         val hintStringRes = if (isIptv) R.string.search_input_hint_iptv else R.string.search_input_hint
         binding.etSearch.hint = getString(hintStringRes)
 
+        binding.btnSearchClear.nextFocusLeftId = binding.etSearch.id
+        binding.btnSearchVoice.nextFocusLeftId = binding.btnSearchClear.id
+        binding.btnSearchClear.nextFocusDownId = binding.llGlobalSearch.id
+        binding.btnSearchVoice.nextFocusDownId = binding.llGlobalSearch.id
+        binding.etSearch.nextFocusDownId = binding.llGlobalSearch.id
         binding.llGlobalSearch.nextFocusUpId = binding.etSearch.id
         binding.vgvSearch.nextFocusUpId = binding.llGlobalSearch.id
 
@@ -273,7 +286,6 @@ class SearchTvFragment : Fragment() {
         )
 
         binding.btnSearchVoice.apply {
-            requestFocus()
             visibility = if (voiceHelper.isAvailable()) View.VISIBLE else View.GONE
             setOnClickListener { if (!voiceHelper.isListening) voiceHelper.startWithPermissionCheck() }
         }
@@ -315,7 +327,7 @@ class SearchTvFragment : Fragment() {
             })
         }
 
-        binding.root.requestFocus()
+        binding.etSearch.requestFocus()
     }
 
     private fun focusSearchContent(): Boolean {

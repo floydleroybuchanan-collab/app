@@ -1,3 +1,5 @@
+import { MobileLiveGuide } from "@/src/components/MobileLiveGuide";
+import { shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
 import { applyGuideGroupOrder } from "@/src/core/guideGroupTabPreferences";
 import { buildPlaylistMenu, providerGroupIdentity } from "@/src/core/playlistGuideMenu";
@@ -1230,9 +1232,10 @@ const styles = StyleSheet.create({
 });
 
 export default function PurpleGuideScreen() {
+  const { deviceLayoutMode } = useStore();
   return (
     <FocusedTabMount>
-      <PurpleGuideScreenContent />
+      {shouldUseTvLayout(deviceLayoutMode) ? <PurpleGuideScreenContent /> : <MobileLiveGuide />}
     </FocusedTabMount>
   );
 }
