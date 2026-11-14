@@ -121,7 +121,7 @@ export default function MultiviewScreen() {
       if(slot>=policy.multiview_max) {setNotice(policy.multiview_max===0?"Multiview is disabled by the administrator.":`Your multiview allowance is ${policy.multiview_max} panes.`);return;}
       const reason = multiviewAdmission(paneRef.current, slot, channel, policy.provider_limits[channel.playlist_id||"charm-primary"] || record?.account?.maxConnections);
       if (reason) { setNotice(reason); return; }
-      const source = parsePipeHeaders(channel.url);
+      const source = parsePipeHeaders(channel.url, channel.id);
       const kind = detectStreamKind(source.uri, channel.stream_type);
       if (!isNativeMedia3SupportedStreamKind(kind)) { setNotice("This channel's stream protocol is not supported by the player."); return; }
       const next = [...paneRef.current]; next[slot] = { channel, revision }; writePanes(next);

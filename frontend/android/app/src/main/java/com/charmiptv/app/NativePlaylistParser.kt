@@ -181,7 +181,7 @@ internal object NativePlaylistParser {
       .build()
     val request = Request.Builder()
       .url(cleanUrl)
-      .header("User-Agent", CharmUserAgent.current())
+      .header("User-Agent", CharmUserAgent.forUrl(cleanUrl) ?: CharmUserAgent.current())
       .header("Accept", "application/x-mpegURL,application/vnd.apple.mpegurl,audio/mpegurl,application/xml,text/xml,*/*")
       .build()
     val response = client.newCall(request).execute()

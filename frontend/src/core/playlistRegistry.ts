@@ -1,7 +1,10 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "@/src/utils/deviceVault";
 import { decodeXtream, previewXtream, type XtreamAccount } from "./xtream";
+import { NativeModules } from "react-native";
 import { useEffect, useState } from "react";
+import { sanitizeUserAgent } from "./userAgent.ts";
+import { setPlaylistAgents } from "./playlistUserAgent.ts";
 import type { Channel } from "@/src/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchNativePlaylist, finishNativeUpdateJob, startNativeUpdateJob } from "@/src/nativeEpg";
@@ -23,7 +26,7 @@ const listeners = new Set<() => void>();
 function exclusive<T>(action: () => Promise<T>): Promise<T> {
   const job = queue.then(action); queue = job.catch(() => undefined); return job;
 }
-function notify() { listeners.forEach((listener) => listener()); }
+function notify() { setPlaylistAgents(records || []); listeners.forEach((listener) => listener()); }
 function makeRecord(id: string, name: string, managed: boolean): PlaylistRecord {
   const supplied = managed ? managedPlaylistDefinition(id) : undefined;
   return { id, name, groupLabel: name, managed, enabled: true, revision: "", count: 0, refreshedAt: 0,
@@ -69,7 +72,7 @@ async function load(): Promise<PlaylistRecord[]> {
   const valid = (saved || []).filter((item) => /^[a-z0-9-]+$/.test(item.id));
   const next = reconcileManagedRows(valid);
   if (JSON.stringify(next) !== JSON.stringify(saved)) await AsyncStorage.setItem(KEY, JSON.stringify(next));
-  records = next;
+  records = next; setPlaylistAgents(next);
   return next;
 }
 async function commit(next: PlaylistRecord[]) {
@@ -127,10 +130,16 @@ export function validatePlaylistUrl(url: string) {
   if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2048) throw new Error("Enter a complete http:// or https:// M3U URL (up to 2,048 characters).");
   try { new URL(url); } catch { throw new Error("The playlist URL is invalid."); }
 }
-export async function previewPlaylist(url: string) {
+/**
+ * `userAgent` is the personal playlist's own choice: a value is sent with this download, blank clears an earlier
+ * choice, and leaving it out (supplied playlists, other callers) changes nothing.
+ */
+export async function previewPlaylist(url: string, userAgent?: string) {
   validatePlaylistUrl(url.trim());
+  const agent = userAgent === undefined ? undefined : sanitizeUserAgent(userAgent);
   const xtream = decodeXtream(url);
-  if (xtream) return previewXtream(xtream);
+  if (xtream) return previewXtream(xtream, agent || undefined);
+  if (agent !== undefined) { try { NativeModules.CharmDevice?.setHostUserAgent?.(url.trim(), agent); } catch { /* the download still runs with the app's own agent */ } }
   try { const parsed = await fetchNativePlaylist(url.trim()); validatePlaylistImport(parsed); return Object.assign(parsed.channels, { epgUrls: parsed.epgUrls || [], skipped: parsed.rejected || 0 }); }
   catch (error) {
     // Never surface provider URLs/credentials from fetch/transport exceptions.
@@ -145,7 +154,7 @@ export async function fetchPlaybackPlaylist(owner: string): Promise<Channel[]> {
   const row = (await load()).find((item) => item.id === owner && item.enabled);
   if (!row) return [];
   const url = await getPlaylistUrl(row);
-  const channels = await previewPlaylist(url);
+  const channels = await previewPlaylist(url, row.managed ? undefined : row.userAgent ?? "");
   const current = records?.find((item) => item.id === owner && item.enabled);
   if (!current || await getPlaylistUrl(current) !== url) return [];
   return scopePlaylistChannels(current, channels);
@@ -183,7 +192,7 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
       const previousRows = rows;
       const jobId = await startNativeUpdateJob(row.id, "playlist", dueOnly ? "schedule" : "manual").catch(() => 0);
       try {
-        const fresh = await previewPlaylist(await getPlaylistUrl(row));
+        const fresh = await previewPlaylist(await getPlaylistUrl(row), row.managed ? undefined : row.userAgent ?? "");
         catalogs.set(row.id, scopePlaylistChannels(row, fresh));
         try { combinePlaylistCatalogs(rows, catalogs); } catch (error) { catalogs.set(row.id, previous); throw error; }
         const next = await writeCatalog(row, fresh);
@@ -205,13 +214,15 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
   });
 }
 
-export function savePersonalPlaylist(name: string, url: string, preview: Channel[], existingId?: string): Promise<string> {
+export function savePersonalPlaylist(name: string, url: string, preview: Channel[], existingId?: string, userAgent?: string): Promise<string> {
   return exclusive(async () => {
     const rows = await load();
     const old = existingId ? rows.find((row) => row.id === existingId) : undefined;
     if (existingId && (!old || old.managed)) throw new Error("This supplied playlist cannot be replaced.");
     validatePlaylistUrl(url); validatePlaylistImport({ channels: preview, rejected: 0, truncated: false });
-    const row = { kind: (decodeXtream(url) ? "xtream" : "m3u") as "xtream" | "m3u", ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist" };
+    const row = { kind: (decodeXtream(url) ? "xtream" : "m3u") as "xtream" | "m3u", ...(old || makeRecord(`user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, "", false)), groupLabel: old?.groupLabel || old?.name || name.trim().slice(0, 60) || "My playlist", name: name.trim().slice(0, 60) || "My playlist",
+      // Blank removes the choice; leaving it out keeps what the playlist already had.
+      ...(userAgent === undefined ? {} : { userAgent: sanitizeUserAgent(userAgent) || undefined }) };
     const catalogs = await allCatalogs(rows); catalogs.set(row.id, scopePlaylistChannels(row, preview));
     const proposed = old ? rows.map((item) => item.id === row.id ? row : item) : [...rows, row];
     combinePlaylistCatalogs(proposed, catalogs);
@@ -224,7 +235,7 @@ export function savePersonalPlaylist(name: string, url: string, preview: Channel
     return row.id;
   });
 }
-export function updatePlaylist(id: string, change: Partial<Pick<PlaylistRecord, "name" | "enabled" | "refreshHours" | "epgSourceIds" | "autoEpg" | "autoEpgSourceIds" | "epgDiscoveryStatus">>): Promise<void> {
+export function updatePlaylist(id: string, change: Partial<Pick<PlaylistRecord, "name" | "enabled" | "refreshHours" | "epgSourceIds" | "autoEpg" | "autoEpgSourceIds" | "epgDiscoveryStatus" | "userAgent">>): Promise<void> {
   return exclusive(async () => {
     const rows = await load(); const next = rows.map((row) => row.id === id ? { ...row, ...change } : row);
     combinePlaylistCatalogs(next, await allCatalogs(next));

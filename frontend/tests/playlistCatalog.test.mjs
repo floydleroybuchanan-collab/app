@@ -64,6 +64,9 @@ function registryHarness() {
   };
   const mocks = {
     "./xtream": xtream,
+    "react-native": { NativeModules: {} },
+    "./userAgent.ts": { sanitizeUserAgent: value => String(value || "").trim() },
+    "./playlistUserAgent.ts": { setPlaylistAgents: () => {} },
     "expo-file-system/legacy": filesystem,
     "@/src/utils/deviceVault": { getItemAsync: async key => secrets.get(key) || null, setItemAsync: async (key, value) => { secrets.set(key, value); }, deleteItemAsync: async key => { secrets.delete(key); } },
     react: { useState: () => {}, useEffect: () => {} },

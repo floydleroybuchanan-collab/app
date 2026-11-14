@@ -65,16 +65,18 @@ test("native requests read the saved User-Agent and Settings exposes it", async 
   assert.match(agent, /filter \{ it == '.{1,2}t' \|\| it in ' '\.\.'~' \}/);
   assert.match(device, /fun setUserAgent\(value: String\)[\s\S]*?CharmUserAgent\.set\(ctx, value\)/);
   assert.match(device, /putString\("userAgent", CharmUserAgent\.stored\(ctx\)\)/);
-  assert.match(playlist, /\.header\("User-Agent", CharmUserAgent\.current\(\)\)/);
+  assert.match(playlist, /\.header\("User-Agent", CharmUserAgent\.forUrl\(cleanUrl\) \?: CharmUserAgent\.current\(\)\)/);
   assert.match(playback, /properties\["User-Agent"\] = CharmUserAgent\.current\(context\)/);
   assert.match(playback, /\?: CharmUserAgent\.current\(activity\)/);
   assert.match(multiview, /"User-Agent" to CharmUserAgent\.current\(ctx\)/);
-  assert.match(epg, /"User-Agent", CharmUserAgent\.current\(\)/);
+  // The main guide download is a protected transport file and keeps the fixed TiviMate agent.
+  assert.match(epg, /"User-Agent", "TiviMate\/5\.1\.6 \(Linux; Android TV\)"/);
   assert.match(customEpg, /"User-Agent", CharmUserAgent\.current\(reactContext\)/);
   assert.match(background, /CharmUserAgent\.overrideOrNull\(context\) \?: "Charming MediaLab\/2 AndroidTV"/);
-  assert.doesNotMatch(playlist + playback + multiview + epg + customEpg, /"TiviMate\/5\.1\.6/);
+  assert.doesNotMatch(playlist + playback + multiview + customEpg, /"TiviMate\/5\.1\.6/);
   assert.match(runtime, /setActiveUserAgent\(readProfile\(\)\?\.userAgent\)/);
-  assert.match(nativeEpg, /"User-Agent": getActiveUserAgent\(\)/);
+  // The main guide download is a protected transport file and keeps the fixed TiviMate agent.
+  assert.match(nativeEpg, /"User-Agent": "TiviMate\/5\.1\.6 \(Linux; Android TV\)"/);
   assert.match(settings, /useUserAgentPreference\(\)/);
   assert.match(settings, /<Text style=\{styles\.settingLabel\}>User agent<\/Text>/);
   assert.match(settings, /testID="settings-user-agent"/);

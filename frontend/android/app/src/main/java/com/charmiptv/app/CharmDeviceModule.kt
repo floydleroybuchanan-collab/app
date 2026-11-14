@@ -46,6 +46,12 @@ class CharmDeviceModule(private val ctx: ReactApplicationContext) : ReactContext
     CharmUserAgent.set(ctx, value)
   }
 
+  /** A personal playlist's own User-Agent for downloads from this address. Blank removes it. */
+  @ReactMethod
+  fun setHostUserAgent(url: String, value: String) {
+    CharmUserAgent.setForUrl(url, value)
+  }
+
   private companion object {
     const val PREFS = "charm_device_layout"
     const val KEY_MODE = "mode"

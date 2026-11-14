@@ -16,6 +16,8 @@ import { reloadPlaylistCatalog } from "@/src/source.native";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import type { PlaylistPreview } from "@/src/core/playlistRegistry";
 import { fonts, tvColors } from "@/src/theme";
+import { PLAYLIST_AGENT_OPTIONS, describePlaylistAgent, playlistAgentChoice, playlistAgentValue, type PlaylistAgentChoice } from "@/src/core/playlistUserAgent";
+import { getActiveUserAgent } from "@/src/core/userAgent";
 import { Ionicons } from "@expo/vector-icons";
 import { readPlaylistGuideHealth, refreshOnePlaylistAndGuide, refreshOnePlaylistGuide, refreshOnePlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
@@ -26,6 +28,38 @@ function Action({ label, onPress, disabled = false }: { label: string; onPress: 
   // Actions remain inert while disabled; disabling the native view loses D-pad focus.
   return <Pressable accessibilityRole="button" focusable accessibilityState={{ disabled }} onPress={() => { if (!disabled) onPress(); }}
     style={({ focused }: any) => [styles.button, disabled && styles.disabled, focused && styles.focused]}><GlassIcon name={label} /><Text style={styles.buttonText}>{label}</Text></Pressable>;
+}
+
+/**
+ * Optional User-Agent for one personal playlist, shown when adding or editing it. Left on "App default" nothing
+ * changes. Some providers only accept certain players, and each playlist can use a different one.
+ */
+function AgentPicker({ choice, onChange, disabled }: { choice: PlaylistAgentChoice; onChange: (next: PlaylistAgentChoice) => void; disabled: boolean }) {
+  const sending = describePlaylistAgent(choice, getActiveUserAgent());
+  return <View style={styles.agentBox} testID="playlist-user-agent">
+    <View style={styles.agentHead}>
+      <GlassIcon name="user agent" size={30} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.heading}>User agent (optional)</Text>
+        <Text style={styles.help}>Only change this if your provider asks for it. It applies to this playlist and its channels only.</Text>
+      </View>
+    </View>
+    <View style={styles.row}>
+      {PLAYLIST_AGENT_OPTIONS.map((option) => {
+        const selected = choice.preset === option.id;
+        return <Pressable key={option.id} accessibilityRole="button" focusable accessibilityState={{ selected, disabled }} testID={`playlist-agent-${option.id}`}
+          onPress={() => { if (!disabled) onChange({ preset: option.id, custom: choice.custom }); }}
+          style={({ focused }: any) => [styles.chip, selected && styles.chipSelected, disabled && styles.disabled, focused && styles.focused]}>
+          {selected ? <Ionicons name="checkmark-circle" size={12} color="#fff" /> : null}
+          <Text style={styles.buttonText}>{option.label}</Text>
+        </Pressable>;
+      })}
+    </View>
+    {choice.preset === "custom" ? <TextInput accessibilityLabel="Custom user agent" testID="playlist-agent-custom" placeholder="Type the user agent your provider needs" placeholderTextColor="#a99cbc"
+      value={choice.custom} onChangeText={(custom) => onChange({ preset: "custom", custom })} autoCapitalize="none" autoCorrect={false} maxLength={200} style={styles.input} editable={!disabled} /> : null}
+    <Text style={styles.help} numberOfLines={3}>Sending: {sending}</Text>
+    {choice.preset !== "app" ? <Action label="Reset to app default" disabled={disabled} onPress={() => onChange({ preset: "app", custom: "" })} /> : null}
+  </View>;
 }
 
 export default function PlaylistsScreen() {
@@ -46,6 +80,8 @@ export default function PlaylistsScreen() {
   const [xcUser, setXcUser] = useState("");
   const [xcPassword, setXcPassword] = useState("");
   const [xcOutput, setXcOutput] = useState<"ts" | "m3u8">("ts");
+  const [agent, setAgent] = useState<PlaylistAgentChoice>({ preset: "app", custom: "" });
+  const agentValue = playlistAgentValue(agent);
   const sourceValue = () => sourceKind === "xtream" ? encodeXtream({ server: url, username: xcUser, password: xcPassword, output: xcOutput }) : url.trim();
   const [preview, setPreview] = useState<PlaylistPreview | null>(null);
   const [message, setMessage] = useState("");
@@ -98,8 +134,9 @@ export default function PlaylistsScreen() {
           <Action label={"Stream format: " + (xcOutput === "ts" ? "MPEG-TS" : "HLS")} disabled={busy} onPress={() => { setXcOutput(xcOutput === "ts" ? "m3u8" : "ts"); setPreview(null); }} />
           <Text style={styles.help}>Use the login supplied by your IPTV provider. Credentials are saved in secure device storage. A provider using HTTP sends its login without transport encryption.</Text>
         </>}
+        <AgentPicker choice={agent} onChange={(next) => { setAgent(next); setPreview(null); }} disabled={busy} />
         {!!editing && <Action label="Save name only (no download)" disabled={busy} onPress={() => void run(async () => {
-          await updatePlaylist(editing, { name: name.trim().slice(0, 60) || "My playlist" });
+          await updatePlaylist(editing, { name: name.trim().slice(0, 60) || "My playlist", userAgent: agentValue });
           await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setPreview(null); setUrl(""); setXcPassword(""); setXcUser("");
         })} />}
         {sourceKind === "m3u" && <Action label="Choose local M3U file / USB" disabled={busy} onPress={() => void run(async () => {
@@ -107,19 +144,20 @@ export default function PlaylistsScreen() {
           const chosen = await NativeModules.CharmPlaylistDocument.pick();
           if (chosen) { setUrl(chosen); setPreview(null); }
         })} />}
-        <Action label="Validate playlist" disabled={busy} onPress={() => void run(async () => { const rows = await previewPlaylist(sourceValue()); setPreview(rows); })} />
+        <Action label="Validate playlist" disabled={busy} onPress={() => void run(async () => { const rows = await previewPlaylist(sourceValue(), agentValue); setPreview(rows); })} />
         {preview && <>{preview.account && <Text style={styles.text}>{preview.account.status} · {preview.account.expires ? "Expires " + new Date(preview.account.expires).toLocaleDateString() : "No expiry supplied"} · Connections {preview.account.activeConnections}/{preview.account.maxConnections || "unspecified"}</Text>}<Text style={styles.text}>{preview.length.toLocaleString()} channels found. Nothing changes until you choose Save.</Text>
           <Text style={styles.help}>{preview.epgUrls?.length || 0} EPG URL(s) detected in the playlist header. Save will associate available feeds without replacing manual settings.</Text>
           <Text style={styles.help}>{preview.slice(0, 5).map((channel) => channel.name).join(" · ")}</Text>
-          <Action label="Save validated playlist" disabled={busy} onPress={() => void run(async () => { await savePersonalPlaylist(name, sourceValue(), preview, editing || undefined); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); })} /></>}
+          <Action label="Save validated playlist" disabled={busy} onPress={() => void run(async () => { await savePersonalPlaylist(name, sourceValue(), preview, editing || undefined, agentValue); await syncPlaylistEpg(await readCombinedPlaylists(), true); await reloadPlaylistCatalog(); setEditing(null); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); })} /></>}
       </View> : <>
-        <Action label="Add M3U playlist" disabled={busy} onPress={() => { setSourceKind("m3u"); setEditing(""); setName("My playlist"); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); }} />
-        <Action label="Add Xtream Codes account" disabled={busy} onPress={() => { setSourceKind("xtream"); setEditing(""); setName("My Xtream account"); setUrl(""); setXcUser(""); setXcPassword(""); setXcOutput("ts"); setPreview(null); }} />
+        <Action label="Add M3U playlist" disabled={busy} onPress={() => { setSourceKind("m3u"); setAgent({ preset: "app", custom: "" }); setEditing(""); setName("My playlist"); setUrl(""); setXcPassword(""); setXcUser(""); setPreview(null); }} />
+        <Action label="Add Xtream Codes account" disabled={busy} onPress={() => { setSourceKind("xtream"); setAgent({ preset: "app", custom: "" }); setEditing(""); setName("My Xtream account"); setUrl(""); setXcUser(""); setXcPassword(""); setXcOutput("ts"); setPreview(null); }} />
         <Action label="Manage EPG feeds / manual channel assignments" disabled={busy} onPress={() => goToTab(router, "/epg-sources")} />
         {playlists.map((source) => <View key={source.id} style={styles.card}>
           <Text style={styles.heading}>{source.name} {source.managed ? "· supplied" : "· personal"}</Text>
           <Action label="Manage groups / hide tabs" disabled={!source.enabled} onPress={() => router.push({pathname:"/group-settings" as any,params:{playlistId:source.id}})} />
           <Text style={styles.help}>{source.enabled ? "Enabled" : "Disabled — saved channels retained"} · {source.count.toLocaleString()} channels · {source.status}</Text>
+          {!source.managed && !!source.userAgent && <Text style={styles.help}>User agent: {source.userAgent}</Text>}
           <Text style={styles.help}>Last successful update: {source.refreshedAt ? new Date(source.refreshedAt).toLocaleString() : "Never"}</Text>
           {source.kind === "xtream" && source.account && <Text style={styles.help}>Xtream · Last validation: {source.account.status} · {source.account.expires ? "Expires " + new Date(source.account.expires).toLocaleDateString() : "No expiry supplied"} · Last reported connections {source.account.activeConnections}/{source.account.maxConnections || "unspecified"}</Text>}
           {!!source.tombstoneCount && <Text style={styles.help}>{source.tombstoneCount.toLocaleString()} temporarily missing channel record(s) retained so favorites, ordering, groups, and EPG assignments can return if the provider restores them.</Text>}
@@ -141,7 +179,7 @@ export default function PlaylistsScreen() {
           </>}
           {!source.managed && <View style={styles.row}>
             <Action label="Edit name / address" disabled={busy} onPress={() => void run(async () => { const saved = await getPlaylistUrl(source); const xc = decodeXtream(saved);
-              setSourceKind(xc ? "xtream" : "m3u"); setUrl(xc?.server || saved); setXcUser(xc?.username || ""); setXcPassword(xc?.password || ""); setXcOutput(xc?.output || "ts"); setName(source.name); setPreview(null); setEditing(source.id); })} />
+              setSourceKind(xc ? "xtream" : "m3u"); setUrl(xc?.server || saved); setXcUser(xc?.username || ""); setXcPassword(xc?.password || ""); setXcOutput(xc?.output || "ts"); setName(source.name); setAgent(playlistAgentChoice(source.userAgent)); setPreview(null); setEditing(source.id); })} />
             <Action label={removeArmed === source.id ? "Confirm remove playlist" : "Remove playlist"} disabled={busy} onPress={() => { if (removeArmed !== source.id) { setRemoveArmed(source.id); return; } void run(async () => { await removePlaylist(source.id); await reloadPlaylistCatalog(); setRemoveArmed(""); }); }} />
           </View>}
           {advanced === source.id && <>
@@ -182,5 +220,9 @@ const styles = StyleSheet.create({
   focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },
+  agentBox: { padding: 10, gap: 8, backgroundColor: "rgba(122,62,214,0.22)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
+  agentHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 30, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 15 },
+  chipSelected: { backgroundColor: "rgba(124,58,237,0.34)", borderColor: "rgba(200,150,255,0.55)", borderWidth: 1.5 },
   health: { color: "#D8C4FF", fontFamily: fonts.semibold, fontSize: 8.5, lineHeight: 13 },
 });

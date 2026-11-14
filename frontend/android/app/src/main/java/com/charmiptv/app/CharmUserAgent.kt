@@ -17,6 +17,26 @@ object CharmUserAgent {
 
   @Volatile private var cached: String? = null
 
+  // A personal playlist can carry its own User-Agent. It is remembered per server (host and port) for as long
+  // as the app runs, and set again by the app before each download, so nothing is stored here.
+  private val perHost = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+  private fun hostKey(url: String): String? = runCatching {
+    val uri = java.net.URI(url.trim())
+    val host = uri.host?.lowercase() ?: return null
+    "$host:${if (uri.port >= 0) uri.port else if (uri.scheme.equals("https", true)) 443 else 80}"
+  }.getOrNull()
+
+  /** Blank removes the playlist's own choice for that server. */
+  fun setForUrl(url: String, raw: String?) {
+    val key = hostKey(url) ?: return
+    val value = clean(raw)
+    if (value.isEmpty()) perHost.remove(key) else perHost[key] = value
+  }
+
+  /** The playlist's own User-Agent for this address, or null to use [current]. */
+  fun forUrl(url: String): String? = hostKey(url)?.let { perHost[it] }
+
   /** Header-safe: one line, printable ASCII only, at most [MAX_LENGTH] characters. */
   fun clean(raw: String?): String = (raw ?: "").filter { it == '\t' || it in ' '..'~' }.trim().take(MAX_LENGTH)
 

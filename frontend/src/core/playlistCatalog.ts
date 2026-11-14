@@ -49,6 +49,8 @@ export type PlaylistRecord = {
   tombstoneCount?: number;
   kind?: "m3u" | "xtream";
   account?: import("./xtream").XtreamAccount;
+  /** Optional User-Agent for this personal playlist (blank: use the app's own). */
+  userAgent?: string;
 };
 
 export function playlistOwner(channel: Pick<Channel, "id" | "playlist_id">): string {

@@ -1,4 +1,5 @@
 import { DEFAULT_USER_AGENT, getActiveUserAgent } from "./userAgent.ts";
+import { playlistAgentForChannel } from "./playlistUserAgent.ts";
 
 export type Engine = "media3";
 export type EnginePreference = Engine;
@@ -95,11 +96,13 @@ function safeHeader(key: string, value: string): boolean {
   return HTTP_HEADER_NAME.test(key) && !/[^\t\x20-\x7e]/.test(value);
 }
 
-export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record<string, string> } {
+/** `channelKey` lets a personal playlist's own User-Agent apply to its channels. */
+export function parsePipeHeaders(rawUri: string, channelKey?: string | null): { uri: string; headers: Record<string, string> } {
+  const agent = playlistAgentForChannel(channelKey) ?? getActiveUserAgent();
   const useHttpUserAgent = /^https?:\/\//i.test(rawUri.trim());
   const pipeIndex = rawUri.indexOf("|");
   if (pipeIndex < 0) {
-    return { uri: rawUri.trim(), headers: useHttpUserAgent ? { "User-Agent": getActiveUserAgent() } : {} };
+    return { uri: rawUri.trim(), headers: useHttpUserAgent ? { "User-Agent": agent } : {} };
   }
   const uri = rawUri.slice(0, pipeIndex).trim();
   // Preserve headers supplied by the stream/provider. When the playlist omits
@@ -119,7 +122,7 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
     }
   }
   if (useHttpUserAgent && !Object.keys(headers).some((key) => key.toLowerCase() === "user-agent")) {
-    headers["User-Agent"] = getActiveUserAgent();
+    headers["User-Agent"] = agent;
   }
   return { uri, headers };
 }

@@ -1109,7 +1109,7 @@ class EpgNativeModule(private val reactContext: ReactApplicationContext) :
       connection.connectTimeout = 15_000
       connection.readTimeout = 45_000
       connection.instanceFollowRedirects = false
-      connection.setRequestProperty("User-Agent", CharmUserAgent.current())
+      connection.setRequestProperty("User-Agent", "TiviMate/5.1.6 (Linux; Android TV)")
       connection.setRequestProperty("Accept", "*/*")
       connection.setRequestProperty("Accept-Encoding", "gzip")
       if (canUseValidators) {

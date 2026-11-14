@@ -2,6 +2,7 @@ import React from "react";
 import { Image } from "react-native";
 
 const ART: [RegExp, number][] = [
+  [/user.?agent/i, require("../../assets/glass/settings_useragent.png")],
   [/delete|remove|clear|trash|cloud|download|upload|backup|restore|save|import|export/i, require("../../assets/glass/settings_storage.png")],
   [/lock|pin|shield|parental|key/i, require("../../assets/glass/settings_security.png")],
   [/epg|guide|calendar|time|schedule|day/i, require("../../assets/glass/settings_epg.png")],

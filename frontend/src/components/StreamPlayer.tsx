@@ -132,7 +132,7 @@ export function StreamPlayer({
   onStatusRef.current = onStatus;
   onTracksRef.current = onTracksAvailable;
 
-  const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri), [rawUri]);
+  const { uri, headers } = useMemo(() => parsePipeHeaders(rawUri, channelKey), [rawUri, channelKey]);
   const declaredKind = useMemo(() => detectStreamKind(uri, streamTypeHint), [streamTypeHint, uri]);
   // Extensionless live IPTV must not lock Media3 to a prior confirm. A wrong
   // progressive/hls/dash/transport confirm skips or stalls the opaque router →
@@ -263,7 +263,7 @@ export function StreamPlayer({
           resolveNativePlaybackFreshSource(event.requestId, current.uri, current.headers, current.contentType, "fresh-channel-unavailable-reused-current");
           return;
         }
-        const fresh = parsePipeHeaders(channel.url);
+        const fresh = parsePipeHeaders(channel.url, channel.id);
         const freshKind = detectStreamKind(fresh.uri, channel.stream_type);
         if (!isNativeMedia3SupportedStreamKind(freshKind)) {
           resolveNativePlaybackFreshSource(event.requestId, null, {}, null, "unsupported-protocol");

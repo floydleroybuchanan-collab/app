@@ -26,10 +26,10 @@ function endpoint(login: XtreamLogin, file: string, action?: string) {
   if (action) url.searchParams.set("action", action);
   return url.toString();
 }
-async function json(login: XtreamLogin, action?: string): Promise<any> {
+async function json(login: XtreamLogin, action?: string, userAgent?: string): Promise<any> {
   const abort = new AbortController(); const timer = setTimeout(() => abort.abort(), 30_000);
   try {
-    const response = await fetch(endpoint(login, "player_api.php", action), { signal: abort.signal, redirect: "error" });
+    const response = await fetch(endpoint(login, "player_api.php", action), { signal: abort.signal, redirect: "error", ...(userAgent ? { headers: { "User-Agent": userAgent } } : {}) });
     if (!response.ok) throw new Error("Provider request failed.");
     const length = Number(response.headers.get("content-length"));
     if (length > 32 * 1024 * 1024) throw new Error("Provider catalog is too large.");
@@ -66,11 +66,11 @@ export function mapXtreamChannels(login: XtreamLogin, streams: any, categories: 
       group: groups.get(String(s.category_id)) || "Other", url, stream_type: login.output === "m3u8" ? "hls" : "ts" };
   });
 }
-export async function previewXtream(raw: XtreamLogin): Promise<XtreamPreview> {
+export async function previewXtream(raw: XtreamLogin, userAgent?: string): Promise<XtreamPreview> {
   const login = normalizeXtream(raw);
-  const account = accountInfo(await json(login));
-  const categories = await json(login, "get_live_categories");
-  const streams = await json(login, "get_live_streams");
+  const account = accountInfo(await json(login, undefined, userAgent));
+  const categories = await json(login, "get_live_categories", userAgent);
+  const streams = await json(login, "get_live_streams", userAgent);
   const channels = mapXtreamChannels(login, streams, categories);
   if (!channels.length) throw new Error("No playable live channels are available for this account.");
   return Object.assign(channels, { account, epgUrls: [endpoint(login, "xmltv.php")] });
