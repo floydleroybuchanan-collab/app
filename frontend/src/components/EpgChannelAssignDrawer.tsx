@@ -4,7 +4,7 @@ import { TvSettingsTextInput as TextInput } from "./TvSettingsTextInput";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, radius, tvColors } from "@/src/theme";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 
@@ -223,32 +223,33 @@ export function EpgChannelAssignDrawer({
 
 const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.72)", alignItems: "center", justifyContent: "center", padding: 24 },
-  card: { width: "100%", maxWidth: 560, maxHeight: "88%", backgroundColor: tvColors.panel, borderRadius: radius.lg, borderWidth: 1, borderColor: tvColors.lineStrong, overflow: "hidden" },
+  backdrop: { flex: 1, backgroundColor: "rgba(6,2,16,0.55)", alignItems: "center", justifyContent: "center", padding: 24 },
+  // see-through glass card with a soft light edge
+  card: { width: "100%", maxWidth: 560, maxHeight: "88%", backgroundColor: "rgba(36,14,72,0.42)", borderRadius: 20, borderWidth: 1, borderColor: glass.edge, overflow: "hidden" },
   cardInner: { padding: 16, gap: 10 },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   headerText: { flex: 1, minWidth: 0 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 15 },
-  subtitle: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, marginTop: 3, lineHeight: 12.5 },
-  closeBtn: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  input: { minHeight: 40, borderRadius: radius.sm, borderWidth: 1, borderColor: tvColors.lineStrong, color: "#fff", paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 11, backgroundColor: tvColors.panelRaised },
+  subtitle: { color: glass.kicker, fontFamily: fonts.regular, fontSize: 9, marginTop: 3, lineHeight: 12.5 },
+  closeBtn: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  input: { minHeight: 40, borderRadius: 12, borderWidth: 1, borderColor: glass.buttonEdge, color: "#fff", paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 11, backgroundColor: glass.button },
   filterRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  filterChip: { minHeight: 28, justifyContent: "center", paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  filterChipActive: { backgroundColor: tvColors.purple },
-  filterText: { color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 8 },
+  filterChip: { minHeight: 28, justifyContent: "center", paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  filterChipActive: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
+  filterText: { color: "#E2D3FA", fontFamily: fonts.semibold, fontSize: 8 },
   filterTextActive: { color: "#fff" },
-  count: { marginLeft: "auto", color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
+  count: { marginLeft: "auto", color: glass.kicker, fontFamily: fonts.medium, fontSize: 8 },
   list: { maxHeight: 320 },
-  row: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 9, marginBottom: 4, borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
-  rowCurrent: { backgroundColor: "rgba(120,80,210,0.22)", borderColor: "rgba(168,132,245,0.30)" },
+  row: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, marginBottom: 4, borderRadius: 12, borderWidth: 1, borderColor: glass.edgeSoft, backgroundColor: glass.panel },
+  rowCurrent: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
   rowText: { flex: 1, minWidth: 0 },
   rowName: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
-  rowId: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, marginTop: 1 },
-  empty: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9.5, textAlign: "center", paddingVertical: 20 },
-  pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: tvColors.line },
-  pagerBtn: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderRadius: 5, borderWidth: 2, borderColor: "transparent", backgroundColor: tvColors.panelRaised },
+  rowId: { color: glass.kicker, fontFamily: fonts.regular, fontSize: 7.5, marginTop: 1 },
+  empty: { color: glass.kicker, fontFamily: fonts.regular, fontSize: 9.5, textAlign: "center", paddingVertical: 20 },
+  pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: glass.edgeSoft },
+  pagerBtn: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: glass.buttonEdge, backgroundColor: glass.button },
   pagerText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8 },
-  pagerLabel: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8.5 },
+  pagerLabel: { color: glass.kicker, fontFamily: fonts.medium, fontSize: 8.5 },
   disabled: { opacity: 0.35 },
-  focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
+  focused: { ...glassFocus },
 });

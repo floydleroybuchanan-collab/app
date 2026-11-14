@@ -137,9 +137,7 @@ class TvShowTvFragment : Fragment() {
         appAdapter.submitList(listOfNotNull(
             tvShow.apply { itemType = AppAdapter.Type.TV_SHOW_TV },
 
-            tvShow.takeIf { it.seasons.isNotEmpty() }
-                ?.copy()
-                ?.apply { itemType = AppAdapter.Type.TV_SHOW_SEASONS_TV },
+            // Seasons and episodes live in the two panels of the title header.
 
             tvShow.takeIf { it.directors.isNotEmpty() }
                 ?.copy()

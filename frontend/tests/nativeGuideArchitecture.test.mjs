@@ -98,19 +98,20 @@ test("preview tuning only follows settled native selection", async () => {
   assert.match(guide, /if \(settled\) armPreviewForChannel\(channel\)/);
 });
 
-test("Startup V4 uses ordered milestones and exits at eight seconds", async () => {
+test("Startup V4 shows real milestones, the real channel count, and leaves when ready or at eight seconds", async () => {
   const startup = await source("src/components/StartupVersion4.tsx");
   assert.match(startup, /subscribeProgress/);
   assert.match(startup, /const STARTUP_SEQUENCE_MS = 8_000/);
-  assert.match(startup, /CACHE_DOT_MS = 900/);
-  assert.match(startup, /DATABASE_DOT_MS = 2_400/);
-  assert.match(startup, /PLAYLIST_DOT_MS = 4_500/);
+  assert.match(startup, /const MIN_VISIBLE_MS = 1_200/);
+  assert.doesNotMatch(startup, /CACHE_DOT_MS|DATABASE_DOT_MS|PLAYLIST_DOT_MS/);
+  assert.match(startup, /Loaded \$\{channels\.length\.toLocaleString\(\)\} channels from your playlists/);
+  assert.match(startup, /const mayEnter = \(freshCacheReady && elapsedMs >= MIN_VISIBLE_MS\) \|\| deadlineReached/);
   assert.match(startup, /setInterval/);
   assert.match(startup, /return \(\) => clearInterval\(timer\)/);
-  assert.match(startup, /const mayEnter = sequenceComplete/);
-  assert.match(startup, /Starting EPG in background/);
+  assert.match(startup, /Starting guide in background/);
   assert.match(startup, /let completedForSession = false/);
-  assert.match(startup, /if \(mayEnter\) completedForSession = true/);
+  // It fades out once the real work is done, then marks itself finished for the session.
+  assert.match(startup, /if \(!mayEnter\) return;[\s\S]*?completedForSession = true/);
   assert.match(startup, /if \(completedForSession\) return null/);
 });
 

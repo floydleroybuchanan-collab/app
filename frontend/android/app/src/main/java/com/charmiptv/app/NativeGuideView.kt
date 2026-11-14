@@ -9,7 +9,9 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import com.facebook.react.bridge.Arguments
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.target.CustomTarget
@@ -704,6 +706,107 @@ class NativeGuideView(context: Context) : View(context) {
       return true
     }
     return super.onKeyUp(keyCode, event)
+  }
+
+  // ---- Touch (phones, tablets, mouse): a tap picks the cell under the finger
+  // and opens it like OK; a drag scrolls channels (up/down) and time (sideways).
+  private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+  private var touchDownX = 0f
+  private var touchDownY = 0f
+  private var touchLastX = 0f
+  private var touchLastY = 0f
+  private var touchDragging = false
+  private var touchRowCarry = 0f
+
+  override fun onTouchEvent(event: MotionEvent): Boolean {
+    if (!enabled || rows.isEmpty()) return super.onTouchEvent(event)
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN -> {
+        touchDownX = event.x; touchDownY = event.y
+        touchLastX = event.x; touchLastY = event.y
+        touchDragging = false
+        touchRowCarry = 0f
+        // A page that scrolls must not take the drag away from the grid.
+        parent?.requestDisallowInterceptTouchEvent(true)
+      }
+      MotionEvent.ACTION_MOVE -> {
+        if (!touchDragging && (abs(event.x - touchDownX) > touchSlop || abs(event.y - touchDownY) > touchSlop)) {
+          touchDragging = true
+          touchLastX = event.x; touchLastY = event.y
+        }
+        if (touchDragging) {
+          touchRowCarry += (touchLastY - event.y) / rowHeight
+          val wholeRows = touchRowCarry.toInt()
+          if (wholeRows != 0) {
+            touchRowCarry -= wholeRows
+            scrollRowsByTouch(wholeRows)
+          }
+          if (touchDownX > channelWidth) scrollTimeByTouch(touchLastX - event.x)
+          touchLastX = event.x; touchLastY = event.y
+          invalidate()
+        }
+      }
+      MotionEvent.ACTION_UP -> {
+        if (touchDragging) {
+          touchDragging = false
+          loadPrograms()
+          emitSelection(true)
+        } else {
+          tapAt(event.x, event.y)
+        }
+      }
+      MotionEvent.ACTION_CANCEL -> touchDragging = false
+      else -> return super.onTouchEvent(event)
+    }
+    return true
+  }
+
+  private fun scrollRowsByTouch(delta: Int) {
+    val visible = fullRowCount()
+    val next = (firstVisibleRow + delta).coerceIn(0, max(0, rows.size - visible))
+    if (next == firstVisibleRow) return
+    firstVisibleRow = next
+    // The cursor follows only when it would leave the screen.
+    val kept = selectedRow.coerceIn(firstVisibleRow, min(rows.lastIndex, firstVisibleRow + visible - 1))
+    val moved = kept != selectedRow
+    selectedRow = kept
+    loadPrograms()
+    emitRunway(if (delta > 0) 1 else -1)
+    if (moved) emitSelection(false)
+  }
+
+  private fun scrollTimeByTouch(dx: Float) {
+    if (dx == 0f) return
+    val guideWidth = max(1f, width.toFloat() - channelWidth)
+    val shift = (dx / guideWidth * visibleWindowMs.toFloat()).toLong()
+    if (shift == 0L) return
+    val next = clampViewportStart(viewportStartMs + shift)
+    if (next == viewportStartMs) return
+    liveFollowEnabled = false
+    viewportStartMs = next
+    selectedTimeMs = selectedTimeMs.coerceIn(viewportStartMs, max(viewportStartMs, viewportEndMs() - 1))
+  }
+
+  private fun tapAt(x: Float, y: Float) {
+    if (y < headerHeight) return
+    val row = firstVisibleRow + ((y - headerHeight) / rowHeight).toInt()
+    if (row < 0 || row > rows.lastIndex) return
+    requestFocus()
+    selectedRow = row
+    if (x < channelWidth) {
+      channelRailSelected = true
+    } else {
+      channelRailSelected = false
+      val guideWidth = max(1f, width.toFloat() - channelWidth)
+      val span = max(1L, viewportEndMs() - viewportStartMs)
+      val time = viewportStartMs + ((x - channelWidth) / guideWidth * span.toFloat()).toLong()
+      selectedTimeMs = time.coerceIn(windowStartMs, windowEndMs - 1)
+      updateLiveFollowFromSelection()
+    }
+    ensureVisible()
+    loadPrograms()
+    invalidate()
+    emitSelection(true, pressed = true)
   }
 
   private fun moveVertical(delta: Int) {

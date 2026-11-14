@@ -83,7 +83,7 @@ internal object NativeMultiview {
     if (releaseFailed || pane.player != null) return
     emit(slot, pane.revision, "loading")
     try {
-      val properties = linkedMapOf("User-Agent" to "TiviMate/5.1.6 (Linux; Android TV)", "Accept" to "*/*")
+      val properties = linkedMapOf("User-Agent" to CharmUserAgent.current(ctx), "Accept" to "*/*")
       pane.headers.forEach { (key,value) -> properties.keys.firstOrNull { it.equals(key, true) }?.let(properties::remove); properties[key] = value }
       val client = CharmHttpClients.mediaClientForHeaders(http, properties)
       val data = DefaultDataSource.Factory(ctx, OkHttpDataSource.Factory(client).setDefaultRequestProperties(properties))

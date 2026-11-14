@@ -106,10 +106,10 @@ object NativePlaybackManager {
   // allocation remains capped at the Onn/Fire-TV-safe 48 MB budget.
   private const val TARGET_BUFFER_BYTES_LOW_RAM = 16 * 1024 * 1024
   private const val TARGET_BUFFER_BYTES_NORMAL = 48 * 1024 * 1024
-  // Match the builder's TiViMate-style panel UA. OkHttp's default "okhttp/x.x"
-  // (and unknown Charm-only strings) are blocked by many IPTV panels, which
-  // leaves every tune black+silent while the guide still loads.
-  private const val DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)"
+  // The default stream User-Agent is CharmUserAgent.DEFAULT, a TiViMate-style panel UA.
+  // OkHttp's default "okhttp/x.x" (and unknown Charm-only strings) are blocked by many
+  // IPTV panels, which leaves every tune black+silent while the guide still loads.
+  // The viewer can replace it in Settings; a stream that sets its own keeps it.
 
   // Startup deadlines are armed only until the first rendered frame. Healthy
   // playback has no periodic timer capable of stopping or rebuilding it.
@@ -1096,7 +1096,7 @@ object NativePlaybackManager {
     if (Uri.parse(source.uri).scheme.equals("rtsp", ignoreCase = true)) {
       // RTSP has its own transport and does not use the OkHttp factory.
       require(source.headers.keys.all { it.equals("User-Agent", ignoreCase = true) }) { "RTSP custom headers are unsupported" }
-      val userAgent = source.headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value ?: DEFAULT_STREAM_USER_AGENT
+      val userAgent = source.headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value ?: CharmUserAgent.current(activity)
       return RtspMediaSource.Factory().setUserAgent(userAgent).createMediaSource(item)
     }
     val dataSource = createDataSourceFactory(source.headers)
@@ -1135,7 +1135,7 @@ object NativePlaybackManager {
     val context = activity ?: throw IllegalStateException("Playback surface is not attached")
     val properties = LinkedHashMap<String, String>(headers.size + 2)
     if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
-      properties["User-Agent"] = DEFAULT_STREAM_USER_AGENT
+      properties["User-Agent"] = CharmUserAgent.current(context)
     }
     // Match ordinary IPTV clients / playlist fetch: panels that inspect Accept
     // often reject bare OkHttp defaults.

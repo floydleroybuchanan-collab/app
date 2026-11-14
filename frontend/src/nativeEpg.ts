@@ -1,4 +1,5 @@
 import { playlistEpgUrls } from "@/src/core/playlistEpgHeader";
+import { getActiveUserAgent } from "./core/userAgent.ts";
 import { DeviceEventEmitter, NativeModules, Platform } from "react-native";
 import type { Channel, Program } from "@/src/api";
 import { getMultiEpgSources } from "@/src/core/multiEpgSources";
@@ -108,7 +109,7 @@ export async function fetchNativePlaylist(url: string): Promise<NativePlaylistRe
   const timeout = setTimeout(() => controller.abort(), PLAYLIST_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(cleanUrl, {
-      headers: { "User-Agent": "TiviMate/5.1.6 (Linux; Android TV)" },
+      headers: { "User-Agent": getActiveUserAgent() },
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`M3U HTTP ${response.status}`);

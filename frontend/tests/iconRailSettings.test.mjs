@@ -61,7 +61,7 @@ test("all Settings tiles resolve to a focus-owned section or a reviewed independ
   const settings = read("app/(tabs)/settings.tsx");
   const tiles = settings.match(/const TILES: Tile\[\] = \[([\s\S]*?)\n\];/)?.[1] || "";
   const sections = Array.from(tiles.matchAll(/id: "([^"]+)"/g), match => match[1]);
-  assert.equal(sections.length, 14);
+  assert.equal(sections.length, 15);
   for (const section of sections) {
     if (section === "epg" || section === "playlists") continue;
     assert.ok(settings.includes(`section === "${section}"`), `${section} must have an in-page destination`);
@@ -83,7 +83,8 @@ test("Settings fields have visible focus and assignment/dropdown overlays restor
   for (const path of ["app/(tabs)/settings.tsx", "app/playlists.tsx", "app/epg-source.tsx", "app/epg-custom.tsx", "app/group-settings.tsx"]) {
     assert.match(read(path), /TvSettingsTextInput as TextInput/, path);
   }
-  assert.match(read("src/components/TvSettingsTextInput.tsx"), /focused && \{ borderColor: "#fff"/);
+  assert.match(read("src/components/TvSettingsTextInput.tsx"), /focused && styles\.focused/);
+  assert.match(read("src/components/TvSettingsTextInput.tsx"), /borderColor: glass\.focusEdge/);
   const picker = read("src/components/EpgChannelAssignDrawer.tsx");
   assert.match(picker, /focusable=\{false\} style=\{styles.backdrop\}/);
   assert.match(picker, /focusable=\{false\} style=\{styles.card\}/);

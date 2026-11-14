@@ -12,7 +12,7 @@ import com.facebook.react.uimanager.ViewManager
 class CharmVodPackage : ReactPackage {
     // Read-only recent-titles lookup for the Live TV screen's VOD row.
     override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> =
-        listOf(CharmVodHistoryModule(context))
+        listOf(CharmVodHistoryModule(context), CharmDeviceModule(context))
     override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> =
         listOf(CharmVodSurfaceManager(context))
 }

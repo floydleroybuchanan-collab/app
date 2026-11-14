@@ -1,8 +1,8 @@
 import { useTVFocusEntry } from './useTVFocusEntry';
 import { MediaLabArt } from "@/src/components/MediaLabBrand";
 import { AccountLoginBrand } from "./AccountLoginBrand";
+import { LoginScene } from "./LoginScene";
 import { FocusGuide } from "./TVFocusGuideView";
-import { LinearGradient } from "expo-linear-gradient";
 import {AccountSecurityDialog,type SecurityScreen} from './AccountSecurityDialog';
 import {securityRequest} from '@/src/auth/securityApi';
 import React, { useCallback, useEffect, useState } from "react";
@@ -17,7 +17,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { DonationButton } from "./DonationDialog";
 
 import { useAuth } from "@/src/auth/AuthContext";
 import { forgetRememberedLogin, readRememberedLogin } from "@/src/auth/rememberedLogin";
@@ -189,7 +188,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0B0912" }}>
-    <LinearGradient pointerEvents="none" colors={["#231031", "#100B19", "#0B0912"]} start={{x:0,y:.45}} end={{x:1,y:.7}} style={StyleSheet.absoluteFill} />
+    <LoginScene animate={!securityScreen} />
     <FocusGuide style={{flex:1}} autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
     <ScrollView focusable={false} removeClippedSubviews={false}
       style={styles.screenScroll}
@@ -199,11 +198,14 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
       testID="account-login-screen"
     >
       <View style={[styles.loginBrand, wide && {width:Math.min(380,width*.34)}]}>
-        <AccountLoginBrand size={wide ? Math.min(280, height*.46) : 132} animate={!securityScreen} />
-        <Text style={[styles.tagline, !wide && {fontSize:19}]}>Live TV. Movies. Series.</Text>
-        <Text style={styles.brandSubtitle}>Your favorites. All in one place.</Text>
+        {/* On wide screens the angel and the name are part of the backdrop. */}
+        {!wide ? <>
+          <AccountLoginBrand size={132} animate={!securityScreen} />
+          <Text style={[styles.tagline, {fontSize:19}]}>Live TV. Movies. Series.</Text>
+          <Text style={styles.brandSubtitle}>Your favorites. All in one place.</Text>
+        </> : null}
       </View>
-      <View style={[styles.loginForm, wide && {width:Math.min(396,width*.43)}]} onFocusCapture={entryFocus.onFocusCapture} onLayout={entryFocus.onLayout}>
+      <View style={[styles.loginForm, styles.loginGlass, wide && {width:Math.min(430,width*.43)}]} onFocusCapture={entryFocus.onFocusCapture} onLayout={entryFocus.onLayout}>
         <Text style={styles.kicker}>WELCOME TO CHARMING MEDIALAB</Text>
         <Text style={styles.title}>{mode === "login" ? "Welcome back." : "Create your account"}</Text>
         <Text style={[styles.message, compact && {marginBottom:14}]}>
@@ -353,14 +355,13 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           </Pressable>}
           <Pressable disabled={busy} onPress={() => { setError(null); setPassword(""); setConfirmPassword(""); setShowPassword(false); setMode(current => current === "login" ? "register" : "login"); }}
             testID="account-switch-mode" style={({focused})=>[styles.secondaryButton,styles.optionButton,focused&&styles.focused]}>
-            <Text style={styles.secondaryButtonText}>{mode === "login" ? "I have an invitation" : "Return to sign in"}</Text>
+            <Text style={styles.secondaryButtonText}>{mode === "login" ? "Setup Account" : "Return to sign in"}</Text>
           </Pressable>
         </View>
         <Pressable disabled={busy} onPress={()=>setSecurityScreen('community')} accessibilityRole="button"
           testID="account-community" style={({focused})=>[styles.linkButton,styles.communityButton,focused&&styles.focused]}>
           <Text style={styles.communityText}>Telegram community ↗</Text>
         </Pressable>
-        <View style={{marginTop:12,alignItems:"center"}}><DonationButton /></View>
       </View>
     </ScrollView></FocusGuide>{securityScreen&&<AccountSecurityDialog kind={securityScreen} initialLogin={username} registration={{invite_code:inviteCode,username,email}} onApproved={async token=>{const message=await register(inviteCode,username,email,password,token);if(message)throw new Error(message);setPassword('');setConfirmPassword('');setSecurityScreen(null);}} onClose={()=>setSecurityScreen(null)}/>}</View>
   );
@@ -414,15 +415,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(28, 19, 38, .82)",
   },
   cardCompact: { paddingHorizontal: 24, paddingVertical: 24 },
-  screenWide: {flexDirection:"row",gap:44,paddingHorizontal:44,paddingVertical:32},
+  screenWide: {flexDirection:"row",justifyContent:"space-between",gap:44,paddingHorizontal:44,paddingVertical:32},
   loginBrand: {alignItems:"center",justifyContent:"center"},
   loginForm: {width:396,maxWidth:"100%"},
+  loginGlass: {paddingHorizontal:26,paddingVertical:24,borderRadius:24,borderWidth:1,borderColor:"rgba(226,190,255,.30)",backgroundColor:"rgba(30,12,62,.34)"},
   tagline: {color:"#EEE6FF",fontFamily:fonts.medium,fontSize:23,letterSpacing:-.6,marginTop:22},
   brandSubtitle: {color:"#B3A5C2",fontFamily:fonts.regular,fontSize:13,marginTop:10},
   passwordRow: {flexDirection:"row",alignItems:"stretch",gap:8,marginBottom:15},
   passwordInput: {flex:1,minWidth:0,marginBottom:0},
   showPassword: {minWidth:61,minHeight:46,alignItems:"center",justifyContent:"center",borderWidth:2,borderColor:"#473453",backgroundColor:"#1B1425",borderRadius:11},
-  inputFocused: {borderColor:"#EDE3FF",backgroundColor:"#352048"},
+  inputFocused: {borderColor:"#EDE3FF",backgroundColor:"rgba(138,43,226,.38)"},
   helpRow: {alignItems:"flex-end",marginTop:5,marginBottom:8},
   linkButton: {minHeight:36,justifyContent:"center",paddingHorizontal:8,borderWidth:2,borderColor:"transparent",borderRadius:8},
   linkText: {color:"#CCB4E6",fontFamily:fonts.medium,fontSize:12},
@@ -452,9 +454,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 15,
     borderWidth: 2,
-    borderColor: "#473453",
-    borderRadius: 11,
-    backgroundColor: "#181220",
+    borderColor: "rgba(226,190,255,.30)",
+    borderRadius: 14,
+    backgroundColor: "rgba(10,4,24,.55)",
     paddingHorizontal: 14,
     marginBottom: 15,
   },
@@ -468,8 +470,8 @@ const styles = StyleSheet.create({
     gap: 9,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#BD70F0",
-    backgroundColor: "#7B32C3",
+    borderColor: "rgba(255,255,255,.85)",
+    backgroundColor: "#8F3BE0",
     marginTop: 0,
   },
   primaryButtonText: { color: "#fff", fontFamily: fonts.bold, fontSize: 13 },
@@ -479,8 +481,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#473453",
-    backgroundColor: "#1B1425",
+    borderColor: "rgba(226,190,255,.30)",
+    backgroundColor: "rgba(10,4,24,.5)",
   },
   secondaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11 },
   focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },

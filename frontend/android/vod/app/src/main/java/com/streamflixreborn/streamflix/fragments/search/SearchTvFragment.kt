@@ -22,7 +22,6 @@ import com.streamflixreborn.streamflix.adapters.AppAdapter
 import com.streamflixreborn.streamflix.database.AppDatabase
 import com.streamflixreborn.streamflix.databinding.FragmentSearchTvBinding
 import com.streamflixreborn.streamflix.models.Category
-import com.streamflixreborn.streamflix.models.Genre
 import com.streamflixreborn.streamflix.models.Movie
 import com.streamflixreborn.streamflix.models.TvShow
 import com.streamflixreborn.streamflix.utils.CacheUtils
@@ -38,24 +37,35 @@ import com.streamflixreborn.streamflix.providers.IptvProvider
 
 class SearchTvFragment : Fragment() {
 
+    private companion object {
+        const val LIVE_PAUSE_MS = 380L
+        const val LIVE_MIN_LETTERS = 2
+    }
+
     private var hasAutoCleared409: Boolean = false
     private var _binding: FragmentSearchTvBinding? = null
     private val binding get() = _binding!!
 
     private val database by lazy { AppDatabase.getInstance(requireContext()) }
-    private val viewModel by viewModelsFactory { SearchViewModel(database) }
+    private val viewModel by viewModelsFactory { SearchViewModel(database, browseWhenEmpty = false) }
     private var isGlobalSearchChecked: Boolean = false
     private var currentGridColumns: Int = 1
+    /** 0 = everything, 1 = movies only, 2 = series only. */
+    private var resultFilter: Int = 0
+    private var lastResults: List<AppAdapter.Item> = emptyList()
+    private var lastHasMore: Boolean = false
 
     private val appAdapter by lazy {
         AppAdapter().apply {
             onMovieClickListener = { movie ->
+                com.streamflixreborn.streamflix.charm.VodSearchRecents.add(requireContext(), viewModel.query)
                 switchProviderIfNeeded(movie.providerName)
                 findNavController().navigate(
                     SearchTvFragmentDirections.actionSearchToMovie(id = movie.id)
                 )
             }
             onTvShowClickListener = { tvShow ->
+                com.streamflixreborn.streamflix.charm.VodSearchRecents.add(requireContext(), viewModel.query)
                 switchProviderIfNeeded(tvShow.providerName)
                 findNavController().navigate(
                     SearchTvFragmentDirections.actionSearchToTvShow(
@@ -160,12 +170,50 @@ class SearchTvFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        binding.etSearch.removeCallbacks(liveSearch)
         voiceHelper.stopRecognition()
         _binding = null
     }
 
+    /** Results appear while typing: a short pause after two letters searches. */
+    private val liveSearch = Runnable {
+        val current = _binding ?: return@Runnable
+        if (isGlobalSearchChecked) return@Runnable
+        val typed = current.etSearch.text?.toString().orEmpty().trim()
+        if (typed == viewModel.query.trim()) return@Runnable
+        if (typed.isEmpty() || typed.length >= LIVE_MIN_LETTERS) viewModel.search(typed)
+    }
+
+    private fun showRecents() {
+        val current = _binding ?: return
+        val empty = current.etSearch.text.isNullOrBlank()
+        com.streamflixreborn.streamflix.charm.VodSearchRecents.show(current.llSearchRecents, empty) { query ->
+            current.etSearch.setText(query)
+            current.etSearch.setSelection(query.length)
+            current.etSearch.removeCallbacks(liveSearch)
+            viewModel.search(query)
+        }
+        val recents = current.llSearchRecents.visibility == View.VISIBLE
+        current.tvSearchHint.visibility = if (empty) View.VISIBLE else View.GONE
+        current.tvSearchHint.text = if (recents) "Recent searches" else "Type two letters or more. Movies and series show up as you type."
+        val filters = current.llSearchFilter.visibility == View.VISIBLE
+        current.llGlobalSearch.nextFocusDownId = when {
+            recents -> current.llSearchRecents.id
+            filters -> current.llSearchFilter.id
+            else -> current.vgvSearch.id
+        }
+    }
+
+    /** The row a result in the top line goes Up to. */
+    private fun aboveResultsId(): Int {
+        val current = _binding ?: return View.NO_ID
+        return if (current.llSearchFilter.visibility == View.VISIBLE) current.llSearchFilter.id else current.llGlobalSearch.id
+    }
+
     private fun submitSearch(): Boolean {
         val query = binding.etSearch.text?.toString().orEmpty()
+        binding.etSearch.removeCallbacks(liveSearch)
+        com.streamflixreborn.streamflix.charm.VodSearchRecents.add(requireContext(), query)
         hideKeyboard()
 
         if (isGlobalSearchChecked) {
@@ -235,6 +283,9 @@ class SearchTvFragment : Fragment() {
 
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) {
+                    binding.etSearch.removeCallbacks(liveSearch)
+                    binding.etSearch.postDelayed(liveSearch, if (s.isNullOrBlank()) 0L else LIVE_PAUSE_MS)
+                    showRecents()
                     if (s.isNullOrBlank()) {
                                 val isIptv = UserPreferences.currentProvider is IptvProvider
         val hintStringRes = if (isIptv) R.string.search_input_hint_iptv else R.string.search_input_hint
@@ -309,11 +360,15 @@ class SearchTvFragment : Fragment() {
                     subposition: Int,
                 ) {
                     child?.itemView?.nextFocusUpId =
-                        if (position in 0 until currentGridColumns) binding.llGlobalSearch.id
+                        if (position in 0 until currentGridColumns) aboveResultsId()
                         else View.NO_ID
                 }
             })
         }
+
+        com.streamflixreborn.streamflix.charm.VodSearchRecents.glass(binding.clSearch, binding.etSearch)
+        com.streamflixreborn.streamflix.charm.VodSearchRecents.glass(binding.llGlobalSearch, binding.llGlobalSearch)
+        showRecents()
 
         binding.root.requestFocus()
     }
@@ -332,12 +387,38 @@ class SearchTvFragment : Fragment() {
     }
 
     private fun displaySearch(list: List<AppAdapter.Item>, hasMore: Boolean) {
-        currentGridColumns = if (viewModel.query == "") 5 else 6
+        lastResults = list
+        lastHasMore = hasMore
+        currentGridColumns = 6
         binding.vgvSearch.setNumColumns(currentGridColumns)
 
-        appAdapter.submitList(list.onEach {
+        // Posters only: movies and series. The grid wraps to a new line every six
+        // posters and scrolls inside its own area, however many results there are.
+        val movies = list.count { it is Movie }
+        val series = list.count { it is TvShow }
+        // The choice is offered only when both kinds were found.
+        if (movies == 0 || series == 0) resultFilter = 0
+        com.streamflixreborn.streamflix.charm.VodSearchRecents.filters(
+            binding.llSearchFilter,
+            if (movies > 0 && series > 0) listOf("All (${movies + series})", "Movies ($movies)", "Series ($series)") else emptyList(),
+            resultFilter,
+        ) { choice ->
+            if (choice != resultFilter) {
+                resultFilter = choice
+                displaySearch(lastResults, lastHasMore)
+            }
+        }
+        binding.vgvSearch.nextFocusUpId = aboveResultsId()
+        showRecents()
+
+        appAdapter.submitList(list.filter {
+            when (resultFilter) {
+                1 -> it is Movie
+                2 -> it is TvShow
+                else -> it is Movie || it is TvShow
+            }
+        }.onEach {
             when (it) {
-                is Genre -> it.itemType = AppAdapter.Type.GENRE_GRID_TV_ITEM
                 is Movie -> it.itemType = AppAdapter.Type.MOVIE_GRID_TV_ITEM
                 is TvShow -> it.itemType = AppAdapter.Type.TV_SHOW_GRID_TV_ITEM
             }
@@ -374,6 +455,8 @@ class SearchTvFragment : Fragment() {
             }
         }
 
+        com.streamflixreborn.streamflix.charm.VodSearchRecents.filters(binding.llSearchFilter, emptyList(), 0) {}
+        binding.vgvSearch.nextFocusUpId = aboveResultsId()
         currentGridColumns = 1
         binding.vgvSearch.setNumColumns(currentGridColumns) // La lista de categorías es una sola columna vertical
         appAdapter.submitList(categories)

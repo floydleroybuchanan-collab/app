@@ -1,3 +1,5 @@
+import { DEFAULT_USER_AGENT, getActiveUserAgent } from "./userAgent.ts";
+
 export type Engine = "media3";
 export type EnginePreference = Engine;
 /** CMAF is packaging (fMP4) carried inside HLS or DASH — not a separate engine path. */
@@ -38,7 +40,7 @@ function kindFromHint(raw: string | null | undefined): StreamKind | null {
  * direct MPEG-TS on the explicit TS extractor path instead of silently
  * downgrading it to generic progressive playback.
  */
-export const DEFAULT_STREAM_USER_AGENT = "TiviMate/5.1.6 (Linux; Android TV)";
+export const DEFAULT_STREAM_USER_AGENT = DEFAULT_USER_AGENT;
 
 export function detectStreamKind(uri: string, streamTypeHint?: string | null): StreamKind {
   const lower = uri.toLowerCase();
@@ -97,12 +99,13 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
   const useHttpUserAgent = /^https?:\/\//i.test(rawUri.trim());
   const pipeIndex = rawUri.indexOf("|");
   if (pipeIndex < 0) {
-    return { uri: rawUri.trim(), headers: useHttpUserAgent ? { "User-Agent": DEFAULT_STREAM_USER_AGENT } : {} };
+    return { uri: rawUri.trim(), headers: useHttpUserAgent ? { "User-Agent": getActiveUserAgent() } : {} };
   }
   const uri = rawUri.slice(0, pipeIndex).trim();
   // Preserve headers supplied by the stream/provider. When the playlist omits
-  // User-Agent, use the same TiViMate-style Android TV UA the cloud builder
-  // already retries with so IPTV panels that gate on that identity still deliver bytes.
+  // User-Agent, use the viewer's User-Agent setting, which defaults to the
+  // TiViMate-style Android TV UA the cloud builder already retries with, so IPTV
+  // panels that gate on that identity still deliver bytes.
   const headers: Record<string, string> = {};
   for (const pair of rawUri.slice(pipeIndex + 1).split("&")) {
     const equals = pair.indexOf("=");
@@ -116,7 +119,7 @@ export function parsePipeHeaders(rawUri: string): { uri: string; headers: Record
     }
   }
   if (useHttpUserAgent && !Object.keys(headers).some((key) => key.toLowerCase() === "user-agent")) {
-    headers["User-Agent"] = DEFAULT_STREAM_USER_AGENT;
+    headers["User-Agent"] = getActiveUserAgent();
   }
   return { uri, headers };
 }

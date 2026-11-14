@@ -1,7 +1,7 @@
 <resources>
   <color name="charm_icon_background">#10051F</color>
   <color name="splashscreen_background">#000000</color>
-  <color name="iconBackground">#000000</color>
+  <color name="iconBackground">#10051F</color>
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#000000</color>
   <color name="notification_icon_color">#E11D48</color>

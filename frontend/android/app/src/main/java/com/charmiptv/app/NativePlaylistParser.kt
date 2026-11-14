@@ -181,7 +181,7 @@ internal object NativePlaylistParser {
       .build()
     val request = Request.Builder()
       .url(cleanUrl)
-      .header("User-Agent", "TiviMate/5.1.6 (Linux; Android TV)")
+      .header("User-Agent", CharmUserAgent.current())
       .header("Accept", "application/x-mpegURL,application/vnd.apple.mpegurl,audio/mpegurl,application/xml,text/xml,*/*")
       .build()
     val response = client.newCall(request).execute()

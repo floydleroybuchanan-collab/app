@@ -26,7 +26,7 @@
         <item name="colorAccent">#FFFFFF</item>
         <item name="android:textColorPrimary">#FFFFFF</item>
         <item name="android:textColorSecondary">#BDBDBD</item>
-        <item name="alertDialogTheme">@style/Theme.Amoled.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="home_gradient_drawable">@drawable/bg_home_gradient_amoled</item>
         <item name="movie_banner_gradient_drawable">@drawable/bg_movie_banner_gradient_amoled</item>
         <item name="tv_show_banner_gradient_drawable">@drawable/bg_tv_show_banner_gradient_amoled</item>
@@ -141,7 +141,7 @@
     <style name="AppTheme.Tv" parent="Theme.Leanback">
         <item name="app_background_color">#070711</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">@color/charm_vod_focus</item>
         <item name="colorControlActivated">@color/charm_vod_focus</item>
         <item name="colorControlNormal">#AAA7BB</item>
@@ -175,7 +175,7 @@
         <item name="defaultSearchBrightColor">#000000</item>
         <item name="defaultSearchIconColor">#FFFFFF</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlay.Leanback.Amoled</item>
-        <item name="alertDialogTheme">@style/Theme.Amoled.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="home_gradient_drawable">@drawable/bg_home_gradient_amoled</item>
         <item name="movie_banner_gradient_drawable">@drawable/bg_movie_banner_gradient_amoled</item>
         <item name="tv_show_banner_gradient_drawable">@drawable/bg_tv_show_banner_gradient_amoled</item>
@@ -185,7 +185,7 @@
     <style name="AppTheme.SunsetCinema" parent="Theme.Leanback">
         <item name="app_background_color">#201410</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#F39A5B</item>
         <item name="colorControlActivated">#F39A5B</item>
         <item name="colorControlNormal">#D7B7A4</item>
@@ -205,7 +205,7 @@
     <style name="AppTheme.SteelBlue" parent="Theme.Leanback">
         <item name="app_background_color">#141C25</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#7DB3E8</item>
         <item name="colorControlActivated">#7DB3E8</item>
         <item name="colorControlNormal">#ADC5DA</item>
@@ -225,7 +225,7 @@
     <style name="AppTheme.ForestNight" parent="Theme.Leanback">
         <item name="app_background_color">#101816</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#65D7C2</item>
         <item name="colorControlActivated">#65D7C2</item>
         <item name="colorControlNormal">#A8D1C7</item>
@@ -245,7 +245,7 @@
     <style name="AppTheme.CrimsonNoir" parent="Theme.Leanback">
         <item name="app_background_color">#1C1014</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#D86A7A</item>
         <item name="colorControlActivated">#D86A7A</item>
         <item name="colorControlNormal">#A88891</item>
@@ -265,7 +265,7 @@
     <style name="AppTheme.MidnightViolet" parent="Theme.Leanback">
         <item name="app_background_color">#151523</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#AFA3FF</item>
         <item name="colorControlActivated">#AFA3FF</item>
         <item name="colorControlNormal">#8F8AAE</item>
@@ -285,7 +285,7 @@
     <style name="AppTheme.NordFrost" parent="Theme.Leanback">
         <item name="app_background_color">#182029</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#8ED0E8</item>
         <item name="colorControlActivated">#8ED0E8</item>
         <item name="colorControlNormal">#8EA2B0</item>
@@ -305,7 +305,7 @@
     <style name="AppTheme.EmeraldLuxe" parent="Theme.Leanback">
         <item name="app_background_color">#11201B</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#7ED6A3</item>
         <item name="colorControlActivated">#7ED6A3</item>
         <item name="colorControlNormal">#98AE9F</item>
@@ -325,7 +325,7 @@
     <style name="AppTheme.RetroNeon" parent="Theme.Leanback">
         <item name="app_background_color">#16161D</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlayLeanback</item>
-        <item name="alertDialogTheme">@style/Theme.AppCompat.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Charm.Dialog.Glass</item>
         <item name="colorAccent">#4DE0D7</item>
         <item name="colorControlActivated">#4DE0D7</item>
         <item name="colorControlNormal">#A56FBD</item>
@@ -340,6 +340,26 @@
         <item name="movie_banner_gradient_drawable">@drawable/bg_movie_banner_gradient_neon</item>
         <item name="tv_show_banner_gradient_drawable">@drawable/bg_tv_show_banner_gradient_neon</item>
         <item name="category_swiper_gradient_drawable">@drawable/fg_category_swiper_neon</item>
+    </style>
+
+    <!-- Glass dialog: violet see-through card with a soft light edge, white text, bright violet buttons. -->
+    <style name="Charm.Dialog.Glass" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_charm_dialog_glass</item>
+        <item name="android:colorBackground">#00000000</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#E2D3FA</item>
+        <item name="android:windowMinWidthMajor">45%</item>
+        <item name="android:windowMinWidthMinor">80%</item>
+        <item name="colorAccent">#F0C8FF</item>
+        <item name="buttonBarButtonStyle">@style/Charm.Dialog.Glass.Button</item>
+    </style>
+
+    <style name="Charm.Dialog.Glass.Button" parent="Widget.AppCompat.Button.ButtonBar.AlertDialog">
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:background">@drawable/vod_pref_glass</item>
+        <item name="android:minWidth">88dp</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:layout_marginEnd">4dp</item>
     </style>
 
     <!-- Stile Dialogo Nero Amoled/Oled -->

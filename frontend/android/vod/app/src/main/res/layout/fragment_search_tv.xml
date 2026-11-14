@@ -116,19 +116,62 @@
 
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/tv_search_hint"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:textColor="#D9C8F5"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toEndOf="@id/cl_search"
+        app:layout_constraintStart_toStartOf="@id/cl_search"
+        app:layout_constraintTop_toBottomOf="@id/ll_global_search" />
+
+    <LinearLayout
+        android:id="@+id/ll_search_recents"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:descendantFocusability="afterDescendants"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/cl_search"
+        app:layout_constraintStart_toStartOf="@id/cl_search"
+        app:layout_constraintTop_toBottomOf="@id/tv_search_hint" />
+
+    <LinearLayout
+        android:id="@+id/ll_search_filter"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:descendantFocusability="afterDescendants"
+        android:nextFocusDown="@+id/vgv_search"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/cl_search"
+        app:layout_constraintStart_toStartOf="@id/cl_search"
+        app:layout_constraintTop_toBottomOf="@id/ll_global_search" />
+
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/barrier_search_top"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="ll_global_search,tv_search_hint,ll_search_recents,ll_search_filter" />
+
     <androidx.leanback.widget.VerticalGridView
         android:id="@+id/vgv_search"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:clipChildren="false"
-        android:clipToPadding="false"
+        android:clipToPadding="true"
         android:descendantFocusability="afterDescendants"
         android:padding="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/ll_global_search"
+        app:layout_constraintTop_toBottomOf="@id/barrier_search_top"
         tools:listitem="@layout/item_movie_tv" />
 
     <include

@@ -21,7 +21,8 @@ import { useCustomGuideGroups } from "@/src/core/customGuideGroups";
 import { GUIDE_START_LAST_USED, useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { formatRelativeAge } from "@/src/utils/time";
 import { createCustomEpgSourceId, useMultiEpgSources } from "@/src/core/multiEpgSources";
-import { fonts, tvColors } from "@/src/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { readPlaylistGuideHealth, refreshEveryGuide, refreshEveryPlaylistAndGuide, refreshEveryPlaylistOnly, type PlaylistGuideHealth } from "@/src/core/playlistGuideOperations";
 import { nativeEpgAvailable, readNativeUpdateDiagnostics, type NativeUpdateDiagnostics } from "@/src/nativeEpg";
@@ -174,6 +175,12 @@ function EpgSourcesScreenContent() {
   const matchedChannelCount = playlistHealth.length ? playlistHealth.reduce((sum, item) => sum + item.matched, 0) : diagnostics?.matchQuality?.matched;
   const unmatchedChannelCount = playlistHealth.length ? playlistHealth.reduce((sum, item) => sum + item.unmatched, 0) : diagnostics?.matchQuality?.unmatched;
 
+  const totalChannels = channels.length;
+  const coverage = totalChannels && typeof matchedChannelCount === "number" ? Math.min(100, Math.round((matchedChannelCount / totalChannels) * 100)) : 0;
+  const heroTone = status.refreshing ? "busy" : status.error ? "bad" : "good";
+  const heroHeadline = status.refreshing ? "Updating your guide…" : status.error ? "The last guide update failed" : totalChannels ? `${coverage}% of channels have guide data` : "No channels loaded yet";
+  const heroSub = diagnostics?.guideRefreshedAt ? `EPG refreshed ${formatRelativeAge(diagnostics.guideRefreshedAt)} · ${dayjs(diagnostics.guideRefreshedAt).format(timeFormat)}` : "The guide has not been refreshed yet.";
+
   return (
     <PurpleTvShell active="/settings">
       <View style={styles.page}><GlassBackdrop />
@@ -196,6 +203,32 @@ function EpgSourcesScreenContent() {
             contentInsetAdjustmentBehavior="never"
             contentContainerStyle={styles.content}
           >
+            <View style={styles.hero} testID="epg-hero">
+              <LinearGradient colors={["rgba(122,62,214,0.45)", "rgba(26,11,51,0.94)"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              <View style={styles.heroTop}>
+                <View style={styles.heroCopy}>
+                  <Text style={styles.heroKicker}>GUIDE HEALTH</Text>
+                  <Text style={styles.heroTitle}>{heroHeadline}</Text>
+                  <Text style={styles.heroSub}>{heroSub}</Text>
+                </View>
+                <View style={[styles.heroPill, heroTone === "busy" && styles.pillBusy, heroTone === "bad" && styles.pillBad, heroTone === "good" && styles.pillGood]}>
+                  <View style={[styles.heroDot, heroTone === "busy" && styles.dotBusy, heroTone === "bad" && styles.dotBad, heroTone === "good" && styles.dotGood]} />
+                  <Text style={styles.heroPillText}>{heroTone === "busy" ? "Updating" : heroTone === "bad" ? "Needs attention" : "Up to date"}</Text>
+                </View>
+              </View>
+              <View style={styles.meter}><View style={[styles.meterFill, { width: `${coverage}%` }]} /></View>
+              <View style={styles.stats}>
+                <Stat label="Channels" value={String(totalChannels)} />
+                <Stat label="With guide data" value={String(indexedChannelCount)} />
+                <Stat label="Matched" value={String(matchedChannelCount ?? "…")} />
+                <Stat label="Unmatched" value={String(unmatchedChannelCount ?? "…")} />
+              </View>
+              <View style={styles.quick}>
+                <QuickAction icon="refresh" label="Refresh everything" note="Playlists and guide" busy={activeAction === "refresh-all"} disabled={busy} onPress={refreshAll} testID="epg-refresh-all" />
+                <QuickAction icon="list-outline" label="Playlists only" note="Keeps the guide data" busy={activeAction === "refresh-playlist"} disabled={busy} onPress={refreshPlaylist} testID="epg-refresh-playlists" />
+                <QuickAction icon="calendar-outline" label="Guide only" note="Keeps the playlists" busy={activeAction === "refresh-epg"} disabled={busy} onPress={refreshGuide} testID="epg-refresh-guide" />
+              </View>
+            </View>
             <Card title="Sources" icon="server-outline">
               <SourceRow title="Primary XMLTV Guide" subtitle="Managed by Charming MediaLab · locked source" status={!epgOwnership.primaryEnabled ? "Disabled" : status.refreshing ? "Updating…" : status.error ? "Last update failed — see below" : "Active"} />
               <SourceRow title={epgOwnership.userName} subtitle="Saved custom XMLTV source · select for settings" status={!epgOwnership.userEnabled ? "Disabled" : epgOwnership.userUrl ? `${Object.keys(epgOwnership.userOverrides).length} assigned channels` : "Enabled · URL required"} onPress={() => router.push("/epg-custom" as any)} />
@@ -239,9 +272,6 @@ function EpgSourcesScreenContent() {
               <ToggleRow label="Background updates require device idle" value={sourceRefresh.backgroundIdleOnly} onChange={sourceRefresh.setBackgroundIdleOnly} />
               <Text style={styles.help}>Android schedules each enabled guide source durably. Failed downloads keep last-good data and retry later with increasing delays, even after the app closes or the TV restarts.</Text>
               <Text style={styles.help}>Playlist and EPG refresh independently. Only the operation you start runs; repeat OK presses are ignored until it finishes.</Text>
-              <Action label={activeAction === "refresh-playlist" ? "Working…" : "Refresh playlists only now"} icon="list-outline" onPress={refreshPlaylist} disabled={busy} />
-              <Action label={activeAction === "refresh-all" ? "Working…" : "Refresh playlist & EPG now"} icon="refresh" onPress={refreshAll} disabled={busy} />
-              <Action label={activeAction === "refresh-epg" ? "Working…" : "Refresh EPG only now"} icon="calendar-outline" onPress={refreshGuide} disabled={busy} />
             </Card>
             <Card title="Guide Time Correction" icon="time-outline">
               <ChoiceRow<number> label="Global offset" value={guideTiming.globalOffsetMinutes} options={[-120, -60, -30, 0, 30, 60, 120].map((value) => ({ label: value === 0 ? "0" : `${value > 0 ? "+" : ""}${value}m`, value }))} onChange={guideTiming.setGlobalOffsetMinutes} />
@@ -308,7 +338,7 @@ function Card({ title, icon, children }: { title: string; icon: React.ComponentP
   return <View style={styles.card}><View style={styles.cardHeader}><GlassIcon name={icon} size={22} /><Text style={styles.cardTitle}>{title}</Text></View>{children}</View>;
 }
 function SourceRow({ title, subtitle, status, onPress }: { title: string; subtitle: string; status: string; onPress?: () => void }) {
-  const content = <><View style={styles.sourceCopy}><Text style={styles.sourceTitle}>{title}</Text><Text style={styles.sourceSub}>{subtitle}</Text></View><Text style={styles.sourceStatus}>{status}</Text><Ionicons name={onPress ? "chevron-forward" : "lock-closed"} size={12} color={tvColors.textMuted} /></>;
+  const content = <><View style={styles.sourceCopy}><Text style={styles.sourceTitle}>{title}</Text><Text style={styles.sourceSub}>{subtitle}</Text></View><View style={styles.statusPill}><View style={[styles.statusDot, { backgroundColor: sourceTone(status) }]} /><Text style={styles.sourceStatus}>{status}</Text></View><Ionicons name={onPress ? "chevron-forward" : "lock-closed"} size={12} color={tvColors.textMuted} /></>;
   return onPress
     ? <Pressable onPress={onPress} style={({ focused }: any) => [styles.sourceRow, focused && styles.focused]}>{content}</Pressable>
     : <View style={styles.sourceRow}>{content}</View>;
@@ -322,6 +352,23 @@ function ChoiceRow<T extends string | number>({ label, value, options, onChange 
 function Action({ label, icon, onPress, disabled }: { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; onPress: () => void; disabled?: boolean }) {
   return <Pressable accessibilityState={{ busy: Boolean(disabled) }} onPress={onPress} style={({ focused }: any) => [styles.action, disabled && styles.disabled, focused && styles.focused]}><GlassIcon name={icon} size={22} /><Text style={styles.actionText}>{label}</Text></Pressable>;
 }
+function sourceTone(status: string): string {
+  if (/disabled|failed|unavailable|attention/i.test(status)) return "#FF7A8C";
+  if (/updating|checking|enable/i.test(status)) return "#FFC45C";
+  return "#5FE3A1";
+}
+function Stat({ label, value }: { label: string; value: string }) {
+  return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>;
+}
+function QuickAction({ icon, label, note, busy, disabled, onPress, testID }: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; note: string; busy: boolean; disabled: boolean; onPress: () => void; testID: string }) {
+  return (
+    <Pressable accessibilityState={{ busy }} disabled={disabled} onPress={onPress} testID={testID}
+      style={({ focused }: any) => [styles.quickTile, disabled && !busy && styles.quickDisabled, focused && styles.quickFocused]}>
+      <GlassIcon name={icon} size={26} />
+      <View style={styles.quickCopy}><Text style={styles.quickLabel}>{busy ? "Working…" : label}</Text><Text style={styles.quickNote}>{note}</Text></View>
+    </Pressable>
+  );
+}
 function Info({ label, value }: { label: string; value: string }) {
   return <View style={styles.infoRow}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View>;
 }
@@ -334,7 +381,35 @@ const styles = StyleSheet.create({
   back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
   backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   scrollWrap: { flex: 1 }, content: { paddingVertical: 12, gap: 10, paddingBottom: 28 },
-  card: { padding: 11, gap: 7, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
+  hero: { padding: 16, gap: 12, borderRadius: 20, borderWidth: 1, borderColor: glass.edge, overflow: "hidden", backgroundColor: glass.drawer },
+  heroTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  heroCopy: { flex: 1, gap: 3 },
+  heroKicker: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.6 },
+  heroTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 19 },
+  heroSub: { color: "rgba(237,227,255,0.72)", fontFamily: fonts.regular, fontSize: 9.5 },
+  heroPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+  pillGood: { borderColor: "rgba(95,227,161,0.7)", backgroundColor: "rgba(95,227,161,0.14)" },
+  pillBusy: { borderColor: "rgba(255,196,92,0.7)", backgroundColor: "rgba(255,196,92,0.14)" },
+  pillBad: { borderColor: "rgba(255,122,140,0.75)", backgroundColor: "rgba(255,122,140,0.14)" },
+  heroDot: { width: 8, height: 8, borderRadius: 4 },
+  dotGood: { backgroundColor: "#5FE3A1" }, dotBusy: { backgroundColor: "#FFC45C" }, dotBad: { backgroundColor: "#FF7A8C" },
+  heroPillText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9.5 },
+  meter: { height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.14)", overflow: "hidden" },
+  meterFill: { height: 6, borderRadius: 3, backgroundColor: glass.glow },
+  stats: { flexDirection: "row", gap: 8 },
+  stat: { flex: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.26)", borderWidth: 1, borderColor: glass.edgeSoft },
+  statValue: { color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
+  statLabel: { color: glass.kicker, fontFamily: fonts.medium, fontSize: 8.5, marginTop: 1 },
+  quick: { flexDirection: "row", gap: 8 },
+  quickTile: { flex: 1, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderRadius: 16, backgroundColor: glass.button, borderWidth: 1, borderColor: glass.buttonEdge },
+  quickDisabled: { opacity: 0.5 },
+  quickFocused: { ...glassFocus },
+  quickCopy: { flex: 1, minWidth: 0 },
+  quickLabel: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10.5 },
+  quickNote: { color: "rgba(237,227,255,0.65)", fontFamily: fonts.regular, fontSize: 8.5, marginTop: 1 },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.26)", borderWidth: 1, borderColor: glass.edgeSoft },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  card: { padding: 13, gap: 8, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 18 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 2 },
   cardTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10.5 },
   sourceRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },

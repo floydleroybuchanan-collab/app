@@ -26,7 +26,7 @@ test('each TV calibration button changes exactly one pixel on all four edges', (
   const api = load('src/components/TvCalibrationControls.tsx', {
     react, 'react-native': { Platform: { isTV: true }, StyleSheet: { create: value => value } },
     'expo-haptics': { selectionAsync: async () => {} },
-    '@/src/theme': { fonts: {}, radius: {}, spacing: {} },
+    '@/src/theme': { fonts: {}, radius: {}, spacing: {}, glass: {}, glassFocus: {} },
     '@/src/tvCalibration': { TV_CALIBRATION_MIN_OFFSET: -96, TV_CALIBRATION_MAX_OFFSET: 96,
       useTvCalibration: () => ({ draftCalibration: draft, setSide: (side, value) => changes.push([side, value]) }) },
   }, '', { Date: { now: () => now += 200 } });
@@ -97,7 +97,9 @@ test('launcher uses RGBA circle artwork without an extra VOD interstitial', () =
   assert.equal(asset.readUInt32BE(20), 1024);
   assert.equal(asset[25], 6, 'launcher keeps an actual alpha channel');
   const manifest = read('android/app/src/main/AndroidManifest.xml');
-  assert.match(manifest, /android:icon="@drawable\/charm_launcher"/);
+  // Installers and launchers read the app icon from a bitmap mipmap; a layer-list drawable showed a generic icon on the install screen.
+  assert.match(manifest, /android:icon="@mipmap\/ic_launcher"/);
+  assert.match(manifest, /android:roundIcon="@mipmap\/ic_launcher_round"/);
   assert.match(manifest, /android:banner="@drawable\/charm_tv_banner"/);
   for (const name of ['drawable/charm_launcher.xml', 'drawable-v26/charm_launcher.xml']) {
     assert.match(read(`android/app/src/main/res/${name}`), /@drawable\/medialab_launcher/);

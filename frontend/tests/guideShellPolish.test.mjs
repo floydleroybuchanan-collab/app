@@ -236,8 +236,8 @@ test("EPG and playlist controls live only on the dedicated EPG settings page", a
     assert.doesNotMatch(settings, new RegExp(`label="${label}"`));
     assert.match(epg, new RegExp(label));
   }
-  assert.match(epg, /Refresh playlist & EPG now/);
-  assert.match(epg, /Refresh EPG only now/);
+  assert.match(epg, /Refresh everything/);
+  assert.match(epg, /Guide only/);
   assert.match(epg, /operationInFlight\.current/);
   assert.doesNotMatch(epg, /<Pressable disabled=\{disabled\}/);
   assert.match(epg, /accessibilityState=\{\{ busy: Boolean\(disabled\) \}\}/);

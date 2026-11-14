@@ -52,6 +52,8 @@ import {
   type PlaybackBufferProfile,
 } from "@/src/core/playbackBufferProfile";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
+import { useUserAgentPreference } from "@/src/core/userAgentPreference";
+import { MAX_USER_AGENT_LENGTH, USER_AGENT_PRESETS, cleanUserAgentInput, resolveUserAgent, type UserAgentPreset } from "@/src/core/userAgent";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { useParentalPin } from "@/src/core/parentalPin";
 import { failedStreamCount, listFailedChannelIds } from "@/src/core/streamFailureRegistry";
@@ -100,6 +102,7 @@ type Section =
   | "backup"
   | "invites"
   | "account"
+  | "donate"
   | "about";
 
 type Tile = {
@@ -123,6 +126,7 @@ const TILE_ART: Record<string, number> = {
   backup: require("../../assets/glass/settings_storage.png"),
   invites: require("../../assets/glass/genre_romance.png"),
   account: require("../../assets/glass/settings_account.png"),
+  donate: require("../../assets/glass/settings_donate.png"),
   about: require("../../assets/glass/settings_about.png"),
 };
 /** Picks the glass artwork that fits a control's purpose. */
@@ -161,6 +165,7 @@ const TILE_ABOUT: Record<string, string> = {
   "backup": "Save or restore all of your settings.",
   "invites": "Share access with invite codes.",
   "account": "Your subscription and devices.",
+  "donate": "Support Charming MediaLab.",
   "about": "Version and build details."
 };
 
@@ -179,6 +184,7 @@ const TILES: Tile[] = [
   { id: "invites", label: "Invites", icon: "gift-outline" },
   { id: "account", label: "Account", icon: "person-outline" },
   { id: "about", label: "About", icon: "information-circle-outline" },
+  { id: "donate", label: "Donations", icon: "heart-outline" },
 ];
 
 const ADULT_GROUP_RE = /adult|xxx|porn/i;
@@ -257,6 +263,7 @@ function SettingsScreenContent() {
   } = useStore();
   const remoteShortcuts = useRemoteShortcutPreferences();
   const [playbackBufferProfile, setPlaybackBufferProfile] = usePlaybackBufferProfile();
+  const [userAgentChoice, setUserAgentChoice] = useUserAgentPreference();
   const channelCustomize = useChannelCustomize();
   const guideUi = useGuideUiPreferences();
   const parental = useParentalPin();
@@ -783,6 +790,35 @@ function SettingsScreenContent() {
                   onChange={setSleepTimerMinutes}
                 />
                 <View style={styles.divider} />
+                <Text style={styles.settingLabel}>User agent</Text>
+                <Text style={styles.help}>
+                  The name this app gives your provider when it asks for playlists, guide data and streams. Streams that set their own User-Agent keep it.
+                  A new choice applies to the next channel you open and the next refresh.
+                </Text>
+                <ChoiceRow<UserAgentPreset>
+                  label="Identity"
+                  value={userAgentChoice.preset}
+                  options={[...USER_AGENT_PRESETS.map((preset) => ({ label: preset.label, value: preset.id as UserAgentPreset })), { label: "Custom", value: "custom" as UserAgentPreset }]}
+                  onChange={(preset) => setUserAgentChoice({ ...userAgentChoice, preset })}
+                />
+                {userAgentChoice.preset === "custom" ? (
+                  <View style={styles.pinInputRow}>
+                    <Text style={styles.infoLabel}>Custom</Text>
+                    <TextInput
+                      value={userAgentChoice.custom}
+                      onChangeText={(custom) => setUserAgentChoice({ preset: "custom", custom: cleanUserAgentInput(custom) })}
+                      placeholder="MyPlayer/1.0 (Android)"
+                      placeholderTextColor={tvColors.textMuted}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={MAX_USER_AGENT_LENGTH}
+                      style={styles.pinInput}
+                      testID="settings-user-agent"
+                    />
+                  </View>
+                ) : null}
+                <Text style={styles.help}>Sending: {resolveUserAgent(userAgentChoice)}</Text>
+                <View style={styles.divider} />
                 <Text style={styles.settingLabel}>Audio / CC</Text>
                 <Text style={styles.help}>
                   Preferred audio language auto-selects a matching native Media3 track.
@@ -1127,6 +1163,7 @@ function SettingsScreenContent() {
                   options={[{ label: "Auto", value: "auto" }, { label: "TV", value: "tv" }, { label: "Mobile", value: "mobile" }]}
                   onChange={setDeviceLayoutMode}
                 />
+                <Text style={styles.help}>Auto picks touch on phones and tablets and the remote layout on TVs and boxes. Mobile makes everything work by touch; TV keeps remote navigation. Restart the app after changing this.</Text>
                 <ChoiceRow<GuideDensity>
                   label="Guide density"
                   value={guideDensity}
@@ -1283,6 +1320,11 @@ function SettingsScreenContent() {
               </SettingsCard>
             ) : null}
 
+            {section === "donate" ? (
+              <SettingsCard title="Donations" icon="heart-outline">
+                <Text style={styles.help}>Thank you for thinking about supporting Charming MediaLab. Donation options are being set up and are not available yet. Nothing on this page takes a payment.</Text>
+              </SettingsCard>
+            ) : null}
             {section === "about" ? (
               <SettingsCard title="About Charming MediaLab" icon="information-circle-outline">
                 <InfoRow label="Version" value={appVersion} />

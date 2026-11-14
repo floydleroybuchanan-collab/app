@@ -53,7 +53,7 @@ test("Live TV lists recently watched VOD titles and opens them in VOD", () => {
   assert.match(reader, /movieDao\(\)\.getRecentlyWatched\(\)\.first\(\)/);
   assert.match(reader, /tvShowDao\(\)\.getRecentlyWatched\(\)\.first\(\)/);
   const pkg = read("android/app/src/main/java/com/charmiptv/app/CharmVodPackage.kt");
-  assert.match(pkg, /listOf\(CharmVodHistoryModule\(context\)\)/);
+  assert.match(pkg, /listOf\(CharmVodHistoryModule\(context\)/);
 });
 
 test("opening a VOD title keeps focus inside VOD while the page loads", () => {

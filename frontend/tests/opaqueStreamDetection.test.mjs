@@ -72,8 +72,7 @@ test("opaque startup uses one Media3 connection, stable confirmation and bounded
   assert.match(manager, /advanceOpaqueCandidateOnStall\(instance, "start-timeout"\)/);
   assert.match(manager, /isContainerMismatch/);
   assert.match(manager, /forgetDetectedType\(cacheKey\)/);
-  assert.match(manager, /DEFAULT_STREAM_USER_AGENT = "TiviMate\/5\.1\.6 \(Linux; Android TV\)"/);
-  assert.match(manager, /properties\["User-Agent"\] = DEFAULT_STREAM_USER_AGENT/);
+  assert.match(manager, /properties\["User-Agent"\] = CharmUserAgent\.current\(context\)/);
   assert.match(manager, /properties\["Accept"\] = "\*\/\*"/);
   assert.match(manager, /CharmHttpClients\.mediaClient\(\)/);
   assert.doesNotMatch(manager, /silentAudioCheck|bufferingWatchdog|RECONNECT_STALL_MS/);

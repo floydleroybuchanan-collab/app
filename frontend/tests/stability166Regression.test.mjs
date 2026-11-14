@@ -47,7 +47,7 @@ function matchApi(nativeWrite, ramWrite, globals = {}) {
       CharmEpg: { upsertPlaylistEpgMatches: nativeWrite, queryGuideWindow: async () => { reads.push('sqlite'); return []; } },
       CharmEpgRam: { replaceMatches: ramWrite, queryGuideWindow: async () => { reads.push('ram'); return []; } },
     }, Platform: { OS: 'android' }, DeviceEventEmitter: {} },
-    '@/src/core/playlistEpgHeader': {}, '@/src/core/multiEpgSources': {}, '@/src/core/sourceParsing': {},
+    '@/src/core/playlistEpgHeader': {}, '@/src/core/multiEpgSources': {}, '@/src/core/sourceParsing': {}, './core/userAgent.ts': { getActiveUserAgent: () => 'test-agent' },
   }, { setTimeout, clearTimeout, ...globals });
   return { api, reads };
 }

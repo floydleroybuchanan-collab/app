@@ -1,4 +1,5 @@
 import { activeGroupChannels } from "@/src/core/groupVisibility";
+import { applyDeviceLayoutChoice } from "@/src/utils/tvRuntime";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import React, { createContext, startTransition, useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
@@ -302,7 +303,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const [safePreviewMode, setSafePreviewModeState] = useState<SafePreviewMode>("delayed");
   const [channelNumbers, setChannelNumbersState] = useState(false);
   const [channelLogos, setChannelLogosState] = useState(true);
-  const [deviceLayoutMode, setDeviceLayoutModeState] = useState<DeviceLayoutMode>("tv");
+  const [deviceLayoutMode, setDeviceLayoutModeState] = useState<DeviceLayoutMode>("auto");
   const [playerControlsTimeoutMs, setPlayerControlsTimeoutMsState] = useState<PlayerControlsTimeoutMs>(8000);
   const [preferTvgIdOnly, setPreferTvgIdOnlyState] = useState(false);
   const [powerProfile, setPowerProfileState] = useState<PowerProfile>("normal");
@@ -399,6 +400,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const setDeviceLayoutMode = useCallback((v: DeviceLayoutMode) => {
     settingsTouchedRef.current.add(DEVICE_LAYOUT_MODE_KEY);
+    applyDeviceLayoutChoice(v);
     setDeviceLayoutModeState(v);
     storage.setItem(DEVICE_LAYOUT_MODE_KEY, v);
   }, []);
@@ -914,8 +916,12 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
       if (!settingsTouchedRef.current.has(CHANNEL_NUMBERS_KEY)) setChannelNumbersState(storedChannelNumbers);
       const storedChannelLogos = (await bootstrapSettings.getItem<boolean>(CHANNEL_LOGOS_KEY, true)) ?? true;
       if (!settingsTouchedRef.current.has(CHANNEL_LOGOS_KEY)) setChannelLogosState(storedChannelLogos);
-      const storedDeviceLayout = (await bootstrapSettings.getItem<DeviceLayoutMode>(DEVICE_LAYOUT_MODE_KEY, "tv")) || "tv";
-      if (!settingsTouchedRef.current.has(DEVICE_LAYOUT_MODE_KEY)) setDeviceLayoutModeState(storedDeviceLayout);
+      // Nothing saved means Auto: phones and tablets get touch behaviour, TVs and boxes the remote one.
+      const storedDeviceLayout = (await bootstrapSettings.getItem<DeviceLayoutMode>(DEVICE_LAYOUT_MODE_KEY, "auto")) || "auto";
+      if (!settingsTouchedRef.current.has(DEVICE_LAYOUT_MODE_KEY)) {
+        applyDeviceLayoutChoice(storedDeviceLayout);
+        setDeviceLayoutModeState(storedDeviceLayout);
+      }
       const storedPlayerTimeout = (await bootstrapSettings.getItem<PlayerControlsTimeoutMs>(PLAYER_TIMEOUT_KEY, 8000)) || 8000;
       if (!settingsTouchedRef.current.has(PLAYER_TIMEOUT_KEY)) setPlayerControlsTimeoutMsState(storedPlayerTimeout);
       const tvgOnly = (await bootstrapSettings.getItem<boolean>(PREFER_TVG_ID_ONLY_KEY, false)) || false;

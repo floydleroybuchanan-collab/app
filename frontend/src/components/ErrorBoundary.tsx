@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { colors, fonts, radius, spacing } from "@/src/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { fonts, glass, glassFocus, spacing } from "@/src/theme";
 
 type Props = {
   children: React.ReactNode;
@@ -41,6 +42,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (this.props.fallback) return this.props.fallback(this.reset);
     return (
       <View style={styles.wrap}>
+        <LinearGradient pointerEvents="none" colors={["#1B0A3C", "#0E0622", "#220B46"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <View style={styles.card}>
         <Text style={styles.title}>Something went wrong</Text>
         <Text style={styles.sub}>The screen hit an unexpected error. Try again.</Text>
         {this.state.message ? (
@@ -56,17 +59,20 @@ export class ErrorBoundary extends React.Component<Props, State> {
         >
           <Text style={styles.btnText}>Try Again</Text>
         </Pressable>
+        </View>
       </View>
     );
   }
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl, backgroundColor: colors.surface },
-  title: { color: colors.onSurface, fontFamily: fonts.bold, fontSize: 18 },
-  sub: { color: colors.onSurfaceTertiary, fontFamily: fonts.regular, fontSize: 14, textAlign: "center" },
-  detail: { maxWidth: 760, color: "#ffb4b4", fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },
-  btn: { backgroundColor: colors.brand, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: 2, borderColor: "transparent" },
-  btnFocused: { borderColor: "#fff" },
+  wrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, backgroundColor: glass.page },
+  // see-through glass card with a soft light edge
+  card: { maxWidth: 640, alignItems: "center", gap: spacing.md, padding: spacing.xl, borderRadius: 20, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(36,14,72,0.40)" },
+  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18 },
+  sub: { color: "#E2D3FA", fontFamily: fonts.regular, fontSize: 14, textAlign: "center" },
+  detail: { maxWidth: 560, color: "#FFB4D0", fontFamily: fonts.regular, fontSize: 12, textAlign: "center" },
+  btn: { backgroundColor: glass.button, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: 12, borderWidth: 1, borderColor: glass.buttonEdge },
+  btnFocused: { ...glassFocus },
   btnText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 15 },
 });

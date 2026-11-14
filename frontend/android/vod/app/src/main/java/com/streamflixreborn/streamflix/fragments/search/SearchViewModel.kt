@@ -13,6 +13,7 @@ import com.streamflixreborn.streamflix.utils.ParentalControlUtils
 import com.streamflixreborn.streamflix.utils.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -43,7 +44,12 @@ data class ProviderResult(
 }
 
 
-class SearchViewModel(database: AppDatabase) : ViewModel() {
+/**
+ * [browseWhenEmpty] false: an empty search box shows nothing from the provider
+ * (the TV page shows recent searches instead of the provider's genre tiles).
+ */
+class SearchViewModel(database: AppDatabase, private val browseWhenEmpty: Boolean = true) : ViewModel() {
+
 
     private val _state = MutableStateFlow<State>(State.Searching)
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -106,19 +112,37 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
 
     var query = ""
     private var page = 1
+    private var searching: Job? = null
 
     init {
         search(query)
     }
 
-    fun search(query: String) = viewModelScope.launch(Dispatchers.IO) {
+    fun search(query: String): Job {
+        // Typing fires a search per pause; only the newest one may publish.
+        searching?.cancel()
+        return viewModelScope.launch(Dispatchers.IO) {
+            runSearch(query)
+        }.also { searching = it }
+    }
+
+    private suspend fun runSearch(query: String) {
+        if (query.isBlank() && !browseWhenEmpty) {
+            this@SearchViewModel.query = ""
+            page = 1
+            _state.emit(State.SuccessSearching(emptyList(), false))
+            return
+        }
         _state.emit(State.Searching)
 
         try {
-            val results = ParentalControlUtils.filterItems(UserPreferences.currentProvider!!.search(query))
+            val found = ParentalControlUtils.filterItems(UserPreferences.currentProvider!!.search(query))
+            val results = if (query.isBlank()) found else found.sortedBy { searchRank(it, query) }
             this@SearchViewModel.query = query
             page = 1
             _state.emit(State.SuccessSearching(results, results.isNotEmpty()))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e("SearchViewModel", "search: ", e)
             _state.emit(State.FailedSearching(e))
@@ -202,6 +226,23 @@ class SearchViewModel(database: AppDatabase) : ViewModel() {
                 _state.emit(State.SuccessGlobalSearching(mutableResults.sortedWith(stateComparator)))
             }
         }
+    }
+}
+
+/** Titles starting with what was typed first, then a word starting with it, then the rest. */
+internal fun searchRank(item: AppAdapter.Item, query: String): Int {
+    val title = when (item) {
+        is Movie -> item.title
+        is TvShow -> item.title
+        else -> return 3
+    }.trim().lowercase()
+    val typed = query.trim().lowercase()
+    return when {
+        typed.isEmpty() -> 3
+        title.startsWith(typed) -> 0
+        title.split(' ', '-', ':').any { it.startsWith(typed) } -> 1
+        title.contains(typed) -> 2
+        else -> 3
     }
 }
 
