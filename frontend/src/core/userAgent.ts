@@ -11,7 +11,7 @@ export type UserAgentChoice = { preset: UserAgentPreset; custom: string };
 
 export const USER_AGENT_PRESETS: readonly { id: Exclude<UserAgentPreset, "custom">; label: string; value: string }[] = [
   { id: "default", label: "Default", value: DEFAULT_USER_AGENT },
-  { id: "vlc", label: "VLC", value: "VLC/3.0.20 LibVLC/3.0.20" },
+  { id: "vlc", label: "VLC", value: "VLC/3.0.20" },
   { id: "kodi", label: "Kodi", value: "Kodi/21.0 (Linux; Android 13) App_Bitness/64 Version/21.0" },
   { id: "chrome", label: "Chrome", value: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36" },
 ];
