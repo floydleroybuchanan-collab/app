@@ -15,7 +15,7 @@ import { CURATED_GROUPS, SMART_GROUPS } from "@/src/core/guideGroups";
 import { GUIDE_START_LAST_USED, useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import { applyGuideGroupOrder, getGuideGroupDisplayName } from "@/src/core/guideGroupTabPreferences";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, radius, tvColors, glass, ph } from "@/src/theme";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 
@@ -303,29 +303,29 @@ export default function GroupSettingsScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1, padding: 18, backgroundColor: "transparent" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2 },
-  title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 24 },
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 36, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 11 },
+  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: ph(10), letterSpacing: 1.2 },
+  title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: ph(24) },
+  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: ph(36), backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(11) },
   scrollWrap: { flex: 1 },
   content: { gap: 12, paddingBottom: 40 },
-  card: { padding: 12, gap: 6, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
-  cardTitle: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 14 },
-  help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15, marginBottom: 4 },
-  row: { minHeight: 40, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  card: { padding: 12, gap: 6, backgroundColor: glass.panel, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
+  cardTitle: { color: tvColors.text, fontFamily: fonts.bold, fontSize: ph(14) },
+  help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(10), lineHeight: 15, marginBottom: 4 },
+  row: { minHeight: ph(40), paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   selected: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
   focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
-  rowText: { color: tvColors.text, fontFamily: fonts.medium, fontSize: 11 },
-  sub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, marginTop: 2 },
-  value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 10 },
+  rowText: { color: tvColors.text, fontFamily: fonts.medium, fontSize: ph(11) },
+  sub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(9), marginTop: 2 },
+  value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(10) },
   inputRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  input: { flex: 1, minHeight: 38, color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 11, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  action: { minHeight: 38, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  actionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
+  input: { flex: 1, minHeight: ph(38), color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: ph(11), backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  action: { minHeight: ph(38), paddingHorizontal: 14, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  actionText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(10) },
   groupBlock: { gap: 4 },
   providerEdit: { gap: 6, paddingHorizontal: 10, paddingBottom: 4 },
   groupActions: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 10 },
-  mini: { minHeight: 32, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  mini: { minHeight: ph(32), paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginVertical: 4 },
   disabled: { opacity: 0.35 },
 });

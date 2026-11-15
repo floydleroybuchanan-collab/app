@@ -23,8 +23,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:padding="8dp"
-        android:src="@drawable/ic_player_back"
-        android:tint="#FFFFFF"
+        android:src="@drawable/ic_glass_back"
         app:layout_constraintBottom_toBottomOf="@id/tv_exo_subtitle"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@id/tv_exo_title"
@@ -87,8 +86,7 @@
             android:layout_width="60dp"
             android:layout_height="match_parent"
             android:padding="10dp"
-            android:src="@drawable/ic_previous"
-            app:tint="#FFFFFF" />
+            android:src="@drawable/ic_glass_prev" />
 
         <ImageView
             android:id="@+id/exo_rew"
@@ -114,7 +112,6 @@
             android:layout_height="match_parent"
             android:padding="15dp"
             android:src="@drawable/exo_styled_controls_play"
-            android:tint="#FFFFFF"
             tools:ignore="ContentDescription,PrivateResource,UseAppTint" />
 
         <ImageView
@@ -131,8 +128,7 @@
             android:layout_width="60dp"
             android:layout_height="match_parent"
             android:padding="10dp"
-            android:src="@drawable/ic_next"
-            app:tint="#FFFFFF" />
+            android:src="@drawable/ic_glass_next" />
 
     </LinearLayout>
 

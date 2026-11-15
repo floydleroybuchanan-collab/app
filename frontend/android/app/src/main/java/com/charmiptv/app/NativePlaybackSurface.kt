@@ -110,8 +110,38 @@ class NativePlaybackSurface(context: Context) : FrameLayout(context) {
     if (owner != NativePlaybackManager.Owner.NONE) claimAndAttach()
   }
 
+  private var layoutPassPending = false
+
+  /**
+   * React Native does not run a layout pass for children added natively. The video view is added here after
+   * RN sized this host, so after a phone turned from portrait to landscape (or back) it kept its old size and the
+   * picture came out stretched. Run the pass here instead, at this host's real size.
+   */
+  override fun requestLayout() {
+    super.requestLayout()
+    if (layoutPassPending) return
+    layoutPassPending = true
+    post {
+      layoutPassPending = false
+      if (isAttachedToWindow) fitChildren(width, height)
+    }
+  }
+
+  private fun fitChildren(w: Int, h: Int) {
+    if (w <= 0 || h <= 0) return
+    val exactW = MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY)
+    val exactH = MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
+    for (index in 0 until childCount) {
+      val child = getChildAt(index)
+      if (child.width == w && child.height == h) continue
+      child.measure(exactW, exactH)
+      child.layout(0, 0, w, h)
+    }
+  }
+
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
     super.onSizeChanged(w, h, oldw, oldh)
+    fitChildren(w, h)
     if (w <= 0 || h <= 0 || owner == NativePlaybackManager.Owner.NONE) return
     // First real layout after a 0×0 GONE/unmeasured host. Rebind so MediaCodec
     // is not left outputting to a dead TextureView while audio continues.

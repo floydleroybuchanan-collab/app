@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   FlatList,
+  Image,
   Platform,
   Pressable,
   StatusBar as RNStatusBar,
@@ -29,7 +30,7 @@ import { useStore } from "@/src/store";
 import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext, setGuideNavigationActive } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
-import { getTvSafeInsets } from "@/src/utils/tvLayout";
+import { getTvSafeInsets, shouldUseTvLayout } from "@/src/utils/tvLayout";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocus, requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { PlayerGuidePanel } from "@/src/components/PlayerGuidePanel";
@@ -77,6 +78,14 @@ function AutoScrollProgramDescription({ text }: { text: string; activeKey: strin
     </View>
   );
 }
+
+const PLAYER_GLASS = {
+  prev: require("../assets/glass/player_prev.png"),
+  pause: require("../assets/glass/player_pause.png"),
+  play: require("../assets/glass/player_play.png"),
+  next: require("../assets/glass/player_next.png"),
+  back: require("../assets/glass/player_back.png"),
+};
 
 export default function PlayerScreen() {
   const appPolicy=useAppPolicy();
@@ -187,6 +196,8 @@ export default function PlayerScreen() {
   overlayOpenRef.current = playerOverlay !== null;
   keepControlsRef.current = status === "error" || !channelById(channelId)?.url;
   const safe = useMemo(() => getTvSafeInsets(width, height, deviceLayoutMode), [deviceLayoutMode, height, width]);
+  // A touch phone gets the glass transport icons; the TV keeps its own controls.
+  const phoneUi = !shouldUseTvLayout(deviceLayoutMode);
   const guidePreviewWidth = Math.round((width - safe.left - safe.right - 28) * 0.42);
   const guidePreviewHeight = guidePreviewWidth * 9 / 16;
   // The SAME fullscreen Media3 surface is resized for the small preview window.
@@ -659,6 +670,11 @@ export default function PlayerScreen() {
       {controls && !guideOverlayOpen ? (
         <>
           <LinearGradient colors={["rgba(5,4,13,0.92)", "rgba(5,4,13,0.42)", "transparent"]} style={[styles.topOverlay, { paddingTop: insets.top + safe.top + 8, paddingLeft: safe.left + 14, paddingRight: safe.right + 14 }]}>
+            {phoneUi ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={stopAndExit} style={styles.glassBack} testID="player-glass-back">
+                <Image source={PLAYER_GLASS.back} style={styles.glassBackArt} />
+              </Pressable>
+            ) : null}
             <View style={styles.channelIdentity}>
               {channel ? <View style={styles.identityLogo}><ChannelLogo name={channel.name} logo={channel.logo} disabled={!channelLogos} size={38} /></View> : null}
               <View>
@@ -691,9 +707,9 @@ export default function PlayerScreen() {
               <Pressable ref={channelsButtonRef} onPress={() => { overlayOpenerRef.current = channelsButtonRef.current; setTracksOpen(false); setChannelsOpen((value) => !value); scheduleHide(); }} style={({ focused }: any) => [styles.textControl, channelsOpen && styles.controlActive, focused && styles.focused]}><Ionicons name="list" size={15} color="#fff" /><Text style={styles.controlLabel}>Channels</Text></Pressable>
               <View style={styles.controlsSpacer} />
               <Pressable accessibilityLabel="Restart this channel" testID="restart-current-channel" onPress={() => void restartThisChannel()} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="refresh" size={15} color="#fff" /><Text style={styles.controlLabel}>Restart channel</Text></Pressable>
-              <Pressable ref={prevButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(-1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-back" size={18} color="#fff" /></Pressable>
-              <Pressable accessibilityLabel={playbackPaused ? "Play stream" : "Pause stream"} onPress={() => { setPlaybackPaused((value) => !value); revealControls({ claimChannelsFocus: false }); }} style={({ focused }: any) => [styles.pauseControl, focused && styles.focused]}><Ionicons name={playbackPaused ? "play" : "pause"} size={18} color="#fff" /></Pressable>
-              <Pressable ref={nextButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}><Ionicons name="play-skip-forward" size={18} color="#fff" /></Pressable>
+              <Pressable ref={prevButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(-1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}>{phoneUi ? <Image source={PLAYER_GLASS.prev} style={styles.glassTransport} /> : <Ionicons name="play-skip-back" size={18} color="#fff" />}</Pressable>
+              <Pressable accessibilityLabel={playbackPaused ? "Play stream" : "Pause stream"} onPress={() => { setPlaybackPaused((value) => !value); revealControls({ claimChannelsFocus: false }); }} style={({ focused }: any) => [styles.pauseControl, focused && styles.focused]}>{phoneUi ? <Image source={playbackPaused ? PLAYER_GLASS.play : PLAYER_GLASS.pause} style={styles.glassTransport} /> : <Ionicons name={playbackPaused ? "play" : "pause"} size={18} color="#fff" />}</Pressable>
+              <Pressable ref={nextButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}>{phoneUi ? <Image source={PLAYER_GLASS.next} style={styles.glassTransport} /> : <Ionicons name="play-skip-forward" size={18} color="#fff" />}</Pressable>
               <View style={styles.controlsSpacer} />
               <Pressable onPress={() => { setChannelsOpen(false); setTracksOpen(false); if (hideTimer.current) clearTimeout(hideTimer.current); emitTvQuickActions("player"); }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="ellipsis-horizontal" size={15} color="#fff" /><Text style={styles.controlLabel}>Quick Actions</Text></Pressable>
               <Pressable onPress={stopAndExit} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="stop" size={15} color="#fff" /><Text style={styles.controlLabel}>Stop</Text></Pressable>
@@ -806,6 +822,9 @@ const styles = StyleSheet.create({
   controlActive: { backgroundColor: tvColors.purpleDeep },
   controlLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
   controlsSpacer: { flex: 1 },
+  glassBack: { width: 42, height: 42, borderRadius: 21, marginRight: 10, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "rgba(235,205,255,0.62)", backgroundColor: "rgba(150,90,235,0.35)", shadowColor: "#E04DFF", shadowOpacity: 0.5, shadowRadius: 8, elevation: 6 },
+  glassBackArt: { width: 24, height: 24, resizeMode: "contain" },
+  glassTransport: { width: 26, height: 26, resizeMode: "contain" },
   iconControl: { width: 44, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "rgba(226,190,255,0.42)", backgroundColor: "rgba(150,90,235,0.20)" },
   pauseControl: { width: 50, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 2, borderColor: "#F0D6FF", backgroundColor: "rgba(168,60,255,0.72)", shadowColor: "#D14DFF", elevation: 14 },
   channelStrip: { gap: 6, paddingTop: 5 },

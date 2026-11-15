@@ -15,7 +15,7 @@ import { getPlaylistUrl, movePlaylist, previewPlaylist, removePlaylist, savePers
 import { reloadPlaylistCatalog } from "@/src/source.native";
 import { syncPlaylistEpg } from "@/src/core/playlistEpg";
 import type { PlaylistPreview } from "@/src/core/playlistRegistry";
-import { fonts, tvColors } from "@/src/theme";
+import { fonts, tvColors, glass, ph } from "@/src/theme";
 import { PLAYLIST_AGENT_OPTIONS, describePlaylistAgent, playlistAgentChoice, playlistAgentValue, type PlaylistAgentChoice } from "@/src/core/playlistUserAgent";
 import { getActiveUserAgent } from "@/src/core/userAgent";
 import { Ionicons } from "@expo/vector-icons";
@@ -207,22 +207,22 @@ export default function PlaylistsScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 14, paddingTop: 8, backgroundColor: "transparent" },
-  header: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1 },
-  title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 2 },
-  back: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 }, scrollWrap: { flex: 1 }, content: { paddingVertical: 12, paddingBottom: 40, gap: 10 },
-  heading: { fontFamily: fonts.semibold, fontSize: 10.5, color: "#fff" },
-  text: { color: tvColors.text, fontFamily: fonts.regular, fontSize: 8.5, lineHeight: 13 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, lineHeight: 11 },
-  card: { padding: 11, gap: 7, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  priorityRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7, paddingVertical: 3 }, priorityLabel: { minWidth: 180, flex: 1, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5 },
-  button: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 34, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: 8.5 },
-  input: { minHeight: 40, color: "#fff", fontFamily: fonts.regular, fontSize: 10.5, paddingHorizontal: 10, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, lineHeight: 13 },
-  agentBox: { padding: 10, gap: 8, backgroundColor: "rgba(122,62,214,0.22)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
+  header: { minHeight: ph(52), flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: tvColors.line },
+  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: ph(7.5), letterSpacing: 1 },
+  title: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(18), marginTop: 2 },
+  back: { minHeight: ph(30), flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(8.5) }, scrollWrap: { flex: 1 }, content: { paddingVertical: 12, paddingBottom: 40, gap: 10 },
+  heading: { fontFamily: fonts.semibold, fontSize: ph(10.5), color: "#fff" },
+  text: { color: tvColors.text, fontFamily: fonts.regular, fontSize: ph(8.5), lineHeight: 13 }, help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(7.5), lineHeight: 11 },
+  card: { padding: 11, gap: 7, backgroundColor: glass.panel, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  priorityRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7, paddingVertical: 3 }, priorityLabel: { minWidth: 180, flex: 1, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(8.5) },
+  button: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: ph(34), justifyContent: "center", paddingHorizontal: 12, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(8.5) },
+  input: { minHeight: ph(40), color: "#fff", fontFamily: fonts.regular, fontSize: ph(10.5), paddingHorizontal: 10, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(9), lineHeight: 13 },
+  agentBox: { padding: 10, gap: 8, backgroundColor: glass.panelStrong, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
   agentHead: { flexDirection: "row", alignItems: "center", gap: 10 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 30, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 15 },
-  chipSelected: { backgroundColor: "rgba(124,58,237,0.34)", borderColor: "rgba(200,150,255,0.55)", borderWidth: 1.5 },
-  health: { color: "#D8C4FF", fontFamily: fonts.semibold, fontSize: 8.5, lineHeight: 13 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: ph(30), justifyContent: "center", paddingHorizontal: 12, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 15 },
+  chipSelected: { backgroundColor: glass.selected, borderColor: glass.selectedEdge, borderWidth: 1.5 },
+  health: { color: "#D8C4FF", fontFamily: fonts.semibold, fontSize: ph(8.5), lineHeight: 13 },
 });

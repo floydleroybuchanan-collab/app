@@ -1,5 +1,4 @@
 import { useTVFocusEntry } from './useTVFocusEntry';
-import { MediaLabArt } from "@/src/components/MediaLabBrand";
 import { AccountLoginBrand } from "./AccountLoginBrand";
 import { LoginScene } from "./LoginScene";
 import { FocusGuide } from "./TVFocusGuideView";
@@ -8,6 +7,7 @@ import {securityRequest} from '@/src/auth/securityApi';
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -148,8 +148,10 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 
   if (status === "restoring") {
     return (
-      <View style={styles.screen} testID="account-session-restoring">
-        <MediaLabArt kind="circle" width={120} /><ActivityIndicator color={tvColors.purpleBright} size="large" />
+      <View style={[styles.screen, { backgroundColor: "#000" }]} testID="account-session-restoring">
+        {/* Same picture and black as the native start screen, so the hand-off from it is seamless. */}
+        <Image accessible={false} source={require("@/assets/medialab/medialab_launcher.png")} resizeMode="contain" fadeDuration={0} style={{ width: Math.min(200, width * 0.5), height: Math.min(200, width * 0.5) }} />
+        <ActivityIndicator color={tvColors.purpleBright} size="large" />
         <Text style={styles.loadingText}>Checking your Charming MediaLab account…</Text>
       </View>
     );
@@ -200,7 +202,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
       <View style={[styles.loginBrand, wide && {width:Math.min(380,width*.34)}]}>
         {/* On wide screens the angel and the name are part of the backdrop. */}
         {!wide ? <>
-          <AccountLoginBrand size={132} animate={!securityScreen} />
+          <AccountLoginBrand size={height < 800 ? 104 : 132} animate={!securityScreen} />
           <Text style={[styles.tagline, {fontSize:19}]}>Live TV. Movies. Series.</Text>
           <Text style={styles.brandSubtitle}>Your favorites. All in one place.</Text>
         </> : null}
@@ -323,7 +325,7 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
           accessibilityState={{ checked: rememberLogin, disabled: busy || !loginReady }}
           disabled={busy || !loginReady} onPress={() => void forgetLogin()}
           testID="account-remember-login"
-          style={({ focused }) => [styles.secondaryButton, focused && styles.focused]}
+          style={({ focused }) => [styles.secondaryButton, styles.rememberRow, focused && styles.focused]}
         >
           <Ionicons name={rememberLogin ? "checkbox-outline" : "square-outline"} size={20} color="#fff" />
           <Text style={styles.secondaryButtonText}>Remember login on this device</Text>
@@ -484,6 +486,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(226,190,255,.30)",
     backgroundColor: "rgba(10,4,24,.5)",
   },
+  rememberRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
   secondaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 11 },
   focused: { borderColor: "#fff", backgroundColor: tvColors.purpleDeep },
   disabled: { opacity: 0.6 },

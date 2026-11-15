@@ -1,7 +1,7 @@
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { loadVodRecent, sameVodRecent, vodTitleSection, type VodRecentItem } from "@/src/core/vodRecent";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
@@ -13,7 +13,7 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore } from "@/src/store";
 import { Channel } from "@/src/api";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
@@ -237,6 +237,8 @@ function LiveTvHomeScreenContent() {
     router.replace({ pathname: "/vod", params: { section: vodTitleSection(item) } } as any);
   }, [router]);
 
+  // Narrow screens (a phone held upright): the hero stacks (text above, channel picture below) instead of sitting side by side.
+  const compact = useWindowDimensions().width < 640;
   return (
     <PurpleTvShell active="/">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.page}>
@@ -255,14 +257,14 @@ function LiveTvHomeScreenContent() {
           </View>
         </View>
 
-        <View style={styles.hero}>
+        <View style={[styles.hero, compact && styles.heroCompact]}>
           <LinearGradient
             colors={["rgba(168,85,247,0.34)", "rgba(52,20,104,0.86)", "#1A0B38"]}
             start={{ x: 1, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.heroCopy}>
+          <View style={[styles.heroCopy, compact && styles.heroCopyCompact]}>
             <Text style={styles.heroLabel}>LAST WATCHED · ON NOW</Text>
             <Text numberOfLines={1} style={styles.heroTitle}>
               {heroChannel?.name || "Choose a channel"}
@@ -329,7 +331,7 @@ function LiveTvHomeScreenContent() {
             disabled={!heroChannel}
             nextFocusDown={firstRecentTag}
             onPress={() => heroChannel && play(heroChannel)}
-            style={({ focused }: any) => [styles.heroArtwork, focused && styles.heroArtworkFocused]}
+            style={({ focused }: any) => [styles.heroArtwork, compact && styles.heroArtworkCompact, focused && styles.heroArtworkFocused]}
             testID="home-last-channel-logo"
           >
             <View style={styles.heroGlow} />
@@ -387,49 +389,52 @@ function LiveTvHomeScreenContent() {
 
 const styles = StyleSheet.create({
   page: { padding: 18, paddingBottom: 26, gap: 12, flexGrow: 1, backgroundColor: glass.page },
-  topbar: { minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  eyebrow: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: 8, letterSpacing: 1.2, marginTop: 2 },
-  pageTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 28 },
+  topbar: { minHeight: ph(36), flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  eyebrow: { color: tvColors.purpleSoft, fontFamily: fonts.semibold, fontSize: ph(8), letterSpacing: 1.2, marginTop: 2 },
+  pageTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(28) },
   topRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  clock: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12 },
-  hero: { minHeight: 224, flexDirection: "row", borderRadius: 16, borderWidth: 1, borderColor: glass.edge, overflow: "hidden" },
+  clock: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(12) },
+  hero: { minHeight: ph(224), flexDirection: "row", borderRadius: 16, borderWidth: 1, borderColor: glass.edge, overflow: "hidden" },
   heroCopy: { flex: 1.1, padding: 18, justifyContent: "center", alignItems: "flex-start" },
-  heroLabel: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.8 },
-  heroTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 22, marginTop: 4, maxWidth: "95%" },
+  heroLabel: { color: glass.kicker, fontFamily: fonts.semibold, fontSize: ph(7.5), letterSpacing: 1.8 },
+  heroTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(22), marginTop: 4, maxWidth: "95%" },
   heroMetaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 },
   livePill: { backgroundColor: glass.live, borderColor: glass.liveEdge, borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  livePillText: { color: "#fff", fontFamily: fonts.bold, fontSize: 7 },
-  heroMeta: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 10 },
-  heroProgram: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16, marginTop: 6, maxWidth: "94%" },
-  heroDescription: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9.5, lineHeight: 13, marginTop: 4, maxWidth: "94%" },
+  livePillText: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(7) },
+  heroMeta: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(10) },
+  heroProgram: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(12), lineHeight: 16, marginTop: 6, maxWidth: "94%" },
+  heroDescription: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(9.5), lineHeight: 13, marginTop: 4, maxWidth: "94%" },
   heroProgressTrack: { width: "70%", height: 3, backgroundColor: "rgba(255,255,255,0.14)", marginTop: 8, borderRadius: 2, overflow: "hidden" },
   heroProgressFill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
-  primaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 11 },
-  primaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  secondaryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: glass.button, borderWidth: 2, borderColor: glass.buttonEdge, marginTop: 8 },
-  secondaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  searchHit: { minHeight: 30, flexDirection: "row", gap: 6, paddingHorizontal: 12, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
-  searchText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
+  primaryButton: { minHeight: ph(34), flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 11 },
+  primaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(10) },
+  secondaryButton: { minHeight: ph(34), flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: glass.button, borderWidth: 2, borderColor: glass.buttonEdge, marginTop: 8 },
+  secondaryButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(10) },
+  searchHit: { minHeight: ph(30), flexDirection: "row", gap: 6, paddingHorizontal: 12, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  searchText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(9.5) },
+  heroCompact: { flexDirection: "column", minHeight: 0 },
+  heroCopyCompact: { flex: 0, padding: 16 },
+  heroArtworkCompact: { flex: 0, height: 150, marginTop: 0 },
   heroArtwork: { flex: 0.9, alignItems: "center", justifyContent: "center", gap: 7, overflow: "hidden", borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,14,84,0.55)", margin: 10, borderRadius: 14 },
   heroArtworkFocused: { borderColor: "#fff", backgroundColor: "rgba(124,58,237,0.30)" },
   heroGlow: { position: "absolute", width: 168, height: 168, borderRadius: 84, backgroundColor: "rgba(168,85,247,0.26)" },
-  heroArtName: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, maxWidth: "84%" },
-  heroArtNow: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9, maxWidth: "84%" },
+  heroArtName: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(12), maxWidth: "84%" },
+  heroArtNow: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(9), maxWidth: "84%" },
   sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 },
-  sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 13, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
-  sectionHint: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: 8.5 },
+  sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(13), borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
+  sectionHint: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: ph(8.5) },
   rowScroll: { flexGrow: 0 },
   recentRow: { gap: 9, paddingBottom: 2, paddingTop: 2, alignItems: "flex-start" },
-  vodCard: { width: 170, minHeight: 132, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
+  vodCard: { width: 170, minHeight: ph(132), backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
   vodArt: { height: 88, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6, backgroundColor: "rgba(40,14,84,0.75)" },
   vodKind: { position: "absolute", top: 5, left: 5, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, backgroundColor: "rgba(26,11,51,0.85)" },
-  vodKindText: { color: "#fff", fontFamily: fonts.bold, fontSize: 6.5, letterSpacing: 0.8 },
+  vodKindText: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(6.5), letterSpacing: 0.8 },
   vodTrack: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(255,255,255,0.18)" },
   vodFill: { height: 3, backgroundColor: glass.pink },
-  channelCard: { width: 150, minHeight: 116, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
+  channelCard: { width: 150, minHeight: ph(116), backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 7 },
   channelCardArt: { height: 64, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6 },
-  channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9.5 },
-  channelProgram: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 8.5, marginTop: 2 },
+  channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(9.5) },
+  channelProgram: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(8.5), marginTop: 2 },
   focused: glassFocus,
 });
 

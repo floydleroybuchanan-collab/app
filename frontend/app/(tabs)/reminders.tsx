@@ -15,14 +15,14 @@ import * as Haptics from "expo-haptics";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore, type Reminder } from "@/src/store";
-import { fonts, glass, glassFocus, radius, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, radius, tvColors, phoneUi, ph } from "@/src/theme";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { fmtDayTime } from "@/src/utils/time";
 import { useTvRouteEntryFocus } from "@/src/hooks/use-tv-route-entry-focus";
 import { requestNativeFocus } from "@/src/utils/tvFocus";
 
-const COLUMNS = 6;
+const TV_COLUMNS = 6;
 
 function formatEta(msLeft: number): string {
   if (msLeft <= 0) return "LIVE";
@@ -134,6 +134,8 @@ function RemindersScreenContent() {
       .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   }, [channelById, reminders]);
 
+  // Phone: two reminder cards across upright, three turned.
+  const COLUMNS = phoneUi ? (contentWidth < 600 ? 2 : 3) : TV_COLUMNS;
   const gap = contentWidth >= 1200 ? 14 : 10;
   const pagePad = 18;
   const cardWidth = Math.max(
@@ -202,6 +204,7 @@ function RemindersScreenContent() {
         <FlatList
           data={upcoming}
           keyExtractor={(item) => item.key}
+          key={`cols-${COLUMNS}`}
           numColumns={COLUMNS}
           columnWrapperStyle={[styles.row, { gap }]}
           contentContainerStyle={[styles.list, { gap }]}
@@ -254,7 +257,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    minHeight: 32,
+    minHeight: ph(32),
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 2,
@@ -265,7 +268,7 @@ const styles = StyleSheet.create({
   returnText: {
     color: "#fff",
     fontFamily: fonts.semibold,
-    fontSize: 10,
+    fontSize: ph(10),
   },
   badge: {
     paddingHorizontal: 10,
@@ -278,13 +281,13 @@ const styles = StyleSheet.create({
   badgeText: {
     color: "#F3E8FF",
     fontFamily: fonts.semibold,
-    fontSize: 9,
+    fontSize: ph(9),
     letterSpacing: 0.6,
   },
   help: {
     color: "#D9C8F5",
     fontFamily: fonts.regular,
-    fontSize: 10,
+    fontSize: ph(10),
     marginTop: 0,
     marginBottom: 12,
     maxWidth: 720,
@@ -306,13 +309,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: "#fff",
     fontFamily: fonts.semibold,
-    fontSize: 14,
+    fontSize: ph(14),
     marginBottom: 6,
   },
   empty: {
     color: "#D9C8F5",
     fontFamily: fonts.regular,
-    fontSize: 10,
+    fontSize: ph(10),
     lineHeight: 16,
   },
   card: {
@@ -321,7 +324,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: glass.edge,
     padding: 12,
-    minHeight: 210,
+    minHeight: ph(210),
     justifyContent: "space-between",
   },
   cardHeader: {
@@ -337,12 +340,12 @@ const styles = StyleSheet.create({
   channelName: {
     color: "#fff",
     fontFamily: fonts.bold,
-    fontSize: 13,
+    fontSize: ph(13),
   },
   whenLine: {
     color: "rgba(255,255,255,0.78)",
     fontFamily: fonts.medium,
-    fontSize: 8.5,
+    fontSize: ph(8.5),
     lineHeight: 12,
   },
   whenSep: {
@@ -359,20 +362,20 @@ const styles = StyleSheet.create({
   programTitle: {
     color: "#fff",
     fontFamily: fonts.semibold,
-    fontSize: 12,
+    fontSize: ph(12),
     marginTop: 10,
   },
   description: {
     color: "#C9B5EE",
     fontFamily: fonts.regular,
-    fontSize: 9,
+    fontSize: ph(9),
     lineHeight: 13,
     marginTop: 6,
     flexGrow: 1,
   },
   cancelButton: {
     marginTop: 12,
-    minHeight: 30,
+    minHeight: ph(30),
     borderRadius: 12,
     borderWidth: 2,
     borderColor: glass.buttonEdge,
@@ -387,7 +390,7 @@ const styles = StyleSheet.create({
   cancelText: {
     color: "#fff",
     fontFamily: fonts.semibold,
-    fontSize: 9.5,
+    fontSize: ph(9.5),
   },
 });
 

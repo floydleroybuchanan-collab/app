@@ -1,6 +1,13 @@
 package com.streamflixreborn.streamflix.fragments.home
 
+import android.app.UiModeManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Bundle
+import android.os.SystemClock
+import android.transition.AutoTransition
+import android.transition.TransitionManager
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
@@ -84,6 +91,7 @@ class HomeTvFragment : Fragment() {
 
         initializeHome()
         val dashboard = binding.charmingVodDashboard
+        if (isTouchPhone()) foldDashboardWhileScrolling()
         // Paint real VOD chrome immediately; never gate this screen on provider IO.
         binding.isLoading.root.visibility = View.GONE
         dashboard.onFeature = {
@@ -152,6 +160,42 @@ class HomeTvFragment : Fragment() {
         }
     }
     
+    /** A phone or tablet used by touch, never a TV box (the remote layout stays exactly as it was). */
+    private fun isTouchPhone(): Boolean {
+        val ctx = context ?: return false
+        val ui = ctx.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        return ui?.currentModeType != Configuration.UI_MODE_TYPE_TELEVISION &&
+            !ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+
+    private var dashboardToggledAt = 0L
+
+    /**
+     * The hero and the platform strip sit above the poster rows and never scroll, so on a phone they took most of the
+     * screen and the rows had almost no room. Scrolling the rows down folds that block away (the rows then use the
+     * whole page); scrolling back to the top brings it back.
+     */
+    private fun foldDashboardWhileScrolling() {
+        val b = _binding ?: return
+        val grid = b.vgvHome
+        val dashboard = b.charmingVodDashboard
+        grid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (dy == 0) return
+                val now = SystemClock.uptimeMillis()
+                // The change of room itself makes the list report a scroll; ignore that echo.
+                if (now - dashboardToggledAt < 450L) return
+                val folded = dashboard.visibility == View.GONE
+                val fold = !folded && dy > 6
+                val unfold = folded && dy < -6 && !recyclerView.canScrollVertically(-1)
+                if (!fold && !unfold) return
+                dashboardToggledAt = now
+                TransitionManager.beginDelayedTransition(b.root as ViewGroup, AutoTransition().setDuration(180))
+                dashboard.visibility = if (fold) View.GONE else View.VISIBLE
+            }
+        })
+    }
+
     override fun onStart() {
         super.onStart()
         scheduleFeaturedRotation()

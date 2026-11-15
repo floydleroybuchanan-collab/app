@@ -26,7 +26,7 @@ test('each TV calibration button changes exactly one pixel on all four edges', (
   const api = load('src/components/TvCalibrationControls.tsx', {
     react, 'react-native': { Platform: { isTV: true }, StyleSheet: { create: value => value } },
     'expo-haptics': { selectionAsync: async () => {} },
-    '@/src/theme': { fonts: {}, radius: {}, spacing: {}, glass: {}, glassFocus: {} },
+    '@/src/theme': { fonts: {}, radius: {}, spacing: {}, glass: {}, glassFocus: {}, ph: (n) => n, phoneUi: false },
     '@/src/tvCalibration': { TV_CALIBRATION_MIN_OFFSET: -96, TV_CALIBRATION_MAX_OFFSET: 96,
       useTvCalibration: () => ({ draftCalibration: draft, setSide: (side, value) => changes.push([side, value]) }) },
   }, '', { Date: { now: () => now += 200 } });
@@ -47,7 +47,7 @@ test('each TV calibration button changes exactly one pixel on all four edges', (
 test('playlist actions remain focusable but cannot run while disabled', () => {
   const api = load('app/playlists.tsx', { react,
     'react-native': { StyleSheet: { create: value => value } },
-    '@/src/theme': { fonts: {}, radius: {}, tvColors: {} },
+    '@/src/theme': { fonts: {}, radius: {}, tvColors: {}, glass: {}, ph: (n) => n, phoneUi: false },
   }, '\nexport { Action };');
   let calls = 0;
   for (const disabled of [true, false]) {

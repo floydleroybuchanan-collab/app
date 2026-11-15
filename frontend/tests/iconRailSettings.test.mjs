@@ -45,7 +45,9 @@ test("rail preferences serialize rapid edits, preserve startup hydration and do 
 test("rail timeout waits for a safe native page focus handoff and preserves Guide's separate boundary", () => {
   const shell = read("src/components/PurpleTvShell.tsx");
   const activity = read("android/app/src/main/java/com/charmiptv/app/MainActivity.kt");
-  assert.match(shell, /railPreferences.enabled && !railTimedOut && !drawerOpen/);
+  // TV: the rail follows the saved preference and its idle timeout; a phone ignores both (touch has no remote to lose).
+  assert.match(shell, /railPreferences.enabled && !railTimedOut/);
+  assert.match(shell, /railAllowed && !drawerOpen/);
   assert.match(shell, /active !== "\/guide" \|\| Boolean\(secondaryDrawer\)/);
   assert.match(shell, /await prepareIconRailHide\(tag\)/);
   assert.match(shell, /safeToHide && observedActivity === lastRailInteractionRef.current/);

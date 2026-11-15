@@ -12,7 +12,7 @@ import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
-import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -305,38 +305,38 @@ function ChannelsScreenContent() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, padding: 14, backgroundColor: glass.page },
-  header: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 8 },
+  header: { minHeight: ph(44), flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 8 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 9 },
-  headerAction: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
+  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: ph(9) },
+  headerAction: { minHeight: ph(30), flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
   headerActionActive: { backgroundColor: "rgba(140,70,240,0.80)", borderColor: glass.selectedEdge },
-  headerActionText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 8.5 },
+  headerActionText: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(8.5) },
   searchHit: { width: 34, height: 30, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
-  editHint: { color: glass.kicker, fontFamily: fonts.medium, fontSize: 8, lineHeight: 11, paddingVertical: 6 },
+  editHint: { color: glass.kicker, fontFamily: fonts.medium, fontSize: ph(8), lineHeight: 11, paddingVertical: 6 },
   empty: { flex: 1, alignItems: "flex-start", justifyContent: "center", gap: 8, paddingHorizontal: 4 },
-  emptyTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 14 },
-  emptyMessage: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, maxWidth: 420 },
-  retryButton: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 6 },
-  retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
+  emptyTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(14) },
+  emptyMessage: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(10), maxWidth: 420 },
+  retryButton: { minHeight: ph(34), flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 6 },
+  retryText: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(10) },
   list: { paddingTop: 4, paddingBottom: 20 },
   rowShell: { flexDirection: "row", alignItems: "stretch", gap: 6, marginBottom: 5 },
-  row: { flex: 1, minWidth: 0, minHeight: 50, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", paddingHorizontal: 8, borderRadius: 12 },
+  row: { flex: 1, minWidth: 0, minHeight: ph(50), flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(36,16,70,0.55)", paddingHorizontal: 8, borderRadius: 12 },
   rowEditing: { backgroundColor: "rgba(124,58,237,0.16)" },
   orderActions: { width: 130, flexDirection: "row", gap: 5 },
   orderButton: { flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", gap: 2, borderRadius: 12, borderWidth: 2, borderColor: glass.buttonEdge, backgroundColor: glass.button },
-  orderText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 7.5 },
+  orderText: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(7.5) },
   disabled: { opacity: 0.35 },
   focused: glassFocus,
-  number: { width: 24, color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: 9.5, textAlign: "right" },
+  number: { width: 24, color: tvColors.textMuted, fontFamily: fonts.semibold, fontSize: ph(9.5), textAlign: "right" },
   nameBlock: { width: 138, minWidth: 0 },
-  channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: 10 },
-  group: { color: "#C9B5EE", fontFamily: fonts.medium, fontSize: 7.5, letterSpacing: 0.4, marginTop: 2 },
+  channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(10) },
+  group: { color: "#C9B5EE", fontFamily: fonts.medium, fontSize: ph(7.5), letterSpacing: 0.4, marginTop: 2 },
   programBlock: { flex: 1, minWidth: 0, paddingHorizontal: 5 },
-  program: { color: "rgba(255,255,255,0.90)", fontFamily: fonts.medium, fontSize: 9.5 },
+  program: { color: "rgba(255,255,255,0.90)", fontFamily: fonts.medium, fontSize: ph(9.5) },
   progressTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 2, marginTop: 7, overflow: "hidden" },
   progressFill: { height: 3, borderRadius: 2, backgroundColor: glass.pink },
-  time: { width: 102, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 7.5, textAlign: "right" },
+  time: { width: 102, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(7.5), textAlign: "right" },
   heart: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
 });
 

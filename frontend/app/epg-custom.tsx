@@ -20,7 +20,7 @@ import {
   setNativeGuideChannelBinding,
 } from "@/src/nativeEpg";
 import { invalidateGuideOwnershipCaches } from "@/src/source";
-import { fonts, radius, tvColors } from "@/src/theme";
+import { fonts, radius, tvColors, glass, ph } from "@/src/theme";
 import { type SourceRefreshIntervalHours, useSourceRefreshPreferences } from "@/src/core/sourceRefreshPreferences";
 import { formatRelativeAge } from "@/src/utils/time";
 import { useGuideTimingPreferences } from "@/src/core/guideTimingPreferences";
@@ -425,28 +425,28 @@ function CycleSetting<T extends string | number>({ label, value, values, format,
 const styles = StyleSheet.create({
   page: { flex: 1, padding: 18, backgroundColor: "transparent" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 1.1 },
-  title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 22, marginTop: 2 },
-  back: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: 10 },
+  kicker: { color: tvColors.purpleSoft, fontFamily: fonts.bold, fontSize: ph(9), letterSpacing: 1.1 },
+  title: { color: tvColors.text, fontFamily: fonts.bold, fontSize: ph(22), marginTop: 2 },
+  back: { minHeight: ph(36), flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  backText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(10) },
   scrollWrap: { flex: 1 },
   content: { gap: 12, paddingBottom: 50 },
-  card: { padding: 12, gap: 6, backgroundColor: "rgba(122,62,214,0.13)", borderColor: "rgba(216,178,255,0.30)", borderWidth: 1, borderRadius: 16 },
-  cardTitle: { color: tvColors.text, fontFamily: fonts.bold, fontSize: 14 },
-  help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 10, lineHeight: 15 },
-  row: { minHeight: 42, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent", flexDirection: "row", alignItems: "center", gap: 10 },
-  rowText: { color: tvColors.text, fontFamily: fonts.medium, fontSize: 10.5 },
-  sub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, marginTop: 2 },
-  value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9.5, maxWidth: 260 },
+  card: { padding: 12, gap: 6, backgroundColor: glass.panel, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
+  cardTitle: { color: tvColors.text, fontFamily: fonts.bold, fontSize: ph(14) },
+  help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(10), lineHeight: 15 },
+  row: { minHeight: ph(42), paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent", flexDirection: "row", alignItems: "center", gap: 10 },
+  rowText: { color: tvColors.text, fontFamily: fonts.medium, fontSize: ph(10.5) },
+  sub: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(8.5), marginTop: 2 },
+  value: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(9.5), maxWidth: 260 },
   flex: { flex: 1, minWidth: 0 },
   selected: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
   focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
-  input: { minHeight: 40, color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 10.5, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  input: { minHeight: ph(40), color: tvColors.text, paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: ph(10.5), backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  action: { minHeight: 36, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  small: { minHeight: 32, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
-  actionText: { color: "#fff", fontFamily: fonts.medium, fontSize: 9.5 },
+  action: { minHeight: ph(36), paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  small: { minHeight: ph(32), paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
+  actionText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(9.5) },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginVertical: 3 },
   disabled: { opacity: 0.35 },
-  status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 10.5, paddingHorizontal: 3 },
+  status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(10.5), paddingHorizontal: 3 },
 });

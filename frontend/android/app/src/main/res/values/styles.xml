@@ -4,6 +4,11 @@
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#000000</item>
+    <!-- Use the whole display in landscape too: without this Android keeps the app out of the camera-cutout
+         side and leaves a strip down the edge. Dark window so no light gap can ever show. -->
+    <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+    <item name="android:windowBackground">@color/charm_window_background</item>
+    <item name="android:navigationBarColor">#000000</item>
     <!-- Embedded VOD fragments inherit the host Activity theme. Provide their
          resource attributes here as a safe fallback for child navigation screens. -->
     <item name="app_background_color">#070711</item>

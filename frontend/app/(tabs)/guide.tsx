@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   BackHandler,
   DeviceEventEmitter,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -1109,7 +1110,7 @@ function PurpleGuideScreenContent() {
               channelNumberById={channelNumberById}
               showChannelNumbers={channelNumbers}
               showLogos={isFocused && channelLogos && !surfLogosSuppressed}
-              hidePreview={hidePreview}
+              hidePreview={hidePreview || (!Platform.isTV && screenHeight > screenWidth)}
               muted={mutePreview}
               previewId={safePreviewMode === "off" || drawerOpen || groupDrawerOpen || !!activeProgram || !!pinPromptGroup || quickActionsOpen || !isFocused ? null : previewId}
               previewStatus={previewStatus}

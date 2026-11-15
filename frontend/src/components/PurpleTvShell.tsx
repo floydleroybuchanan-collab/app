@@ -16,12 +16,14 @@ import {
 } from "react-native";
 import { useFocusEffect, usePathname, useRouter } from "expo-router";
 import { goToTab } from "@/src/utils/goToTab";
+import { PhoneBackdrop, PhoneBottomBar, PhoneMoreSheet, PhoneSideRail, type PhoneMoreTarget } from "@/src/components/PhoneChrome";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { fonts, glass, glassFocus, radius, spacing, tvColors } from "@/src/theme";
-import { combineTvEdgeInsets, getTvSafeInsets } from "@/src/utils/tvLayout";
+import { combineTvEdgeInsets, getTvSafeInsets, shouldUseTvLayout } from "@/src/utils/tvLayout";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { useStore } from "@/src/store";
 import { evaluateDrawerBack } from "@/src/core/drawerNavigationPolicy";
@@ -297,9 +299,15 @@ export function PurpleTvShell({
   } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
+  const insets = useSafeAreaInsets();
+  // A phone or tablet used by touch: it keeps the camera cutout clear, never hides the rail by itself, and held
+  // upright it swaps the side rail for a bottom bar (the rail would take a third of a 390 dp wide screen).
+  const phone = !shouldUseTvLayout(deviceLayoutMode);
+  const bottomBar = phone && height > width && !immersiveContent;
   // Guide uses its own channel-column → playlist-groups boundary. The compact
   // menu belongs beside its open groups drawer, not beside the Guide grid.
-  const showIconRail = isFocused && railPreferences.ready && railPreferences.enabled && !railTimedOut && !drawerOpen && !immersiveContent && (active !== "/guide" || Boolean(secondaryDrawer));
+  const railAllowed = phone ? !bottomBar : railPreferences.ready && railPreferences.enabled && !railTimedOut;
+  const showIconRail = isFocused && railAllowed && !drawerOpen && !immersiveContent && (active !== "/guide" || Boolean(secondaryDrawer));
   const lastIconRailFocusRequestRef = useRef(iconRailFocusRequest);
   const { calibration } = useTvCalibration();
   const edges = useMemo(() => {
@@ -632,6 +640,16 @@ export function PurpleTvShell({
     void Haptics.selectionAsync().catch(() => undefined);
     if (Platform.OS !== "web") BackHandler.exitApp();
   }, []);
+  const pickPhoneMore = useCallback((target: PhoneMoreTarget) => {
+    if (target === "exit") { closeDrawer({ force: true }); exit(); return; }
+    if (target === "playlists") { closeDrawer({ force: true }); requestAnimationFrame(() => router.push("/playlists" as any)); return; }
+    if (target === "account") {
+      closeDrawer({ force: true });
+      requestAnimationFrame(() => router.replace({ pathname: "/settings", params: { section: "account" } } as any));
+      return;
+    }
+    navigate(target);
+  }, [closeDrawer, exit, navigate, router]);
   const [exitHint, setExitHint] = useState(false);
   const exitHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const promptHoldToExit = useCallback(() => {
@@ -704,11 +722,13 @@ export function PurpleTvShell({
       onTouchStart={() => { lastRailInteractionRef.current = Date.now(); }}
       style={[
         styles.root,
+        phone && styles.rootPhone,
+        bottomBar && { flexDirection: "column" },
         {
-          paddingTop: edges.padding.top,
-          paddingBottom: edges.padding.bottom,
-          paddingLeft: edges.padding.left,
-          paddingRight: edges.padding.right,
+          paddingTop: edges.padding.top + (phone ? insets.top : 0),
+          paddingBottom: edges.padding.bottom + (phone ? insets.bottom : 0),
+          paddingLeft: edges.padding.left + (phone ? insets.left : 0),
+          paddingRight: edges.padding.right + (phone ? insets.right : 0),
           marginTop: edges.margin.top,
           marginBottom: edges.margin.bottom,
           marginLeft: edges.margin.left,
@@ -716,7 +736,13 @@ export function PurpleTvShell({
         },
       ]}
     >
-      {isFocused && (drawerOpen || drawerVisible) ? <Animated.View
+      {phone ? <PhoneBackdrop /> : null}
+      {phone && isFocused && (drawerOpen || drawerVisible) ? (
+        <View style={styles.phoneMoreLayer} pointerEvents={drawerOpen ? "auto" : "none"}>
+          <PhoneMoreSheet progress={drawerProgress} onClose={() => closeDrawer({ force: true })} onPick={pickPhoneMore} />
+        </View>
+      ) : null}
+      {!phone && isFocused && (drawerOpen || drawerVisible) ? <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
@@ -844,10 +870,13 @@ export function PurpleTvShell({
       </Animated.View> : null}
 
       {/* Drawers float over the page. Resizing it re-lays out the whole Guide or VOD on every step. */}
-      {isFocused && drawerOpen && active !== "/guide" && railPreferences.ready && railPreferences.enabled && !railTimedOut && !immersiveContent
+      {!phone && isFocused && drawerOpen && active !== "/guide" && railAllowed && !immersiveContent
         ? <View style={styles.railPlaceholder} />
         : null}
-      {showIconRail ? (
+      {phone && !bottomBar && isFocused && !immersiveContent ? (
+        <PhoneSideRail active={active} moreOpen={drawerOpen} onNavigate={(route) => navigate(route)} onMore={() => openDrawer({ force: true })} />
+      ) : null}
+      {!phone && showIconRail ? (
         <FocusGuide
           style={[styles.iconRail, active === "/guide" && [styles.guideDrawerLayer, { left: edges.padding.left, top: edges.padding.top, bottom: edges.padding.bottom }]]}
           trapFocusUp
@@ -911,7 +940,7 @@ export function PurpleTvShell({
       ) : null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
-        style={[styles.content, contentStyle]}
+        style={[styles.content, phone && styles.contentPhone, contentStyle]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
@@ -923,6 +952,9 @@ export function PurpleTvShell({
       >
         {children}
       </FocusGuide>
+      {bottomBar && isFocused ? (
+        <PhoneBottomBar active={active} moreOpen={drawerOpen} onNavigate={(route) => navigate(route)} onMore={() => openDrawer({ force: true })} />
+      ) : null}
       {!immersiveContent && headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
     </View>
   );
@@ -930,6 +962,8 @@ export function PurpleTvShell({
 
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", backgroundColor: glass.page, overflow: "hidden" },
+  rootPhone: { backgroundColor: "#0B0420" },
+  phoneMoreLayer: { ...StyleSheet.absoluteFillObject, zIndex: 30 },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
   railPlaceholder: { width: PURPLE_ICON_RAIL_WIDTH, height: "100%", flexShrink: 0 },
   guideDrawerLayer: { position: "absolute", zIndex: 15 },
@@ -1115,5 +1149,22 @@ const styles = StyleSheet.create({
   footerCompactText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 8 },
   footerDisabled: { opacity: 0.5 },
   content: { flex: 1, backgroundColor: glass.page },
+  contentPhone: { backgroundColor: "transparent" },
+  drawerScrim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 19, backgroundColor: "rgba(4,1,12,0.55)" },
+  phoneBar: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    minHeight: 58,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 4,
+    backgroundColor: glass.rail,
+    borderTopWidth: 1,
+    borderTopColor: glass.edgeSoft,
+  },
+  phoneBarItem: { flex: 1, minWidth: 0, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 2, borderWidth: 1, borderColor: "transparent" },
+  phoneBarItemSelected: { backgroundColor: "rgba(140,70,240,0.55)", borderColor: glass.selectedEdge },
+  phoneBarLabel: { color: "#CDBFE6", fontFamily: fonts.medium, fontSize: 10 },
+  phoneBarLabelSelected: { color: "#fff", fontFamily: fonts.semibold },
   headerRight: { position: "absolute", top: 10, right: spacing.lg },
 });

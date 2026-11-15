@@ -40,7 +40,7 @@ export const tvColors = {
  * redesign uses). Plain colors only: no blur, no extra views, so a page costs
  * the same to draw as before the facelift.
  */
-export const glass = {
+const tvGlass = {
   page: "#120826",
   rail: "#1A0B33",
   drawer: "#1E0C3C",
@@ -59,6 +59,60 @@ export const glass = {
   live: "#E11D48",
   liveEdge: "#FF6B8B",
   kicker: "#C4A6F0",
+};
+
+/**
+ * A touch phone reads this after tvRuntime has decided TV or phone (it is the
+ * first import of the root layout), so the TV values above are never touched.
+ */
+function isTouchPhone(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Platform } = require("react-native");
+    return Platform.OS === "android" && !Platform.isTV;
+  } catch {
+    return false;
+  }
+}
+
+/** Phone neon glass: the page is clear so the crown shows; panels, buttons and drawers are about 65% see-through. */
+const phoneGlassTokens: typeof tvGlass = {
+  ...tvGlass,
+  page: "transparent",
+  rail: "rgba(40,16,90,0.35)",
+  drawer: "rgba(95,50,175,0.42)",
+  panel: "rgba(130,72,212,0.30)",
+  panelStrong: "rgba(130,72,212,0.38)",
+  edge: "rgba(235,205,255,0.55)",
+  edgeSoft: "rgba(235,205,255,0.32)",
+  button: "rgba(150,90,235,0.35)",
+  buttonEdge: "rgba(235,205,255,0.62)",
+  selected: "rgba(170,85,245,0.52)",
+  selectedEdge: "rgba(255,255,255,0.92)",
+};
+
+/** True on a touch phone (never on a TV); screens use it for phone-only layout changes. */
+export const phoneUi: boolean = isTouchPhone();
+
+export const glass: typeof tvGlass = phoneUi ? phoneGlassTokens : tvGlass;
+
+/**
+ * The TV sizes are drawn for a 10-foot screen; on a phone held at arm's length text and
+ * tap targets are scaled up 30%. On a TV this returns the size unchanged.
+ */
+export const ph = (n: number): number => (phoneUi ? Math.round(n * 1.3 * 2) / 2 : n);
+
+/**
+ * Phone neon-glass look (approved mock-ups). Alpha = 1 - transparency: drawers,
+ * buttons and bars are 65% see-through (alpha 0.35); selected pills 48%.
+ */
+export const phoneGlass = {
+  pageTop: ["#220A4A", "#0B0420"] as [string, string],
+  fill: ["rgba(175,105,255,0.35)", "rgba(85,40,170,0.35)"] as [string, string],
+  selectedFill: ["rgba(215,115,255,0.55)", "rgba(125,55,235,0.5)"] as [string, string],
+  edge: "rgba(235,205,255,0.62)",
+  glow: "#E04DFF",
+  scrim: "rgba(6,2,18,0.14)",
 };
 
 /** Focus that matches Settings: bright violet fill, white edge, soft glow. */

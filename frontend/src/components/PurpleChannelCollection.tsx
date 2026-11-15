@@ -11,7 +11,7 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, phoneUi, ph } from "@/src/theme";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { nowNext } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -68,7 +68,8 @@ export function PurpleChannelCollection({
   const isFocused = useIsFocused();
   const { width } = useWindowDimensions();
   const { channels, addRecent, channelLogos, hardRefresh, loading, refreshing, error } = useStore();
-  const columns = width >= 1500 ? 6 : width >= 1050 ? 5 : 4;
+  // Phone: three cards across upright, four turned (as in the approved mock-ups).
+  const columns = phoneUi ? (width < 600 ? 3 : 4) : width >= 1500 ? 6 : width >= 1050 ? 5 : 4;
   const [now, setNow] = useState(() => new Date());
   const [preferInitialFocus, setPreferInitialFocus] = useState(true);
 
@@ -114,6 +115,7 @@ export function PurpleChannelCollection({
             <Text style={styles.section}>Available Now</Text>
             <FlatList
               data={items}
+              key={`cols-${columns}`}
               numColumns={columns}
               keyExtractor={(item) => item.id}
               initialNumToRender={columns * 2}
@@ -168,22 +170,22 @@ export function PurpleChannelCollection({
 
 const styles = StyleSheet.create({
   page: { flex: 1, padding: 14, backgroundColor: glass.page },
-  header: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  header: { minHeight: ph(44), flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flexShrink: 1, minWidth: 0 },
-  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 9 },
-  section: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, marginTop: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
+  count: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: ph(9) },
+  section: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(12), marginTop: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: glass.pink, paddingLeft: 7 },
   grid: { paddingBottom: 20, paddingTop: 2 },
   row: { gap: 9, marginBottom: 9 },
-  card: { flex: 1, minWidth: 0, maxWidth: 220, minHeight: 158, backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 6 },
+  card: { flex: 1, minWidth: 0, maxWidth: 220, minHeight: ph(158), backgroundColor: glass.panel, borderRadius: 14, borderWidth: 2, borderColor: glass.edgeSoft, padding: 6 },
   art: { height: 96, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  name: { color: "#fff", fontFamily: fonts.bold, fontSize: 9.5, lineHeight: 12, marginTop: 6, minHeight: 24 },
-  program: { color: "#C9B5EE", fontFamily: fonts.medium, fontSize: 7.5, letterSpacing: 0.4, marginTop: 2 },
+  name: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(9.5), lineHeight: 12, marginTop: 6, minHeight: ph(24) },
+  program: { color: "#C9B5EE", fontFamily: fonts.medium, fontSize: ph(7.5), letterSpacing: 0.4, marginTop: 2 },
   focused: glassFocus,
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 40 },
-  emptyTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 14 },
-  emptyText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 9, textAlign: "center", maxWidth: 420 },
+  emptyTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(14) },
+  emptyText: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(9), textAlign: "center", maxWidth: 420 },
   emptyButton: {
-    minHeight: 32,
+    minHeight: ph(32),
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
@@ -195,5 +197,5 @@ const styles = StyleSheet.create({
     borderColor: glass.selectedEdge,
     marginTop: 4,
   },
-  emptyButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: 9 },
+  emptyButtonText: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(9) },
 });

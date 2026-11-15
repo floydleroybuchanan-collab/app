@@ -24,7 +24,10 @@ export function StartupVersion4() {
   const targetRef = useRef(0);
   const stage = useStartupStage();
   const run = useMotionAllowed();
-  const fade = useRef(new Animated.Value(0)).current;
+  // The black cover is solid from the first frame, so nothing behind it (the app, the account check) can show
+  // through. Only the picture fades in on top of it, and the whole cover fades out at the end.
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(1)).current;
   const [done, setDone] = useState(completedForSession);
   useEffect(() => subscribeProgress(setEpg), []);
   useEffect(() => {
@@ -56,8 +59,8 @@ export function StartupVersion4() {
   targetRef.current = milestones.filter((item) => item.ready).length / milestones.length;
   // Fades in from black, and fades out once the real work is done.
   useEffect(() => {
-    Animated.timing(fade, { toValue: 1, duration: FADE_IN_MS, easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }).start();
-  }, [fade]);
+    Animated.timing(fadeIn, { toValue: 1, duration: FADE_IN_MS, easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }).start();
+  }, [fadeIn]);
   useEffect(() => {
     if (!mayEnter) return;
     Animated.timing(fade, { toValue: 0, duration: FADE_OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true, isInteraction: false }).start(({ finished }) => {
@@ -78,6 +81,7 @@ export function StartupVersion4() {
   const growth = percent / 100 * percent / 100 * (3 - 2 * percent / 100);
   return (
     <Animated.View style={[styles.overlay, { opacity: fade }]} testID="startup-version-4">
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeIn }]}>
       <StartupScene growth={growth} />
       <View style={[styles.box, { top: boxTop, left: (stage.width - boxW) / 2, width: boxW, minHeight: boxH, borderRadius: 28 * unit, paddingHorizontal: 40 * unit, paddingTop: 22 * unit, paddingBottom: 18 * unit }]}>
         <ProgressBar label="Loading Charming MediaLab" right={`${percent}%`} percent={percent} unit={unit} run={run} thick />
@@ -87,6 +91,7 @@ export function StartupVersion4() {
         </View>
         <TypedTask text={task} unit={unit} run={run} />
       </View>
+      </Animated.View>
     </Animated.View>
   );
 }

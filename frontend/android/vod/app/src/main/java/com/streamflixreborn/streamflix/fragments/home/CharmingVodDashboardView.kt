@@ -38,8 +38,14 @@ class CharmingVodDashboardView @JvmOverloads constructor(
     var onPlatform: ((String) -> Unit)? = null
 
     private val density = resources.displayMetrics.density
-    private val screenScale =
-        (resources.displayMetrics.heightPixels / density / 540f).coerceIn(0.8f, 1.5f)
+    // TV and landscape keep the approved 960x540 scale. A phone held upright is far narrower than 960 dp, so its
+    // scale follows the width instead of the (tall) height, or the hero and platform strip would fill the page.
+    private val screenScale = run {
+        val m = resources.displayMetrics
+        if (m.heightPixels > m.widthPixels * 1.1f)
+            (m.widthPixels / density / 960f * 1.45f).coerceIn(0.62f, 1.5f)
+        else (m.heightPixels / density / 540f).coerceIn(0.8f, 1.5f)
+    }
 
     private fun dp(n: Float) = (n * screenScale * density + 0.5f).toInt()
     private fun dp(n: Int) = dp(n.toFloat())

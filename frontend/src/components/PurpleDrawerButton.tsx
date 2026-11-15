@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useIconRailFocusBoundary, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
-import { fonts, glass, glassFocus } from "@/src/theme";
+import { fonts, glass, glassFocus, phoneUi } from "@/src/theme";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
 
 /** Consistent, explicit Drawer entry for full-bleed TV pages. */
@@ -46,6 +46,8 @@ export function PurpleDrawerButton({ testID }: { testID: string }) {
     };
   }, [focusIconRail, focused, pathname]);
 
+  // A phone has the bottom bar and its More sheet, so the TV drawer button would only repeat them.
+  if (phoneUi) return null;
   return (
     <Pressable
       ref={buttonRef as any}

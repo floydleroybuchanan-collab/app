@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   kicker: { color: glass.pink, fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 1.8 },
   title: { color: "#fff", fontFamily: fonts.bold, fontSize: 18, marginTop: 3 },
   subtitle: { color: "#C9B5EE", fontFamily: fonts.regular, fontSize: 9, marginTop: 3 },
-  close: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  close: { width: 36, height: 36, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   list: { gap: 5, paddingVertical: 10, paddingBottom: 28 },
   row: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 10, borderRadius: 12, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,18,78,0.60)" },
   iconTile: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,58,237,0.38)", borderWidth: 1, borderColor: glass.edge },
@@ -516,6 +516,6 @@ const styles = StyleSheet.create({
   status: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: 9.5, lineHeight: 14, padding: 8 },
   sectionTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 12, marginTop: 4, marginBottom: 4 },
   epgBody: { flex: 1, minHeight: 0, paddingTop: 10 },
-  search: { minHeight: 42, color: "#fff", paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 10.5, marginBottom: 6, backgroundColor: "rgba(150,90,235,0.18)", borderColor: "rgba(226,190,255,0.40)", borderWidth: 1, borderRadius: 12 },
+  search: { minHeight: 42, color: "#fff", paddingHorizontal: 10, fontFamily: fonts.regular, fontSize: 10.5, marginBottom: 6, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   count: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: 8.5, marginBottom: 3 },
 });

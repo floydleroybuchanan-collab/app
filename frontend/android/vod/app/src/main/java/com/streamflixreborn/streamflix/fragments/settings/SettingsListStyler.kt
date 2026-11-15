@@ -155,8 +155,9 @@ internal object SettingsListStyler {
         val titleColor = android.graphics.Color.WHITE
         val summaryColor = 0xFFE0D2EE.toInt()
         val accentColor = 0xFFF09BFF.toInt()
-        val rowBackgroundColor = 0x2E9A5CF0
-        val rowBorderColor = 0x73E2BEFF
+        // A phone gets the approved settings look: rows 40% see-through (alpha .60) with a brighter edge; the TV keeps its own values.
+        val rowBackgroundColor = if (isTv) 0x2E9A5CF0 else 0x999A5CF0.toInt()
+        val rowBorderColor = if (isTv) 0x73E2BEFF else 0x9EEBCDFF.toInt()
         val rowHighlightColor = 0xB8B446FF.toInt()
         val rowHighlightBorderColor = android.graphics.Color.WHITE
 

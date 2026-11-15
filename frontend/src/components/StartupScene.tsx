@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AccessibilityInfo, AppState, Image, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Image as AnimatedImage } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { BloomLayer, PuddleLayer } from "@/src/components/StartupEffects";
 
 // Layers, bottom to top: the sky loop (moon glow, twinkling stars, shooting stars); live puddles that spread with the
@@ -21,11 +22,19 @@ const MOVE = { x: 240, y: 0, w: 1440, h: 810 };
 /** Size of the 1920 x 1080 stage once it covers the screen, and where it sits. */
 export function useStartupStage() {
   const { width, height } = useWindowDimensions();
-  const cover = Math.max(width / STARTUP_STAGE_W, height / STARTUP_STAGE_H);
+  // A phone held upright is much narrower than the picture. Covering it would cut the crown off at both sides, so
+  // the whole scene is scaled to fit the width instead (the crown spans about 700 stage units) and sits in the
+  // upper part of the screen. Wide screens (TV, landscape) still cover the whole screen.
+  const portrait = height > width * 1.05;
+  const cover = portrait ? width / 760 : Math.max(width / STARTUP_STAGE_W, height / STARTUP_STAGE_H);
   const stageW = STARTUP_STAGE_W * cover;
   const stageH = STARTUP_STAGE_H * cover;
-  return { width, height, cover, stageW, stageH, left: (width - stageW) / 2, top: (height - stageH) / 2 };
+  const top = portrait ? Math.max(0, (height - stageH) * 0.32) : (height - stageH) / 2;
+  return { width, height, cover, stageW, stageH, left: (width - stageW) / 2, top, portrait };
 }
+
+/** Floor colour under the picture on a tall screen (matches the bottom of the sky picture). */
+const FLOOR = "#07040F";
 
 /** True when animation is allowed: reduce-motion is off and the app is in the foreground. */
 export function useMotionAllowed() {
@@ -52,8 +61,13 @@ export function StartupScene({ growth }: { growth: number }) {
   const place = (r: { x: number; y: number; w: number; h: number }) => ({ position: "absolute" as const, left: stage.left + r.x * stage.cover, top: stage.top + r.y * stage.cover, width: r.w * stage.cover, height: r.h * stage.cover });
   return (
     <View pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants" style={[StyleSheet.absoluteFill, { backgroundColor: "#000", overflow: "hidden" }]}>
+      {stage.portrait && stage.top + stage.stageH < stage.height ? <View style={{ position: "absolute", left: 0, right: 0, top: stage.top + stage.stageH - 1, bottom: 0, backgroundColor: FLOOR }} /> : null}
       {run ? <AnimatedImage source={backLoop} contentFit="fill" autoplay transition={0} style={back} />
         : <Image source={backStill} resizeMode="stretch" style={back} />}
+      {stage.portrait ? <>
+        <LinearGradient pointerEvents="none" colors={["#000000", "rgba(0,0,0,0)"]} style={{ position: "absolute", left: 0, right: 0, top: stage.top, height: 70 }} />
+        <LinearGradient pointerEvents="none" colors={["rgba(7,4,15,0)", FLOOR]} style={{ position: "absolute", left: 0, right: 0, top: stage.top + stage.stageH - 70, height: 70 }} />
+      </> : null}
       <PuddleLayer stage={stage} growth={growth} run={run} />
       <Image source={art} resizeMode="stretch" style={place(ART)} />
       <BloomLayer run={run} source={bloom} style={place(ART)} />
