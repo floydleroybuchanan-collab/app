@@ -1,4 +1,3 @@
-import { MediaLabBackdrop } from "@/src/components/MediaLabBrand";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -886,7 +885,7 @@ export function PurpleTvShell({
           trapFocusLeft
           testID="purple-icon-rail"
         >
-          <MediaLabBackdrop quiet /><View style={styles.iconRailBrand} pointerEvents="none">
+          <View style={styles.iconRailBrand} pointerEvents="none">
             <Image accessible={false} accessibilityLabel="Charming MediaLab" source={RAIL_CROWN} fadeDuration={0} resizeMode="contain" style={styles.iconRailCrown} />
           </View>
           <View style={styles.iconRailItems}>
@@ -976,7 +975,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     flexShrink: 0,
     alignItems: "center",
-    backgroundColor: "#2A1462",
+    backgroundColor: "#2F1770",
     borderWidth: 2,
     borderColor: "rgba(235,205,255,0.45)",
     borderRadius: 28,
@@ -1024,8 +1023,12 @@ const styles = StyleSheet.create({
     width: PURPLE_SIDEBAR_WIDTH,
     height: "100%",
     backgroundColor: glass.drawer,
-    borderRightWidth: 1,
-    borderRightColor: glass.edge,
+    // A solid violet drawer with a lit edge and rounded outer corners, like the More sheet.
+    borderWidth: 2,
+    borderLeftWidth: 0,
+    borderColor: "rgba(235,205,255,0.45)",
+    borderTopRightRadius: 28,
+    borderBottomRightRadius: 28,
     paddingHorizontal: 10,
     paddingTop: 12,
     paddingBottom: 8,
@@ -1097,13 +1100,15 @@ const styles = StyleSheet.create({
   navListContent: { gap: 3, paddingBottom: 2 },
   navRow: {
     minHeight: 35,
-    borderRadius: 11,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: "transparent",
+    borderColor: "rgba(235,205,255,0.26)",
+    backgroundColor: "rgba(190,140,255,0.14)",
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 9,
+    marginBottom: 3,
   },
   navRowSelected: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
   navRowActiveMark: { borderWidth: 1 },

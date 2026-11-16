@@ -6,7 +6,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("a touch phone gets the clear-page neon glass tokens; the TV tokens are untouched", () => {
   const theme = read("src/theme.ts");
-  assert.match(theme, /const tvGlass = \{[^}]*?page: "transparent",\s*rail: "#1A0B33",\s*drawer: "#1E0C3C"/);
+  assert.match(theme, /const tvGlass = \{[^}]*?page: "transparent",\s*rail: "#1A0B33",[^}]*?drawer: "#2F1770"/);
   assert.match(theme, /Platform\.OS === "android" && !Platform\.isTV/);
   assert.match(theme, /page: "transparent"/);
   assert.match(theme, /export const glass: typeof tvGlass = phoneUi \? phoneGlassTokens : tvGlass/);
@@ -66,7 +66,7 @@ test("native VOD player glass icons are phone-only: touch devices get the glass 
 
 test("drawers are solid, the crown background is behind every screen, and the phone chrome works with a remote", () => {
   const theme = read("src/theme.ts");
-  assert.match(theme, /drawer: "#2A1360"/);
+  assert.match(theme, /drawer: "#2F1770"/);
   const chrome = read("src/components/PhoneChrome.tsx");
   assert.doesNotMatch(chrome, /focusable=\{false\}[\s\S]{0,40}onPress=\{item\.press\}/);
   assert.match(chrome, /hasTVPreferredFocus=\{index === 0\}/);
@@ -151,7 +151,7 @@ test("the Guide has the approved top row on a phone: back, group, more and a sea
 test("pages no longer paint their own backdrop over the crown, and the TV icon rail is violet glass, not near-black", () => {
   assert.match(read("src/components/GlassBackdrop.tsx"), /return null;/);
   const shell = read("src/components/PurpleTvShell.tsx");
-  assert.match(shell, /backgroundColor: "#2A1462",\s*borderWidth: 2,/);
+  assert.match(shell, /backgroundColor: "#2F1770",\s*borderWidth: 2,/);
   assert.match(shell, /railPlaceholder: \{ width: PURPLE_ICON_RAIL_WIDTH \+ 6/);
 });
 
@@ -170,4 +170,14 @@ test("BACK from a stream keeps the chosen Guide group: no reset while the lists 
 
 test("the Settings buttons are 50% see-through on phone and TV", () => {
   assert.match(read("app/(tabs)/settings.tsx"), /tile: \{[^}]*backgroundColor: "rgba\(130,72,212,0\.50\)"/);
+});
+
+test("the icon rail has no dark box of its own, and the drawers are solid violet with glass rows", () => {
+  const shell = read("src/components/PurpleTvShell.tsx");
+  assert.doesNotMatch(shell, /<MediaLabBackdrop/);
+  assert.match(shell, /borderTopRightRadius: 28,\s*borderBottomRightRadius: 28,/);
+  assert.match(shell, /backgroundColor: "rgba\(190,140,255,0\.14\)"/);
+  const groups = read("src/components/PurpleGuideGroupDrawer.tsx");
+  assert.match(groups, /borderTopRightRadius: 28,\s*borderBottomRightRadius: 28,/);
+  assert.match(groups, /backgroundColor: "rgba\(190,140,255,0\.10\)"/);
 });

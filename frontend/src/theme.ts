@@ -44,7 +44,8 @@ const tvGlass = {
   // Clear: the crown background drawn by the shell shows through every page.
   page: "transparent",
   rail: "#1A0B33",
-  drawer: "#1E0C3C",
+  // Drawers and sheets are solid violet, the same as the More sheet.
+  drawer: "#2F1770",
   panel: "rgba(122,62,214,0.13)",
   panelStrong: "rgba(122,62,214,0.22)",
   edge: "rgba(216,178,255,0.30)",
@@ -81,7 +82,7 @@ const phoneGlassTokens: typeof tvGlass = {
   ...tvGlass,
   page: "transparent",
   rail: "#1A0B33",
-  drawer: "#2A1360",
+  drawer: "#2F1770",
   panel: "rgba(130,72,212,0.50)",
   panelStrong: "rgba(130,72,212,0.38)",
   edge: "rgba(235,205,255,0.55)",
