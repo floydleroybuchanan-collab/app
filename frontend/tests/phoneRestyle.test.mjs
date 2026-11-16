@@ -6,7 +6,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("a touch phone gets the clear-page neon glass tokens; the TV tokens are untouched", () => {
   const theme = read("src/theme.ts");
-  assert.match(theme, /const tvGlass = \{\s*page: "#120826",\s*rail: "#1A0B33",\s*drawer: "#1E0C3C"/);
+  assert.match(theme, /const tvGlass = \{[^}]*?page: "transparent",\s*rail: "#1A0B33",\s*drawer: "#1E0C3C"/);
   assert.match(theme, /Platform\.OS === "android" && !Platform\.isTV/);
   assert.match(theme, /page: "transparent"/);
   assert.match(theme, /export const glass: typeof tvGlass = phoneUi \? phoneGlassTokens : tvGlass/);
@@ -61,4 +61,45 @@ test("native VOD player glass icons are phone-only: touch devices get the glass 
   }
   const tv = read("android/vod/app/src/main/res/layout/content_exo_controller_tv.xml");
   assert.doesNotMatch(tv, /ic_glass_/);
+});
+
+test("drawers are solid, the crown background is behind every screen, and the phone chrome works with a remote", () => {
+  const theme = read("src/theme.ts");
+  assert.match(theme, /drawer: "#2A1360"/);
+  const chrome = read("src/components/PhoneChrome.tsx");
+  assert.doesNotMatch(chrome, /focusable=\{false\}[\s\S]{0,40}onPress=\{item\.press\}/);
+  assert.match(chrome, /hasTVPreferredFocus=\{index === 0\}/);
+  assert.match(chrome, /<FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight/);
+  assert.match(chrome, /crown_backdrop\.png/);
+  assert.ok(existsSync(new URL("../assets/medialab/crown_backdrop.png", import.meta.url)));
+  const shell = read("src/components/PurpleTvShell.tsx");
+  assert.match(shell, /<PhoneBackdrop \/>/);
+  assert.match(shell, /trapFocusDown=\{!bottomBar && /);
+});
+
+test("fullscreen video is not pushed down by the safe-area padding", () => {
+  const shell = read("src/components/PurpleTvShell.tsx");
+  assert.match(shell, /edges\.padding\.top \+ \(phone && !immersiveContent \? insets\.top : 0\)/);
+});
+
+test("the loading and sign-in scenes animate on first launch and use 1080p loops", () => {
+  for (const f of ["src/components/StartupScene.tsx", "src/components/LoginScene.tsx", "src/components/AccountLoginBrand.tsx"]) {
+    assert.match(read(f), /AppState\.currentState !== "background"/, f);
+  }
+  const size = (f) => readFileSync(new URL(`../assets/login/${f}`, import.meta.url)).length;
+  assert.ok(size("scene_loop.webp") > 15_000_000);
+  assert.ok(size("startup_move.webp") > 5_000_000);
+  // The WebP header carries the canvas size: width-1 and height-1 as 24-bit little-endian at bytes 24 and 27.
+  const dims = (f) => { const b = readFileSync(new URL(`../assets/login/${f}`, import.meta.url)).subarray(0, 40); return [(b[24] | (b[25] << 8) | (b[26] << 16)) + 1, (b[27] | (b[28] << 8) | (b[29] << 16)) + 1]; };
+  assert.deepEqual(dims("scene_loop.webp"), [1920, 1080]);
+  assert.deepEqual(dims("startup_back.webp"), [1920, 1080]);
+  assert.deepEqual(dims("startup_move.webp"), [1440, 810]);
+});
+
+test("embedded VOD gets the crown background and the glass bottom bar", () => {
+  const base = "android/vod/app/src/main/java/com/streamflixreborn/streamflix";
+  assert.match(read(`${base}/charm/CrownBackdrop.kt`), /class CrownBackdrop\(context: Context\) : Drawable\(\)/);
+  assert.match(read(`${base}/activities/main/MainMobileActivity.kt`), /binding\.root\.background = com\.streamflixreborn\.streamflix\.charm\.CrownBackdrop\(this\)/);
+  assert.match(read(`${base}/activities/main/MainMobileActivity.kt`), /binding\.bnvMain\.background = glassBar/);
+  assert.match(read(`${base}/activities/main/MainTvActivity.kt`), /CrownBackdrop\(this\)/);
 });

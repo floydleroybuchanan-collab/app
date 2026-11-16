@@ -87,7 +87,7 @@ function ShootingStar({ scale, run, fromLeft, top, period, delay }: { scale: num
 export function LoginScene({ animate = true, showAngel = true }: { animate?: boolean; showAngel?: boolean }) {
   const { width, height } = useWindowDimensions();
   const [reduceMotion, setReduceMotion] = useState(true);
-  const [foreground, setForeground] = useState(AppState.currentState === "active");
+  const [foreground, setForeground] = useState(AppState.currentState !== "background");
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); }).catch(() => {});

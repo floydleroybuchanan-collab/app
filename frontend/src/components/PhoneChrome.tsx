@@ -3,6 +3,7 @@ import { Animated, Image, Pressable, StyleSheet, Text, View, useWindowDimensions
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { fonts, phoneGlass } from "@/src/theme";
+import { FocusGuide } from "@/src/components/TVFocusGuideView";
 
 /**
  * Phone look (neon glass): crown behind every screen, a glass bottom bar held
@@ -10,7 +11,7 @@ import { fonts, phoneGlass } from "@/src/theme";
  * from the right (turned). Touch only; the TV layout never renders any of this.
  */
 
-const CROWN = require("../../assets/medialab/medialab_crown.png");
+const CROWN = require("../../assets/medialab/crown_backdrop.png");
 const ART = {
   home: require("../../assets/glass/nav_home.png"),
   guide: require("../../assets/glass/settings_epg.png"),
@@ -50,7 +51,7 @@ export const PHONE_MORE: { target: PhoneMoreTarget; label: string; art?: number 
   { target: "exit", label: "Exit" },
 ];
 
-/** Aurora + crown dead centre. The crown is never rotated, so it stays upright when the phone is turned. */
+/** Aurora + crown dead centre, behind every screen on phone and TV. The crown is never rotated, so it stays upright when the phone is turned. */
 export function PhoneBackdrop() {
   const { width, height } = useWindowDimensions();
   const crown = Math.min(width, height) * (width > height ? 0.78 : 0.95);
@@ -101,11 +102,10 @@ export function PhoneBottomBar({
           return (
             <Pressable
               key={tab.route}
-              focusable={false}
               accessibilityRole="button"
               accessibilityLabel={tab.label}
               onPress={() => onNavigate(tab.route)}
-              style={styles.tab}
+              style={({ focused }: any) => [styles.tab, focused && styles.focusRing]}
               testID={`purple-phone-bar-${tab.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
               {selected ? <GlassFill strong style={styles.tabPill} /> : null}
@@ -115,11 +115,10 @@ export function PhoneBottomBar({
           );
         })}
         <Pressable
-          focusable={false}
           accessibilityRole="button"
           accessibilityLabel="More"
           onPress={onMore}
-          style={styles.tab}
+          style={({ focused }: any) => [styles.tab, focused && styles.focusRing]}
           testID="purple-phone-bar-more"
         >
           {moreOpen ? <GlassFill strong style={styles.tabPill} /> : null}
@@ -153,11 +152,10 @@ export function PhoneSideRail({
         {items.map((item) => (
           <Pressable
             key={item.key}
-            focusable={false}
-            accessibilityRole="button"
+              accessibilityRole="button"
             accessibilityLabel={item.label}
             onPress={item.press}
-            style={styles.railItem}
+            style={({ focused }: any) => [styles.railItem, focused && styles.focusRing]}
             testID={`purple-phone-rail-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
           >
             {item.on ? <GlassFill strong style={styles.railPill} /> : null}
@@ -194,18 +192,19 @@ export function PhoneMoreSheet({
           landscape ? { width: panelW, transform: [{ translateX: slide }] } : { height: sheetH, transform: [{ translateY: slide }] },
         ]}
       >
-        <GlassFill style={[styles.panel, landscape ? styles.panelRadiusRight : styles.panelRadiusBottom]}>
+        <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={{ flex: 1 }}>
+        <LinearGradient colors={phoneGlass.solid} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.panel, landscape ? styles.panelRadiusRight : styles.panelRadiusBottom]}>
           {!landscape ? <View style={styles.handle} /> : null}
           <Text style={styles.sheetTitle}>More</Text>
           <View style={styles.grid}>
-            {PHONE_MORE.map((item) => (
+            {PHONE_MORE.map((item, index) => (
               <Pressable
                 key={item.target}
-                focusable={false}
-                accessibilityRole="button"
+                  accessibilityRole="button"
                 accessibilityLabel={item.label}
                 onPress={() => onPick(item.target)}
-                style={[styles.tile, { width: tileW }]}
+                hasTVPreferredFocus={index === 0}
+                style={({ focused }: any) => [styles.tile, { width: tileW }, focused && styles.tileFocus]}
                 testID={`purple-phone-more-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <GlassFill style={styles.tileFill}>
@@ -215,7 +214,8 @@ export function PhoneMoreSheet({
               </Pressable>
             ))}
           </View>
-        </GlassFill>
+        </LinearGradient>
+        </FocusGuide>
       </Animated.View>
     </View>
   );
@@ -281,6 +281,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
+  focusRing: { borderRadius: 28, borderWidth: 2.5, borderColor: "#fff", backgroundColor: "rgba(224,77,255,0.35)" },
+  tileFocus: { transform: [{ scale: 1.04 }] },
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: phoneGlass.scrim },
   panelBottom: { position: "absolute", left: 0, right: 0, bottom: 0 },
   panelRight: { position: "absolute", top: 0, bottom: 0, right: 0 },

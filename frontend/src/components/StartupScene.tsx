@@ -39,7 +39,7 @@ const FLOOR = "#07040F";
 /** True when animation is allowed: reduce-motion is off and the app is in the foreground. */
 export function useMotionAllowed() {
   const [reduceMotion, setReduceMotion] = useState(true);
-  const [foreground, setForeground] = useState(AppState.currentState === "active");
+  const [foreground, setForeground] = useState(AppState.currentState !== "background");
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); }).catch(() => {});

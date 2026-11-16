@@ -117,6 +117,8 @@ class MainMobileActivity : FragmentActivity() {
 
         _binding = ActivityMainMobileBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // The same crown background as the rest of the app, so VOD does not look like another app.
+        binding.root.background = com.streamflixreborn.streamflix.charm.CrownBackdrop(this)
         applyThemeNavigationChrome()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContent) { view, windowInsets ->
@@ -590,9 +592,22 @@ class MainMobileActivity : FragmentActivity() {
             )
         )
 
-        binding.bnvMain.setBackgroundColor(palette.mobileNavBackground)
-        binding.bnvMain.itemIconTintList = navColors
-        binding.bnvMain.itemTextColor = navColors
+        // The bottom bar wears the app's glass look (violet glass, lit edge, pink selected item) instead of the stock theme bar.
+        val glassBar = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xB83B1C7E.toInt(), 0xB826114F.toInt()),
+        ).apply {
+            val radius = resources.displayMetrics.density * 28f
+            cornerRadii = floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f)
+            setStroke((resources.displayMetrics.density * 2f).toInt(), 0x9EEBCDFF.toInt())
+        }
+        val glassColors = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(0xFFFF9BE8.toInt(), 0xFFD9CCF5.toInt()),
+        )
+        binding.bnvMain.background = glassBar
+        binding.bnvMain.itemIconTintList = glassColors
+        binding.bnvMain.itemTextColor = glassColors
 
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar

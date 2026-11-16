@@ -64,6 +64,8 @@ class MainTvActivity : FragmentActivity() {
 
         _binding = ActivityMainTvBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // The same crown background as the rest of the app, so VOD does not look like another app.
+        binding.root.background = com.streamflixreborn.streamflix.charm.CrownBackdrop(this)
         window.setBackgroundDrawableResource(R.color.charm_vod_canvas)
         applyThemeNavigationChrome()
 

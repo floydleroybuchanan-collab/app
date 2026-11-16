@@ -20,7 +20,7 @@ test("a phone gets a bottom bar held upright, keeps the cutout clear, and the TV
   assert.match(shell, /<PhoneBottomBar /);
   assert.match(shell, /openDrawer\(\{ force: true \}\)/);
   // The bar, the More sheet and the crown backdrop are for touch only.
-  assert.match(shell, /\{phone \? <PhoneBackdrop \/> : null\}/);
+  assert.match(shell, /<PhoneBackdrop \/>/);
   assert.match(shell, /\{phone && isFocused && \(drawerOpen \|\| drawerVisible\) \?/);
   const chrome = read("src/components/PhoneChrome.tsx");
   assert.match(chrome, /testID="purple-phone-bar"/);

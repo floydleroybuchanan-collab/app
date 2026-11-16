@@ -722,13 +722,14 @@ export function PurpleTvShell({
       onTouchStart={() => { lastRailInteractionRef.current = Date.now(); }}
       style={[
         styles.root,
-        phone && styles.rootPhone,
+        styles.rootPhone,
+        immersiveContent && { backgroundColor: "#000" },
         bottomBar && { flexDirection: "column" },
         {
-          paddingTop: edges.padding.top + (phone ? insets.top : 0),
-          paddingBottom: edges.padding.bottom + (phone ? insets.bottom : 0),
-          paddingLeft: edges.padding.left + (phone ? insets.left : 0),
-          paddingRight: edges.padding.right + (phone ? insets.right : 0),
+          paddingTop: edges.padding.top + (phone && !immersiveContent ? insets.top : 0),
+          paddingBottom: edges.padding.bottom + (phone && !immersiveContent ? insets.bottom : 0),
+          paddingLeft: edges.padding.left + (phone && !immersiveContent ? insets.left : 0),
+          paddingRight: edges.padding.right + (phone && !immersiveContent ? insets.right : 0),
           marginTop: edges.margin.top,
           marginBottom: edges.margin.bottom,
           marginLeft: edges.margin.left,
@@ -736,7 +737,8 @@ export function PurpleTvShell({
         },
       ]}
     >
-      {phone ? <PhoneBackdrop /> : null}
+      {/* The crown background sits behind every screen, on a phone and on a TV. */}
+      <PhoneBackdrop />
       {phone && isFocused && (drawerOpen || drawerVisible) ? (
         <View style={styles.phoneMoreLayer} pointerEvents={drawerOpen ? "auto" : "none"}>
           <PhoneMoreSheet progress={drawerProgress} onClose={() => closeDrawer({ force: true })} onPick={pickPhoneMore} />
@@ -943,7 +945,8 @@ export function PurpleTvShell({
         style={[styles.content, phone && styles.contentPhone, contentStyle]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
-        trapFocusDown={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
+        // Held upright on a phone the bottom bar is below the page, so Down must be allowed to reach it.
+        trapFocusDown={!bottomBar && !drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         trapFocusRight={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         onFocusCapture={(event: any) => {
           const tag = Number(event?.nativeEvent?.target || event?.target || 0);

@@ -7,7 +7,7 @@ const icon = require("@/assets/medialab/medialab_login_icon.png");
 export function AccountLoginBrand({ size, animate = true }: { size: number; animate?: boolean }) {
   const glow = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(true);
-  const [foreground, setForeground] = useState(AppState.currentState === "active");
+  const [foreground, setForeground] = useState(AppState.currentState !== "background");
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (mounted) setReduceMotion(value); }).catch(() => {});

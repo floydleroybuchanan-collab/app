@@ -41,7 +41,8 @@ export const tvColors = {
  * the same to draw as before the facelift.
  */
 const tvGlass = {
-  page: "#120826",
+  // Clear: the crown background drawn by the shell shows through every page.
+  page: "transparent",
   rail: "#1A0B33",
   drawer: "#1E0C3C",
   panel: "rgba(122,62,214,0.13)",
@@ -79,8 +80,8 @@ function isTouchPhone(): boolean {
 const phoneGlassTokens: typeof tvGlass = {
   ...tvGlass,
   page: "transparent",
-  rail: "rgba(40,16,90,0.35)",
-  drawer: "rgba(95,50,175,0.42)",
+  rail: "#1A0B33",
+  drawer: "#2A1360",
   panel: "rgba(130,72,212,0.30)",
   panelStrong: "rgba(130,72,212,0.38)",
   edge: "rgba(235,205,255,0.55)",
@@ -109,6 +110,8 @@ export const ph = (n: number): number => (phoneUi ? Math.round(n * 1.3 * 2) / 2 
 export const phoneGlass = {
   pageTop: ["#220A4A", "#0B0420"] as [string, string],
   fill: ["rgba(175,105,255,0.35)", "rgba(85,40,170,0.35)"] as [string, string],
+  /** Drawers and sheets are solid, not see-through. */
+  solid: ["#3B1C7E", "#26114F"] as [string, string],
   selectedFill: ["rgba(215,115,255,0.55)", "rgba(125,55,235,0.5)"] as [string, string],
   edge: "rgba(235,205,255,0.62)",
   glow: "#E04DFF",
