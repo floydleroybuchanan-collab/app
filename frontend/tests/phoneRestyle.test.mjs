@@ -181,3 +181,25 @@ test("the icon rail has no dark box of its own, and the drawers are solid violet
   assert.match(groups, /borderTopRightRadius: 28,\s*borderBottomRightRadius: 28,/);
   assert.match(groups, /backgroundColor: "rgba\(190,140,255,0\.10\)"/);
 });
+
+test("the phone Guide is a readable list: compact native layout, no live preview, and Up reaches the top row", () => {
+  const guide = read("app/(tabs)/guide.tsx");
+  assert.match(guide, /\{phoneUi \? null : \(\s*<GuideSelectionPreview/);
+  assert.match(guide, /compact=\{phoneUi\}\s*enableUpBoundary=\{!phoneUi\}/);
+  assert.match(read("src/components/NativeGuideCanvas.tsx"), /compact=\{compact\}/);
+  const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  assert.match(view, /fun setCompact\(value: Boolean\)/);
+  assert.match(view, /visibleWindowMs = if \(!compact\) 3L \* 60L \* 60_000L else if \(h > w\) 90L \* 60_000L else 120L \* 60_000L/);
+  assert.match(view, /if \(!compact\) drawClippedText\(canvas, row\.label/);
+  assert.match(read("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"), /name = "compact"/);
+});
+
+test("the player's Quick Actions reach it on a phone (Aspect ratio used to do nothing) and the phone has an Aspect button", () => {
+  const player = read("app/player.tsx");
+  assert.doesNotMatch(player, /if \(!isTV\) return;\s*return addPlayerQuickCommandListener/);
+  assert.match(player, /return addPlayerQuickCommandListener\(\(command\) => \{/);
+  assert.match(player, /testID="player-aspect-ratio" onPress=\{cycleScaleMode\}/);
+  const vod = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt");
+  assert.match(vod, /UserPreferences\.PlayerResize\.Fit -> UserPreferences\.PlayerResize\.Fill/);
+  assert.match(vod, /UserPreferences\.PlayerResize\.Fill -> UserPreferences\.PlayerResize\.Zoom/);
+});

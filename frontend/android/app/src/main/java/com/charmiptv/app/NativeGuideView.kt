@@ -130,15 +130,16 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   private val density = resources.displayMetrics.density
-  private val channelWidth = 184f * density
-  private val headerHeight = 38f * density
-  private val baseRowHeight = 54f * density
+  // Phone ("compact") layout changes these, so they are variables. The TV values are the defaults.
+  private var channelWidth = 184f * density
+  private var headerHeight = 38f * density
+  private var baseRowHeight = 54f * density
   // Stretched in onSizeChanged so a whole number of rows fills the grid exactly.
   private var rowHeight = baseRowHeight
   private val pad = 8f * density
 
   /** Three visible hours gives six equal 30-minute header columns on every TV size. */
-  private val visibleWindowMs = 3L * 60L * 60_000L
+  private var visibleWindowMs = 3L * 60L * 60_000L
   private val horizontalPrefetchBeforeMs = 30L * 60_000L
   private val horizontalPrefetchAfterMs = 60L * 60_000L
   private val liveWindowHistoryMs = 60L * 60_000L
@@ -250,7 +251,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   /** Draws the logo on a light tile (dark logos stay readable); returns the space it used. */
   private fun drawRowLogo(canvas: Canvas, rowId: String, name: String, top: Float): Float {
-    val size = min(logoBox, rowHeight - 12f * density)
+    val size = min(if (compact) 52f * density else logoBox, rowHeight - 12f * density)
     if (size <= 8f * density) return 0f
     val left = pad
     val boxTop = top + (rowHeight - density - size) / 2f
@@ -869,8 +870,33 @@ class NativeGuideView(context: Context) : View(context) {
   /** The small bias keeps float rounding from counting an exact fit one row short. */
   private fun fullRowCount(): Int = max(1, ((height - headerHeight) / rowHeight + 0.01f).toInt())
 
+  private var compact = false
+
+  /**
+   * The phone layout of the Guide: a narrow column of channel tiles, taller rows, bigger text and a shorter
+   * time window (90 minutes upright, 2 hours sideways) so every programme is readable. The TV keeps its own values.
+   */
+  fun setCompact(value: Boolean) {
+    if (compact == value) return
+    compact = value
+    channelWidth = (if (value) 80f else 184f) * density
+    headerHeight = (if (value) 40f else 38f) * density
+    baseRowHeight = (if (value) 68f else 54f) * density
+    title.textSize = (if (value) 14f else 13f) * density
+    muted.textSize = (if (value) 12f else 11f) * density
+    headerLabel.textSize = (if (value) 13f else 14f) * density
+    if (width > 0 && height > 0) onSizeChanged(width, height, width, height)
+    invalidate()
+  }
+
+  private fun applyCompactWindow(w: Int, h: Int) {
+    visibleWindowMs = if (!compact) 3L * 60L * 60_000L else if (h > w) 90L * 60_000L else 120L * 60_000L
+    viewportStartMs = clampViewportStart(viewportStartMs)
+  }
+
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
     super.onSizeChanged(w, h, oldw, oldh)
+    applyCompactWindow(w, h)
     val gridHeight = h - headerHeight
     if (gridHeight <= 0f) return
     rowHeight = gridHeight / max(1, (gridHeight / baseRowHeight).toInt())
@@ -994,7 +1020,8 @@ class NativeGuideView(context: Context) : View(context) {
       paintCell(canvas, density, top + density, channelWidth - density, top + rowHeight - 2f * density, channel, channelChosen)
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       val logoSpace = drawRowLogo(canvas, row.id, row.name, top)
-      drawClippedText(canvas, row.label, pad + logoSpace, top + rowHeight * .62f, channelWidth - pad, title)
+      // The phone column is only the tile (logo or letters); the name is not squeezed beside it.
+      if (!compact) drawClippedText(canvas, row.label, pad + logoSpace, top + rowHeight * .62f, channelWidth - pad, title)
 
       val list = programs[row.id].orEmpty()
       // Every stretch of the row is painted: a hole in the EPG data shows a

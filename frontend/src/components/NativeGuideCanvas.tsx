@@ -12,6 +12,8 @@ type Props = {
   transparencyLevel?: number;
   channelTransparencyLevel?: number;
   enableUpBoundary?: boolean;
+  /** Phone layout: a narrow tile column, taller rows, bigger text and a shorter time window. */
+  compact?: boolean;
   /** Draw channel logos in the channel column (only rows near the cursor are sent). */
   showLogos?: boolean;
   channelNumberById: Record<string, number>;
@@ -56,6 +58,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
   channelTransparencyLevel = 75,
   // The full Guide always routes Up at its top row to its preview actions.
   enableUpBoundary = true,
+  compact = false,
   showLogos = false,
   channelNumberById,
   onChannelFocus,
@@ -200,6 +203,7 @@ export const NativeGuideCanvas = memo(function NativeGuideCanvas({
       restoreTimeMs={deferredRestoreTimeMs}
       reloadGeneration={reloadGeneration}
       overlayMode={overlayMode}
+      compact={compact}
       transparencyLevel={transparencyLevel}
       channelTransparencyLevel={channelTransparencyLevel}
       enableUpBoundary={enableUpBoundary}

@@ -1127,6 +1127,8 @@ function PurpleGuideScreenContent() {
           </View>
         ) : (
           <View style={styles.body}>
+            {/* A phone has no live preview: the Guide there is a readable list of what is on. */}
+            {phoneUi ? null : (
             <GuideSelectionPreview
               width={guideTopPanelWidth}
               channelById={filteredChannelById}
@@ -1145,9 +1147,12 @@ function PurpleGuideScreenContent() {
               focusRequestToken={previewFocusRequestToken}
               guideFocusTag={nativeGuideFocusTag}
             />
+            )}
 
             <View style={styles.gridPanel}>
               <NativeGuideCanvas
+                compact={phoneUi}
+                enableUpBoundary={!phoneUi}
                 channels={filtered}
                 showLogos={channelLogos && !surfLogosSuppressed}
                 windowStart={windowStart}

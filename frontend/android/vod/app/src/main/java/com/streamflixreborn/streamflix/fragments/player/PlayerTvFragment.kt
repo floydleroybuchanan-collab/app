@@ -877,7 +877,13 @@ class PlayerTvFragment : Fragment() {
             binding.pvPlayer.controller.binding.exoProgress.setKeyTimeIncrement(10_000)
 
             binding.pvPlayer.controller.binding.btnExoAspectRatio.setOnClickListener {
-                val newResize = UserPreferences.playerResize.next()
+                // Three of the six modes (4:3, stretch vertical, super zoom) are drawn with a surface scale that this player resets,
+                // so they looked identical to Fit and the button seemed to do nothing. Cycle only through the three that change the picture.
+                val newResize = when (UserPreferences.playerResize) {
+                    UserPreferences.PlayerResize.Fit -> UserPreferences.PlayerResize.Fill
+                    UserPreferences.PlayerResize.Fill -> UserPreferences.PlayerResize.Zoom
+                    else -> UserPreferences.PlayerResize.Fit
+                }
                 zoomToast?.cancel()
                 zoomToast =
                     Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)

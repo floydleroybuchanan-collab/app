@@ -375,8 +375,9 @@ export default function PlayerScreen() {
     revealControls({ claimChannelsFocus: false });
   }, [revealControls, showNotice]);
 
+  // Quick Actions (Aspect ratio, Audio / subtitles, Previous channel, Diagnostics) reach the player on a phone too.
+  // This listener used to be registered for a TV only, so on a phone "Aspect ratio" did nothing.
   useEffect(() => {
-    if (!isTV) return;
     return addPlayerQuickCommandListener((command) => {
       if (guideOverlayOpenRef.current) return;
       if (command === "CYCLE_ASPECT") return cycleScaleMode();
@@ -386,7 +387,7 @@ export default function PlayerScreen() {
       if (command === "PREVIOUS_CHANNEL") return returnToPreviousChannel();
       if (command === "SAVE_DIAGNOSTICS") saveAudioReportRef.current();
     });
-  }, [cycleScaleMode, isTV, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
+  }, [cycleScaleMode, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
 
   const restartStream = useCallback(() => {
     if (!hasStream || exitInFlightRef.current || failReason === "unsupported-protocol") return;
@@ -711,6 +712,11 @@ export default function PlayerScreen() {
               <Pressable accessibilityLabel={playbackPaused ? "Play stream" : "Pause stream"} onPress={() => { setPlaybackPaused((value) => !value); revealControls({ claimChannelsFocus: false }); }} style={({ focused }: any) => [styles.pauseControl, focused && styles.focused]}>{phoneUi ? <Image source={playbackPaused ? PLAYER_GLASS.play : PLAYER_GLASS.pause} style={styles.glassTransport} /> : <Ionicons name={playbackPaused ? "play" : "pause"} size={18} color="#fff" />}</Pressable>
               <Pressable ref={nextButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}>{phoneUi ? <Image source={PLAYER_GLASS.next} style={styles.glassTransport} /> : <Ionicons name="play-skip-forward" size={18} color="#fff" />}</Pressable>
               <View style={styles.controlsSpacer} />
+              {phoneUi ? (
+                <Pressable accessibilityRole="button" accessibilityLabel="Aspect ratio" testID="player-aspect-ratio" onPress={cycleScaleMode} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}>
+                  <Ionicons name="resize-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>{`Aspect: ${scaleMode === "fit" ? "Fit" : scaleMode === "fill" ? "Fill" : scaleMode === "zoom" ? "Zoom" : "Stretch"}`}</Text>
+                </Pressable>
+              ) : null}
               <Pressable onPress={() => { setChannelsOpen(false); setTracksOpen(false); if (hideTimer.current) clearTimeout(hideTimer.current); emitTvQuickActions("player"); }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="ellipsis-horizontal" size={15} color="#fff" /><Text style={styles.controlLabel}>Quick Actions</Text></Pressable>
               <Pressable onPress={stopAndExit} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="stop" size={15} color="#fff" /><Text style={styles.controlLabel}>Stop</Text></Pressable>
             </View>

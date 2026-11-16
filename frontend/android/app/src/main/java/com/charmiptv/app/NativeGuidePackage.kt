@@ -20,6 +20,7 @@ class NativeGuideManager : SimpleViewManager<NativeGuideView>() {
   @ReactProp(name = "overlayMode", defaultBoolean = false) fun overlayMode(view: NativeGuideView, value: Boolean) = view.setOverlayMode(value)
   @ReactProp(name = "transparencyLevel", defaultInt = 60) fun transparencyLevel(view: NativeGuideView, value: Int) = view.setTransparencyLevel(value)
   @ReactProp(name = "channelTransparencyLevel", defaultInt = 75) fun channelTransparencyLevel(view: NativeGuideView, value: Int) = view.setChannelTransparencyLevel(value)
+  @ReactProp(name = "compact", defaultBoolean = false) fun compact(view: NativeGuideView, value: Boolean) = view.setCompact(value)
   @ReactProp(name = "enableUpBoundary", defaultBoolean = false) fun enableUpBoundary(view: NativeGuideView, value: Boolean) { view.enableUpBoundary = value }
   @ReactProp(name = "restoreChannelId") fun restore(view: NativeGuideView, value: String?) = view.restoreChannel(value)
   @ReactProp(name = "restoreGeneration", defaultInt = 0) fun restoreGeneration(view: NativeGuideView, value: Int) = view.setRestoreGeneration(value)
