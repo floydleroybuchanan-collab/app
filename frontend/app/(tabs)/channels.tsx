@@ -12,7 +12,8 @@ import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
-import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph, phoneUi } from "@/src/theme";
+import { PhoneLiveHub } from "@/src/components/PhoneLiveHub";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -340,10 +341,19 @@ const styles = StyleSheet.create({
   heart: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
 });
 
+/** Phone: the Cards | Guide Live TV hub; the TV keeps the channel list above. */
+function PhoneChannelsScreen() {
+  return (
+    <PurpleTvShell active="/channels">
+      <PhoneLiveHub />
+    </PurpleTvShell>
+  );
+}
+
 export default function ChannelsScreen() {
   return (
     <FocusedTabMount>
-      <ChannelsScreenContent />
+      {phoneUi ? <PhoneChannelsScreen /> : <ChannelsScreenContent />}
     </FocusedTabMount>
   );
 }

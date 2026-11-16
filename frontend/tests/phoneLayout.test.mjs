@@ -26,7 +26,7 @@ test("a phone gets a bottom bar held upright, keeps the cutout clear, and the TV
   assert.match(chrome, /testID="purple-phone-bar"/);
   assert.match(chrome, /testID="purple-drawer-scrim"/);
   // Five tabs as designed: Live TV, Guide, Channels, On Demand, More.
-  for (const label of ["Live TV", "Guide", "Channels", "On Demand"]) assert.match(chrome, new RegExp(`label: "${label}"`));
+  for (const label of ["Live TV", "Channels", "On Demand"]) assert.match(chrome, new RegExp(`label: "${label}"`));
   assert.match(chrome, /accessibilityLabel="More"/);
   // The More sheet holds the nine places from the design, Exit last.
   for (const label of ["Favorites", "My Reminders", "Search", "Movies", "Series", "Playlists", "Settings", "Account", "Exit"]) assert.match(chrome, new RegExp(`label: "${label}"`));

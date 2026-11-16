@@ -31,7 +31,6 @@ export type PhoneRoute = "/" | "/guide" | "/channels" | "/vod";
 
 export const PHONE_TABS: { route: PhoneRoute; label: string; art: number }[] = [
   { route: "/", label: "Live TV", art: ART.home },
-  { route: "/guide", label: "Guide", art: ART.guide },
   { route: "/channels", label: "Channels", art: ART.channels },
   { route: "/vod", label: "On Demand", art: ART.vod },
 ];
@@ -99,7 +98,8 @@ export function PhoneBottomBar({
     <View style={styles.barWrap} testID="purple-phone-bar">
       <GlassFill style={styles.bar}>
         {PHONE_TABS.map((tab) => {
-          const selected = !moreOpen && tab.route === active;
+          // The Guide now lives inside Channels (Cards | Guide), so Channels stays lit on the timeline Guide too.
+          const selected = !moreOpen && (tab.route === active || (tab.route === "/channels" && active === "/guide"));
           return (
             <Pressable
               key={tab.route}

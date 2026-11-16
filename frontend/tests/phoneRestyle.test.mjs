@@ -271,3 +271,20 @@ test("phone Guide: readable group name, no self-opening drawer, full channel nam
   assert.match(native, /private fun tileLetters\(/);
   assert.match(native, /if \(value\) 142f else 184f/);
 });
+
+test("phone Live TV is the Cards | Guide hub with a pop-down for playlists and groups; the TV list stays", () => {
+  const hub = read("src/components/PhoneLiveHub.tsx");
+  for (const id of ["phone-live-playlist", "phone-live-group", "phone-live-search", "phone-live-manage", "phone-live-add"]) {
+    assert.ok(hub.includes(id), id);
+  }
+  assert.match(hub, /testID=\{`phone-live-mode-\$\{item\}`\}/);
+  assert.match(hub, /Categories/);
+  assert.match(hub, /NOW \$\{fmtTime/);
+  assert.match(hub, /Full timeline Guide/);
+  assert.match(hub, /buildPlaylistMenu\(/);
+  const channels = read("app/(tabs)/channels.tsx");
+  assert.match(channels, /phoneUi \? <PhoneChannelsScreen \/> : <ChannelsScreenContent \/>/);
+  const chrome = read("src/components/PhoneChrome.tsx");
+  assert.doesNotMatch(chrome, /label: "Guide"/);
+  assert.match(chrome, /tab\.route === "\/channels" && active === "\/guide"/);
+});
