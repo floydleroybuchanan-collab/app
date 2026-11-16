@@ -97,9 +97,52 @@ test("the loading and sign-in scenes animate on first launch and use 1080p loops
 });
 
 test("embedded VOD gets the crown background and the glass bottom bar", () => {
+  assert.match(read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt"), /b\.root\.background = CrownBackdrop\(requireContext\(\)\)/);
   const base = "android/vod/app/src/main/java/com/streamflixreborn/streamflix";
   assert.match(read(`${base}/charm/CrownBackdrop.kt`), /class CrownBackdrop\(context: Context\) : Drawable\(\)/);
   assert.match(read(`${base}/activities/main/MainMobileActivity.kt`), /binding\.root\.background = com\.streamflixreborn\.streamflix\.charm\.CrownBackdrop\(this\)/);
   assert.match(read(`${base}/activities/main/MainMobileActivity.kt`), /binding\.bnvMain\.background = glassBar/);
   assert.match(read(`${base}/activities/main/MainTvActivity.kt`), /CrownBackdrop\(this\)/);
+  assert.match(read(`${base}/activities/main/MainTvActivity.kt`), /vodGlassActions\.setBackgroundColor\(android\.graphics\.Color\.TRANSPARENT\)/);
+});
+
+test("the Guide and On Demand buttons use the new glass TV and VOD icons on the rail, drawer and phone bar", () => {
+  const chrome = read("src/components/PhoneChrome.tsx");
+  assert.match(chrome, /guide: require\("\.\.\/\.\.\/assets\/glass\/nav_tv\.png"\)/);
+  assert.match(chrome, /vod: require\("\.\.\/\.\.\/assets\/glass\/nav_vod\.png"\)/);
+  const shell = read("src/components/PurpleTvShell.tsx");
+  assert.match(shell, /route: "\/guide", label: "TV Guide", art: require\("\.\.\/\.\.\/assets\/glass\/nav_tv\.png"\)/);
+  assert.match(shell, /route: "\/vod", label: "Video OnDemand", art: require\("\.\.\/\.\.\/assets\/glass\/nav_vod\.png"\)/);
+  for (const f of ["nav_tv.png", "nav_vod.png"]) {
+    const png = readFileSync(new URL(`../assets/glass/${f}`, import.meta.url));
+    // PNG colour type 6 = RGBA, so the background is transparent.
+    assert.equal(png[25], 6, f);
+  }
+});
+
+test("the native Guide has genre-coloured glass cells, colourful channel tiles and a clear background on TV and phone", () => {
+  const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  assert.match(view, /private fun tintFor\(program: NativeEpgProgram\): Paint/);
+  assert.match(view, /private val cellRadius = 12f \* density/);
+  assert.match(view, /TILE_COLORS\[\(name\.hashCode\(\) and 0x7fffffff\) % TILE_COLORS\.size\]/);
+  assert.match(view, /canvas\.drawText\("Today", pad, headerHeight \* \.66f, headerLabel\)/);
+  assert.match(view, /private val elapsedShade/);
+});
+
+test("the Series button has its own icon, and every new icon has a fully transparent background", () => {
+  assert.match(read("src/components/PhoneChrome.tsx"), /shows: require\("\.\.\/\.\.\/assets\/glass\/nav_series\.png"\)/);
+  assert.match(read("src/components/PurpleTvShell.tsx"), /route: "\/series", label: "Series", art: require\("\.\.\/\.\.\/assets\/glass\/nav_series\.png"\)/);
+  for (const f of ["nav_tv.png", "nav_vod.png", "nav_series.png", "player_back.png", "player_prev.png", "player_pause.png", "player_play.png", "player_next.png"]) {
+    const png = readFileSync(new URL(`../assets/glass/${f}`, import.meta.url));
+    assert.equal(png[25], 6, `${f} must be RGBA`);
+  }
+});
+
+test("the Guide has the approved top row on a phone: back, group, more and a search pill", () => {
+  const bar = read("src/components/GuideTopBar.tsx");
+  for (const id of ["guide-top-back", "guide-top-group", "guide-top-more", "guide-top-search"]) assert.match(bar, new RegExp(`testID="${id}"`));
+  assert.match(bar, /Search by program name/);
+  const guide = read("app/(tabs)/guide.tsx");
+  assert.match(guide, /\{phoneUi && channels\.length > 0 \? \(\s*<GuideTopBar/);
+  assert.match(guide, /onGroups=\{\(\) => setGroupDrawerOpen\(true\)\}/);
 });

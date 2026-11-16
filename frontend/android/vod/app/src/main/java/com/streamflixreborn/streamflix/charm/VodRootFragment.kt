@@ -91,6 +91,9 @@ class VodRootFragment : Fragment() {
         }
         b.root.setPadding(UserPreferences.paddingX, UserPreferences.paddingY,
             UserPreferences.paddingX, UserPreferences.paddingY)
+        // The app background (violet sky, crown in the middle) behind every VOD page, instead of flat black.
+        b.root.background = CrownBackdrop(requireContext())
+        b.navMainFragment.setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
         // Providers use this activity context, but never spawn another player
         // process or another React runtime.

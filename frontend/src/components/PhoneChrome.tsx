@@ -14,14 +14,15 @@ import { FocusGuide } from "@/src/components/TVFocusGuideView";
 const CROWN = require("../../assets/medialab/crown_backdrop.png");
 const ART = {
   home: require("../../assets/glass/nav_home.png"),
-  guide: require("../../assets/glass/settings_epg.png"),
+  guide: require("../../assets/glass/nav_tv.png"),
   channels: require("../../assets/glass/settings_provider.png"),
-  vod: require("../../assets/glass/nav_movies.png"),
+  vod: require("../../assets/glass/nav_vod.png"),
+  movies: require("../../assets/glass/nav_movies.png"),
   more: require("../../assets/glass/settings_gear.png"),
   favorites: require("../../assets/glass/nav_favorites.png"),
   reminders: require("../../assets/glass/settings_notifications.png"),
   search: require("../../assets/glass/nav_search.png"),
-  shows: require("../../assets/glass/nav_shows.png"),
+  shows: require("../../assets/glass/nav_series.png"),
   playlists: require("../../assets/glass/nav_platforms.png"),
   account: require("../../assets/glass/settings_account.png"),
 };
@@ -43,7 +44,7 @@ export const PHONE_MORE: { target: PhoneMoreTarget; label: string; art?: number 
   { target: "/favorites", label: "Favorites", art: ART.favorites },
   { target: "/reminders", label: "My Reminders", art: ART.reminders },
   { target: "/search", label: "Search", art: ART.search },
-  { target: "/movies", label: "Movies", art: ART.vod },
+  { target: "/movies", label: "Movies", art: ART.movies },
   { target: "/series", label: "Series", art: ART.shows },
   { target: "playlists", label: "Playlists", art: ART.playlists },
   { target: "/settings", label: "Settings", art: ART.more },
@@ -146,8 +147,11 @@ export function PhoneSideRail({
     ...PHONE_TABS.map((tab) => ({ key: tab.route, label: tab.label, art: tab.art, on: !moreOpen && tab.route === active, press: () => onNavigate(tab.route) })),
     { key: "more", label: "More", art: ART.more, on: moreOpen, press: onMore },
   ];
+  // About 5% of the width (60 to 76 dp), as slim as in the approved sideways design.
+  const { width } = useWindowDimensions();
+  const railW = Math.round(Math.min(76, Math.max(60, width * 0.05)));
   return (
-    <View style={styles.railWrap} testID="purple-phone-rail">
+    <View style={[styles.railWrap, { width: railW }]} testID="purple-phone-rail">
       <GlassFill style={styles.rail}>
         {items.map((item) => (
           <Pressable

@@ -164,7 +164,7 @@ test("native Guide renders selectable no-information cells instead of black rows
   assert.match(view, /var paintedProgramme = false/);
   assert.match(view, /if \(!paintedProgramme\)/);
   assert.match(view, /drawClippedText\(canvas, "No information"/);
-  assert.match(view, /if \(!channelRailSelected && rowIndex == selectedRow\) selected else cell/);
+  assert.match(view, /if \(!channelRailSelected && rowIndex == selectedRow\) selected else noInfoPaint/);
 });
 
 test("native Guide resolves short versus held Select before opening a programme", async () => {

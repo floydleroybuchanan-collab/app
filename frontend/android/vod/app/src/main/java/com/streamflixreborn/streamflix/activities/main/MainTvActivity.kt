@@ -188,7 +188,8 @@ class MainTvActivity : FragmentActivity() {
         val palette = ThemeManager.palette(UserPreferences.selectedTheme)
         window.statusBarColor = palette.systemBar
         window.navigationBarColor = palette.systemBar
-        binding.vodGlassActions.setBackgroundColor(palette.tvNavBackground)
+        // Clear behind the Home / Search / Movies buttons, so the crown background shows instead of a black strip.
+        binding.vodGlassActions.setBackgroundColor(android.graphics.Color.TRANSPARENT)
     }
     
     private fun updateNavigationVisibility() {

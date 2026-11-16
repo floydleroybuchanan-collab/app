@@ -67,7 +67,8 @@ import {
 } from "@/src/core/streamFailureRegistry";
 import { consumeGuideJump, peekGuideJump } from "@/src/core/guideSearchJump";
 import { consumeGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
-import { fonts, glass, glassFocus, spacing, tvColors } from "@/src/theme";
+import { fonts, glass, glassFocus, spacing, tvColors, phoneUi } from "@/src/theme";
+import { GuideTopBar } from "@/src/components/GuideTopBar";
 import { nowNext } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
@@ -1066,6 +1067,16 @@ function PurpleGuideScreenContent() {
     >
       <View style={styles.page}>
         <EpgProgressBar />
+        {/* Phone: the top row of the approved Guide design (back, group, more, search). */}
+        {phoneUi && channels.length > 0 ? (
+          <GuideTopBar
+            label={group}
+            onBack={() => router.replace("/" as any)}
+            onGroups={() => setGroupDrawerOpen(true)}
+            onMore={() => emitTvQuickActions("guide")}
+            onSearch={() => router.replace("/search" as any)}
+          />
+        ) : null}
         {/* Nothing sits above the preview: the playlist panel opens with LEFT from the grid. */}
         {activePlaylist !== "all" && visiblePlaylistChannels.length === 0 && !loading && <View style={styles.center}>
           <Text style={styles.centerText}>This playlist has no saved channels yet. Its initial download may still be running.</Text>

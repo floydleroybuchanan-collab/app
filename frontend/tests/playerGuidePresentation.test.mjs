@@ -25,9 +25,10 @@ test("60% transparent overlay at default setting; preview has fully opaque panel
   assert.match(settings, /1 - clampTransparency\(level\) \* 0\.01/);
   assert.match(settings, /mode === "preview" \? 1 : overlayOpacity\(level\)/);
   assert.match(native, /private var transparencyLevel = 60/);
-  assert.match(native, /if \(overlayMode\) 0 else 255/);
-  assert.match(native, /rowSurface\.alpha = if \(overlayMode\) 0 else 255/);
-  assert.match(native, /setBackgroundColor\(if \(overlayMode\) Color\.TRANSPARENT/);
+  assert.match(native, /header\.alpha = if \(overlayMode\) opacity else 110/);
+  // The Guide is glass in every mode now: the app's crown background shows between the cells.
+  assert.match(native, /rowSurface\.alpha = 0/);
+  assert.match(native, /setBackgroundColor\(Color\.TRANSPARENT\)/);
   assert.match(panel, /backgroundColor: "#1A0B33"/);
 });
 

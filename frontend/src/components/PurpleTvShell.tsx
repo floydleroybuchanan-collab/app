@@ -82,13 +82,13 @@ export type PurpleGuideGroup = {
 
 const NAV: NavItem[] = [
   { route: "/", label: "Live TV", art: require("../../assets/glass/nav_home.png") },
-  { route: "/guide", label: "TV Guide", art: require("../../assets/glass/settings_epg.png") },
-  { route: "/vod", label: "Video OnDemand", art: require("../../assets/glass/nav_movies.png") },
+  { route: "/guide", label: "TV Guide", art: require("../../assets/glass/nav_tv.png") },
+  { route: "/vod", label: "Video OnDemand", art: require("../../assets/glass/nav_vod.png") },
   { route: "/favorites", label: "Favorites", art: require("../../assets/glass/nav_favorites.png") },
   { route: "/reminders", label: "My Reminders", art: require("../../assets/glass/settings_notifications.png") },
   { route: "/channels", label: "Channels", art: require("../../assets/glass/settings_provider.png") },
   { route: "/movies", label: "Movies", art: require("../../assets/glass/vod_set_playback.webp") },
-  { route: "/series", label: "Series", art: require("../../assets/glass/nav_shows.png") },
+  { route: "/series", label: "Series", art: require("../../assets/glass/nav_series.png") },
   { route: "/search", label: "Search", art: require("../../assets/glass/nav_search.png") },
   { route: "/settings", label: "Settings", art: require("../../assets/glass/settings_gear.png") },
 ];
