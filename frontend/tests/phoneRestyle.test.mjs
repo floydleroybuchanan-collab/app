@@ -126,7 +126,7 @@ test("the native Guide has genre-coloured glass cells, colourful channel tiles a
   assert.match(view, /private fun tintFor\(program: NativeEpgProgram\): Paint/);
   assert.match(view, /private val cellRadius = 12f \* density/);
   assert.match(view, /TILE_COLORS\[\(name\.hashCode\(\) and 0x7fffffff\) % TILE_COLORS\.size\]/);
-  assert.match(view, /canvas\.drawText\("Today", pad, headerHeight \* \.66f, headerLabel\)/);
+  assert.match(view, /canvas\.drawText\("Today", pad - slide, headerHeight \* \.66f, headerLabel\)/);
   assert.match(view, /private val elapsedShade/);
 });
 
@@ -190,7 +190,7 @@ test("the phone Guide is a readable list: compact native layout, no live preview
   const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(view, /fun setCompact\(value: Boolean\)/);
   assert.match(view, /visibleWindowMs = if \(!compact\) 3L \* 60L \* 60_000L else if \(h > w\) 90L \* 60_000L else 120L \* 60_000L/);
-  assert.match(view, /if \(!compact\) drawClippedText\(canvas, row\.label/);
+  assert.match(view, /else drawClippedText\(canvas, row\.label/);
   assert.match(read("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"), /name = "compact"/);
 });
 
@@ -254,4 +254,20 @@ test("the phone VOD has Genres, Platforms, platform pages and a platform row on 
     const src = read(`android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/${f}.kt`);
     assert.match(src, /is VodRootMobileFragment\) 0 else 0xFF120A20/, `${f} is see-through on a phone, unchanged on TV`);
   }
+});
+
+test("phone Guide: readable group name, no self-opening drawer, full channel names, channel column scrolls away with the guide", () => {
+  const guide = read("app/(tabs)/guide.tsx");
+  assert.match(guide, /label=\{groupLabel\}/);
+  assert.doesNotMatch(guide, /label=\{group\}/);
+  assert.match(guide, /providerGroupIdentity\(group\)/);
+  assert.match(guide, /if \(phoneUi\) \{ router\.replace\("\/" as any\); return true; \}/);
+  assert.match(guide, /if \(phoneUi\) return;\s*if \(!drawerOpen && !groupDrawerOpen && !activeProgram\) setGroupDrawerOpen\(true\)/);
+  assert.match(guide, /consumeGuideGroupsOnEntry\(\) && !phoneUi/);
+  const native = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  assert.match(native, /private fun channelSlidePx\(\)/);
+  assert.match(native, /if \(!compact\) return 0f|if \(!compact\) 0f/);
+  assert.match(native, /private fun drawChannelName\(/);
+  assert.match(native, /private fun tileLetters\(/);
+  assert.match(native, /if \(value\) 142f else 184f/);
 });

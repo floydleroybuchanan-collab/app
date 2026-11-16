@@ -21,7 +21,7 @@ test("Guide puts the live preview at the very top with nothing above it", () => 
   const guide = read("app/(tabs)/guide.tsx");
   assert.doesNotMatch(guide, /Choose playlists/);
   // The playlist panel is still one LEFT press away from the grid.
-  assert.match(guide, /onGuideLeftBoundary = useCallback\(\(\) => \{\s*if \(!drawerOpen && !groupDrawerOpen && !activeProgram\) setGroupDrawerOpen\(true\)/);
+  assert.match(guide, /onGuideLeftBoundary = useCallback\(\(\) => \{(?:[^}]*?\n)?\s*if \(!drawerOpen && !groupDrawerOpen && !activeProgram\) setGroupDrawerOpen\(true\)/);
   const page = guide.slice(guide.indexOf('<View style={styles.page}>'));
   assert.ok(page.indexOf("<EpgProgressBar />") < page.indexOf("<GuideSelectionPreview"));
 });

@@ -251,7 +251,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   /** Draws the logo on a light tile (dark logos stay readable); returns the space it used. */
   private fun drawRowLogo(canvas: Canvas, rowId: String, name: String, top: Float): Float {
-    val size = min(if (compact) 52f * density else logoBox, rowHeight - 12f * density)
+    val size = min(if (compact) 40f * density else logoBox, rowHeight - 12f * density)
     if (size <= 8f * density) return 0f
     val left = pad
     val boxTop = top + (rowHeight - density - size) / 2f
@@ -261,7 +261,7 @@ class NativeGuideView(context: Context) : View(context) {
       logoRect.set(left, boxTop, left + size, boxTop + size)
       tileFill.color = TILE_COLORS[(name.hashCode() and 0x7fffffff) % TILE_COLORS.size]
       canvas.drawRoundRect(logoRect, 9f * density, 9f * density, tileFill)
-      val initials = name.trim().split(' ').firstOrNull().orEmpty().take(3).uppercase(Locale.ROOT)
+      val initials = tileLetters(name)
       tileText.textSize = size * (if (initials.length > 2) 0.30f else 0.38f)
       canvas.drawText(initials, left + size / 2f, boxTop + size / 2f + tileText.textSize * 0.35f, tileText)
       return size + pad
@@ -280,6 +280,46 @@ class NativeGuideView(context: Context) : View(context) {
     }
     return size + pad
   }
+  /** Letters for a logo-less tile: skips a leading "USA:" / "UK |" style prefix, so channels do not all read "USA". */
+  private fun tileLetters(name: String): String {
+    var text = name.trim()
+    val cut = text.indexOfFirst { it == ':' || it == '|' }
+    if (cut in 1..6 && text.substring(cut + 1).isNotBlank()) text = text.substring(cut + 1).trim()
+    text = text.trimStart('*', '-', ' ')
+    return text.split(' ').firstOrNull().orEmpty().take(3).uppercase(Locale.ROOT)
+  }
+
+  private val nameText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; typeface = android.graphics.Typeface.DEFAULT_BOLD }
+
+  /** The phone's channel name: the whole name on up to two lines beside the tile, never cut to a few letters. */
+  private fun drawChannelName(canvas: Canvas, name: String, x: Float, top: Float, right: Float) {
+    val room = right - x
+    if (room <= 8f * density) return
+    nameText.textSize = 12f * density
+    val mid = top + rowHeight / 2f
+    val whole = nameText.breakText(name, true, room, null)
+    if (whole >= name.length) {
+      canvas.drawText(name, x, mid + nameText.textSize * 0.35f, nameText)
+      return
+    }
+    var cut = name.lastIndexOf(' ', whole)
+    if (cut <= 0) cut = whole
+    val first = name.substring(0, cut).trim()
+    var second = name.substring(cut).trim()
+    val fits = nameText.breakText(second, true, room, null)
+    if (fits < second.length) second = second.substring(0, max(0, fits - 1)).trimEnd() + "…"
+    canvas.drawText(first, x, mid - nameText.textSize * 0.1f, nameText)
+    canvas.drawText(second, x, mid + nameText.textSize * 1.1f, nameText)
+  }
+
+  /** Phone only: how far the channel column has slid out of view as the guide scrolls forward in time. */
+  private fun channelSlidePx(): Float {
+    if (!compact) return 0f
+    val liveBase = max(windowStartMs, System.currentTimeMillis() - 15L * 60_000L)
+    val pxPerMs = max(1f, width.toFloat() - channelWidth) / max(1L, visibleWindowMs).toFloat()
+    return ((viewportStartMs - liveBase).toFloat() * pxPerMs).coerceIn(0f, channelWidth)
+  }
+
   private var timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
   private val tickDate = Date()
   private var use24HourClock = false
@@ -785,7 +825,7 @@ class NativeGuideView(context: Context) : View(context) {
             touchRowCarry -= wholeRows
             scrollRowsByTouch(wholeRows)
           }
-          if (touchDownX > channelWidth) scrollTimeByTouch(touchLastX - event.x)
+          if (touchDownX > channelWidth - channelSlidePx()) scrollTimeByTouch(touchLastX - event.x)
           touchLastX = event.x; touchLastY = event.y
           invalidate()
         }
@@ -837,7 +877,7 @@ class NativeGuideView(context: Context) : View(context) {
     if (row < 0 || row > rows.lastIndex) return
     requestFocus()
     selectedRow = row
-    if (x < channelWidth) {
+    if (x < channelWidth - channelSlidePx()) {
       channelRailSelected = true
     } else {
       channelRailSelected = false
@@ -879,7 +919,7 @@ class NativeGuideView(context: Context) : View(context) {
   fun setCompact(value: Boolean) {
     if (compact == value) return
     compact = value
-    channelWidth = (if (value) 80f else 184f) * density
+    channelWidth = (if (value) 142f else 184f) * density
     headerHeight = (if (value) 40f else 38f) * density
     baseRowHeight = (if (value) 68f else 54f) * density
     title.textSize = (if (value) 14f else 13f) * density
@@ -1004,7 +1044,11 @@ class NativeGuideView(context: Context) : View(context) {
     val visibleRows = fullRowCount()
     val drawnRows = min(visibleRows, (rows.size - firstVisibleRow).coerceAtLeast(0))
     val gridBottom = min(height.toFloat(), headerHeight + drawnRows * rowHeight)
-    drawHeader(canvas, visibleStartMs, visibleEndMs, gridBottom)
+    val slide = channelSlidePx()
+    val guideLeft = channelWidth - slide
+    // The time that now shows in the strip the channel column left behind.
+    val slideMs = if (slide > 0f) (slide / (max(1f, width.toFloat() - channelWidth) / max(1L, visibleEndMs - visibleStartMs).toFloat())).toLong() else 0L
+    drawHeader(canvas, visibleStartMs, visibleEndMs, gridBottom, slide, slideMs)
 
     canvas.save()
     canvas.clipRect(0f, headerHeight, width.toFloat(), gridBottom)
@@ -1017,19 +1061,25 @@ class NativeGuideView(context: Context) : View(context) {
       // Setting a color resets alpha, so the channel column's opacity is applied per row.
       channel.alpha = if (overlayMode && !(rowIndex == selectedRow && channelRailSelected))
         (255f * (1f - 0.01f * channelTransparencyLevel)).toInt().coerceIn(0, 255) else 255
-      paintCell(canvas, density, top + density, channelWidth - density, top + rowHeight - 2f * density, channel, channelChosen)
-      canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
-      val logoSpace = drawRowLogo(canvas, row.id, row.name, top)
-      // The phone column is only the tile (logo or letters); the name is not squeezed beside it.
-      if (!compact) drawClippedText(canvas, row.label, pad + logoSpace, top + rowHeight * .62f, channelWidth - pad, title)
+      canvas.drawRect(guideLeft, top, width.toFloat(), top + rowHeight - density, rowSurface)
+      if (slide < channelWidth) {
+        canvas.save()
+        canvas.translate(-slide, 0f)
+        paintCell(canvas, density, top + density, channelWidth - density, top + rowHeight - 2f * density, channel, channelChosen)
+        val logoSpace = drawRowLogo(canvas, row.id, row.name, top)
+        // Phone: the logo tile with the whole channel name beside it (two lines if needed).
+        if (compact) drawChannelName(canvas, row.name, pad + logoSpace, top, channelWidth - pad)
+        else drawClippedText(canvas, row.label, pad + logoSpace, top + rowHeight * .62f, channelWidth - pad, title)
+        canvas.restore()
+      }
 
       val list = programs[row.id].orEmpty()
       // Every stretch of the row is painted: a hole in the EPG data shows a
       // selectable "No information" cell rather than black space with no focus.
-      var gapStart = visibleStartMs
+      var gapStart = visibleStartMs - slideMs
       var paintedProgramme = false
       fun paintGap(start: Long, end: Long) {
-        val left = max(channelWidth, timeToX(start, visibleStartMs, visibleEndMs)) + density
+        val left = max(guideLeft, timeToX(start, visibleStartMs, visibleEndMs)) + density
         val right = min(width.toFloat(), timeToX(end, visibleStartMs, visibleEndMs)) - density
         if (right <= left) return
         val chosen = !channelRailSelected && rowIndex == selectedRow && selectedTimeMs >= start && selectedTimeMs < end
@@ -1037,10 +1087,10 @@ class NativeGuideView(context: Context) : View(context) {
         drawClippedText(canvas, "No information", left + pad, top + rowHeight * .60f, right - pad, muted)
       }
       for (program in list) {
-        if (program.endMs <= visibleStartMs || program.startMs >= visibleEndMs) continue
+        if (program.endMs <= visibleStartMs - slideMs || program.startMs >= visibleEndMs) continue
         val left = timeToX(program.startMs, visibleStartMs, visibleEndMs)
         val right = timeToX(program.endMs, visibleStartMs, visibleEndMs)
-        val clippedLeft = max(channelWidth, left)
+        val clippedLeft = max(guideLeft, left)
         val clippedRight = min(width.toFloat(), right)
         if (clippedRight <= clippedLeft) continue
         paintedProgramme = true
@@ -1066,7 +1116,7 @@ class NativeGuideView(context: Context) : View(context) {
         // A legitimate unmatched/empty EPG row must never look like a broken
         // black canvas. Keep the row selectable/playable and show a neutral
         // TiviMate-style placeholder without inventing persisted programme data.
-        val left = channelWidth + density
+        val left = guideLeft + density
         val right = width.toFloat() - density
         if (right > left) {
           val fill = if (!channelRailSelected && rowIndex == selectedRow) selected else noInfoPaint.also { it.alpha = cell.alpha }
@@ -1085,9 +1135,9 @@ class NativeGuideView(context: Context) : View(context) {
     }
   }
 
-  private fun drawHeader(canvas: Canvas, start: Long, end: Long, gridBottom: Float) {
-    canvas.drawText("Today", pad, headerHeight * .66f, headerLabel)
-    var tick = ((start / 1_800_000L) + 1) * 1_800_000L
+  private fun drawHeader(canvas: Canvas, start: Long, end: Long, gridBottom: Float, slide: Float = 0f, slideMs: Long = 0L) {
+    if (slide < channelWidth) canvas.drawText("Today", pad - slide, headerHeight * .66f, headerLabel)
+    var tick = (((start - slideMs) / 1_800_000L) + 1) * 1_800_000L
     while (tick < end) {
       val x = timeToX(tick, start, end)
       tickDate.time = tick

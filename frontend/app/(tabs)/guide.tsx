@@ -388,9 +388,11 @@ function PurpleGuideScreenContent() {
         openDrawer({ force: true });
         return true;
       }
+      // A phone has the group button on the top row; Back there just leaves the Guide.
+      if (phoneUi) { router.replace("/" as any); return true; }
       setGroupDrawerOpen(true);
       return true;
-    }, [activeProgram, drawerOpen, groupDrawerOpen, openDrawer]),
+    }, [activeProgram, drawerOpen, groupDrawerOpen, openDrawer, router]),
     !pinPromptGroup,
   );
 
@@ -446,7 +448,7 @@ function PurpleGuideScreenContent() {
 
   useFocusEffect(
     useCallback(() => {
-      if (consumeGuideGroupsOnEntry()) setGroupDrawerOpen(true);
+      if (consumeGuideGroupsOnEntry() && !phoneUi) setGroupDrawerOpen(true);
     }, []),
   );
 
@@ -956,6 +958,8 @@ function PurpleGuideScreenContent() {
   );
 
   const onGuideLeftBoundary = useCallback(() => {
+    // Swiping the grid to its left edge on a phone must not throw the drawer open.
+    if (phoneUi) return;
     if (!drawerOpen && !groupDrawerOpen && !activeProgram) setGroupDrawerOpen(true);
   }, [activeProgram, drawerOpen, groupDrawerOpen]);
 
@@ -1029,6 +1033,16 @@ function PurpleGuideScreenContent() {
     });
   }, []);
 
+  /** The group's real name for the phone's top button, never the internal "@playlist-group:UK%20STORE" key. */
+  const groupLabel = useMemo(() => {
+    const sections = playlistMenu.filter((section) => section.id === activePlaylist).concat(playlistMenu);
+    for (const section of sections) {
+      const found = section.groups.find((item) => item.key === group);
+      if (found) return found.label;
+    }
+    return providerGroupIdentity(group);
+  }, [activePlaylist, group, playlistMenu]);
+
   const playlistDrawerRows = useMemo<PurpleGuideGroup[]>(() => playlistMenu.flatMap((section) => {
     const expanded = expandedPlaylists.has(section.id);
     const rows: PurpleGuideGroup[] = [{
@@ -1084,7 +1098,7 @@ function PurpleGuideScreenContent() {
         {/* Phone: the top row of the approved Guide design (back, group, more, search). */}
         {phoneUi && channels.length > 0 ? (
           <GuideTopBar
-            label={group}
+            label={groupLabel}
             onBack={() => router.replace("/" as any)}
             onGroups={() => setGroupDrawerOpen(true)}
             onMore={() => emitTvQuickActions("guide")}

@@ -39,5 +39,5 @@ test("native Guide rolls live time indefinitely while channel rail stays fixed",
   assert.match(native, /return channelWidth \+/);
   // The channel column is painted at a fixed x (rounded glass cell), never time-shifted.
   assert.match(native, /paintCell\(canvas, density, top \+ density, channelWidth - density/);
-  assert.match(native, /canvas\.drawRect\(channelWidth, top, width\.toFloat\(\)/);
+  assert.match(native, /canvas\.drawRect\(guideLeft, top, width\.toFloat\(\)/);
 });
