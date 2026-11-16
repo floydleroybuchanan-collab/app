@@ -237,3 +237,21 @@ test("a touch phone gets the mobile VOD screens in the same embedded surface; th
   assert.match(tv, /nav_main_graph_tv/);
   assert.doesNotMatch(tv, /nav_main_graph_mobile/);
 });
+
+test("the phone VOD has Genres, Platforms, platform pages and a platform row on Home, with the crown showing through", () => {
+  const graph = read("android/vod/app/src/main/res/navigation/nav_main_graph_mobile.xml");
+  for (const id of ["genre_hub", "platforms", "platform_titles"]) assert.ok(graph.includes(`android:id="@+id/${id}"`), id);
+  assert.match(graph, /charm\.VodGenresHubFragment/);
+  assert.match(graph, /charm\.VodPlatformsFragment/);
+  const phone = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
+  for (const label of ["Genres", "Platforms"]) assert.ok(phone.includes(`"${label}"`), label);
+  assert.match(phone, /section == "genres" -> R\.id\.genre_hub/);
+  assert.match(phone, /section == "platforms" -> R\.id\.platforms/);
+  const home = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/home/HomeMobileFragment.kt");
+  assert.match(home, /parentFragment\?\.parentFragment is com\.streamflixreborn\.streamflix\.charm\.VodRootMobileFragment/);
+  assert.match(home, /VodPhoneHomeStrip\.attach/);
+  for (const f of ["VodPlatformsFragment", "VodGenresHubFragment"]) {
+    const src = read(`android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/${f}.kt`);
+    assert.match(src, /is VodRootMobileFragment\) 0 else 0xFF120A20/, `${f} is see-through on a phone, unchanged on TV`);
+  }
+});

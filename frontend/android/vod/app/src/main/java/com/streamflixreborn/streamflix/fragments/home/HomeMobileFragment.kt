@@ -150,6 +150,14 @@ class HomeMobileFragment : Fragment() {
         
         // Ensure background image is hidden on mobile to show theme color
         binding.ivHomeBackground.visibility = View.GONE
+
+        // Inside the phone VOD host: platform buttons above the shelves.
+        if (parentFragment?.parentFragment is com.streamflixreborn.streamflix.charm.VodRootMobileFragment) {
+            com.streamflixreborn.streamflix.charm.VodPhoneHomeStrip.attach(
+                binding.root as androidx.constraintlayout.widget.ConstraintLayout,
+                binding.rvHome, binding.ivProviderLogo, findNavController(),
+            )
+        }
     }
 
     private fun displayHome(categories: List<Category>) {

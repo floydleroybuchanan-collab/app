@@ -65,7 +65,8 @@ class VodRootMobileFragment : Fragment() {
         }
 
         private val TOP_LEVEL = setOf(
-            R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.search, R.id.settings,
+            R.id.home, R.id.movies, R.id.tv_shows, R.id.favorites, R.id.genre_hub, R.id.platforms,
+            R.id.search, R.id.settings,
         )
     }
 
@@ -138,7 +139,8 @@ class VodRootMobileFragment : Fragment() {
         }
         val items = listOf(
             R.id.home to "Home", R.id.movies to "Movies", R.id.tv_shows to "TV Shows",
-            R.id.favorites to "My List", R.id.search to "Search", R.id.settings to "Settings",
+            R.id.favorites to "My List", R.id.genre_hub to "Genres", R.id.platforms to "Platforms",
+            R.id.search to "Search", R.id.settings to "Settings",
         )
         items.forEach { (id, label) ->
             val pill = TextView(requireContext()).apply {
@@ -188,6 +190,8 @@ class VodRootMobileFragment : Fragment() {
         R.id.movies -> "movies"
         R.id.tv_shows -> "shows"
         R.id.favorites -> "favorites"
+        R.id.genre_hub -> "genres"
+        R.id.platforms -> "platforms"
         R.id.search -> "search"
         R.id.settings -> "settings"
         else -> "home"
@@ -217,6 +221,8 @@ class VodRootMobileFragment : Fragment() {
             section == "movies" -> R.id.movies
             section == "shows" -> R.id.tv_shows
             section == "favorites" -> R.id.favorites
+            section == "genres" -> R.id.genre_hub
+            section == "platforms" -> R.id.platforms
             section.startsWith("settings") -> R.id.settings
             else -> R.id.home
         }

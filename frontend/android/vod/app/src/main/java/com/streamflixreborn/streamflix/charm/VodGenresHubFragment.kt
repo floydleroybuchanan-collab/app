@@ -70,7 +70,7 @@ class VodGenresHubFragment : Fragment() {
             clipToPadding = false
         }
         val root = VodPageScrollView(requireContext()).apply {
-            setBackgroundColor(0xFF120A20.toInt())
+            setBackgroundColor(if (parentFragment?.parentFragment is VodRootMobileFragment) 0 else 0xFF120A20.toInt()) // phone: the crown shows through
             isFocusable = false
             clipChildren = true
             addView(column)

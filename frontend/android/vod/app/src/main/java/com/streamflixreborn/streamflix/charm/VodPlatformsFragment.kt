@@ -67,7 +67,7 @@ class VodPlatformsFragment : Fragment() {
         val root = VodPageScrollView(context).apply {
             isFillViewport = true
             isFocusable = false
-            setBackgroundColor(0xFF120A20.toInt())
+            setBackgroundColor(if (parentFragment?.parentFragment is VodRootMobileFragment) 0 else 0xFF120A20.toInt()) // phone: the crown shows through
             // Rows and focused posters stay inside the page, under the top bar.
             clipChildren = true
             clipToPadding = true
