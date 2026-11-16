@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   time: { width: 104, color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(7.5), textAlign: "right" },
   heart: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
   empty: { alignSelf: "center", marginTop: "auto", marginBottom: "auto", width: 380, maxWidth: "100%", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 26, borderRadius: 18, borderWidth: 1, borderColor: glass.edge, backgroundColor: glass.panelStrong },
-  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,58,237,0.85)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", shadowColor: glass.glow, elevation: 12 },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,58,237,0.85)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", shadowColor: glass.glow, elevation: 0 },
   emptyTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(14) },
   emptyText: { color: "#D9C8F5", fontFamily: fonts.regular, fontSize: ph(9), textAlign: "center" },
   guideButton: { minHeight: ph(32), justifyContent: "center", paddingHorizontal: 16, borderRadius: 12, backgroundColor: "rgba(140,70,240,0.80)", borderWidth: 2, borderColor: glass.selectedEdge, marginTop: 4 },

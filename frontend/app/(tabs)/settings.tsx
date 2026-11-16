@@ -644,7 +644,7 @@ function SettingsScreenContent() {
                   onFocus={index === 0 ? tileEntryFocus.onFocus : undefined}
                   onBlur={index === 0 ? tileEntryFocus.onBlur : undefined}
                   onPress={() => choose(tile.id)}
-                  style={({ focused }: any) => [styles.tile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 14 }]}
+                  style={({ focused }: any) => [styles.tile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 0 }]}
                   testID={`settings-tile-${tile.id}`}
                 >
                   <Image source={TILE_ART[tile.id]} style={styles.tileArt} resizeMode="contain" />
@@ -673,7 +673,7 @@ function SettingsScreenContent() {
                     key={item.key}
                     nextFocusLeft={index % 4 === 0 ? iconRailEntryTag : undefined}
                     onPress={() => router.push(`/vod?section=settings&pane=${item.key}` as any)}
-                    style={({ focused }: any) => [styles.tile, styles.vodTile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 14 }]}
+                    style={({ focused }: any) => [styles.tile, styles.vodTile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 0 }]}
                     testID={`settings-vod-${item.key}`}
                   >
                     <Image source={item.art} style={styles.tileArt} resizeMode="contain" fadeDuration={0} />
@@ -1445,13 +1445,13 @@ const styles = StyleSheet.create({
   settingRow: { minHeight: ph(42), flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 5, borderWidth: 2, borderColor: "transparent", paddingHorizontal: 8 },
   settingLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(9.5) },
   toggle: { width: 34, height: 19, padding: 2, backgroundColor: "rgba(255,255,255,0.13)", borderColor: "rgba(226,190,255,0.5)", borderWidth: 1, borderRadius: 11 },
-  toggleOn: { backgroundColor: "rgba(205,70,255,0.72)", borderColor: "#F4B8FF", borderWidth: 1, shadowColor: "#E04DFF", elevation: 12 },
+  toggleOn: { backgroundColor: "rgba(205,70,255,0.72)", borderColor: "#F4B8FF", borderWidth: 1, shadowColor: "#E04DFF", elevation: 0 },
   knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.70)", borderColor: "rgba(255,255,255,0.9)", borderWidth: 1 },
-  knobOn: { alignSelf: "flex-end", backgroundColor: "#FFFFFF", borderColor: "#39E6FF", borderWidth: 1, shadowColor: "#39E6FF", elevation: 10 },
+  knobOn: { alignSelf: "flex-end", backgroundColor: "#FFFFFF", borderColor: "#39E6FF", borderWidth: 1, shadowColor: "#39E6FF", elevation: 0 },
   choiceBlock: { gap: 7, paddingVertical: 4 },
   choices: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
   choice: { minHeight: ph(29), justifyContent: "center", paddingHorizontal: 10, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
-  choiceActive: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
+  choiceActive: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 0 },
   choiceText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: ph(8) },
   choiceTextActive: { color: "#fff" },
   action: { alignSelf: "flex-start", minHeight: ph(32), flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
@@ -1488,7 +1488,7 @@ const styles = StyleSheet.create({
   channelEditActions: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 8, paddingBottom: 4 },
   miniAction: { minHeight: ph(28), paddingHorizontal: 10, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   miniActionText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(8) },
-  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 0 },
 });
 
 export default function SettingsScreen() {

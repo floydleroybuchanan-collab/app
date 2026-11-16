@@ -222,7 +222,7 @@ export function EpgChannelAssignDrawer({
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 1000 },
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, elevation: 0 },
   backdrop: { flex: 1, backgroundColor: "rgba(6,2,16,0.55)", alignItems: "center", justifyContent: "center", padding: 24 },
   // see-through glass card with a soft light edge
   card: { width: "100%", maxWidth: 560, maxHeight: "88%", backgroundColor: "rgba(36,14,72,0.42)", borderRadius: 20, borderWidth: 1, borderColor: glass.edge, overflow: "hidden" },

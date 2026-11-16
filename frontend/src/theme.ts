@@ -124,7 +124,7 @@ export const glassFocus = {
   borderColor: glass.focusEdge,
   borderWidth: 2,
   shadowColor: glass.glow,
-  elevation: 14,
+  elevation: 0,
 } as const;
 
 export const fonts = {

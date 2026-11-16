@@ -418,11 +418,11 @@ const styles = StyleSheet.create({
   sourceStatus: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(7.5), maxWidth: 150, textAlign: "right" },
   settingRow: { minHeight: ph(38), flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 9, borderWidth: 2, borderColor: "transparent", borderRadius: 5, backgroundColor: tvColors.panel },
   settingLabel: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(8.5) },
-  toggle: { width: 34, height: 19, padding: 2, backgroundColor: "rgba(255,255,255,0.13)", borderColor: "rgba(226,190,255,0.5)", borderWidth: 1, borderRadius: 11 }, toggleOn: { backgroundColor: "rgba(205,70,255,0.72)", borderColor: "#F4B8FF", borderWidth: 1, shadowColor: "#E04DFF", elevation: 12 },
-  knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.70)", borderColor: "rgba(255,255,255,0.9)", borderWidth: 1 }, knobOn: { alignSelf: "flex-end", backgroundColor: "#FFFFFF", borderColor: "#39E6FF", borderWidth: 1, shadowColor: "#39E6FF", elevation: 10 },
+  toggle: { width: 34, height: 19, padding: 2, backgroundColor: "rgba(255,255,255,0.13)", borderColor: "rgba(226,190,255,0.5)", borderWidth: 1, borderRadius: 11 }, toggleOn: { backgroundColor: "rgba(205,70,255,0.72)", borderColor: "#F4B8FF", borderWidth: 1, shadowColor: "#E04DFF", elevation: 0 },
+  knob: { width: 15, height: 15, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.70)", borderColor: "rgba(255,255,255,0.9)", borderWidth: 1 }, knobOn: { alignSelf: "flex-end", backgroundColor: "#FFFFFF", borderColor: "#39E6FF", borderWidth: 1, shadowColor: "#39E6FF", elevation: 0 },
   choiceBlock: { gap: 5 }, choices: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   choice: { minHeight: ph(30), justifyContent: "center", paddingHorizontal: 10, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
-  choiceActive: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 14 },
+  choiceActive: { backgroundColor: "rgba(205,70,255,0.46)", borderColor: "#F09BFF", borderWidth: 2, shadowColor: "#E04DFF", elevation: 0 },
   choiceText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: ph(8) }, choiceTextActive: { color: "#fff" },
   help: { color: tvColors.textMuted, fontFamily: fonts.regular, fontSize: ph(7.5), lineHeight: 11 },
   action: { minHeight: ph(34), flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 12, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   error: { color: "#FCA5A5", fontFamily: fonts.regular, fontSize: ph(7.5), marginTop: 4 },
   actionStatus: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(8.5), textAlign: "center" },
   playlistHealth: { gap: 3, padding: 8, backgroundColor: glass.panel, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
-  disabled: { opacity: 0.55 }, focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 },
+  disabled: { opacity: 0.55 }, focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 0 },
 });
 
 export default function EpgSourcesScreen() {

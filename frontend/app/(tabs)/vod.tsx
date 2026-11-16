@@ -139,6 +139,6 @@ const styles = StyleSheet.create({
   errorBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, padding: 30 },
   message: { color: "#FFE7F5", fontSize: 17, textAlign: "center" },
   button: { backgroundColor: "rgba(150,90,235,0.30)", borderWidth: 1, borderColor: "rgba(226,190,255,0.5)", paddingVertical: 14, paddingHorizontal: 22, borderRadius: 13 },
-  buttonFocused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#fff", borderWidth: 2, shadowColor: "#D14DFF", elevation: 16 },
+  buttonFocused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#fff", borderWidth: 2, shadowColor: "#D14DFF", elevation: 0 },
   buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
 });

@@ -21,5 +21,5 @@ export const TvSettingsTextInput = forwardRef<TextInput, TextInputProps>(functio
 
 const styles = StyleSheet.create({
   field: { color: "#fff", fontFamily: fonts.medium, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
-  focused: { backgroundColor: glass.focus, borderColor: glass.focusEdge, borderWidth: 2, shadowColor: glass.glow, elevation: 14 },
+  focused: { backgroundColor: glass.focus, borderColor: glass.focusEdge, borderWidth: 2, shadowColor: glass.glow, elevation: 0 },
 });

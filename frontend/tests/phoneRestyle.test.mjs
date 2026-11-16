@@ -146,3 +146,16 @@ test("the Guide has the approved top row on a phone: back, group, more and a sea
   assert.match(guide, /\{phoneUi && channels\.length > 0 \? \(\s*<GuideTopBar/);
   assert.match(guide, /onGroups=\{\(\) => setGroupDrawerOpen\(true\)\}/);
 });
+
+test("pages no longer paint their own backdrop over the crown, and the TV icon rail is violet glass, not near-black", () => {
+  assert.match(read("src/components/GlassBackdrop.tsx"), /return null;/);
+  const shell = read("src/components/PurpleTvShell.tsx");
+  assert.match(shell, /backgroundColor: "#2A1462",\s*borderWidth: 2,/);
+  assert.match(shell, /railPlaceholder: \{ width: PURPLE_ICON_RAIL_WIDTH \+ 6/);
+});
+
+test("see-through glass has no elevation: Android draws it as a purple box behind the icon and label", () => {
+  assert.doesNotMatch(read("src/components/PhoneChrome.tsx"), /elevation: [1-9]/);
+  assert.match(read("src/theme.ts"), /elevation: 0,\s*\} as const/);
+  assert.doesNotMatch(read("app/(tabs)/settings.tsx"), /elevation: [1-9]/);
+});

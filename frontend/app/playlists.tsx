@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   card: { padding: 11, gap: 7, backgroundColor: glass.panel, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 }, row: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   priorityRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7, paddingVertical: 3 }, priorityLabel: { minWidth: 180, flex: 1, color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(8.5) },
   button: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: ph(34), justifyContent: "center", paddingHorizontal: 12, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
-  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 20 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(8.5) },
+  focused: { backgroundColor: "rgba(178,70,255,0.62)", borderColor: "#FFFFFF", borderWidth: 2, shadowColor: "#39E6FF", elevation: 0 }, disabled: { opacity: 0.45 }, buttonText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(8.5) },
   input: { minHeight: ph(40), color: "#fff", fontFamily: fonts.regular, fontSize: ph(10.5), paddingHorizontal: 10, backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   message: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(9), lineHeight: 13 },
   agentBox: { padding: 10, gap: 8, backgroundColor: glass.panelStrong, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
