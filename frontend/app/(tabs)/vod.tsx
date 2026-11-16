@@ -3,9 +3,10 @@ import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleS
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
+import { phoneUi } from "@/src/theme";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 
-const NativeVod = requireNativeComponent<{ style?: any; startSection?: string }>("CharmVodSurface");
+const NativeVod = requireNativeComponent<{ style?: any; startSection?: string; phone?: boolean }>("CharmVodSurface");
 
 /** Native start section: Home, a Settings pane, or a title page from Live TV. */
 function startSectionFor(section?: string, pane?: string): string {
@@ -111,6 +112,7 @@ export default function VideoOnDemandScreen() {
             key={attempt}
             style={styles.surface}
             startSection={startSectionFor(section, pane)}
+            phone={phoneUi}
           />
         ) : (
           <View style={styles.errorBox}>

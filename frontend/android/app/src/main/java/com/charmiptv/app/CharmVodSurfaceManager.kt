@@ -15,6 +15,7 @@ import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
 import com.streamflixreborn.streamflix.charm.VodRootFragment
+import com.streamflixreborn.streamflix.charm.VodRootMobileFragment
 
 /**
  * A React Native native-view surface, not a second Activity.
@@ -55,6 +56,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         }
         private var activity: MainActivity? = null
         private var fragment: VodRootFragment? = null
+        private var phoneFragment: VodRootMobileFragment? = null
+        /** Touch phones get the mobile VOD screens; TVs keep the original host. */
+        var phone: Boolean = false
         private var manager: FragmentManager? = null
         private var mountStartedAt = 0L
         private var mountRetryCount = 0
@@ -65,6 +69,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             set(value) {
                 field = value
                 fragment?.navigateTo(value)
+                phoneFragment?.navigateTo(value)
             }
 
         init {
@@ -148,7 +153,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         }
 
         private fun retryHost(reason: String) {
-            if (!isAttachedToWindow || mountFailureSent || fragment != null) return
+            if (!isAttachedToWindow || mountFailureSent || fragment != null || phoneFragment != null) return
             mountRetryCount += 1
             if (mountRetryCount <= 50) {
                 if (mountRetryCount == 1 || mountRetryCount % 10 == 0) {
@@ -165,7 +170,7 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         }
 
         private fun mountIfReady() {
-            if (!isAttachedToWindow || fragment != null || mountFailureSent) return
+            if (!isAttachedToWindow || fragment != null || phoneFragment != null || mountFailureSent) return
             val host = (context as? ThemedReactContext)?.currentActivity as? MainActivity
             if (host == null) {
                 retryHost("Activity not yet available")
@@ -187,6 +192,10 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             }
             if (host.findViewById<View>(container.id) !== container) {
                 retryHost("VOD container id is not unique yet")
+                return
+            }
+            if (phone) {
+                mountPhone(host, fm)
                 return
             }
             val screen = VodRootFragment.create(startSection)
@@ -247,11 +256,60 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
             }
         }
 
+        /** Phone path: same wiring as the TV host, with the touch-phone VOD fragment. */
+        private fun mountPhone(host: MainActivity, fm: FragmentManager) {
+            val screen = VodRootMobileFragment.create(startSection)
+            screen.onHostBack = { emit("CharmVodRootBack", "") }
+            screen.onHostIconRail = { false }
+            screen.onNeedsLayout = { forceLayoutPass() }
+            screen.onHostGuide = {
+                host.setVodImmersive(false)
+                emit("CharmVodImmersiveChanged", "false")
+                emit("CharmVodOpenGuide", "")
+            }
+            screen.onImmersiveChanged = { playing ->
+                host.setVodImmersive(playing)
+                emit("CharmVodImmersiveChanged", if (playing) "true" else "false")
+            }
+            screen.onRootError = { message ->
+                if (phoneFragment === screen && isAttachedToWindow) {
+                    showFailure(message)
+                    emit("CharmVodMountError", message)
+                }
+            }
+            screen.onRootReady = {
+                if (phoneFragment === screen && isAttachedToWindow) {
+                    emit("CharmVodRootReady", (SystemClock.elapsedRealtime() - mountStartedAt).toString())
+                }
+            }
+            activity = host
+            manager = fm
+            phoneFragment = screen
+            host.attachVodInput(this, screen::onRemoteKey, screen::navigateBack)
+            try {
+                fm.beginTransaction().replace(container.id, screen, "charm_unified_vod_" + container.id)
+                    .commitNowAllowingStateLoss()
+            } catch (e: RuntimeException) {
+                Log.e(TAG, "Embedded phone VOD failed to inflate/mount", e)
+                host.detachVodInput(this)
+                activity = null
+                phoneFragment = null
+                manager = null
+                runCatching {
+                    if (screen.isAdded) fm.beginTransaction().remove(screen).commitNowAllowingStateLoss()
+                }
+                val message = failureSummary(e)
+                showFailure(message)
+                emit("CharmVodMountError", message)
+            }
+        }
+
         fun restoreNativeFocus(): Boolean =
             isAttachedToWindow && fragment?.restoreFocusFromRail() == true
 
         /** True while this surface shows the VOD player page. */
-        fun playerShown(): Boolean = isAttachedToWindow && isShown && fragment?.isPlayerShown() == true
+        fun playerShown(): Boolean = isAttachedToWindow && isShown &&
+            (fragment?.isPlayerShown() == true || phoneFragment?.isPlayerShown() == true)
 
         fun dispose() {
             activity?.detachVodInput(this)
@@ -264,9 +322,19 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
                 onRootReady = null
                 onRootError = null
             }
-            val old = fragment
+            phoneFragment?.apply {
+                onHostBack = null
+                onHostIconRail = null
+                onImmersiveChanged = null
+                onNeedsLayout = null
+                onHostGuide = null
+                onRootReady = null
+                onRootError = null
+            }
+            val old: androidx.fragment.app.Fragment? = fragment ?: phoneFragment
             val fm = manager
             fragment = null
+            phoneFragment = null
             manager = null
             activity = null
             if (old != null && fm != null && !fm.isDestroyed) {
@@ -287,6 +355,11 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
     @ReactProp(name = "startSection")
     fun setStartSection(view: Surface, section: String?) {
         view.startSection = section ?: "home"
+    }
+
+    @ReactProp(name = "phone")
+    fun setPhone(view: Surface, phone: Boolean) {
+        view.phone = phone
     }
 
     override fun onDropViewInstance(view: Surface) {

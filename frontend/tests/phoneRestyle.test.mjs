@@ -203,3 +203,37 @@ test("the player's Quick Actions reach it on a phone (Aspect ratio used to do no
   assert.match(vod, /UserPreferences\.PlayerResize\.Fit -> UserPreferences\.PlayerResize\.Fill/);
   assert.match(vod, /UserPreferences\.PlayerResize\.Fill -> UserPreferences\.PlayerResize\.Zoom/);
 });
+
+test("every command the Quick Actions drawer sends to the player has a handler in the player, on any device", () => {
+  const remote = read("src/utils/tvRemote.ts");
+  const typeLine = remote.match(/export type PlayerQuickCommand = ([^;]+);/)?.[1] || "";
+  const commands = [...typeLine.matchAll(/"([A-Z_]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(commands.sort(), ["CYCLE_ASPECT", "OPEN_TRACKS", "PREVIOUS_CHANNEL", "SAVE_DIAGNOSTICS"]);
+  const player = read("app/player.tsx");
+  const overlay = read("src/components/TvQuickActionsOverlay.tsx");
+  for (const command of commands) {
+    assert.ok(overlay.includes(`runPlayerCommand("${command}")`), `${command} is sent by the drawer`);
+    assert.ok(player.includes(`command === "${command}"`), `${command} is handled by the player`);
+  }
+  // The handler must not be limited to a TV.
+  assert.doesNotMatch(player, /if \(!isTV\) return;\s*\/\/ Quick Actions/);
+});
+
+test("a touch phone gets the mobile VOD screens in the same embedded surface; the TV host is left alone", () => {
+  const vodTab = read("app/(tabs)/vod.tsx");
+  assert.match(vodTab, /phone\?: boolean/);
+  assert.match(vodTab, /phone=\{phoneUi\}/);
+  const surface = read("android/app/src/main/java/com/charmiptv/app/CharmVodSurfaceManager.kt");
+  assert.match(surface, /@ReactProp\(name = "phone"\)/);
+  assert.match(surface, /if \(phone\) \{\s*mountPhone\(host, fm\)/);
+  assert.match(surface, /VodRootFragment\.create\(startSection\)/);
+  const phone = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
+  assert.match(phone, /nav_main_graph_mobile/);
+  assert.match(phone, /CrownBackdrop\(requireContext\(\)\)/);
+  assert.match(phone, /popUpTo\(R\.id\.providers\)/);
+  assert.match(phone, /bnvMain\.visibility = View\.GONE/);
+  for (const section of ["Home", "Movies", "TV Shows", "My List", "Search", "Settings"]) assert.ok(phone.includes(`"${section}"`), section);
+  const tv = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt");
+  assert.match(tv, /nav_main_graph_tv/);
+  assert.doesNotMatch(tv, /nav_main_graph_mobile/);
+});
