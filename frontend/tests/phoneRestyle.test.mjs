@@ -46,10 +46,11 @@ test("secondary pages use the shared glass tokens, so a phone gets the phone loo
   assert.match(read("app/playlists.tsx"), /minHeight: ph\(34\)/);
 });
 
-test("settings are one big glass window (18% see-through) on a phone", () => {
+test("settings have no solid window behind the buttons, so the crown shows through", () => {
   const settings = read("app/(tabs)/settings.tsx");
-  assert.match(settings, /tileGridWrap: \{[^}]*\.\.\.\(phoneUi \? \{ backgroundColor: "rgba\(98,52,170,0\.82\)"/);
-  assert.match(settings, /detailsWrap: \{ flex: 1, \.\.\.\(phoneUi \? \{ backgroundColor: "rgba\(98,52,170,0\.82\)"/);
+  assert.match(settings, /tileGridWrap: \{ flex: 1, minHeight: 0, overflow: "hidden" \},/);
+  assert.match(settings, /detailsWrap: \{ flex: 1 \},/);
+  assert.doesNotMatch(settings, /rgba\(98,52,170,0\.82\)/);
 });
 
 test("native VOD player glass icons are phone-only: touch devices get the glass play/pause, the TV keeps its own", () => {
@@ -158,4 +159,15 @@ test("see-through glass has no elevation: Android draws it as a purple box behin
   assert.doesNotMatch(read("src/components/PhoneChrome.tsx"), /elevation: [1-9]/);
   assert.match(read("src/theme.ts"), /elevation: 0,\s*\} as const/);
   assert.doesNotMatch(read("app/(tabs)/settings.tsx"), /elevation: [1-9]/);
+});
+
+test("BACK from a stream keeps the chosen Guide group: no reset while the lists load, no switch to an unknown playlist", () => {
+  const guide = read("app/(tabs)/guide.tsx");
+  assert.match(guide, /const \[groupsSettled, setGroupsSettled\] = useState\(false\)/);
+  assert.match(guide, /if \(!groupsSettled\) return;\s*if \(!groups\.includes\(group\)/);
+  assert.match(guide, /playlistsRef\.current\.some\(\(item\) => item\.id === jumpOwner && item\.enabled\)\) selectPlaylist\(jumpOwner\)/);
+});
+
+test("the Settings buttons are 50% see-through on phone and TV", () => {
+  assert.match(read("app/(tabs)/settings.tsx"), /tile: \{[^}]*backgroundColor: "rgba\(130,72,212,0\.50\)"/);
 });

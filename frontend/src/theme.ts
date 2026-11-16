@@ -82,7 +82,7 @@ const phoneGlassTokens: typeof tvGlass = {
   page: "transparent",
   rail: "#1A0B33",
   drawer: "#2A1360",
-  panel: "rgba(130,72,212,0.30)",
+  panel: "rgba(130,72,212,0.50)",
   panelStrong: "rgba(130,72,212,0.38)",
   edge: "rgba(235,205,255,0.55)",
   edgeSoft: "rgba(235,205,255,0.32)",

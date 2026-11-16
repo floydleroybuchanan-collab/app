@@ -1,4 +1,3 @@
-import React from "react";
 
 /**
  * Kept so every page that mounts it still compiles. The app background (violet sky and the crown) is drawn once,

@@ -201,6 +201,8 @@ function GuideSelectionPreview({
 
 function PurpleGuideScreenContent() {
   const playlists = usePlaylists();
+  const playlistsRef = useRef(playlists);
+  playlistsRef.current = playlists;
   const selectedPlaylist = useSelectedPlaylist();
   const [expandedPlaylists, setExpandedPlaylists] = useState(() => new Set([selectedPlaylist]));
   const activePlaylist = playlists.some((item) => item.id === selectedPlaylist && item.enabled) ? selectedPlaylist : "all";
@@ -689,7 +691,16 @@ function PurpleGuideScreenContent() {
     screenWidth,
   ]);
 
+  // After BACK from a stream the Guide mounts again while the playlist menu and the custom groups are still
+  // loading, so for a moment the remembered group is "missing". Resetting to All right then threw the viewer's
+  // group away. Only reset a group that is still missing once those lists have had time to load.
+  const [groupsSettled, setGroupsSettled] = useState(false);
   useEffect(() => {
+    const timer = setTimeout(() => setGroupsSettled(true), 2500);
+    return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (!groupsSettled) return;
     if (!groups.includes(group) && !overflowGroups.includes(group)) {
       quiesceGuideForTransition(true);
       guideSessionGroup = "All";
@@ -697,7 +708,7 @@ function PurpleGuideScreenContent() {
       setGroup("All");
       setResetToken((value) => value + 1);
     }
-  }, [group, groups, overflowGroups, quiesceGuideForTransition]);
+  }, [group, groups, groupsSettled, overflowGroups, quiesceGuideForTransition]);
 
   const channelNumberById = useMemo(() => {
     const result: Record<string, number> = {};
@@ -966,7 +977,10 @@ function PurpleGuideScreenContent() {
       setPreviewActionsFocused(false);
       setQuickActionsOpen(false);
       consumeGuideGroupsOnEntry();
-      selectPlaylist(playlistOwner({ id: jump.channelId }));
+      // Switch playlists only to a real, enabled playlist: an unknown owner would make the Guide fall back to
+      // "all" playlists and lose the group the viewer picked.
+      const jumpOwner = playlistOwner({ id: jump.channelId });
+      if (playlistsRef.current.some((item) => item.id === jumpOwner && item.enabled)) selectPlaylist(jumpOwner);
       startPreferenceAppliedRef.current = true;
       const nextGroup = jump.group || guideSessionGroup || "All";
       if (hasPin && isGroupLocked(providerGroupIdentity(nextGroup))) {

@@ -1430,11 +1430,11 @@ const styles = StyleSheet.create({
   heroCopy: { flex: 1, minWidth: 0, gap: 3 },
   heroTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: ph(19) },
   heroAbout: { color: "#E0D2EE", fontFamily: fonts.regular, fontSize: ph(10.5) },
-  // Phone: one big glass window (about 18% see-through, as approved) around the tiles and every settings section.
-  tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden", ...(phoneUi ? { backgroundColor: "rgba(98,52,170,0.82)", borderColor: glass.edge, borderWidth: 2, borderRadius: 30, marginTop: 6 } : null) },
+  // No window behind the tiles: the crown background shows through the glass buttons.
+  tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden" },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 9, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
-  detailsWrap: { flex: 1, ...(phoneUi ? { backgroundColor: "rgba(98,52,170,0.82)", borderColor: glass.edge, borderWidth: 2, borderRadius: 30, marginTop: 6, overflow: "hidden" } : null) },
-  tile: { width: phoneUi ? "31.5%" : "23.8%", minHeight: phoneUi ? 128 : 118, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: phoneUi ? glass.button : glass.panel, borderColor: phoneUi ? glass.buttonEdge : glass.edge, borderWidth: phoneUi ? 2 : 1, borderRadius: phoneUi ? 20 : 16 },
+  detailsWrap: { flex: 1 },
+  tile: { width: phoneUi ? "31.5%" : "23.8%", minHeight: phoneUi ? 128 : 118, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "rgba(130,72,212,0.50)", borderColor: phoneUi ? glass.buttonEdge : glass.edge, borderWidth: phoneUi ? 2 : 1, borderRadius: phoneUi ? 20 : 16 },
   tileIcon: { width: 48, height: 48, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   tileText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(9.5), textAlign: "center" },
   details: { paddingTop: 10, paddingHorizontal: 24, paddingBottom: 24 },
