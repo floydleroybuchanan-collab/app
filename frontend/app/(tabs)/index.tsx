@@ -13,7 +13,8 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore } from "@/src/store";
 import { Channel } from "@/src/api";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph, phoneUi } from "@/src/theme";
+import { ChannelCard } from "@/src/components/PhoneLiveHub";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
@@ -116,6 +117,7 @@ function LiveTvHomeScreenContent() {
     channelNumbers,
     hardRefresh,
     patchProgramsForChannelIds,
+    retainGuideSlidingCache,
     loading,
     refreshing,
     error,
@@ -208,8 +210,11 @@ function LiveTvHomeScreenContent() {
     for (const channel of recentLive) if (channel.id) idSet.add(channel.id);
     const ids = Array.from(idSet);
     if (!ids.length) return;
+    // Phone: these are the rows kept on screen, so the programme data that comes back is not thrown away
+    // as belonging to some other list (the TV Guide keeps its own set).
+    if (phoneUi) retainGuideSlidingCache(ids);
     void patchProgramsForChannelIds(ids, heroChannel?.id ? [heroChannel.id] : ids.slice(0, 1));
-  }, [channels.length, heroChannel?.id, isFocused, patchProgramsForChannelIds, recentLive]);
+  }, [channels.length, heroChannel?.id, isFocused, patchProgramsForChannelIds, recentLive, retainGuideSlidingCache]);
 
   const play = useCallback(
     (channel: Channel) => {
@@ -350,7 +355,12 @@ function LiveTvHomeScreenContent() {
           <Text style={styles.sectionHint}>Currently airing on channels you watched</Text>
         </View>
         <ScrollView horizontal style={styles.rowScroll} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
-          {recentLive.map((channel, index) => (
+          {recentLive.map((channel, index) => phoneUi ? (
+            // Phone: the same card as the Channels screen (logo or full name, what is on, what is next, progress).
+            <View key={channel.id} style={styles.phoneCardSlot}>
+              <ChannelCard channel={channel} now={now} logos={isFocused && channelLogos} onPlay={play} compact />
+            </View>
+          ) : (
             <RecentChannelCard
               key={channel.id}
               channel={channel}
@@ -435,6 +445,7 @@ const styles = StyleSheet.create({
   channelCardArt: { height: 64, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center", marginBottom: 6 },
   channelName: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(9.5) },
   channelProgram: { color: tvColors.purpleSoft, fontFamily: fonts.medium, fontSize: ph(8.5), marginTop: 2 },
+  phoneCardSlot: { width: 172 },
   focused: glassFocus,
 });
 

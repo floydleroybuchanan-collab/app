@@ -229,18 +229,18 @@ test("a touch phone gets the mobile VOD screens in the same embedded surface; th
   assert.match(surface, /if \(phone\) \{\s*mountPhone\(host, fm\)/);
   assert.match(surface, /VodRootFragment\.create\(startSection\)/);
   const phone = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
-  assert.match(phone, /nav_main_graph_mobile/);
+  assert.match(phone, /nav_main_graph_phone/);
   assert.match(phone, /CrownBackdrop\(requireContext\(\)\)/);
-  assert.match(phone, /popUpTo\(R\.id\.providers\)/);
+  assert.doesNotMatch(phone, /R\.id\.providers/);
   assert.match(phone, /bnvMain\.visibility = View\.GONE/);
   for (const section of ["Home", "Movies", "TV Shows", "My List", "Search", "Settings"]) assert.ok(phone.includes(`"${section}"`), section);
   const tv = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootFragment.kt");
   assert.match(tv, /nav_main_graph_tv/);
-  assert.doesNotMatch(tv, /nav_main_graph_mobile/);
+  assert.doesNotMatch(tv, /nav_main_graph_(mobile|phone)/);
 });
 
 test("the phone VOD has Genres, Platforms, platform pages and a platform row on Home, with the crown showing through", () => {
-  const graph = read("android/vod/app/src/main/res/navigation/nav_main_graph_mobile.xml");
+  const graph = read("android/vod/app/src/main/res/navigation/nav_main_graph_phone.xml");
   for (const id of ["genre_hub", "platforms", "platform_titles"]) assert.ok(graph.includes(`android:id="@+id/${id}"`), id);
   assert.match(graph, /charm\.VodGenresHubFragment/);
   assert.match(graph, /charm\.VodPlatformsFragment/);
@@ -262,8 +262,8 @@ test("phone Live TV is Cards only with pop-down pickers; the Guide is TV only; t
   for (const id of ["phone-live-playlist", "phone-live-group", "phone-live-search", "phone-live-manage", "phone-live-add"]) assert.ok(hub.includes(id), id);
   assert.doesNotMatch(hub, /phone-live-mode|Full timeline Guide|GuideRow/);
   assert.match(hub, /Categories/);
-  assert.match(hub, /Now: \$\{current\.title\}/);
   assert.match(hub, /Next: \$\{next\.title\}/);
+  assert.match(hub, /until \$\{ends\}/);
   // No logo: the whole channel name, not a few letters.
   assert.match(hub, /\{channel\.name\}<\/Text>\s*\)\}\s*<\/LinearGradient>/);
   // The guide data for the rows on screen is requested, so "what's on" fills in.
@@ -278,4 +278,47 @@ test("phone Live TV is Cards only with pop-down pickers; the Guide is TV only; t
   const vod = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
   assert.match(vod, /setOnClickListener \{ navigateBack\(\) \}/);
   assert.match(vod, /backPill\?\.visibility = if \(top\) View\.GONE else View\.VISIBLE/);
+});
+
+test("phone VOD is safe inside the app: starts at Home, embedded Settings, Back pops pages, no side drawer", () => {
+  const dir = "android/vod/app/src/main/res/navigation/";
+  const phoneGraph = read(dir + "nav_main_graph_phone.xml");
+  assert.match(phoneGraph, /app:startDestination="@id\/home"/);
+  // The mobile Settings screen restarts the standalone VOD activity on a theme or language change: never in the app.
+  assert.match(phoneGraph, /fragments\.settings\.SettingsTvFragment/);
+  assert.doesNotMatch(phoneGraph, /SettingsMobileFragment|SettingsAboutMobileFragment/);
+  assert.match(read(dir + "nav_main_graph_mobile.xml"), /app:startDestination="@id\/providers"/);
+  const phone = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
+  assert.match(phone, /fun canGoBack\(\): Boolean/);
+  assert.match(phone, /private fun settingsArgs\(section: String\)/);
+  const main = read("android/app/src/main/java/com/charmiptv/app/MainActivity.kt");
+  assert.match(main, /phoneCanGoBack\(\) == true/);
+  assert.match(main, /\(nativeVodOwnsFocus\(\) \|\| phoneVodHasBack\) && vodBackHandler\?\.invoke\(\) == true/);
+  const tab = read("app/(tabs)/vod.tsx");
+  assert.match(tab, /if \(phoneUi\) \{\s*router\.replace\("\/" as any\);\s*return;\s*\}\s*openDrawer\(\{ force: true \}\);/);
+});
+
+test("phone Live TV home uses the same cards, and the cards ask for the guide data they show", () => {
+  const home = read("app/(tabs)/index.tsx");
+  assert.match(home, /phoneUi \? \(/);
+  assert.match(home, /<ChannelCard channel=\{channel\}/);
+  assert.match(home, /if \(phoneUi\) retainGuideSlidingCache\(ids\);/);
+  const hub = read("src/components/PhoneLiveHub.tsx");
+  assert.match(hub, /retainRef\.current\(ids\);/);
+  assert.match(hub, /const cardColumns = landscape \? 5 : 3;/);
+  assert.match(hub, /function withSpacers/);
+  assert.match(hub, /key=\{landscape \? "cards-l" : "cards"\}/);
+  assert.match(hub, /if \(!isFocused\) return;\s*const sub = BackHandler/);
+  assert.match(hub, /BackHandler\.addEventListener\("hardwareBackPress"/);
+});
+
+test("TV Guide: channel boxes are 20% narrower, logo-less channels get a TV icon, names wrap beside the icon", () => {
+  const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  assert.match(view, /private var channelWidth = 148f \* density/);
+  assert.match(view, /channelWidth = \(if \(value\) 80f else 148f\) \* density/);
+  assert.match(view, /private fun drawTvIcon\(/);
+  assert.match(view, /private fun drawChannelName\(/);
+  assert.doesNotMatch(view, /TILE_COLORS|tileFill/);
+  // The text starts after the icon, so it can never run under it.
+  assert.match(view, /drawChannelName\(canvas, row\.label, pad \+ logoSpace, top, channelWidth - pad\)/);
 });

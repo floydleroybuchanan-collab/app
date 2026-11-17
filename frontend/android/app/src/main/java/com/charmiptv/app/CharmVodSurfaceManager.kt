@@ -307,6 +307,9 @@ class CharmVodSurfaceManager(private val reactContext: ReactApplicationContext) 
         fun restoreNativeFocus(): Boolean =
             isAttachedToWindow && fragment?.restoreFocusFromRail() == true
 
+        /** Phone VOD only: a page that has a Back (title, genre, platform, player) is on screen. */
+        fun phoneCanGoBack(): Boolean = isAttachedToWindow && isShown && phoneFragment?.canGoBack() == true
+
         /** True while this surface shows the VOD player page. */
         fun playerShown(): Boolean = isAttachedToWindow && isShown &&
             (fragment?.isPlayerShown() == true || phoneFragment?.isPlayerShown() == true)

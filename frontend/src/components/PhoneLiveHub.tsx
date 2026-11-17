@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { BackHandler, FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -15,7 +16,7 @@ import { playlistOwner } from "@/src/core/playlistCatalog";
 import { usePlaylists } from "@/src/core/playlistRegistry";
 import { selectPlaylist, useSelectedPlaylist } from "@/src/core/playlistSelection";
 import { fonts, glass, phoneGlass } from "@/src/theme";
-import { nowNext, progressPct } from "@/src/utils/time";
+import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 
 /**
@@ -26,40 +27,60 @@ import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 
 type Panel = null | "playlists" | "groups" | "more";
 type GroupRow = { key: string; label: string; count: number };
+type Spacer = { spacer: true; key: string; id: string };
+
+/** Fills the last row of a grid with empty cells, so one card on its own stays one column wide. */
+function withSpacers<T>(items: T[], columns: number): (T | Spacer)[] {
+  const missing = (columns - (items.length % columns)) % columns;
+  if (!missing) return items;
+  const out: (T | Spacer)[] = items.slice();
+  for (let i = 0; i < missing; i += 1) out.push({ spacer: true, key: `spacer-${i}`, id: `spacer-${i}` });
+  return out;
+}
+const isSpacer = (item: unknown): item is Spacer => !!item && typeof item === "object" && (item as Spacer).spacer === true;
 
 const CARD_COLORS: [string, string][] = [
   ["#8E3B52", "#4B2A7A"], ["#3C4FA8", "#4B2A7A"], ["#2F7A6A", "#3B3A8F"], ["#8A5A2B", "#4B2A7A"],
   ["#7A3FA8", "#3A2A7A"], ["#2E6FA8", "#3A2A7A"], ["#A83F7A", "#3A2A7A"], ["#3F8A4B", "#3A2A7A"],
 ];
-const colorsFor = (text: string) => CARD_COLORS[(text.split("").reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) | 0, 7) >>> 0) % CARD_COLORS.length];
+export const cardColorsFor = (text: string): [string, string] =>
+  CARD_COLORS[(text.split("").reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) | 0, 7) >>> 0) % CARD_COLORS.length];
 
-const ChannelCard = memo(function ChannelCard({ channel, now, logos, onPlay, onFavorite }: {
-  channel: Channel; now: Date; logos: boolean; onPlay: (channel: Channel) => void; onFavorite: (id: string) => void;
+/**
+ * A channel card: the logo, or the whole channel name when there is no logo, then what is on now, when it
+ * ends, what is next and a bar showing how far through it is. Used on the Live TV pages of the phone.
+ */
+export const ChannelCard = memo(function ChannelCard({ channel, now, logos, onPlay, onFavorite, compact }: {
+  channel: Channel; now: Date; logos: boolean; onPlay: (channel: Channel) => void; onFavorite?: (id: string) => void; compact?: boolean;
 }) {
   const programs = useGuidePrograms(channel.id);
   const { current, next } = nowNext(programs, now);
   const progress = current ? progressPct(current, now) : 0;
-  const [from, to] = colorsFor(channel.name);
+  const [from, to] = cardColorsFor(channel.name);
+  const hasLogo = !!channel.logo && logos;
+  const ends = current?.stop ? fmtTime(current.stop) : "";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${channel.name}. ${current?.title || "Live channel"}`}
+      accessibilityLabel={`${channel.name}. ${current ? `Now ${current.title}` : "No guide information"}`}
       onPress={() => onPlay(channel)}
-      onLongPress={() => onFavorite(channel.id)}
+      onLongPress={onFavorite ? () => onFavorite(channel.id) : undefined}
       delayLongPress={450}
       style={({ focused }: any) => [styles.card, focused && styles.focusRing]}
       testID={`phone-live-card-${channel.id}`}
     >
-      <LinearGradient colors={[from, to]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardTile}>
-        {channel.logo && logos ? <ChannelLogo name={channel.name} logo={channel.logo} size={44} /> : (
+      <LinearGradient colors={[from, to]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.cardTile, compact && styles.cardTileCompact]}>
+        {hasLogo ? <ChannelLogo name={channel.name} logo={channel.logo} size={compact ? 40 : 44} /> : (
           // No logo: the whole channel name, so you can tell which channel it is.
           <Text numberOfLines={3} style={styles.cardNameBig}>{channel.name}</Text>
         )}
       </LinearGradient>
       <View style={styles.cardBody}>
-        <Text numberOfLines={1} style={styles.cardName}>{channel.name}</Text>
-        <Text numberOfLines={1} style={styles.cardProgram}>{current ? `Now: ${current.title}` : "No guide info"}</Text>
-        {next ? <Text numberOfLines={1} style={styles.cardNext}>{`Next: ${next.title}`}</Text> : null}
+        {hasLogo ? <Text numberOfLines={1} style={styles.cardName}>{channel.name}</Text> : null}
+        <Text numberOfLines={1} style={styles.cardProgram}>{current ? current.title : "No guide information"}</Text>
+        <Text numberOfLines={1} style={styles.cardNext}>
+          {current && ends ? `until ${ends}` : ""}{current && ends && next ? " · " : ""}{next ? `Next: ${next.title}` : ""}
+        </Text>
         <View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View>
       </View>
     </Pressable>
@@ -68,7 +89,11 @@ const ChannelCard = memo(function ChannelCard({ channel, now, logos, onPlay, onF
 
 export function PhoneLiveHub() {
   const router = useRouter();
-  const { channels, favorites, toggleFavorite, addRecent, channelLogos, hardRefresh, patchProgramsForChannelIds } = useStore();
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+  // A tab that was just left stays mounted for a while: it must not take Back or load data while hidden.
+  const isFocused = useIsFocused();
+  const { channels, favorites, toggleFavorite, addRecent, channelLogos, hardRefresh, patchProgramsForChannelIds, retainGuideSlidingCache } = useStore();
   const playlists = usePlaylists();
   const selected = useSelectedPlaylist();
   const activePlaylist = playlists.some((item) => item.id === selected && item.enabled) ? selected : "all";
@@ -91,11 +116,16 @@ export function PhoneLiveHub() {
   );
   const section = menu.find((item) => item.id === activePlaylist) || menu[0];
   const playlistName = activePlaylist === "all" ? "All Playlists" : playlists.find((item) => item.id === activePlaylist)?.name || "Playlist";
-  const groupRows: GroupRow[] = section?.groups || [];
-  const categories = groupRows.filter((row) => row.key !== "All" && row.key !== "Favorites");
+  const groupRows = useMemo<GroupRow[]>(() => section?.groups || [], [section]);
+  const categories = useMemo(() => groupRows.filter((row) => row.key !== "All" && row.key !== "Favorites"), [groupRows]);
   const activeGroup = group ?? "All";
   const groupLabel = groupRows.find((row) => row.key === activeGroup)?.label || "All Channels";
   const groupCount = groupRows.find((row) => row.key === activeGroup)?.count ?? 0;
+
+  // A group from another playlist (the playlist was changed elsewhere) goes back to the categories.
+  useEffect(() => {
+    if (group !== null && groupRows.length > 0 && !groupRows.some((row) => row.key === group)) setGroup(null);
+  }, [group, groupRows]);
 
   const shown = useMemo(() => {
     const base = activePlaylist === "all" ? channels : channels.filter((channel) => playlistOwner(channel) === activePlaylist);
@@ -112,12 +142,20 @@ export function PhoneLiveHub() {
   shownRef.current = shown;
   const patchRef = useRef(patchProgramsForChannelIds);
   patchRef.current = patchProgramsForChannelIds;
+  const retainRef = useRef(retainGuideSlidingCache);
+  retainRef.current = retainGuideSlidingCache;
   const loadAround = useCallback((first: number, last: number) => {
     const list = shownRef.current;
     const ids = list.slice(Math.max(0, first - 12), Math.min(list.length, last + 30)).map((channel) => channel.id);
-    if (ids.length) void patchRef.current(ids, list.slice(Math.max(0, first), last + 1).map((channel) => channel.id));
+    if (!ids.length) return;
+    // The rows on screen are the ones kept, so the programme data that arrives for them is applied.
+    retainRef.current(ids);
+    void patchRef.current(ids, list.slice(Math.max(0, first), last + 1).map((channel) => channel.id));
   }, []);
-  useEffect(() => { loadAround(0, 18); }, [shown, loadAround]);
+  useEffect(() => {
+    // The categories page shows no channels, so nothing is asked for until a group is open.
+    if (isFocused && group !== null) loadAround(0, 18);
+  }, [shown, group, isFocused, loadAround]);
   const viewableRef = useRef(({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
     const indexes = viewableItems.map((item) => item.index).filter((index): index is number => typeof index === "number");
     if (indexes.length) loadAround(Math.min(...indexes), Math.max(...indexes));
@@ -142,6 +180,36 @@ export function PhoneLiveHub() {
     setPanel(null);
   };
   const showCategories = group === null;
+  const categoryColumns = landscape ? 4 : 2;
+  const cardColumns = landscape ? 5 : 3;
+  const categoryData = useMemo(() => withSpacers(categories, categoryColumns), [categories, categoryColumns]);
+  const cardData = useMemo(() => withSpacers(shown, cardColumns), [shown, cardColumns]);
+
+  // Back closes the pop-down first, then returns from a group to the categories.
+  useEffect(() => {
+    if (!isFocused) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (panel) { setPanel(null); return true; }
+      if (group !== null) { setGroup(null); return true; }
+      return false;
+    });
+    return () => sub.remove();
+  }, [panel, group, isFocused]);
+
+  const searchPill = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Search channels and programs"
+      onPress={() => router.replace("/search" as any)}
+      style={({ focused }: any) => [styles.pill, landscape ? styles.searchPillInline : styles.searchPill, focused && styles.focusRing]}
+      testID="phone-live-search"
+    >
+      <Ionicons name="search" size={18} color="#CDBBEE" />
+      <Text numberOfLines={1} style={styles.searchText}>Search channels and programs</Text>
+    </Pressable>
+  );
+  const groupTop = landscape ? 110 : 168;
+  const popMax = Math.max(160, height - (panel === "groups" ? groupTop : 60) - (landscape ? 16 : 120));
 
   return (
     <View style={styles.page} testID="phone-live-hub">
@@ -157,6 +225,7 @@ export function PhoneLiveHub() {
           <Text numberOfLines={1} style={styles.playlistText}>{playlistName}</Text>
           <Ionicons name={panel === "playlists" ? "chevron-up" : "chevron-down"} size={18} color="#CFE6FF" />
         </Pressable>
+        {landscape ? searchPill : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="More actions"
@@ -167,16 +236,7 @@ export function PhoneLiveHub() {
           <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
         </Pressable>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Search channels and programs"
-        onPress={() => router.replace("/search" as any)}
-        style={({ focused }: any) => [styles.pill, styles.searchPill, focused && styles.focusRing]}
-        testID="phone-live-search"
-      >
-        <Ionicons name="search" size={18} color="#CDBBEE" />
-        <Text numberOfLines={1} style={styles.searchText}>Search channels and programs</Text>
-      </Pressable>
+      {landscape ? null : searchPill}
       {!showCategories ? (
         <Pressable
           accessibilityRole="button"
@@ -193,17 +253,18 @@ export function PhoneLiveHub() {
 
       {showCategories ? (
         <FlatList
-          key="categories"
-          data={categories}
-          numColumns={2}
+          key={landscape ? "categories-l" : "categories"}
+          data={categoryData}
+          numColumns={categoryColumns}
           keyExtractor={(item) => item.key}
           ListHeaderComponent={<Text style={styles.heading}>Categories</Text>}
-          ListEmptyComponent={<Text style={styles.empty}>No channels loaded yet. Pull Reload from the menu above.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>No channels loaded yet. Use Reload in the menu above.</Text>}
           columnWrapperStyle={styles.categoryRow}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
-            const [from, to] = colorsFor(item.label);
+            if (isSpacer(item)) return <View style={styles.spacerCell} />;
+            const [from, to] = cardColorsFor(item.label);
             return (
               <Pressable
                 accessibilityRole="button"
@@ -221,65 +282,71 @@ export function PhoneLiveHub() {
         />
       ) : (
         <FlatList
-          key="cards"
-          data={shown}
-          numColumns={3}
+          key={landscape ? "cards-l" : "cards"}
+          data={cardData}
+          numColumns={cardColumns}
           keyExtractor={(item) => item.id}
           columnWrapperStyle={styles.cardRow}
           contentContainerStyle={styles.list}
           onViewableItemsChanged={viewableRef.current}
           viewabilityConfig={viewabilityRef.current}
-          initialNumToRender={12}
+          initialNumToRender={landscape ? 10 : 12}
           maxToRenderPerBatch={9}
           windowSize={7}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={<Text style={styles.empty}>No channels in this group.</Text>}
-          renderItem={({ item }) => <ChannelCard channel={item} now={now} logos={channelLogos} onPlay={play} onFavorite={favorite} />}
+          renderItem={({ item }) => isSpacer(item) ? <View style={styles.spacerCell} /> : <ChannelCard channel={item} now={now} logos={channelLogos} onPlay={play} onFavorite={favorite} compact={landscape} />}
         />
       )}
 
       {panel ? (
         <>
           <Pressable style={styles.scrim} onPress={() => setPanel(null)} accessibilityLabel="Close" testID="phone-live-scrim" />
-          <View style={[styles.popDown, panel === "groups" && styles.popDownGroups]} testID={`phone-live-popdown-${panel}`}>
+          <View style={[styles.popDown, panel === "groups" ? { top: groupTop } : null, { maxHeight: popMax }]} testID={`phone-live-popdown-${panel}`}>
             {panel === "playlists" ? (
-              <>
-                <Text style={styles.popTitle}>Playlists</Text>
-                {[{ id: "all", label: "All Playlists", count: menu.find((item) => item.id === "all")?.count ?? channels.length },
-                  ...playlists.filter((item) => item.enabled).map((item) => ({ id: item.id, label: item.name, count: menu.find((m) => m.id === item.id)?.count ?? item.count }))
-                ].map((item) => (
-                  <Pressable key={item.id} onPress={() => choosePlaylist(item.id)} style={[styles.popRow, activePlaylist === item.id && styles.popRowOn]} testID={`phone-live-playlist-${item.id}`}>
+              <FlatList
+                style={styles.popList}
+                data={[{ id: "all", label: "All Playlists", count: menu.find((item) => item.id === "all")?.count ?? channels.length },
+                  ...playlists.filter((item) => item.enabled).map((item) => ({ id: item.id, label: item.name, count: menu.find((m) => m.id === item.id)?.count ?? item.count }))]}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                ListHeaderComponent={<Text style={styles.popTitle}>Playlists</Text>}
+                renderItem={({ item }) => (
+                  <Pressable onPress={() => choosePlaylist(item.id)} style={[styles.popRow, activePlaylist === item.id && styles.popRowOn]} testID={`phone-live-playlist-${item.id}`}>
                     <Text numberOfLines={1} style={styles.popRowText}>{item.label}</Text>
                     <Text style={styles.popRowCount}>{item.count.toLocaleString()}</Text>
                   </Pressable>
-                ))}
-                <Pressable onPress={() => { setPanel(null); router.push("/playlists" as any); }} style={[styles.popRow, styles.popAction]} testID="phone-live-manage">
-                  <Text style={styles.popActionText}>Manage playlists</Text>
-                </Pressable>
-                <Pressable onPress={() => { setPanel(null); router.push("/playlists" as any); }} style={[styles.popRow, styles.popAction2]} testID="phone-live-add">
-                  <Text style={styles.popActionText}>Add a playlist</Text>
-                </Pressable>
-              </>
+                )}
+                ListFooterComponent={(
+                  <View style={landscape ? styles.popActionsRow : null}>
+                    <Pressable onPress={() => { setPanel(null); router.push("/playlists" as any); }} style={[styles.popRow, styles.popAction, landscape && styles.popActionHalf]} testID="phone-live-manage">
+                      <Text style={styles.popActionText}>Manage playlists</Text>
+                    </Pressable>
+                    <Pressable onPress={() => { setPanel(null); router.push("/playlists" as any); }} style={[styles.popRow, styles.popAction2, landscape && styles.popActionHalf]} testID="phone-live-add">
+                      <Text style={styles.popActionText}>Add a playlist</Text>
+                    </Pressable>
+                  </View>
+                )}
+              />
             ) : panel === "groups" ? (
-              <>
-                <Text style={styles.popTitle}>Channel groups</Text>
-                <FlatList
-                  data={groupRows}
-                  keyExtractor={(item) => item.key}
-                  showsVerticalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                    <Pressable onPress={() => chooseGroup(item.key)} style={[styles.popRow, activeGroup === item.key && styles.popRowOn]} testID={`phone-live-group-${item.key}`}>
-                      <Text numberOfLines={1} style={styles.popRowText}>{item.label}</Text>
-                      <Text style={styles.popRowCount}>{item.count.toLocaleString()}</Text>
-                    </Pressable>
-                  )}
-                  ListFooterComponent={(
-                    <Pressable onPress={() => { setGroup(null); setPanel(null); }} style={[styles.popRow, styles.popAction]} testID="phone-live-all-categories">
-                      <Text style={styles.popActionText}>All categories</Text>
-                    </Pressable>
-                  )}
-                />
-              </>
+              <FlatList
+                style={styles.popList}
+                data={groupRows}
+                keyExtractor={(item) => item.key}
+                showsVerticalScrollIndicator={false}
+                ListHeaderComponent={<Text style={styles.popTitle}>Channel groups</Text>}
+                renderItem={({ item }) => (
+                  <Pressable onPress={() => chooseGroup(item.key)} style={[styles.popRow, activeGroup === item.key && styles.popRowOn]} testID={`phone-live-group-${item.key}`}>
+                    <Text numberOfLines={1} style={styles.popRowText}>{item.label}</Text>
+                    <Text style={styles.popRowCount}>{item.count.toLocaleString()}</Text>
+                  </Pressable>
+                )}
+                ListFooterComponent={(
+                  <Pressable onPress={() => { setGroup(null); setPanel(null); }} style={[styles.popRow, styles.popAction]} testID="phone-live-all-categories">
+                    <Text style={styles.popActionText}>All categories</Text>
+                  </Pressable>
+                )}
+              />
             ) : (
               <>
                 <Text style={styles.popTitle}>Live TV</Text>
@@ -302,58 +369,47 @@ const styles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 14, paddingTop: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   pill: { height: 44, borderRadius: 22, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, borderWidth: 2, borderColor: edge, backgroundColor: fill },
-  playlistPill: { flex: 1, minWidth: 0 },
+  playlistPill: { flex: 1.2, minWidth: 0 },
   playlistIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: "#E8654A" },
   playlistText: { flex: 1, color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
   circle: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: edge, backgroundColor: fill },
   searchPill: { marginTop: 8 },
+  searchPillInline: { flex: 1, minWidth: 0 },
   searchText: { flex: 1, color: "#CDBBEE", fontFamily: fonts.medium, fontSize: 14 },
-  switchWrap: { alignSelf: "center", flexDirection: "row", marginTop: 10, borderRadius: 22, borderWidth: 2, borderColor: edge, backgroundColor: fill, padding: 3 },
-  switchItem: { minWidth: 120, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  switchOn: { backgroundColor: "rgba(150,90,235,0.85)", borderWidth: 2, borderColor: "#fff" },
-  switchText: { color: "#CDBBEE", fontFamily: fonts.bold, fontSize: 15 },
-  switchTextOn: { color: "#fff" },
   groupPill: { marginTop: 10, justifyContent: "space-between" },
   groupText: { flex: 1, color: "#fff", fontFamily: fonts.bold, fontSize: 14 },
   groupCount: { color: "#7FD6FF", fontFamily: fonts.bold, fontSize: 13 },
   heading: { color: "#fff", fontFamily: fonts.bold, fontSize: 22, marginTop: 12, marginBottom: 8 },
-  list: { paddingBottom: 130, paddingTop: 10 },
+  list: { paddingBottom: 24, paddingTop: 10 },
   empty: { color: "#CDBBEE", fontFamily: fonts.medium, fontSize: 14, paddingVertical: 24, textAlign: "center" },
   categoryRow: { gap: 12, marginBottom: 12 },
-  category: { flex: 1, minHeight: 112, borderRadius: 18, borderWidth: 2, borderColor: edge, overflow: "hidden", padding: 12, justifyContent: "space-between" },
+  category: { flex: 1, minHeight: 104, borderRadius: 18, borderWidth: 2, borderColor: edge, overflow: "hidden", padding: 12, justifyContent: "space-between" },
   categoryName: { color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
   categoryCount: { color: "#fff", fontFamily: fonts.medium, fontSize: 14 },
+  spacerCell: { flex: 1 },
   cardRow: { gap: 10, marginBottom: 10 },
   card: { flex: 1, borderRadius: 16, borderWidth: 2, borderColor: edge, backgroundColor: "rgba(36,16,70,0.55)", overflow: "hidden" },
   cardTile: { height: 76, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  cardTileCompact: { height: 66 },
   cardNameBig: { color: "#fff", fontFamily: fonts.bold, fontSize: 15, textAlign: "center" },
   cardBody: { padding: 8 },
-  cardName: { color: "#fff", fontFamily: fonts.bold, fontSize: 13 },
+  cardName: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 12 },
+  cardProgram: { color: "#fff", fontFamily: fonts.bold, fontSize: 13, marginTop: 2 },
   cardNext: { color: "#B7A4DD", fontFamily: fonts.medium, fontSize: 11, marginTop: 1 },
-  cardProgram: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 12, marginTop: 2 },
   track: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", marginTop: 8, overflow: "hidden" },
   fill: { height: 4, borderRadius: 2, backgroundColor: "#8FA8FF" },
-  guideHead: { flexDirection: "row", gap: 8, paddingHorizontal: 4, paddingBottom: 4 },
-  guideHeadText: { color: "#E7DCFB", fontFamily: fonts.bold, fontSize: 14 },
-  guideRow: { flexDirection: "row", alignItems: "stretch", gap: 8, marginBottom: 8, minHeight: 70 },
-  guideTile: { flex: 1.25, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, borderWidth: 2, borderColor: edge },
-  guideName: { color: "#fff", fontFamily: fonts.bold, fontSize: 14, textAlign: "center" },
-  guideNameSmall: { color: "#fff", fontFamily: fonts.bold, fontSize: 11, textAlign: "center", marginTop: 3 },
-  guideCell: { borderRadius: 14, padding: 10, borderWidth: 2, borderColor: edge, justifyContent: "center" },
-  guideNow: { flex: 2, backgroundColor: "rgba(140,60,90,0.55)" },
-  guideNext: { flex: 1.6, backgroundColor: "rgba(80,60,160,0.55)" },
-  guideWhen: { color: "#E7DCFB", fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.4 },
-  guideTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 15, marginTop: 2 },
   focusRing: { borderColor: "#fff", backgroundColor: "rgba(170,110,255,0.45)" },
   scrim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(10,4,24,0.45)" },
-  popDown: { position: "absolute", left: 12, right: 12, top: 56, borderRadius: 26, borderWidth: 2, borderColor: edge, backgroundColor: phoneGlass.solid[0], padding: 14, gap: 8 },
-  popDownGroups: { top: 190, maxHeight: "60%" },
-  popTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 20, textAlign: "center", marginBottom: 4 },
+  popDown: { position: "absolute", left: 12, right: 12, top: 56, borderRadius: 26, borderWidth: 2, borderColor: edge, backgroundColor: phoneGlass.solid[0], padding: 14 },
+  popList: { flexGrow: 0 },
+  popTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 20, textAlign: "center", marginBottom: 8 },
   popRow: { minHeight: 48, borderRadius: 16, borderWidth: 2, borderColor: edge, backgroundColor: "rgba(120,70,210,0.30)", flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, gap: 10, marginBottom: 6 },
   popRowOn: { backgroundColor: "rgba(150,90,235,0.85)", borderColor: "#fff" },
   popRowText: { flex: 1, color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
   popRowCount: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 15 },
   popAction: { justifyContent: "center", backgroundColor: "rgba(150,90,235,0.55)" },
   popAction2: { justifyContent: "center" },
+  popActionsRow: { flexDirection: "row", gap: 8 },
+  popActionHalf: { flex: 1 },
   popActionText: { color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
 });

@@ -131,7 +131,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   private val density = resources.displayMetrics.density
   // Phone ("compact") layout changes these, so they are variables. The TV values are the defaults.
-  private var channelWidth = 184f * density
+  private var channelWidth = 148f * density
   private var headerHeight = 38f * density
   private var baseRowHeight = 54f * density
   // Stretched in onSizeChanged so a whole number of rows fills the grid exactly.
@@ -193,7 +193,7 @@ class NativeGuideView(context: Context) : View(context) {
   // (never the whole catalog); Glide decodes each at a small fixed size and at
   // most MAX_LOGO_BITMAPS stay referenced here, so memory stays bounded.
   private val logoUrlById = HashMap<String, String>()
-  private val logoBox = 34f * density
+  private val logoBox = 32f * density
   private val logoPx = (logoBox * 1.25f).toInt().coerceIn(48, 128)
   private val logoBacking = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(235, 255, 255, 255) }
   private val logoPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
@@ -247,7 +247,6 @@ class NativeGuideView(context: Context) : View(context) {
     return null
   }
 
-  /** Draws the logo on a light tile (dark logos stay readable); returns the space it used. */
   private val tvStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     color = Color.rgb(214, 196, 250); strokeWidth = 2f * density
@@ -281,6 +280,7 @@ class NativeGuideView(context: Context) : View(context) {
     }
     title.textSize = saved * 0.92f
     val fitsAll = title.breakText(name, true, room, null)
+    if (fitsAll <= 0) { title.textSize = saved; return }
     if (fitsAll >= name.length) {
       canvas.drawText(name, x, mid + title.textSize * 0.35f, title)
       title.textSize = saved
@@ -297,6 +297,7 @@ class NativeGuideView(context: Context) : View(context) {
     title.textSize = saved
   }
 
+  /** Draws the logo on a light tile (dark logos stay readable); returns the space it used. */
   private fun drawRowLogo(canvas: Canvas, rowId: String, name: String, top: Float): Float {
     val size = min(if (compact) 52f * density else logoBox, rowHeight - 12f * density)
     if (size <= 8f * density) return 0f
@@ -921,7 +922,7 @@ class NativeGuideView(context: Context) : View(context) {
   fun setCompact(value: Boolean) {
     if (compact == value) return
     compact = value
-    channelWidth = (if (value) 80f else 184f) * density
+    channelWidth = (if (value) 80f else 148f) * density
     headerHeight = (if (value) 40f else 38f) * density
     baseRowHeight = (if (value) 68f else 54f) * density
     title.textSize = (if (value) 14f else 13f) * density

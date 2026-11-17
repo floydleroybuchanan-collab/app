@@ -382,7 +382,9 @@ class MainActivity : ReactActivity() {
     } == true
 
   override fun onBackPressed() {
-    if (nativeVodOwnsFocus() && vodBackHandler?.invoke() == true) return
+    // A touch phone has no focused VOD view, so ask the phone VOD directly: Back pops a title or genre page.
+    val phoneVodHasBack = (vodInputOwner as? CharmVodSurfaceManager.Surface)?.phoneCanGoBack() == true
+    if ((nativeVodOwnsFocus() || phoneVodHasBack) && vodBackHandler?.invoke() == true) return
     super.onBackPressed()
   }
 

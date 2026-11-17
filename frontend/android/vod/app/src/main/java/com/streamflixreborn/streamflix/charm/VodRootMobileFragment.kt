@@ -76,6 +76,8 @@ class VodRootMobileFragment : Fragment() {
         rootStartedAt = SystemClock.elapsedRealtime()
         Log.i("CharmVodRoot", "Inflating embedded phone VOD root")
         requireActivity().theme.applyStyle(ThemeManager.mobileThemeRes(UserPreferences.selectedTheme), false)
+        // VOD Settings is the shared embedded settings screen, which also reads the TV theme's attributes.
+        requireActivity().theme.applyStyle(ThemeManager.tvThemeRes(UserPreferences.selectedTheme), false)
         val themed = ContextThemeWrapper(inflater.context, ThemeManager.mobileThemeRes(UserPreferences.selectedTheme))
         _binding = ActivityMainMobileBinding.inflate(inflater.cloneInContext(themed), parent, false)
         return binding.root
@@ -100,18 +102,12 @@ class VodRootMobileFragment : Fragment() {
         CharmVodDefaults.apply()
 
         val navHost = childFragmentManager.findFragmentById(b.navMainFragment.id) as? NavHostFragment
-            ?: NavHostFragment.create(R.navigation.nav_main_graph_mobile).also {
+            ?: NavHostFragment.create(R.navigation.nav_main_graph_phone).also {
                 childFragmentManager.beginTransaction().replace(b.navMainFragment.id, it).commitNowAllowingStateLoss()
             }
         val controller = navHost.navController
         navigation = controller
-        // The graph starts at the provider picker; VOD always has its provider, so go straight to Home.
-        if (saved == null) {
-            controller.navigate(R.id.home, null, navOptions {
-                launchSingleTop = true
-                popUpTo(R.id.providers) { inclusive = true }
-            })
-        }
+        // The phone graph starts at Home (VOD always has its provider), so there is nothing to navigate away from.
         controller.addOnDestinationChangedListener { _, destination, _ ->
             onImmersiveChanged?.invoke(destination.id == R.id.player)
             // Pills on the main pages, a Back button on a title/genre/platform page, nothing over the player.
@@ -237,6 +233,12 @@ class VodRootMobileFragment : Fragment() {
         }
     }
 
+    /** "settings:screen_x" opens VOD Settings directly on that section (the same keys as the TV host). */
+    private fun settingsArgs(section: String): Bundle? =
+        section.substringAfter("settings:", "").takeIf { Regex("^screen_[a-z_]+$").matches(it) }?.let {
+            Bundle().apply { putString(androidx.preference.PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, it) }
+        }
+
     private fun openSection(section: String) {
         val controller = navigation ?: return
         titleDestination(section)?.let { (destination, id) ->
@@ -255,8 +257,9 @@ class VodRootMobileFragment : Fragment() {
             section.startsWith("settings") -> R.id.settings
             else -> R.id.home
         }
-        if (controller.currentDestination?.id == destination) return
-        controller.navigate(destination, null, navOptions {
+        val args = if (destination == R.id.settings) settingsArgs(section) else null
+        if (controller.currentDestination?.id == destination && args == null) return
+        controller.navigate(destination, args, navOptions {
             launchSingleTop = true
             popUpTo(R.id.home) { inclusive = false }
         })
@@ -294,6 +297,12 @@ class VodRootMobileFragment : Fragment() {
 
     /** Touch screens have no rail focus to hand back. */
     fun restoreFocusFromRail(): Boolean = false
+
+    /** True on a title, genre, platform or player page: system Back must pop it instead of leaving VOD. */
+    fun canGoBack(): Boolean {
+        val id = navigation?.currentDestination?.id ?: return false
+        return isVisible && id !in TOP_LEVEL
+    }
 
     fun isPlayerShown(): Boolean = isVisible && navigation?.currentDestination?.id == R.id.player
 

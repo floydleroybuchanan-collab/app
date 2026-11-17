@@ -53,6 +53,11 @@ export default function VideoOnDemandScreen() {
         router.replace("/settings?section=vod" as any);
         return;
       }
+      // A phone has no side drawer: Back from a main VOD page goes to Live TV.
+      if (phoneUi) {
+        router.replace("/" as any);
+        return;
+      }
       openDrawer({ force: true });
     };
     // Native events are global; only the focused VOD screen may act on them.
