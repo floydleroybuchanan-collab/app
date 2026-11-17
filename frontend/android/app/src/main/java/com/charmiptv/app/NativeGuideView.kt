@@ -171,8 +171,6 @@ class NativeGuideView(context: Context) : View(context) {
   private val noInfoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(52, 46, 78) }
   private val cellEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(80, 235, 205, 255); style = Paint.Style.STROKE; strokeWidth = density }
   private val elapsedShade = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 0, 0, 0) }
-  private val tileFill = Paint(Paint.ANTI_ALIAS_FLAG)
-  private val tileText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER; typeface = android.graphics.Typeface.DEFAULT_BOLD }
   private val headerLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 14f * density; typeface = android.graphics.Typeface.DEFAULT_BOLD }
 
   private fun tintFor(program: NativeEpgProgram): Paint {
@@ -250,6 +248,55 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   /** Draws the logo on a light tile (dark logos stay readable); returns the space it used. */
+  private val tvStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    color = Color.rgb(214, 196, 250); strokeWidth = 2f * density
+  }
+  private val tvScreen = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.argb(70, 150, 90, 235) }
+
+  /** A small television with two antennas, for a channel that has no logo. */
+  private fun drawTvIcon(canvas: Canvas, left: Float, top: Float, size: Float) {
+    val bodyTop = top + size * 0.24f
+    val bodyBottom = top + size * 0.92f
+    logoRect.set(left + 1f * density, bodyTop, left + size - 1f * density, bodyBottom)
+    canvas.drawRoundRect(logoRect, 6f * density, 6f * density, tvScreen)
+    canvas.drawRoundRect(logoRect, 6f * density, 6f * density, tvStroke)
+    val cx = left + size / 2f
+    canvas.drawLine(cx, bodyTop, cx - size * 0.22f, top + size * 0.04f, tvStroke)
+    canvas.drawLine(cx, bodyTop, cx + size * 0.22f, top + size * 0.04f, tvStroke)
+    // The screen's glint.
+    canvas.drawLine(left + size * 0.2f, bodyTop + size * 0.16f, left + size * 0.2f, bodyTop + size * 0.30f, tvStroke)
+  }
+
+  /** The whole channel name beside the icon: one line if it fits, otherwise a second line under it. */
+  private fun drawChannelName(canvas: Canvas, name: String, x: Float, top: Float, right: Float) {
+    val room = right - x
+    if (room <= 8f * density) return
+    val saved = title.textSize
+    val mid = top + rowHeight / 2f
+    val whole = title.breakText(name, true, room, null)
+    if (whole >= name.length) {
+      canvas.drawText(name, x, mid + title.textSize * 0.35f, title)
+      return
+    }
+    title.textSize = saved * 0.92f
+    val fitsAll = title.breakText(name, true, room, null)
+    if (fitsAll >= name.length) {
+      canvas.drawText(name, x, mid + title.textSize * 0.35f, title)
+      title.textSize = saved
+      return
+    }
+    var cut = name.lastIndexOf(' ', fitsAll)
+    if (cut <= 0) cut = fitsAll
+    val first = name.substring(0, cut).trim()
+    var second = name.substring(cut).trim()
+    val fits = title.breakText(second, true, room, null)
+    if (fits < second.length) second = second.substring(0, max(0, fits - 1)).trimEnd() + "…"
+    canvas.drawText(first, x, mid - title.textSize * 0.1f, title)
+    canvas.drawText(second, x, mid + title.textSize * 1.05f, title)
+    title.textSize = saved
+  }
+
   private fun drawRowLogo(canvas: Canvas, rowId: String, name: String, top: Float): Float {
     val size = min(if (compact) 52f * density else logoBox, rowHeight - 12f * density)
     if (size <= 8f * density) return 0f
@@ -257,13 +304,8 @@ class NativeGuideView(context: Context) : View(context) {
     val boxTop = top + (rowHeight - density - size) / 2f
     val url = logoUrlById[rowId]
     if (url == null) {
-      // No logo yet: a colourful tile with the channel's letters, as in the approved design.
-      logoRect.set(left, boxTop, left + size, boxTop + size)
-      tileFill.color = TILE_COLORS[(name.hashCode() and 0x7fffffff) % TILE_COLORS.size]
-      canvas.drawRoundRect(logoRect, 9f * density, 9f * density, tileFill)
-      val initials = name.trim().split(' ').firstOrNull().orEmpty().take(3).uppercase(Locale.ROOT)
-      tileText.textSize = size * (if (initials.length > 2) 0.30f else 0.38f)
-      canvas.drawText(initials, left + size / 2f, boxTop + size / 2f + tileText.textSize * 0.35f, tileText)
+      // No logo: a TV icon (the channel's name is written beside it).
+      drawTvIcon(canvas, left, boxTop, size)
       return size + pad
     }
     logoRect.set(left, boxTop, left + size, boxTop + size)
@@ -1021,7 +1063,7 @@ class NativeGuideView(context: Context) : View(context) {
       canvas.drawRect(channelWidth, top, width.toFloat(), top + rowHeight - density, rowSurface)
       val logoSpace = drawRowLogo(canvas, row.id, row.name, top)
       // The phone column is only the tile (logo or letters); the name is not squeezed beside it.
-      if (!compact) drawClippedText(canvas, row.label, pad + logoSpace, top + rowHeight * .62f, channelWidth - pad, title)
+      if (!compact) drawChannelName(canvas, row.label, pad + logoSpace, top, channelWidth - pad)
 
       val list = programs[row.id].orEmpty()
       // Every stretch of the row is painted: a hole in the EPG data shows a
@@ -1125,11 +1167,6 @@ class NativeGuideView(context: Context) : View(context) {
     private const val MAX_LOGO_BITMAPS = 28
     private val CHANNEL_COLOR = Color.rgb(34, 16, 68)
     private val SELECTED_COLOR = Color.rgb(160, 72, 245)
-    // Channel tile colours for channels without a logo.
-    private val TILE_COLORS = intArrayOf(
-      Color.rgb(219, 61, 140), Color.rgb(150, 190, 40), Color.rgb(40, 190, 90), Color.rgb(140, 60, 210),
-      Color.rgb(30, 180, 170), Color.rgb(230, 120, 40), Color.rgb(60, 110, 240), Color.rgb(190, 60, 200),
-    )
     private const val LIVE_CLOCK_TICK_MS = 30_000L
     private const val COVERAGE_TTL_MS = 60_000L
     // The grid paints titles only. This short text covers the preview until the

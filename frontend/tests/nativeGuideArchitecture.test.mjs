@@ -144,7 +144,7 @@ test("Settings claims destination focus before swapping tile/detail trees", asyn
 test("native Guide precomputes row labels outside the repaint loop", async () => {
   const view = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(view, /ChannelRow\(val id: String, val name: String, val number: String, val label: String\)/);
-  assert.match(view, /drawClippedText\(canvas, row\.label/);
+  assert.match(view, /drawChannelName\(canvas, row\.label/);
   assert.doesNotMatch(view, /val rowLabel = if \(row\.number\.isBlank\(\)/);
 });
 

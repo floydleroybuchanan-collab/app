@@ -121,11 +121,12 @@ test("the Guide and On Demand buttons use the new glass TV and VOD icons on the 
   }
 });
 
-test("the native Guide has genre-coloured glass cells, colourful channel tiles and a clear background on TV and phone", () => {
+test("the native Guide has genre-coloured glass cells, a TV icon for logo-less channels and a clear background on TV and phone", () => {
   const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(view, /private fun tintFor\(program: NativeEpgProgram\): Paint/);
   assert.match(view, /private val cellRadius = 12f \* density/);
-  assert.match(view, /TILE_COLORS\[\(name\.hashCode\(\) and 0x7fffffff\) % TILE_COLORS\.size\]/);
+  assert.match(view, /private fun drawTvIcon\(canvas: Canvas, left: Float, top: Float, size: Float\)/);
+  assert.doesNotMatch(view, /TILE_COLORS/);
   assert.match(view, /canvas\.drawText\("Today", pad, headerHeight \* \.66f, headerLabel\)/);
   assert.match(view, /private val elapsedShade/);
 });
@@ -190,7 +191,7 @@ test("the phone Guide is a readable list: compact native layout, no live preview
   const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(view, /fun setCompact\(value: Boolean\)/);
   assert.match(view, /visibleWindowMs = if \(!compact\) 3L \* 60L \* 60_000L else if \(h > w\) 90L \* 60_000L else 120L \* 60_000L/);
-  assert.match(view, /if \(!compact\) drawClippedText\(canvas, row\.label/);
+  assert.match(view, /if \(!compact\) drawChannelName\(canvas, row\.label/);
   assert.match(read("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"), /name = "compact"/);
 });
 
