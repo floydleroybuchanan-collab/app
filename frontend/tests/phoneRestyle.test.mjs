@@ -449,13 +449,17 @@ test("the phone bottom bar and side rail cannot take D-pad/remote focus (a conne
 });
 
 test("a second, independent frozen isTV flag cannot re-split TV and phone chrome (found in a full-app scan after the usePhoneUi fix)", () => {
-  // These four also decided WHICH screen/component renders from a local isTV
+  // These also decided WHICH screen/component renders from a local isTV
   // derived straight from the frozen Platform.isTV, instead of the one live
   // usePhoneUi() signal every other screen already uses - so they could still
   // show stale TV-or-phone content after a Device Layout change with no restart.
+  // app/_layout.tsx is the one exception: RootLayout renders GuideProvider as a
+  // descendant, so RootLayout itself is never inside it and usePhoneUi() (which
+  // needs useStore()'s context) throws there - confirmed by a real crash on
+  // launch ("useStore must be used inside GuideProvider"). It must keep reading
+  // the platform's own raw TV flag instead.
   const layout = read("app/_layout.tsx");
-  assert.match(layout, /const isTV = !usePhoneUi\(\);/);
-  assert.doesNotMatch(layout, /Platform\.isTV/);
+  assert.match(layout, /const isTV = Platform\.OS !== "web" && !!Platform\.isTV;/);
 
   const player = read("app/player.tsx");
   assert.match(player, /const phoneUi = usePhoneUi\(\);\s*\n\s*const isTV = !phoneUi;/);

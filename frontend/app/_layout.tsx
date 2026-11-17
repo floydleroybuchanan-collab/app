@@ -4,7 +4,7 @@ import { AppUpdateNotice } from "@/src/components/AppUpdateNotice";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect } from "react";
-import { LogBox, useWindowDimensions } from "react-native";
+import { LogBox, Platform, useWindowDimensions } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -19,7 +19,6 @@ import { PurpleTvDrawerProvider } from "@/src/components/PurpleTvShell";
 import { SourceRefreshScheduler } from "@/src/components/SourceRefreshScheduler";
 import { TvQuickActionsOverlay } from "@/src/components/TvQuickActionsOverlay";
 import { TvCalibrationFrame, TvCalibrationProvider } from "@/src/tvCalibration";
-import { usePhoneUi } from "@/src/utils/tvLayout";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { StartupVersion4 } from "@/src/components/StartupVersion4";
 import { storage } from "@/src/utils/storage";
@@ -150,9 +149,9 @@ export default function RootLayout() {
   const [fontsLoaded, fontErr] = useAppFonts();
   const { width, height } = useWindowDimensions();
   // On a phone the screen is turned and has a camera cutout, so the layout follows the real window, not stale numbers.
-  // isTV follows the reactive usePhoneUi() hook, not the native platform's own frozen TV flag,
-  // so a live Device Layout change resizes this root wrapper right away instead of waiting for a restart.
-  const isTV = !usePhoneUi();
+  // This cannot use the reactive usePhoneUi()/useStore() hook: RootLayout renders GuideProvider
+  // as a descendant below, so RootLayout itself is never inside it, and that hook throws here.
+  const isTV = Platform.OS !== "web" && !!Platform.isTV;
 
   const ready = (iconsLoaded || iconErr) && (fontsLoaded || fontErr);
 
