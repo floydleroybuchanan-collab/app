@@ -44,9 +44,17 @@ class TvShowsMobileFragment : Fragment() {
         return binding.root
     }
 
+    private var allTvShows: List<TvShow> = emptyList()
+    private var tvShowsHasMore: Boolean = false
+    private var genresUpdated: ((List<TvShow>) -> Unit)? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        com.streamflixreborn.streamflix.charm.VodPhoneHeader.attach(this, binding.root, "TV Shows")
+        com.streamflixreborn.streamflix.charm.VodPhoneHeader.attach(this, binding.root, binding.rvTvShows, "TV Shows")?.let { header ->
+            genresUpdated = com.streamflixreborn.streamflix.charm.VodPhoneGenreChips.attach(
+                this, header, { show: TvShow -> show.genres.map { it.name } },
+            ) { genre -> submitTvShows(genre) }
+        }
 
         initializeTvShows()
 
@@ -117,11 +125,17 @@ class TvShowsMobileFragment : Fragment() {
     }
 
     private fun displayTvShows(tvShows: List<TvShow>, hasMore: Boolean) {
-        appAdapter.submitList(tvShows.onEach {
-            it.itemType = AppAdapter.Type.TV_SHOW_GRID_MOBILE_ITEM
-        })
+        allTvShows = tvShows.onEach { it.itemType = AppAdapter.Type.TV_SHOW_GRID_MOBILE_ITEM }
+        tvShowsHasMore = hasMore
+        // No genre chip row (TV, or the chips failed to attach): show everything, same as before.
+        genresUpdated?.invoke(allTvShows) ?: submitTvShows(null)
+    }
 
-        if (hasMore) {
+    /** Shows every loaded show, or only the ones in `genre` when the chip row (phone only) has one picked. */
+    private fun submitTvShows(genre: String?) {
+        val shown = if (genre == null) allTvShows else allTvShows.filter { show -> show.genres.any { it.name == genre } }
+        appAdapter.submitList(shown)
+        if (tvShowsHasMore) {
             appAdapter.setOnLoadMoreListener { viewModel.loadMoreTvShows() }
         } else {
             appAdapter.setOnLoadMoreListener(null)

@@ -369,12 +369,45 @@ test("VOD Settings keeps its phone-appropriate row styling now that phones reuse
   assert.match(styler, /0x999A5CF0/);
 });
 
-test("Movies and TV Shows on a phone show a page title over the grid, matching the design Genres and Platforms already have", () => {
+test("the phone page title is gated to the phone host, not drawn on TV", () => {
   const header = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodPhoneHeader.kt");
   assert.match(header, /object VodPhoneHeader/);
   assert.match(header, /fragment\.parentFragment\?\.parentFragment !is VodRootMobileFragment/);
+});
+
+test("Movies and TV Shows on a phone get a genre filter row under the title, built from genres actually loaded", () => {
+  const header = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodPhoneHeader.kt");
+  assert.match(header, /fun attach\(fragment: Fragment, root: ViewGroup, content: View, title: String\): LinearLayout\?/);
+  assert.match(header, /connect\(content\.id, ConstraintSet\.TOP, container\.id, ConstraintSet\.BOTTOM\)/);
+  const chips = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodPhoneGenreChips.kt");
+  assert.match(chips, /object VodPhoneGenreChips/);
+  assert.match(chips, /addChip\("All", null\)/);
   const movies = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/movies/MoviesMobileFragment.kt");
-  assert.match(movies, /VodPhoneHeader\.attach\(this, binding\.root, "Movies"\)/);
+  assert.match(movies, /VodPhoneHeader\.attach\(this, binding\.root, binding\.rvMovies, "Movies"\)\?\.let \{ header ->/);
+  assert.match(movies, /VodPhoneGenreChips\.attach\(\s*this, header, \{ movie: Movie -> movie\.genres\.map \{ it\.name \} \},/);
+  assert.match(movies, /allMovies\.filter \{ movie -> movie\.genres\.any \{ it\.name == genre \} \}/);
   const shows = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/tv_shows/TvShowsMobileFragment.kt");
-  assert.match(shows, /VodPhoneHeader\.attach\(this, binding\.root, "TV Shows"\)/);
+  assert.match(shows, /VodPhoneHeader\.attach\(this, binding\.root, binding\.rvTvShows, "TV Shows"\)\?\.let \{ header ->/);
+  assert.match(shows, /allTvShows\.filter \{ show -> show\.genres\.any \{ it\.name == genre \} \}/);
+});
+
+test("My List (phone Favorites) shows its own title beside the existing reorder buttons, without covering them", () => {
+  const xml = read("android/vod/app/src/main/res/layout/fragment_favorites_mobile.xml");
+  assert.match(xml, /android:id="@\+id\/tv_favorites_title"/);
+  assert.match(xml, /android:text="@string\/favorites_title_phone"/);
+  assert.match(xml, /app:layout_constraintEnd_toStartOf="@id\/btn_favorites_reorder_mode"/);
+  const strings = read("android/vod/app/src/main/res/values/strings.xml");
+  assert.match(strings, /<string name="favorites_title_phone">My List<\/string>/);
+});
+
+test("the shared mobile Watch Now / secondary buttons (Home hero, movie/show pages, retry) are the violet glass pill, not the old flat white rectangle", () => {
+  const primary = read("android/vod/app/src/main/res/drawable/bg_button_mobile.xml");
+  assert.match(primary, /android:radius="24dp"/);
+  assert.match(primary, /android:color="#CC9A5CF0"/);
+  assert.doesNotMatch(primary, /android:radius="4dp"/);
+  const secondary = read("android/vod/app/src/main/res/drawable/bg_button_secondary_mobile.xml");
+  assert.match(secondary, /android:radius="24dp"/);
+  assert.match(secondary, /android:color="#59965AEB"/);
+  const style = read("android/vod/app/src/main/res/values/style.xml");
+  assert.match(style, /<style name="AppTheme\.Widget\.Mobile\.Button" parent="AppTheme\.Mobile">[\s\S]{0,500}<item name="android:textColor">#FFFFFF<\/item>\s*<\/style>/);
 });

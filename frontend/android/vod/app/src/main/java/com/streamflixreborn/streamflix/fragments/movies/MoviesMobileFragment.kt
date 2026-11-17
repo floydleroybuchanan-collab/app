@@ -44,9 +44,17 @@ class MoviesMobileFragment : Fragment() {
         return binding.root
     }
 
+    private var allMovies: List<Movie> = emptyList()
+    private var moviesHasMore: Boolean = false
+    private var genresUpdated: ((List<Movie>) -> Unit)? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        com.streamflixreborn.streamflix.charm.VodPhoneHeader.attach(this, binding.root, "Movies")
+        com.streamflixreborn.streamflix.charm.VodPhoneHeader.attach(this, binding.root, binding.rvMovies, "Movies")?.let { header ->
+            genresUpdated = com.streamflixreborn.streamflix.charm.VodPhoneGenreChips.attach(
+                this, header, { movie: Movie -> movie.genres.map { it.name } },
+            ) { genre -> submitMovies(genre) }
+        }
 
         initializeMovies()
 
@@ -117,11 +125,17 @@ class MoviesMobileFragment : Fragment() {
     }
 
     private fun displayMovies(movies: List<Movie>, hasMore: Boolean) {
-        appAdapter.submitList(movies.onEach {
-            it.itemType = AppAdapter.Type.MOVIE_GRID_MOBILE_ITEM
-        })
+        allMovies = movies.onEach { it.itemType = AppAdapter.Type.MOVIE_GRID_MOBILE_ITEM }
+        moviesHasMore = hasMore
+        // No genre chip row (TV, or the chips failed to attach): show everything, same as before.
+        genresUpdated?.invoke(allMovies) ?: submitMovies(null)
+    }
 
-        if (hasMore) {
+    /** Shows every loaded movie, or only the ones in `genre` when the chip row (phone only) has one picked. */
+    private fun submitMovies(genre: String?) {
+        val shown = if (genre == null) allMovies else allMovies.filter { movie -> movie.genres.any { it.name == genre } }
+        appAdapter.submitList(shown)
+        if (moviesHasMore) {
             appAdapter.setOnLoadMoreListener { viewModel.loadMoreMovies() }
         } else {
             appAdapter.setOnLoadMoreListener(null)

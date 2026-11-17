@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The primary mobile button (Watch Now / Play): the same rounded violet-glass pill used by the
+     phone shell's own buttons, in place of the old flat white 4dp-corner rectangle. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
 
-    <corners android:radius="4dp" />
-    <solid android:color="#FFFFFF" />
+    <corners android:radius="24dp" />
+    <solid android:color="#CC9A5CF0" />
+    <stroke android:width="2dp" android:color="#FFFFFFFF" />
 
 </shape>
