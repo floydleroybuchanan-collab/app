@@ -126,7 +126,7 @@ test("the native Guide has genre-coloured glass cells, colourful channel tiles a
   assert.match(view, /private fun tintFor\(program: NativeEpgProgram\): Paint/);
   assert.match(view, /private val cellRadius = 12f \* density/);
   assert.match(view, /TILE_COLORS\[\(name\.hashCode\(\) and 0x7fffffff\) % TILE_COLORS\.size\]/);
-  assert.match(view, /canvas\.drawText\("Today", pad - slide, headerHeight \* \.66f, headerLabel\)/);
+  assert.match(view, /canvas\.drawText\("Today", pad, headerHeight \* \.66f, headerLabel\)/);
   assert.match(view, /private val elapsedShade/);
 });
 
@@ -190,7 +190,7 @@ test("the phone Guide is a readable list: compact native layout, no live preview
   const view = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
   assert.match(view, /fun setCompact\(value: Boolean\)/);
   assert.match(view, /visibleWindowMs = if \(!compact\) 3L \* 60L \* 60_000L else if \(h > w\) 90L \* 60_000L else 120L \* 60_000L/);
-  assert.match(view, /else drawClippedText\(canvas, row\.label/);
+  assert.match(view, /if \(!compact\) drawClippedText\(canvas, row\.label/);
   assert.match(read("android/app/src/main/java/com/charmiptv/app/NativeGuidePackage.kt"), /name = "compact"/);
 });
 
@@ -256,35 +256,25 @@ test("the phone VOD has Genres, Platforms, platform pages and a platform row on 
   }
 });
 
-test("phone Guide: readable group name, no self-opening drawer, full channel names, channel column scrolls away with the guide", () => {
-  const guide = read("app/(tabs)/guide.tsx");
-  assert.match(guide, /label=\{groupLabel\}/);
-  assert.doesNotMatch(guide, /label=\{group\}/);
-  assert.match(guide, /providerGroupIdentity\(group\)/);
-  assert.match(guide, /if \(phoneUi\) \{ router\.replace\("\/" as any\); return true; \}/);
-  assert.match(guide, /if \(phoneUi\) return;\s*if \(!drawerOpen && !groupDrawerOpen && !activeProgram\) setGroupDrawerOpen\(true\)/);
-  assert.match(guide, /consumeGuideGroupsOnEntry\(\) && !phoneUi/);
-  const native = read("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
-  assert.match(native, /private fun channelSlidePx\(\)/);
-  assert.match(native, /if \(!compact\) return 0f|if \(!compact\) 0f/);
-  assert.match(native, /private fun drawChannelName\(/);
-  assert.match(native, /private fun tileLetters\(/);
-  assert.match(native, /if \(value\) 142f else 184f/);
-});
-
-test("phone Live TV is the Cards | Guide hub with a pop-down for playlists and groups; the TV list stays", () => {
+test("phone Live TV is Cards only with pop-down pickers; the Guide is TV only; the TV list stays", () => {
   const hub = read("src/components/PhoneLiveHub.tsx");
-  for (const id of ["phone-live-playlist", "phone-live-group", "phone-live-search", "phone-live-manage", "phone-live-add"]) {
-    assert.ok(hub.includes(id), id);
-  }
-  assert.match(hub, /testID=\{`phone-live-mode-\$\{item\}`\}/);
+  for (const id of ["phone-live-playlist", "phone-live-group", "phone-live-search", "phone-live-manage", "phone-live-add"]) assert.ok(hub.includes(id), id);
+  assert.doesNotMatch(hub, /phone-live-mode|Full timeline Guide|GuideRow/);
   assert.match(hub, /Categories/);
-  assert.match(hub, /NOW \$\{fmtTime/);
-  assert.match(hub, /Full timeline Guide/);
+  assert.match(hub, /Now: \$\{current\.title\}/);
+  assert.match(hub, /Next: \$\{next\.title\}/);
+  // No logo: the whole channel name, not a few letters.
+  assert.match(hub, /\{channel\.name\}<\/Text>\s*\)\}\s*<\/LinearGradient>/);
+  // The guide data for the rows on screen is requested, so "what's on" fills in.
+  assert.match(hub, /patchProgramsForChannelIds/);
   assert.match(hub, /buildPlaylistMenu\(/);
   const channels = read("app/(tabs)/channels.tsx");
   assert.match(channels, /phoneUi \? <PhoneChannelsScreen \/> : <ChannelsScreenContent \/>/);
   const chrome = read("src/components/PhoneChrome.tsx");
   assert.doesNotMatch(chrome, /label: "Guide"/);
-  assert.match(chrome, /tab\.route === "\/channels" && active === "\/guide"/);
+  const guide = read("app/(tabs)/guide.tsx");
+  assert.match(guide, /if \(phoneUi\) return <Redirect href=\{"\/channels" as any\} \/>;/);
+  const vod = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
+  assert.match(vod, /setOnClickListener \{ navigateBack\(\) \}/);
+  assert.match(vod, /backPill\?\.visibility = if \(top\) View\.GONE else View\.VISIBLE/);
 });

@@ -57,6 +57,8 @@ class VodRootMobileFragment : Fragment() {
     private var navigation: NavController? = null
     private var requestedSection = "home"
     private var pills: HorizontalScrollView? = null
+    private var topBar: View? = null
+    private var backPill: TextView? = null
     private val pillViews = LinkedHashMap<Int, TextView>()
 
     companion object {
@@ -112,7 +114,11 @@ class VodRootMobileFragment : Fragment() {
         }
         controller.addOnDestinationChangedListener { _, destination, _ ->
             onImmersiveChanged?.invoke(destination.id == R.id.player)
-            pills?.visibility = if (destination.id in TOP_LEVEL) View.VISIBLE else View.GONE
+            // Pills on the main pages, a Back button on a title/genre/platform page, nothing over the player.
+            val top = destination.id in TOP_LEVEL
+            topBar?.visibility = if (destination.id == R.id.player) View.GONE else View.VISIBLE
+            pills?.visibility = if (top) View.VISIBLE else View.GONE
+            backPill?.visibility = if (top) View.GONE else View.VISIBLE
             pillViews.forEach { (id, v) -> styleSelected(v, id == destination.id) }
         }
         if (saved == null) openSection(requestedSection)
@@ -165,14 +171,37 @@ class VodRootMobileFragment : Fragment() {
             addView(row)
         }
         pills = scroller
-        b.root.addView(scroller, ConstraintLayout.LayoutParams(
+        val back = TextView(requireContext()).apply {
+            text = "‹  Back"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(8), dp(20), dp(8))
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Back"
+            visibility = View.GONE
+            setOnClickListener { navigateBack() }
+        }
+        styleSelected(back, false)
+        backPill = back
+        val bar = android.widget.FrameLayout(requireContext()).apply {
+            id = View.generateViewId()
+            addView(scroller, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT))
+            addView(back, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply { leftMargin = dp(10); topMargin = dp(8); bottomMargin = dp(6) })
+        }
+        topBar = bar
+        b.root.addView(bar, ConstraintLayout.LayoutParams(
             ConstraintLayout.LayoutParams.MATCH_CONSTRAINT, ConstraintLayout.LayoutParams.WRAP_CONTENT))
         ConstraintSet().apply {
             clone(b.root)
-            connect(scroller.id, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
-            connect(scroller.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
-            connect(scroller.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
-            connect(b.navMainFragment.id, ConstraintSet.TOP, scroller.id, ConstraintSet.BOTTOM)
+            connect(bar.id, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+            connect(bar.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+            connect(bar.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+            connect(b.navMainFragment.id, ConstraintSet.TOP, bar.id, ConstraintSet.BOTTOM)
             connect(b.navMainFragment.id, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
             applyTo(b.root)
         }
@@ -293,6 +322,8 @@ class VodRootMobileFragment : Fragment() {
     override fun onDestroyView() {
         navigation = null
         pills = null
+        topBar = null
+        backPill = null
         pillViews.clear()
         onImmersiveChanged?.invoke(false)
         onRootReady = null

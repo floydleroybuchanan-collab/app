@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,17 +15,15 @@ import { playlistOwner } from "@/src/core/playlistCatalog";
 import { usePlaylists } from "@/src/core/playlistRegistry";
 import { selectPlaylist, useSelectedPlaylist } from "@/src/core/playlistSelection";
 import { fonts, glass, phoneGlass } from "@/src/theme";
-import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
+import { nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
-import { storage } from "@/src/utils/storage";
 
 /**
- * Phone Live TV (the approved design): a playlist button, search, a Cards | Guide switch and a pop-down
- * for choosing playlists and channel groups. Cards = categories, then channel cards. Guide = what is on
- * now and next. Touch only; the TV never renders this.
+ * Phone Live TV: a playlist button, search and a pop-down for choosing playlists and channel groups.
+ * Categories first, then channel cards that show what is on now (and next). There is no timeline Guide on
+ * a phone; that stays on the TV. Touch only; the TV never renders this.
  */
 
-type Mode = "cards" | "guide";
 type Panel = null | "playlists" | "groups" | "more";
 type GroupRow = { key: string; label: string; count: number };
 
@@ -35,26 +33,11 @@ const CARD_COLORS: [string, string][] = [
 ];
 const colorsFor = (text: string) => CARD_COLORS[(text.split("").reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) | 0, 7) >>> 0) % CARD_COLORS.length];
 
-/** "USA: ABC HD" -> "ABC", for a card with no logo. */
-function abbreviation(name: string): string {
-  let text = name.trim();
-  const cut = text.search(/[:|]/);
-  if (cut > 0 && cut <= 6 && text.slice(cut + 1).trim()) text = text.slice(cut + 1).trim();
-  text = text.replace(/^[*\-\s]+/, "");
-  return (text.split(/\s+/)[0] || "").slice(0, 4).toUpperCase();
-}
-
-function ProgramLine({ channel, now }: { channel: Channel; now: Date }) {
-  const programs = useGuidePrograms(channel.id);
-  const { current } = nowNext(programs, now);
-  return <Text numberOfLines={1} style={styles.cardProgram}>{current?.title || "Live channel"}</Text>;
-}
-
 const ChannelCard = memo(function ChannelCard({ channel, now, logos, onPlay, onFavorite }: {
   channel: Channel; now: Date; logos: boolean; onPlay: (channel: Channel) => void; onFavorite: (id: string) => void;
 }) {
   const programs = useGuidePrograms(channel.id);
-  const { current } = nowNext(programs, now);
+  const { current, next } = nowNext(programs, now);
   const progress = current ? progressPct(current, now) : 0;
   const [from, to] = colorsFor(channel.name);
   return (
@@ -69,44 +52,15 @@ const ChannelCard = memo(function ChannelCard({ channel, now, logos, onPlay, onF
     >
       <LinearGradient colors={[from, to]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardTile}>
         {channel.logo && logos ? <ChannelLogo name={channel.name} logo={channel.logo} size={44} /> : (
-          <Text adjustsFontSizeToFit numberOfLines={1} style={styles.cardAbbr}>{abbreviation(channel.name)}</Text>
+          // No logo: the whole channel name, so you can tell which channel it is.
+          <Text numberOfLines={3} style={styles.cardNameBig}>{channel.name}</Text>
         )}
       </LinearGradient>
       <View style={styles.cardBody}>
         <Text numberOfLines={1} style={styles.cardName}>{channel.name}</Text>
-        <ProgramLine channel={channel} now={now} />
+        <Text numberOfLines={1} style={styles.cardProgram}>{current ? `Now: ${current.title}` : "No guide info"}</Text>
+        {next ? <Text numberOfLines={1} style={styles.cardNext}>{`Next: ${next.title}`}</Text> : null}
         <View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View>
-      </View>
-    </Pressable>
-  );
-});
-
-const GuideRow = memo(function GuideRow({ channel, now, logos, onPlay }: {
-  channel: Channel; now: Date; logos: boolean; onPlay: (channel: Channel) => void;
-}) {
-  const programs = useGuidePrograms(channel.id);
-  const { current, next } = nowNext(programs, now);
-  const [from, to] = colorsFor(channel.name);
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${channel.name}. Now ${current?.title || "no information"}`}
-      onPress={() => onPlay(channel)}
-      style={({ focused }: any) => [styles.guideRow, focused && styles.focusRing]}
-      testID={`phone-live-guide-${channel.id}`}
-    >
-      <LinearGradient colors={[from, to]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.guideTile}>
-        {channel.logo && logos ? <ChannelLogo name={channel.name} logo={channel.logo} size={40} /> : (
-          <Text adjustsFontSizeToFit numberOfLines={1} style={styles.guideAbbr}>{abbreviation(channel.name)}</Text>
-        )}
-      </LinearGradient>
-      <View style={[styles.guideCell, styles.guideNow]}>
-        <Text numberOfLines={1} style={styles.guideWhen}>{current ? `NOW ${fmtTime(current.start)}` : "NOW"}</Text>
-        <Text numberOfLines={2} style={styles.guideTitle}>{current?.title || "Data not available"}</Text>
-      </View>
-      <View style={[styles.guideCell, styles.guideNext]}>
-        <Text numberOfLines={1} style={styles.guideWhen}>{next ? `NEXT ${fmtTime(next.start)}` : "NEXT"}</Text>
-        <Text numberOfLines={2} style={styles.guideTitle}>{next?.title || "Data not available"}</Text>
       </View>
     </Pressable>
   );
@@ -114,13 +68,12 @@ const GuideRow = memo(function GuideRow({ channel, now, logos, onPlay }: {
 
 export function PhoneLiveHub() {
   const router = useRouter();
-  const { channels, favorites, toggleFavorite, addRecent, channelLogos, hardRefresh } = useStore();
+  const { channels, favorites, toggleFavorite, addRecent, channelLogos, hardRefresh, patchProgramsForChannelIds } = useStore();
   const playlists = usePlaylists();
   const selected = useSelectedPlaylist();
   const activePlaylist = playlists.some((item) => item.id === selected && item.enabled) ? selected : "all";
   const { hiddenIds } = useChannelCustomize();
   const { hiddenGroups } = useGuideUiPreferences();
-  const [mode, setMode] = useState<Mode>("cards");
   const [group, setGroup] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [now, setNow] = useState(() => new Date());
@@ -128,11 +81,6 @@ export function PhoneLiveHub() {
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
-  }, []);
-  useEffect(() => {
-    let alive = true;
-    void storage.getItem("phone_live_hub_mode", "cards").then((value) => { if (alive && (value === "guide" || value === "cards")) setMode(value); });
-    return () => { alive = false; };
   }, []);
 
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
@@ -159,6 +107,22 @@ export function PhoneLiveHub() {
     });
   }, [activeGroup, activePlaylist, channels, favoriteSet, hiddenIdSet]);
 
+  // What is on now comes from the guide data: ask for the rows on screen and a few pages around them.
+  const shownRef = useRef<Channel[]>(shown);
+  shownRef.current = shown;
+  const patchRef = useRef(patchProgramsForChannelIds);
+  patchRef.current = patchProgramsForChannelIds;
+  const loadAround = useCallback((first: number, last: number) => {
+    const list = shownRef.current;
+    const ids = list.slice(Math.max(0, first - 12), Math.min(list.length, last + 30)).map((channel) => channel.id);
+    if (ids.length) void patchRef.current(ids, list.slice(Math.max(0, first), last + 1).map((channel) => channel.id));
+  }, []);
+  useEffect(() => { loadAround(0, 18); }, [shown, loadAround]);
+  const viewableRef = useRef(({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
+    const indexes = viewableItems.map((item) => item.index).filter((index): index is number => typeof index === "number");
+    if (indexes.length) loadAround(Math.min(...indexes), Math.max(...indexes));
+  });
+  const viewabilityRef = useRef({ itemVisiblePercentThreshold: 20 });
   const play = useCallback((channel: Channel) => {
     void Haptics.selectionAsync().catch(() => undefined);
     addRecent(channel);
@@ -168,10 +132,6 @@ export function PhoneLiveHub() {
     void Haptics.selectionAsync().catch(() => undefined);
     toggleFavorite(id);
   }, [toggleFavorite]);
-  const chooseMode = (next: Mode) => {
-    setMode(next);
-    void storage.setItem("phone_live_hub_mode", next);
-  };
   const choosePlaylist = (id: string) => {
     selectPlaylist(id);
     setGroup(null);
@@ -181,7 +141,7 @@ export function PhoneLiveHub() {
     setGroup(key);
     setPanel(null);
   };
-  const showCategories = mode === "cards" && group === null;
+  const showCategories = group === null;
 
   return (
     <View style={styles.page} testID="phone-live-hub">
@@ -217,20 +177,6 @@ export function PhoneLiveHub() {
         <Ionicons name="search" size={18} color="#CDBBEE" />
         <Text numberOfLines={1} style={styles.searchText}>Search channels and programs</Text>
       </Pressable>
-      <View style={styles.switchWrap}>
-        {(["cards", "guide"] as Mode[]).map((item) => (
-          <Pressable
-            key={item}
-            accessibilityRole="button"
-            accessibilityState={{ selected: mode === item }}
-            onPress={() => chooseMode(item)}
-            style={[styles.switchItem, mode === item && styles.switchOn]}
-            testID={`phone-live-mode-${item}`}
-          >
-            <Text style={[styles.switchText, mode === item && styles.switchTextOn]}>{item === "cards" ? "Cards" : "Guide"}</Text>
-          </Pressable>
-        ))}
-      </View>
       {!showCategories ? (
         <Pressable
           accessibilityRole="button"
@@ -273,7 +219,7 @@ export function PhoneLiveHub() {
             );
           }}
         />
-      ) : mode === "cards" ? (
+      ) : (
         <FlatList
           key="cards"
           data={shown}
@@ -281,32 +227,14 @@ export function PhoneLiveHub() {
           keyExtractor={(item) => item.id}
           columnWrapperStyle={styles.cardRow}
           contentContainerStyle={styles.list}
+          onViewableItemsChanged={viewableRef.current}
+          viewabilityConfig={viewabilityRef.current}
           initialNumToRender={12}
           maxToRenderPerBatch={9}
           windowSize={7}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={<Text style={styles.empty}>No channels in this group.</Text>}
           renderItem={({ item }) => <ChannelCard channel={item} now={now} logos={channelLogos} onPlay={play} onFavorite={favorite} />}
-        />
-      ) : (
-        <FlatList
-          key="guide"
-          data={shown}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          initialNumToRender={10}
-          maxToRenderPerBatch={8}
-          windowSize={7}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={(
-            <View style={styles.guideHead}>
-              <Text style={[styles.guideHeadText, { flex: 1.1 }]}> </Text>
-              <Text style={[styles.guideHeadText, { flex: 2 }]}>Now</Text>
-              <Text style={[styles.guideHeadText, { flex: 1.6 }]}>Next</Text>
-            </View>
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>No channels in this group.</Text>}
-          renderItem={({ item }) => <GuideRow channel={item} now={now} logos={channelLogos} onPlay={play} />}
         />
       )}
 
@@ -345,20 +273,16 @@ export function PhoneLiveHub() {
                       <Text style={styles.popRowCount}>{item.count.toLocaleString()}</Text>
                     </Pressable>
                   )}
-                  ListFooterComponent={mode === "cards" ? (
+                  ListFooterComponent={(
                     <Pressable onPress={() => { setGroup(null); setPanel(null); }} style={[styles.popRow, styles.popAction]} testID="phone-live-all-categories">
                       <Text style={styles.popActionText}>All categories</Text>
                     </Pressable>
-                  ) : null}
+                  )}
                 />
               </>
             ) : (
               <>
                 <Text style={styles.popTitle}>Live TV</Text>
-                <Pressable onPress={() => { setPanel(null); router.push("/guide" as any); }} style={styles.popRow} testID="phone-live-timeline">
-                  <Text style={styles.popRowText}>Full timeline Guide</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#CFE6FF" />
-                </Pressable>
                 <Pressable onPress={() => { setPanel(null); void hardRefresh(); }} style={styles.popRow} testID="phone-live-refresh">
                   <Text style={styles.popRowText}>Reload channels and guide</Text>
                   <Ionicons name="refresh-outline" size={16} color="#CFE6FF" />
@@ -402,17 +326,19 @@ const styles = StyleSheet.create({
   cardRow: { gap: 10, marginBottom: 10 },
   card: { flex: 1, borderRadius: 16, borderWidth: 2, borderColor: edge, backgroundColor: "rgba(36,16,70,0.55)", overflow: "hidden" },
   cardTile: { height: 76, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  cardAbbr: { color: "#fff", fontFamily: fonts.bold, fontSize: 28, maxWidth: "100%" },
+  cardNameBig: { color: "#fff", fontFamily: fonts.bold, fontSize: 15, textAlign: "center" },
   cardBody: { padding: 8 },
   cardName: { color: "#fff", fontFamily: fonts.bold, fontSize: 13 },
+  cardNext: { color: "#B7A4DD", fontFamily: fonts.medium, fontSize: 11, marginTop: 1 },
   cardProgram: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 12, marginTop: 2 },
   track: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", marginTop: 8, overflow: "hidden" },
   fill: { height: 4, borderRadius: 2, backgroundColor: "#8FA8FF" },
   guideHead: { flexDirection: "row", gap: 8, paddingHorizontal: 4, paddingBottom: 4 },
   guideHeadText: { color: "#E7DCFB", fontFamily: fonts.bold, fontSize: 14 },
   guideRow: { flexDirection: "row", alignItems: "stretch", gap: 8, marginBottom: 8, minHeight: 70 },
-  guideTile: { flex: 1.1, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, borderWidth: 2, borderColor: edge },
-  guideAbbr: { color: "#fff", fontFamily: fonts.bold, fontSize: 24, maxWidth: "100%" },
+  guideTile: { flex: 1.25, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 4, borderWidth: 2, borderColor: edge },
+  guideName: { color: "#fff", fontFamily: fonts.bold, fontSize: 14, textAlign: "center" },
+  guideNameSmall: { color: "#fff", fontFamily: fonts.bold, fontSize: 11, textAlign: "center", marginTop: 3 },
   guideCell: { borderRadius: 14, padding: 10, borderWidth: 2, borderColor: edge, justifyContent: "center" },
   guideNow: { flex: 2, backgroundColor: "rgba(140,60,90,0.55)" },
   guideNext: { flex: 1.6, backgroundColor: "rgba(80,60,160,0.55)" },

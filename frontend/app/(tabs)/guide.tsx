@@ -17,7 +17,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, Redirect } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -388,11 +388,9 @@ function PurpleGuideScreenContent() {
         openDrawer({ force: true });
         return true;
       }
-      // A phone has the group button on the top row; Back there just leaves the Guide.
-      if (phoneUi) { router.replace("/" as any); return true; }
       setGroupDrawerOpen(true);
       return true;
-    }, [activeProgram, drawerOpen, groupDrawerOpen, openDrawer, router]),
+    }, [activeProgram, drawerOpen, groupDrawerOpen, openDrawer]),
     !pinPromptGroup,
   );
 
@@ -448,7 +446,7 @@ function PurpleGuideScreenContent() {
 
   useFocusEffect(
     useCallback(() => {
-      if (consumeGuideGroupsOnEntry() && !phoneUi) setGroupDrawerOpen(true);
+      if (consumeGuideGroupsOnEntry()) setGroupDrawerOpen(true);
     }, []),
   );
 
@@ -958,8 +956,6 @@ function PurpleGuideScreenContent() {
   );
 
   const onGuideLeftBoundary = useCallback(() => {
-    // Swiping the grid to its left edge on a phone must not throw the drawer open.
-    if (phoneUi) return;
     if (!drawerOpen && !groupDrawerOpen && !activeProgram) setGroupDrawerOpen(true);
   }, [activeProgram, drawerOpen, groupDrawerOpen]);
 
@@ -1033,16 +1029,6 @@ function PurpleGuideScreenContent() {
     });
   }, []);
 
-  /** The group's real name for the phone's top button, never the internal "@playlist-group:UK%20STORE" key. */
-  const groupLabel = useMemo(() => {
-    const sections = playlistMenu.filter((section) => section.id === activePlaylist).concat(playlistMenu);
-    for (const section of sections) {
-      const found = section.groups.find((item) => item.key === group);
-      if (found) return found.label;
-    }
-    return providerGroupIdentity(group);
-  }, [activePlaylist, group, playlistMenu]);
-
   const playlistDrawerRows = useMemo<PurpleGuideGroup[]>(() => playlistMenu.flatMap((section) => {
     const expanded = expandedPlaylists.has(section.id);
     const rows: PurpleGuideGroup[] = [{
@@ -1098,7 +1084,7 @@ function PurpleGuideScreenContent() {
         {/* Phone: the top row of the approved Guide design (back, group, more, search). */}
         {phoneUi && channels.length > 0 ? (
           <GuideTopBar
-            label={groupLabel}
+            label={group}
             onBack={() => router.replace("/" as any)}
             onGroups={() => setGroupDrawerOpen(true)}
             onMore={() => emitTvQuickActions("guide")}
@@ -1260,6 +1246,8 @@ const styles = StyleSheet.create({
 });
 
 export default function PurpleGuideScreen() {
+  // The timeline Guide is TV only; a phone uses Live TV cards instead.
+  if (phoneUi) return <Redirect href={"/channels" as any} />;
   return (
     <FocusedTabMount>
       <PurpleGuideScreenContent />
