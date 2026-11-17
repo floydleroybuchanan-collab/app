@@ -67,7 +67,8 @@ import {
 } from "@/src/core/streamFailureRegistry";
 import { consumeGuideJump, peekGuideJump } from "@/src/core/guideSearchJump";
 import { consumeGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
-import { fonts, glass, glassFocus, spacing, tvColors, phoneUi } from "@/src/theme";
+import { fonts, glass, glassFocus, spacing, tvColors } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { GuideTopBar } from "@/src/components/GuideTopBar";
 import { nowNext } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -200,6 +201,7 @@ function GuideSelectionPreview({
 }
 
 function PurpleGuideScreenContent() {
+  const phoneUi = usePhoneUi();
   const playlists = usePlaylists();
   const playlistsRef = useRef(playlists);
   playlistsRef.current = playlists;
@@ -1247,7 +1249,7 @@ const styles = StyleSheet.create({
 
 export default function PurpleGuideScreen() {
   // The timeline Guide is TV only; a phone uses Live TV cards instead.
-  if (phoneUi) return <Redirect href={"/channels" as any} />;
+  if (usePhoneUi()) return <Redirect href={"/channels" as any} />;
   return (
     <FocusedTabMount>
       <PurpleGuideScreenContent />

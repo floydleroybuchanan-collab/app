@@ -4,11 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useIconRailFocusBoundary, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
-import { fonts, glass, glassFocus, phoneUi } from "@/src/theme";
+import { fonts, glass, glassFocus } from "@/src/theme";
 import { addTvKeyListener, resetRemoteContextIfOwned, setRemoteContext } from "@/src/utils/tvRemote";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 
 /** Consistent, explicit Drawer entry for full-bleed TV pages. */
 export function PurpleDrawerButton({ testID }: { testID: string }) {
+  const phoneUi = usePhoneUi();
   const pathname = usePathname();
   const { focusIconRail, openDrawer } = usePurpleTvDrawer();
   const { iconRailEntryTag } = useIconRailFocusBoundary();

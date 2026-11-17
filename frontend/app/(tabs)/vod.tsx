@@ -3,7 +3,7 @@ import { DeviceEventEmitter, Platform, Pressable, requireNativeComponent, StyleS
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { stopAllPlaybackSessions } from "@/src/core/playbackSession";
-import { phoneUi } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 
 const NativeVod = requireNativeComponent<{ style?: any; startSection?: string; phone?: boolean }>("CharmVodSurface");
@@ -22,6 +22,7 @@ const VOD_TITLE_LINK = /^(movie|tv_show):[^\s]{1,300}$/;
  * Native navigation must never remount the route or cover it with a black overlay.
  */
 export default function VideoOnDemandScreen() {
+  const phoneUi = usePhoneUi();
   // "pane", not "screen": React Navigation strips params.screen as a nested-route key.
   const { section, pane } = useLocalSearchParams<{ section?: string; pane?: string }>();
   const { closeDrawer, openDrawer, focusIconRail } = usePurpleTvDrawer();
@@ -92,7 +93,7 @@ export default function VideoOnDemandScreen() {
       }
     });
     return () => { back.remove(); rail.remove(); guide.remove(); mode.remove(); failure.remove(); mounted.remove(); };
-  }, [focusIconRail, openDrawer, router]);
+  }, [focusIconRail, openDrawer, phoneUi, router]);
 
   useFocusEffect(useCallback(() => {
     enteredAt.current = Date.now();
@@ -114,7 +115,9 @@ export default function VideoOnDemandScreen() {
           // Expo Tabs detach inactive screens, so the native view mounts on attach
           // and tears down on detach without waiting for another JS render.
           <NativeVod
-            key={attempt}
+            // phoneUi is part of the key: a Device Layout change must remount this native
+            // surface right away with the correct host, not wait for the tab to be left and reopened.
+            key={`${attempt}-${phoneUi}`}
             style={styles.surface}
             startSection={startSectionFor(section, pane)}
             phone={phoneUi}

@@ -11,7 +11,8 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, glass, glassFocus, tvColors, phoneUi, ph } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { nowNext } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -64,6 +65,7 @@ export function PurpleChannelCollection({
   subtitle: string;
   matcher: (channel: Channel) => boolean;
 }) {
+  const phoneUi = usePhoneUi();
   const router = useRouter();
   const isFocused = useIsFocused();
   const { width } = useWindowDimensions();

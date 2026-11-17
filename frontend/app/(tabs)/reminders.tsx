@@ -15,7 +15,8 @@ import * as Haptics from "expo-haptics";
 import { PurpleTvShell, usePurpleTvDrawer } from "@/src/components/PurpleTvShell";
 import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore, type Reminder } from "@/src/store";
-import { fonts, glass, glassFocus, radius, tvColors, phoneUi, ph } from "@/src/theme";
+import { fonts, glass, glassFocus, radius, tvColors, ph } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { fmtDayTime } from "@/src/utils/time";
@@ -97,6 +98,7 @@ function ReminderCard({
 }
 
 function RemindersScreenContent() {
+  const phoneUi = usePhoneUi();
   const router = useRouter();
   const isFocused = useIsFocused();
   const { width } = useWindowDimensions();

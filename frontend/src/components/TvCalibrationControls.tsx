@@ -1,9 +1,10 @@
 import React, { useRef, useState } from "react";
 import { GlassIcon } from "@/src/components/GlassIcon";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { fonts, glass, glassFocus } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import {
   TV_CALIBRATION_MAX_OFFSET,
   TV_CALIBRATION_MIN_OFFSET,
@@ -35,8 +36,9 @@ export function TvCalibrationControls() {
   const [active, setActive] = useState<Side | null>(null);
   const savingRef = useRef(false);
   const lastAdjustAt = useRef(0);
+  const phoneUi = usePhoneUi();
 
-  if (!Platform.isTV) {
+  if (phoneUi) {
     return (
       <View style={styles.note}>
         <Text style={styles.noteTitle}>TV screen fit</Text>

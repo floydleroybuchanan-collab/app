@@ -63,7 +63,8 @@ import {
   type SubtitleBg,
   type SubtitleSize,
 } from "@/src/core/subtitlePreferences";
-import { fonts, glass, tvColors, phoneUi, ph } from "@/src/theme";
+import { fonts, glass, tvColors, ph } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { useTvBackHandler } from "@/src/hooks/use-tv-back-to-guide";
 import { useAudioTrackPreferences } from "@/src/core/audioTrackPreferences";
 import { PREFERRED_AUDIO_LANGUAGE_OPTIONS } from "@/src/core/preferredAudioLanguages";
@@ -223,6 +224,7 @@ function formatTimeRemaining(value: number | string | null | undefined): string 
 }
 
 function SettingsScreenContent() {
+  const phoneUi = usePhoneUi();
   const router = useRouter();
   const { iconRailEntryTag } = useIconRailFocusBoundary();
   const { user: accountUser, signOut, loadReferrals, createReferral, deleteReferral, cancelAccount } = useAuth();
@@ -647,7 +649,7 @@ function SettingsScreenContent() {
                   onFocus={index === 0 ? tileEntryFocus.onFocus : undefined}
                   onBlur={index === 0 ? tileEntryFocus.onBlur : undefined}
                   onPress={() => choose(tile.id)}
-                  style={({ focused }: any) => [styles.tile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 0 }]}
+                  style={({ focused }: any) => [styles.tile, phoneUi && styles.tilePhone, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 0 }]}
                   testID={`settings-tile-${tile.id}`}
                 >
                   <Image source={TILE_ART[tile.id]} style={styles.tileArt} resizeMode="contain" />
@@ -676,7 +678,7 @@ function SettingsScreenContent() {
                     key={item.key}
                     nextFocusLeft={index % 4 === 0 ? iconRailEntryTag : undefined}
                     onPress={() => router.push(`/vod?section=settings&pane=${item.key}` as any)}
-                    style={({ focused }: any) => [styles.tile, styles.vodTile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 0 }]}
+                    style={({ focused }: any) => [styles.tile, phoneUi && styles.tilePhone, styles.vodTile, focused && styles.focused, focused && { transform: [{ scale: 1.055 }], elevation: 0 }]}
                     testID={`settings-vod-${item.key}`}
                   >
                     <Image source={item.art} style={styles.tileArt} resizeMode="contain" fadeDuration={0} />
@@ -1369,8 +1371,9 @@ function SettingsScreenContent() {
 }
 
 function SettingsCard({ title, icon, children }: { title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode }) {
+  const phoneUi = usePhoneUi();
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, phoneUi && styles.cardPhone]}>
       <View style={styles.cardHeader}>
         <Image source={glassArt(icon)} style={styles.cardArt} resizeMode="contain" />
         <Text style={styles.cardTitle}>{title}</Text>
@@ -1449,11 +1452,15 @@ const styles = StyleSheet.create({
   tileGridWrap: { flex: 1, minHeight: 0, overflow: "hidden" },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 9, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24 },
   detailsWrap: { flex: 1 },
-  tile: { width: phoneUi ? "31.5%" : "23.8%", minHeight: phoneUi ? 128 : 118, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "rgba(130,72,212,0.50)", borderColor: phoneUi ? glass.buttonEdge : glass.edge, borderWidth: phoneUi ? 2 : 1, borderRadius: phoneUi ? 20 : 16 },
+  tile: { width: "23.8%", minHeight: 118, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "rgba(130,72,212,0.50)", borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
+  // Live overrides for a phone, applied conditionally at each use site so a Device Layout change
+  // (no restart needed) does not leave these two sized for the other device.
+  tilePhone: { width: "31.5%", minHeight: 128, borderColor: glass.buttonEdge, borderWidth: 2, borderRadius: 20 },
   tileIcon: { width: 48, height: 48, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   tileText: { color: "#fff", fontFamily: fonts.medium, fontSize: ph(9.5), textAlign: "center" },
   details: { paddingTop: 10, paddingHorizontal: 24, paddingBottom: 24 },
-  card: { padding: 14, gap: 9, backgroundColor: phoneUi ? glass.panel : glass.panel, borderColor: phoneUi ? glass.edge : glass.edge, borderWidth: phoneUi ? 2 : 1, borderRadius: phoneUi ? 20 : 16 },
+  card: { padding: 14, gap: 9, backgroundColor: glass.panel, borderColor: glass.edge, borderWidth: 1, borderRadius: 16 },
+  cardPhone: { borderWidth: 2, borderRadius: 20 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 9, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: tvColors.line },
   cardIcon: { width: 32, height: 32, alignItems: "center", justifyContent: "center", backgroundColor: glass.button, borderColor: glass.buttonEdge, borderWidth: 1, borderRadius: 12 },
   cardTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: ph(12) },

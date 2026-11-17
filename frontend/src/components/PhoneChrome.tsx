@@ -106,6 +106,9 @@ export function PhoneBottomBar({
               accessibilityRole="button"
               accessibilityLabel={tab.label}
               onPress={() => onNavigate(tab.route)}
+              // Touch only: a connected remote/keyboard's D-pad must not be able to land
+              // Android's hardware focus on the bar from whatever page is open above it.
+              focusable={false}
               style={({ focused }: any) => [styles.tab, focused && styles.focusRing]}
               testID={`purple-phone-bar-${tab.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
@@ -119,6 +122,7 @@ export function PhoneBottomBar({
           accessibilityRole="button"
           accessibilityLabel="More"
           onPress={onMore}
+          focusable={false}
           style={({ focused }: any) => [styles.tab, focused && styles.focusRing]}
           testID="purple-phone-bar-more"
         >
@@ -159,6 +163,8 @@ export function PhoneSideRail({
               accessibilityRole="button"
             accessibilityLabel={item.label}
             onPress={item.press}
+            // Touch only: see the bottom bar's own Pressables for why.
+            focusable={false}
             style={({ focused }: any) => [styles.railItem, focused && styles.focusRing]}
             testID={`purple-phone-rail-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
           >

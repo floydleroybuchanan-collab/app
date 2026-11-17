@@ -30,7 +30,7 @@ import { useStore } from "@/src/store";
 import { fonts, glass, glassFocus, tvColors } from "@/src/theme";
 import { addPlayerQuickCommandListener, addTvKeyListener, addTvLongPressListener, addTvShortcutListener, emitTvQuickActions, resetRemoteContextIfOwned, setRemoteContext, setGuideNavigationActive } from "@/src/utils/tvRemote";
 import { useRemoteShortcutPreferences, type PlayerRemoteAction } from "@/src/core/remoteShortcutPreferences";
-import { getTvSafeInsets, shouldUseTvLayout } from "@/src/utils/tvLayout";
+import { getTvSafeInsets, usePhoneUi } from "@/src/utils/tvLayout";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { requestNativeFocus, requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { PlayerGuidePanel } from "@/src/components/PlayerGuidePanel";
@@ -202,7 +202,11 @@ export default function PlayerScreen() {
   const subtitleAutoAppliedRef = useRef<string | null>(null);
   const audioAutoAppliedRef = useRef<string | null>(null);
 
-  const isTV = Platform.OS !== "web" && Platform.isTV;
+  // A touch phone gets the glass transport icons; the TV keeps its own controls.
+  // isTV mirrors phoneUi (not the frozen Platform.isTV) so a live Device Layout
+  // change - not just a restart - keeps every usage in this screen in agreement.
+  const phoneUi = usePhoneUi();
+  const isTV = !phoneUi;
   useEffect(() => {
     if (!isTV) return;
     setRemoteContext("player");
@@ -212,8 +216,6 @@ export default function PlayerScreen() {
   overlayOpenRef.current = playerOverlay !== null;
   keepControlsRef.current = status === "error" || !channelById(channelId)?.url;
   const safe = useMemo(() => getTvSafeInsets(width, height, deviceLayoutMode), [deviceLayoutMode, height, width]);
-  // A touch phone gets the glass transport icons; the TV keeps its own controls.
-  const phoneUi = !shouldUseTvLayout(deviceLayoutMode);
   const guidePreviewWidth = Math.round((width - safe.left - safe.right - 28) * 0.42);
   const guidePreviewHeight = guidePreviewWidth * 9 / 16;
   // The SAME fullscreen Media3 surface is resized for the small preview window.

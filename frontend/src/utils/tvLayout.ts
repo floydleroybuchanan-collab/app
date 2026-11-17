@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { useStore } from "@/src/store";
 import type { TvCalibration } from "@/src/tvCalibration";
 
 export type DeviceLayoutMode = "auto" | "tv" | "mobile";
@@ -8,6 +9,25 @@ export function shouldUseTvLayout(mode: DeviceLayoutMode = "auto"): boolean {
   if (mode === "tv") return true;
   if (mode === "mobile") return false;
   return Platform.OS !== "web" && !!Platform.isTV;
+}
+
+/**
+ * The live phone/TV decision, for anything that gates WHICH SCREEN OR COMPONENT renders
+ * (Channels' phone cards vs the TV list, the Guide's TV-only redirect, VOD's native host, ...).
+ *
+ * `theme.ts`'s `phoneUi` constant is read once from the native layer at process start and never
+ * again; after a Device Layout change in Settings, the app shell (this same `deviceLayoutMode`)
+ * updates immediately, but a screen gated on that frozen constant does not, until a real process
+ * restart. Depending on how a person "restarts" the app (many relaunches just resume the existing
+ * process), that mismatch can last indefinitely and shows as one device's layout mixed with the
+ * other's content. This hook reads the same live value the shell itself uses, so there is nothing
+ * left to disagree with it. `theme.ts`'s `glass`/`ph` styling tokens stay frozen (changing those
+ * live would need every styled screen's StyleSheet moved out of module scope); this hook is only for
+ * the handful of places that decide what to render, not how to color or size it.
+ */
+export function usePhoneUi(): boolean {
+  const { deviceLayoutMode } = useStore();
+  return !shouldUseTvLayout(deviceLayoutMode);
 }
 
 /**

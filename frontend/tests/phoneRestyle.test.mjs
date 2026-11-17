@@ -14,7 +14,7 @@ test("a touch phone gets the clear-page neon glass tokens; the TV tokens are unt
 
 test("the player uses glass transport icons on a phone only", () => {
   const player = read("app/player.tsx");
-  assert.match(player, /const phoneUi = !shouldUseTvLayout\(deviceLayoutMode\)/);
+  assert.match(player, /const phoneUi = usePhoneUi\(\);/);
   assert.match(player, /phoneUi \? <Image source=\{PLAYER_GLASS\.prev\}/);
   assert.match(player, /<Ionicons name="play-skip-back"/);
   for (const name of ["prev", "pause", "play", "next", "back"]) {
@@ -26,7 +26,7 @@ test("phone layouts: 3-up channel cards, 2/3-up reminders, 3-up settings tiles, 
   const collection = read("src/components/PurpleChannelCollection.tsx");
   assert.match(collection, /phoneUi \? \(width < 600 \? 3 : 4\) : width >= 1500 \? 6/);
   assert.match(read("app/(tabs)/reminders.tsx"), /phoneUi \? \(contentWidth < 600 \? 2 : 3\) : TV_COLUMNS/);
-  assert.match(read("app/(tabs)/settings.tsx"), /width: phoneUi \? "31\.5%" : "23\.8%"/);
+  assert.match(read("app/(tabs)/settings.tsx"), /tilePhone: \{ width: "31\.5%"/);
   assert.match(read("src/components/PurpleDrawerButton.tsx"), /if \(phoneUi\) return null;/);
   assert.match(read("app/player.tsx"), /testID="player-glass-back"/);
 });
@@ -291,7 +291,7 @@ test("phone Live TV is Cards only with pop-down pickers; the Guide is TV only; t
   const chrome = read("src/components/PhoneChrome.tsx");
   assert.doesNotMatch(chrome, /label: "Guide"/);
   const guide = read("app/(tabs)/guide.tsx");
-  assert.match(guide, /if \(phoneUi\) return <Redirect href=\{"\/channels" as any\} \/>;/);
+  assert.match(guide, /if \(usePhoneUi\(\)\) return <Redirect href=\{"\/channels" as any\} \/>;/);
   const vod = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
   assert.match(vod, /setOnClickListener \{ navigateBack\(\) \}/);
   assert.match(vod, /backPill\?\.visibility = if \(top\) View\.GONE else View\.VISIBLE/);
@@ -410,4 +410,61 @@ test("the shared mobile Watch Now / secondary buttons (Home hero, movie/show pag
   assert.match(secondary, /android:color="#59965AEB"/);
   const style = read("android/vod/app/src/main/res/values/style.xml");
   assert.match(style, /<style name="AppTheme\.Widget\.Mobile\.Button" parent="AppTheme\.Mobile">[\s\S]{0,500}<item name="android:textColor">#FFFFFF<\/item>\s*<\/style>/);
+});
+
+test("the phone/TV screen choice is reactive (usePhoneUi), not a frozen constant, so a Device Layout change takes effect without a real process restart", () => {
+  const tvLayout = read("src/utils/tvLayout.ts");
+  assert.match(tvLayout, /export function usePhoneUi\(\): boolean \{/);
+  assert.match(tvLayout, /const \{ deviceLayoutMode \} = useStore\(\);/);
+  const files = {
+    "app/(tabs)/channels.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "app/(tabs)/guide.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "app/(tabs)/index.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "app/(tabs)/reminders.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "app/(tabs)/settings.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "app/(tabs)/vod.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "app/player.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "src/components/PurpleChannelCollection.tsx": /const phoneUi = usePhoneUi\(\);/,
+    "src/components/PurpleDrawerButton.tsx": /const phoneUi = usePhoneUi\(\);/,
+  };
+  for (const [path, pattern] of Object.entries(files)) {
+    const src = read(path);
+    assert.match(src, pattern, path);
+    // None of these import the frozen theme.ts constant any more.
+    assert.doesNotMatch(src, /\{[^}]*\bphoneUi\b[^}]*\} from "@\/src\/theme"/, path);
+  }
+  // VOD's native surface remounts immediately on a Device Layout change instead of waiting for the tab to be left and reopened.
+  const vod = read("app/(tabs)/vod.tsx");
+  assert.match(vod, /key=\{`\$\{attempt\}-\$\{phoneUi\}`\}/);
+});
+
+test("the phone bottom bar and side rail cannot take D-pad/remote focus (a connected remote's Down used to jump focus straight to the bar)", () => {
+  const chrome = read("src/components/PhoneChrome.tsx");
+  const barMatches = [...chrome.matchAll(/focusable=\{false\}/g)];
+  // The bar's tabs, the More button, and the side rail's items: three, plus the existing scrim.
+  assert.ok(barMatches.length >= 4, `expected at least 4 focusable={false}, found ${barMatches.length}`);
+  assert.match(chrome, /onPress=\{\(\) => onNavigate\(tab\.route\)\}\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*focusable=\{false\}/);
+  assert.match(chrome, /accessibilityLabel="More"\s*\n\s*onPress=\{onMore\}\s*\n\s*focusable=\{false\}/);
+  assert.match(chrome, /onPress=\{item\.press\}\s*\/\/[^\n]*\n\s*focusable=\{false\}/);
+});
+
+test("a second, independent frozen isTV flag cannot re-split TV and phone chrome (found in a full-app scan after the usePhoneUi fix)", () => {
+  // These four also decided WHICH screen/component renders from a local isTV
+  // derived straight from the frozen Platform.isTV, instead of the one live
+  // usePhoneUi() signal every other screen already uses - so they could still
+  // show stale TV-or-phone content after a Device Layout change with no restart.
+  const layout = read("app/_layout.tsx");
+  assert.match(layout, /const isTV = !usePhoneUi\(\);/);
+  assert.doesNotMatch(layout, /Platform\.isTV/);
+
+  const player = read("app/player.tsx");
+  assert.match(player, /const phoneUi = usePhoneUi\(\);\s*\n\s*const isTV = !phoneUi;/);
+
+  const search = read("app/(tabs)/search.tsx");
+  assert.match(search, /const isTV = !usePhoneUi\(\);/);
+
+  const calibration = read("src/components/TvCalibrationControls.tsx");
+  assert.match(calibration, /const phoneUi = usePhoneUi\(\);/);
+  assert.match(calibration, /if \(phoneUi\) \{/);
+  assert.doesNotMatch(calibration, /Platform\.isTV/);
 });

@@ -12,7 +12,8 @@ import { Channel } from "@/src/api";
 import { useStore } from "@/src/store";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
 import { useChannelCustomize } from "@/src/core/channelCustomize";
-import { fonts, glass, glassFocus, tvColors, ph, phoneUi } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { PhoneLiveHub } from "@/src/components/PhoneLiveHub";
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
@@ -351,6 +352,7 @@ function PhoneChannelsScreen() {
 }
 
 export default function ChannelsScreen() {
+  const phoneUi = usePhoneUi();
   return (
     <FocusedTabMount>
       {phoneUi ? <PhoneChannelsScreen /> : <ChannelsScreenContent />}

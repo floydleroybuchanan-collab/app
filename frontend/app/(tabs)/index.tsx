@@ -13,7 +13,8 @@ import { ChannelLogo } from "@/src/components/ChannelLogo";
 import { useStore } from "@/src/store";
 import { Channel } from "@/src/api";
 import { useGuidePrograms } from "@/src/core/guideProgramsStore";
-import { fonts, glass, glassFocus, tvColors, ph, phoneUi } from "@/src/theme";
+import { fonts, glass, glassFocus, tvColors, ph } from "@/src/theme";
+import { usePhoneUi } from "@/src/utils/tvLayout";
 import { ChannelCard } from "@/src/components/PhoneLiveHub";
 import { fmtTime, nowNext, progressPct } from "@/src/utils/time";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
@@ -103,6 +104,7 @@ const VodRecentCard = React.memo(function VodRecentCard({ item, onOpen }: { item
 });
 
 function LiveTvHomeScreenContent() {
+  const phoneUi = usePhoneUi();
   const router = useRouter();
   const isFocused = useIsFocused();
   const { focusIconRail } = usePurpleTvDrawer();
@@ -214,7 +216,7 @@ function LiveTvHomeScreenContent() {
     // as belonging to some other list (the TV Guide keeps its own set).
     if (phoneUi) retainGuideSlidingCache(ids);
     void patchProgramsForChannelIds(ids, heroChannel?.id ? [heroChannel.id] : ids.slice(0, 1));
-  }, [channels.length, heroChannel?.id, isFocused, patchProgramsForChannelIds, recentLive, retainGuideSlidingCache]);
+  }, [channels.length, heroChannel?.id, isFocused, patchProgramsForChannelIds, phoneUi, recentLive, retainGuideSlidingCache]);
 
   const play = useCallback(
     (channel: Channel) => {

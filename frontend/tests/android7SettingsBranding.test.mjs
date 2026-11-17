@@ -27,6 +27,7 @@ test('each TV calibration button changes exactly one pixel on all four edges', (
     react, 'react-native': { Platform: { isTV: true }, StyleSheet: { create: value => value } },
     'expo-haptics': { selectionAsync: async () => {} },
     '@/src/theme': { fonts: {}, radius: {}, spacing: {}, glass: {}, glassFocus: {}, ph: (n) => n, phoneUi: false },
+    '@/src/utils/tvLayout': { usePhoneUi: () => false },
     '@/src/tvCalibration': { TV_CALIBRATION_MIN_OFFSET: -96, TV_CALIBRATION_MAX_OFFSET: 96,
       useTvCalibration: () => ({ draftCalibration: draft, setSide: (side, value) => changes.push([side, value]) }) },
   }, '', { Date: { now: () => now += 200 } });
