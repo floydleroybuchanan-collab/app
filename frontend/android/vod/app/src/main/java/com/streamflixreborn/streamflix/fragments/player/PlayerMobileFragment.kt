@@ -668,14 +668,16 @@ class PlayerMobileFragment : Fragment() {
         }
 
         binding.pvPlayer.controller.binding.btnExoAspectRatio.setOnClickListener {
-            val newResize = UserPreferences.playerResize.next()
-            zoomToast?.cancel()
-            zoomToast = Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)
-            zoomToast?.show()
+            // A drawer listing every mode by name, instead of a single tap cycling blind.
+            AspectPicker.show(this@PlayerMobileFragment, UserPreferences.playerResize, UserPreferences.PlayerResize.entries) { newResize ->
+                zoomToast?.cancel()
+                zoomToast = Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)
+                zoomToast?.show()
 
-            UserPreferences.playerResize = newResize
-            binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
-            updatePlayerScale()
+                UserPreferences.playerResize = newResize
+                binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
+                updatePlayerScale()
+            }
         }
 
         binding.pvPlayer.controller.binding.exoSettings.setOnClickListener {

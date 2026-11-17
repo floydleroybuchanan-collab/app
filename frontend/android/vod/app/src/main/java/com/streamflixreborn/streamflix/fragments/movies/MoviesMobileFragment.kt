@@ -46,6 +46,7 @@ class MoviesMobileFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        com.streamflixreborn.streamflix.charm.VodPhoneHeader.attach(this, binding.root, "Movies")
 
         initializeMovies()
 

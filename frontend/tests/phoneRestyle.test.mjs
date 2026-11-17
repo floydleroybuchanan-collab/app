@@ -199,10 +199,25 @@ test("the player's Quick Actions reach it on a phone (Aspect ratio used to do no
   const player = read("app/player.tsx");
   assert.doesNotMatch(player, /if \(!isTV\) return;\s*return addPlayerQuickCommandListener/);
   assert.match(player, /return addPlayerQuickCommandListener\(\(command\) => \{/);
-  assert.match(player, /testID="player-aspect-ratio" onPress=\{cycleScaleMode\}/);
+  assert.match(player, /testID="player-aspect-ratio" onPress=\{openAspectPicker\}/);
+  // The embedded VOD player's own aspect button now opens AspectPicker rather than cycling in place
+  // (see the dedicated AspectPicker test below for the full picture).
   const vod = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt");
-  assert.match(vod, /UserPreferences\.PlayerResize\.Fit -> UserPreferences\.PlayerResize\.Fill/);
-  assert.match(vod, /UserPreferences\.PlayerResize\.Fill -> UserPreferences\.PlayerResize\.Zoom/);
+  assert.match(vod, /AspectPicker\.show\(/);
+  assert.doesNotMatch(vod, /UserPreferences\.PlayerResize\.Fit -> UserPreferences\.PlayerResize\.Fill/);
+});
+
+test("Aspect ratio opens a drawer of choices (on any device) instead of silently cycling, and each choice becomes the new default", () => {
+  const player = read("app/player.tsx");
+  assert.match(player, /command === "CYCLE_ASPECT"[\s\S]{0,60}return openAspectPicker\(\)/);
+  assert.match(player, /const ASPECT_OPTIONS: \{ mode: PlayerViewMode; label: string; help: string \}\[\] = \[/);
+  for (const mode of ["fit", "fill", "zoom", "stretch"]) assert.ok(player.includes(`{ mode: "${mode}"`), mode);
+  assert.match(player, /testID="player-aspect-picker"/);
+  assert.match(player, /setPlayerAspectMode\(mode\);/);
+  assert.match(player, /playerAspectMode,\s*setPlayerAspectMode,/);
+  const store = read("src/store.tsx");
+  assert.match(store, /const PLAYER_ASPECT_KEY = "gs_player_aspect_mode";/);
+  assert.match(store, /setPlayerAspectModeState\(v\);\s*storage\.setItem\(PLAYER_ASPECT_KEY, v\);/);
 });
 
 test("every command the Quick Actions drawer sends to the player has a handler in the player, on any device", () => {
@@ -262,7 +277,9 @@ test("phone Live TV is Cards only with pop-down pickers; the Guide is TV only; t
   for (const id of ["phone-live-playlist", "phone-live-group", "phone-live-search", "phone-live-manage", "phone-live-add"]) assert.ok(hub.includes(id), id);
   assert.doesNotMatch(hub, /phone-live-mode|Full timeline Guide|GuideRow/);
   assert.match(hub, /Categories/);
-  assert.match(hub, /Next: \$\{next\.title\}/);
+  // "What's Next" is its own labelled row under the status bar, not folded into the "until" line.
+  assert.match(hub, /What&rsquo;s Next<\/Text>/);
+  assert.match(hub, /\{next\.title\}<\/Text>/);
   assert.match(hub, /until \$\{ends\}/);
   // No logo: the whole channel name, not a few letters.
   assert.match(hub, /\{channel\.name\}<\/Text>\s*\)\}\s*<\/LinearGradient>/);
@@ -321,4 +338,43 @@ test("TV Guide: channel boxes are 20% narrower, logo-less channels get a TV icon
   assert.doesNotMatch(view, /TILE_COLORS|tileFill/);
   // The text starts after the icon, so it can never run under it.
   assert.match(view, /drawChannelName\(canvas, row\.label, pad \+ logoSpace, top, channelWidth - pad\)/);
+});
+
+test("Settings has a Default aspect ratio row for the Live TV player, matching the in-player drawer", () => {
+  const settings = read("app/(tabs)/settings.tsx");
+  assert.match(settings, /label="Default aspect ratio"/);
+  assert.match(settings, /value=\{playerAspectMode\}/);
+  assert.match(settings, /onChange=\{setPlayerAspectMode\}/);
+  for (const mode of ["fit", "fill", "zoom", "stretch"]) assert.ok(settings.includes(`value: "${mode}"`), mode);
+});
+
+test("the embedded VOD player's Aspect ratio button opens a drawer of named choices too, on TV and on phone", () => {
+  const picker = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/vod/AspectPicker.kt");
+  assert.match(picker, /object AspectPicker/);
+  assert.match(picker, /fun show\(/);
+  const tv = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt");
+  assert.match(tv, /AspectPicker\.show\(\s*this@PlayerTvFragment,\s*UserPreferences\.playerResize,\s*listOf\(UserPreferences\.PlayerResize\.Fit, UserPreferences\.PlayerResize\.Fill, UserPreferences\.PlayerResize\.Zoom\),/);
+  const mobile = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt");
+  assert.match(mobile, /AspectPicker\.show\(this@PlayerMobileFragment, UserPreferences\.playerResize, UserPreferences\.PlayerResize\.entries\)/);
+  // The TV fragment's own quality-switch-safe scale reset still only lets Fit/Fill/Zoom change the picture there.
+  assert.doesNotMatch(tv, /AspectPicker\.show\([^)]*PlayerResize\.entries/);
+});
+
+test("VOD Settings keeps its phone-appropriate row styling now that phones reuse the TV settings screen", () => {
+  const settings = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/SettingsTvFragment.kt");
+  assert.match(settings, /private fun isEmbeddedOnPhone\(\): Boolean =\s*parentFragment\?\.parentFragment is com\.streamflixreborn\.streamflix\.charm\.VodRootMobileFragment/);
+  assert.match(settings, /SettingsListStyler\.attach\(view, isTv = !isEmbeddedOnPhone\(\)\)/);
+  assert.doesNotMatch(settings, /SettingsListStyler\.attach\(view, isTv = true\)/);
+  const styler = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/settings/SettingsListStyler.kt");
+  assert.match(styler, /0x999A5CF0/);
+});
+
+test("Movies and TV Shows on a phone show a page title over the grid, matching the design Genres and Platforms already have", () => {
+  const header = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodPhoneHeader.kt");
+  assert.match(header, /object VodPhoneHeader/);
+  assert.match(header, /fragment\.parentFragment\?\.parentFragment !is VodRootMobileFragment/);
+  const movies = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/movies/MoviesMobileFragment.kt");
+  assert.match(movies, /VodPhoneHeader\.attach\(this, binding\.root, "Movies"\)/);
+  const shows = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/tv_shows/TvShowsMobileFragment.kt");
+  assert.match(shows, /VodPhoneHeader\.attach\(this, binding\.root, "TV Shows"\)/);
 });

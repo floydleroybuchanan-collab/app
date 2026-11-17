@@ -60,6 +60,16 @@ import { useAppPolicy } from "@/src/core/useAppPolicy";
 const SWITCH_NOTICE_MS = 1800;
 const STABLE_HISTORY_DELAY_MS = 5000;
 type PlayerViewMode = "fit" | "fill" | "zoom" | "stretch";
+const ASPECT_LABELS: Record<PlayerViewMode, string> = {
+  fit: "Aspect: Fit", fill: "Aspect: Fill", zoom: "Aspect: Zoom", stretch: "Aspect: Stretch",
+};
+/** The drawer's rows, in the order shown: the source's own shape first, then the ones that crop or distort it. */
+const ASPECT_OPTIONS: { mode: PlayerViewMode; label: string; help: string }[] = [
+  { mode: "fit", label: "Fit", help: "Shows the whole picture at the source's own aspect ratio (letterboxed if needed)." },
+  { mode: "fill", label: "Fill", help: "Stretches the picture to fill the screen; may distort it." },
+  { mode: "zoom", label: "Zoom", help: "Crops the picture's edges to fill the screen without distorting it." },
+  { mode: "stretch", label: "Stretch", help: "Stretches only the thin bars at the edges." },
+];
 
 const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
   "start-timeout": "start timeout",
@@ -125,6 +135,8 @@ export default function PlayerScreen() {
     deviceLayoutMode,
     sleepTimerMinutes,
     setSleepTimerMinutes,
+    playerAspectMode,
+    setPlayerAspectMode,
   } = useStore();
 
   const [channelId, setChannelId] = useState(params.channelId);
@@ -132,18 +144,20 @@ export default function PlayerScreen() {
   const [failReason, setFailReason] = useState<SessionFailReason | null>(null);
   const [retryToken, setRetryToken] = useState(0);
   const [controls, setControls] = useState(true);
-  const [playerOverlay, setPlayerOverlay] = useState<"channels" | "tracks" | null>(null);
+  const [playerOverlay, setPlayerOverlay] = useState<"channels" | "tracks" | "aspect" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [playerNow, setPlayerNow] = useState(() => new Date());
   const [playbackPaused, setPlaybackPaused] = useState(false);
-  const [scaleMode, setScaleMode] = useState<PlayerViewMode>("fit");
+  // Starts on whatever was last picked (Settings > Player, or this drawer), not always "Fit".
+  const [scaleMode, setScaleMode] = useState<PlayerViewMode>(playerAspectMode);
   const [audioTracks, setAudioTracks] = useState<StreamTrack[]>([]);
   const [textTracks, setTextTracks] = useState<StreamTrack[]>([]);
   const [audioTrackId, setAudioTrackId] = useState<string | number | undefined>(undefined);
   const [textTrackId, setTextTrackId] = useState<string | number | undefined>(undefined);
   const channelsOpen = playerOverlay === "channels";
   const tracksOpen = playerOverlay === "tracks";
-  const setOverlayOpen = useCallback((name: "channels" | "tracks", next: React.SetStateAction<boolean>) => {
+  const aspectOpen = playerOverlay === "aspect";
+  const setOverlayOpen = useCallback((name: "channels" | "tracks" | "aspect", next: React.SetStateAction<boolean>) => {
     setPlayerOverlay((current) => {
       const open = current === name;
       const resolved = typeof next === "function" ? next(open) : next;
@@ -152,6 +166,7 @@ export default function PlayerScreen() {
   }, []);
   const setChannelsOpen = useCallback((next: React.SetStateAction<boolean>) => setOverlayOpen("channels", next), [setOverlayOpen]);
   const setTracksOpen = useCallback((next: React.SetStateAction<boolean>) => setOverlayOpen("tracks", next), [setOverlayOpen]);
+  const setAspectOpen = useCallback((next: React.SetStateAction<boolean>) => setOverlayOpen("aspect", next), [setOverlayOpen]);
   const { defaultLanguage: subtitleDefaultLanguage } = useSubtitlePreferences();
   const audioPreferences = useAudioTrackPreferences();
   const [playbackBufferProfile] = usePlaybackBufferProfile();
@@ -177,6 +192,7 @@ export default function PlayerScreen() {
   const controlsFocusedRef = useRef(false);
   const errorButtonRef = useRef<any>(null);
   const subtitlesOffRef = useRef<any>(null);
+  const aspectFirstRowRef = useRef<any>(null);
   const cancelFocusRef = useRef<(() => void) | null>(null);
   const overlayOpenRef = useRef(false);
   const keepControlsRef = useRef(false);
@@ -314,6 +330,15 @@ export default function PlayerScreen() {
   }, [claimControlsFocus, controls, playerOverlay, scheduleHide, status]);
 
   useEffect(() => {
+    // On TV there is no on-screen Aspect button (Quick Actions is the only opener), so there is no
+    // button ref for the drawer to return focus to; drop it straight onto the first row instead.
+    if (!isTV || !aspectOpen) return;
+    controlsFocusedRef.current = false;
+    return requestNativeFocusWithRetry(() => aspectFirstRowRef.current, [0, 32, 96, 200],
+      () => controlsFocusedRef.current || exitInFlightRef.current);
+  }, [aspectOpen, isTV]);
+
+  useEffect(() => {
     if (!isTV || !tracksOpen) return;
     controlsFocusedRef.current = false;
     return requestNativeFocusWithRetry(() => subtitlesOffRef.current, [0, 32, 96, 200],
@@ -366,28 +391,34 @@ export default function PlayerScreen() {
     changeChannel(previous, true); setPlayerOverlay(null);
   }, [changeChannel]);
 
-  const cycleScaleMode = useCallback(() => {
-    setScaleMode((currentMode) => {
-      const nextMode: PlayerViewMode = currentMode === "fit" ? "fill" : currentMode === "fill" ? "zoom" : currentMode === "zoom" ? "stretch" : "fit";
-      showNotice(nextMode === "fit" ? "Aspect: Fit" : nextMode === "fill" ? "Aspect: Fill" : nextMode === "zoom" ? "Aspect: Zoom" : "Aspect: Stretch");
-      return nextMode;
-    });
+  const openAspectPicker = useCallback(() => {
+    setChannelsOpen(false); setTracksOpen(false); setAspectOpen(true);
     revealControls({ claimChannelsFocus: false });
-  }, [revealControls, showNotice]);
+  }, [revealControls, setAspectOpen, setChannelsOpen, setTracksOpen]);
+
+  // Every choice here also becomes the default for the next playback session, the same way the
+  // Settings > Player row and the embedded VOD player's own aspect choice already persist.
+  const chooseScaleMode = useCallback((mode: PlayerViewMode) => {
+    setScaleMode(mode);
+    showNotice(ASPECT_LABELS[mode]);
+    setPlayerAspectMode(mode);
+    setAspectOpen(false);
+  }, [setAspectOpen, setPlayerAspectMode, showNotice]);
 
   // Quick Actions (Aspect ratio, Audio / subtitles, Previous channel, Diagnostics) reach the player on a phone too.
   // This listener used to be registered for a TV only, so on a phone "Aspect ratio" did nothing.
   useEffect(() => {
     return addPlayerQuickCommandListener((command) => {
       if (guideOverlayOpenRef.current) return;
-      if (command === "CYCLE_ASPECT") return cycleScaleMode();
+      // A single tap used to just cycle to the next mode with no way to see or pick the others.
+      if (command === "CYCLE_ASPECT") return openAspectPicker();
       if (command === "OPEN_TRACKS") {
         controlsRef.current = true; setControls(true); setChannelsOpen(false); setTracksOpen(true); overlayOpenerRef.current = null; scheduleHide(); return;
       }
       if (command === "PREVIOUS_CHANNEL") return returnToPreviousChannel();
       if (command === "SAVE_DIAGNOSTICS") saveAudioReportRef.current();
     });
-  }, [cycleScaleMode, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
+  }, [openAspectPicker, returnToPreviousChannel, scheduleHide, setChannelsOpen, setTracksOpen]);
 
   const restartStream = useCallback(() => {
     if (!hasStream || exitInFlightRef.current || failReason === "unsupported-protocol") return;
@@ -560,11 +591,11 @@ export default function PlayerScreen() {
       if (guideOverlayOpenRef.current) { setGuideOverlayOpen(false); return true; }
       if (exitInFlightRef.current) return true;
       if (!controlsRef.current) { revealControls(); return true; }
-      if (tracksOpen || channelsOpen) { closeOverlayAndRestoreFocus(); scheduleHide(); return true; }
+      if (tracksOpen || channelsOpen || aspectOpen) { closeOverlayAndRestoreFocus(); scheduleHide(); return true; }
       stopAndExit(); return true;
     });
     return () => sub.remove();
-  }, [channelsOpen, closeOverlayAndRestoreFocus, revealControls, scheduleHide, stopAndExit, tracksOpen]);
+  }, [aspectOpen, channelsOpen, closeOverlayAndRestoreFocus, revealControls, scheduleHide, stopAndExit, tracksOpen]);
 
   const engineScaleMode: PlayerScaleMode = scaleMode;
 
@@ -713,8 +744,8 @@ export default function PlayerScreen() {
               <Pressable ref={nextButtonRef} disabled={streamChannels.length < 2} onPress={() => stepChannel(1)} style={({ focused }: any) => [styles.iconControl, focused && styles.focused]}>{phoneUi ? <Image source={PLAYER_GLASS.next} style={styles.glassTransport} /> : <Ionicons name="play-skip-forward" size={18} color="#fff" />}</Pressable>
               <View style={styles.controlsSpacer} />
               {phoneUi ? (
-                <Pressable accessibilityRole="button" accessibilityLabel="Aspect ratio" testID="player-aspect-ratio" onPress={cycleScaleMode} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}>
-                  <Ionicons name="resize-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>{`Aspect: ${scaleMode === "fit" ? "Fit" : scaleMode === "fill" ? "Fill" : scaleMode === "zoom" ? "Zoom" : "Stretch"}`}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Aspect ratio" testID="player-aspect-ratio" onPress={openAspectPicker} style={({ focused }: any) => [styles.textControl, aspectOpen && styles.controlActive, focused && styles.focused]}>
+                  <Ionicons name="resize-outline" size={15} color="#fff" /><Text style={styles.controlLabel}>{ASPECT_LABELS[scaleMode]}</Text>
                 </Pressable>
               ) : null}
               <Pressable onPress={() => { setChannelsOpen(false); setTracksOpen(false); if (hideTimer.current) clearTimeout(hideTimer.current); emitTvQuickActions("player"); }} style={({ focused }: any) => [styles.textControl, focused && styles.focused]}><Ionicons name="ellipsis-horizontal" size={15} color="#fff" /><Text style={styles.controlLabel}>Quick Actions</Text></Pressable>
@@ -732,6 +763,29 @@ export default function PlayerScreen() {
                 <Text style={[styles.controlLabel, { marginTop: 8 }]}>Subtitles</Text>
                 <Pressable ref={subtitlesOffRef} onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
                 {textTracks.map((track) => <Pressable key={`t-${track.id}`} onPress={() => setTextTrackId(track.id)} style={({ focused }: any) => [styles.trackRow, textTrackId === track.id && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>{track.name}</Text></Pressable>)}
+              </View>
+            ) : null}
+
+            {aspectOpen ? (
+              <View style={styles.tracksPanel} testID="player-aspect-picker">
+                <Text style={styles.controlLabel}>Aspect ratio</Text>
+                {ASPECT_OPTIONS.map((option, index) => (
+                  <Pressable
+                    key={option.mode}
+                    ref={index === 0 ? aspectFirstRowRef : undefined}
+                    onPress={() => chooseScaleMode(option.mode)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${option.label}. ${option.help}`}
+                    testID={`player-aspect-option-${option.mode}`}
+                    style={({ focused }: any) => [styles.trackRow, scaleMode === option.mode && styles.controlActive, focused && styles.focused]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.controlLabel}>{option.label}{scaleMode === option.mode ? " · current & default" : ""}</Text>
+                      <Text style={styles.errorText}>{option.help}</Text>
+                    </View>
+                    {scaleMode === option.mode ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                  </Pressable>
+                ))}
               </View>
             ) : null}
 

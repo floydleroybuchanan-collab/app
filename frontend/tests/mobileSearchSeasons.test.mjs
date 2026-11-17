@@ -15,10 +15,14 @@ test("Device layout is decided natively before the first screen and Mobile is re
   assert.match(runtime, /return !!info\.leanback \|\| !info\.touch \|\| !!info\.keyboard;/);
   assert.match(runtime, /get: \(\) => actsAsTv/);
   assert.match(runtime, /export function applyDeviceLayoutChoice/);
-  // Nothing saved means Auto, not a forced TV layout.
-  assert.match(store, /useState<DeviceLayoutMode>\("auto"\)/);
-  assert.match(store, /getItem<DeviceLayoutMode>\(DEVICE_LAYOUT_MODE_KEY, "auto"\)/);
-  assert.equal((store.match(/applyDeviceLayoutChoice\(/g) || []).length, 2);
+  assert.match(runtime, /export function currentDeviceLayoutMode\(\): DeviceLayoutChoice/);
+  // theme.ts's `phoneUi` constant freezes on this same native read at process start. The reactive
+  // `deviceLayoutMode` in the store must start from that exact value, not a separately stored JS
+  // copy that could disagree with it and leave the shell and the screens picking different layouts.
+  assert.match(store, /useState<DeviceLayoutMode>\(\(\) => currentDeviceLayoutMode\(\)\)/);
+  // A stored JS value is mirrored for display, never re-applied over the native decision.
+  assert.doesNotMatch(store, /if \(!settingsTouchedRef\.current\.has\(DEVICE_LAYOUT_MODE_KEY\)\) \{\s*applyDeviceLayoutChoice/);
+  assert.equal((store.match(/applyDeviceLayoutChoice\(/g) || []).length, 1);
   assert.match(device, /isBlockingSynchronousMethod = true\)\s+fun profileSync/);
   assert.match(device, /FEATURE_TOUCHSCREEN/);
   assert.match(pkg, /CharmDeviceModule\(context\)/);

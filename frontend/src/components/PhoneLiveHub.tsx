@@ -78,10 +78,14 @@ export const ChannelCard = memo(function ChannelCard({ channel, now, logos, onPl
       <View style={styles.cardBody}>
         {hasLogo ? <Text numberOfLines={1} style={styles.cardName}>{channel.name}</Text> : null}
         <Text numberOfLines={1} style={styles.cardProgram}>{current ? current.title : "No guide information"}</Text>
-        <Text numberOfLines={1} style={styles.cardNext}>
-          {current && ends ? `until ${ends}` : ""}{current && ends && next ? " · " : ""}{next ? `Next: ${next.title}` : ""}
-        </Text>
+        <Text numberOfLines={1} style={styles.cardWhen}>{current && ends ? `until ${ends}` : ""}</Text>
         <View style={styles.track}><View style={[styles.fill, { width: `${progress}%` }]} /></View>
+        {next ? (
+          <View style={styles.nextRow}>
+            <Text style={styles.nextLabel}>What&rsquo;s Next</Text>
+            <Text numberOfLines={1} style={styles.nextTitle}>{next.title}</Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -395,7 +399,10 @@ const styles = StyleSheet.create({
   cardBody: { padding: 8 },
   cardName: { color: "#D9C8F5", fontFamily: fonts.medium, fontSize: 12 },
   cardProgram: { color: "#fff", fontFamily: fonts.bold, fontSize: 13, marginTop: 2 },
-  cardNext: { color: "#B7A4DD", fontFamily: fonts.medium, fontSize: 11, marginTop: 1 },
+  cardWhen: { color: "#B7A4DD", fontFamily: fonts.medium, fontSize: 11, marginTop: 1, minHeight: 13 },
+  nextRow: { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.14)" },
+  nextLabel: { color: "#8FA8FF", fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.5 },
+  nextTitle: { color: "#fff", fontFamily: fonts.semibold, fontSize: 12, marginTop: 1 },
   track: { height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", marginTop: 8, overflow: "hidden" },
   fill: { height: 4, borderRadius: 2, backgroundColor: "#8FA8FF" },
   focusRing: { borderColor: "#fff", backgroundColor: "rgba(170,110,255,0.45)" },

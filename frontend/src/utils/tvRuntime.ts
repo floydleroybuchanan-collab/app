@@ -52,6 +52,21 @@ if (Platform.OS === "android" && !nativeTv) {
 }
 
 /**
+ * The Device layout choice ("auto"/"tv"/"mobile") already read from the native module at process
+ * start — the exact value `Platform.isTV` (and so `theme.ts`'s `phoneUi` constant) was decided from.
+ * Anything that needs to show or reason about "what layout is this running as" reads this, instead of
+ * a separately persisted copy that could fall out of step with what `phoneUi` already froze on.
+ */
+export function currentDeviceLayoutMode(): DeviceLayoutChoice {
+  return normalize(profile?.mode);
+}
+
+/** The live phone/TV decision right now (reflects the most recent `applyDeviceLayoutChoice` call). */
+export function currentlyActsAsTv(): boolean {
+  return actsAsTv;
+}
+
+/**
  * Applies the Device layout setting now and remembers it natively so the next
  * launch starts in that layout. Returns true when the behaviour changed.
  */

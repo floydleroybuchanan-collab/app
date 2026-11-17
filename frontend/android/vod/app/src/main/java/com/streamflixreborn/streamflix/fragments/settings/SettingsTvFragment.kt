@@ -267,9 +267,16 @@ class SettingsTvFragment : LeanbackPreferenceFragmentCompat() {
         view?.post { listView?.requestFocus() }
     }
 
+    // This screen is shared: the embedded TV host uses it as-is, and the embedded phone host
+    // reuses it too (the mobile preference screen restarts the whole standalone VOD activity on a
+    // theme or language change, which would close the app). Row styling must still match whichever
+    // host actually mounted it, not assume TV.
+    private fun isEmbeddedOnPhone(): Boolean =
+        parentFragment?.parentFragment is com.streamflixreborn.streamflix.charm.VodRootMobileFragment
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        SettingsListStyler.attach(view, isTv = true)
+        SettingsListStyler.attach(view, isTv = !isEmbeddedOnPhone())
         SettingsListStyler.setSectionGrid(view, currentScreenState.rootKey == null)
         view.post { listView?.requestFocus() }
     }

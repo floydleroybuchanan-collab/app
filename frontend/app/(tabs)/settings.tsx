@@ -1,3 +1,4 @@
+import type { PlayerScaleMode } from "@/src/components/StreamPlayer";
 import { useMultiviewPreferences, updateMultiviewPreferences } from "@/src/core/multiviewPreferences";
 import { GlassBackdrop } from "@/src/components/GlassBackdrop";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -245,6 +246,8 @@ function SettingsScreenContent() {
     setDeviceLayoutMode,
     playerControlsTimeoutMs,
     setPlayerControlsTimeoutMs,
+    playerAspectMode,
+    setPlayerAspectMode,
     preferTvgIdOnly,
     powerProfile,
     setPowerProfile,
@@ -754,6 +757,18 @@ function SettingsScreenContent() {
                   options={[{ label: "8 sec", value: 8000 }, { label: "15 sec", value: 15000 }, { label: "30 sec", value: 30000 }, { label: "60 sec", value: 60000 }]}
                   onChange={setPlayerControlsTimeoutMs}
                 />
+                <ChoiceRow<PlayerScaleMode>
+                  label="Default aspect ratio"
+                  value={playerAspectMode}
+                  options={[
+                    { label: "Fit (source)", value: "fit" },
+                    { label: "Fill", value: "fill" },
+                    { label: "Zoom", value: "zoom" },
+                    { label: "Stretch", value: "stretch" },
+                  ]}
+                  onChange={setPlayerAspectMode}
+                />
+                <Text style={styles.help}>What every Live TV channel starts at. The player&apos;s own Aspect ratio button and Quick Actions also update this.</Text>
                 <ChoiceRow<LongDownAction>
                   label="Remote · Long Down"
                   value={remoteShortcuts.longDown}

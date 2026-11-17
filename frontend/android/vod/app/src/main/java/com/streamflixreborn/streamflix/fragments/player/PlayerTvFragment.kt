@@ -877,21 +877,23 @@ class PlayerTvFragment : Fragment() {
             binding.pvPlayer.controller.binding.exoProgress.setKeyTimeIncrement(10_000)
 
             binding.pvPlayer.controller.binding.btnExoAspectRatio.setOnClickListener {
-                // Three of the six modes (4:3, stretch vertical, super zoom) are drawn with a surface scale that this player resets,
-                // so they looked identical to Fit and the button seemed to do nothing. Cycle only through the three that change the picture.
-                val newResize = when (UserPreferences.playerResize) {
-                    UserPreferences.PlayerResize.Fit -> UserPreferences.PlayerResize.Fill
-                    UserPreferences.PlayerResize.Fill -> UserPreferences.PlayerResize.Zoom
-                    else -> UserPreferences.PlayerResize.Fit
-                }
-                zoomToast?.cancel()
-                zoomToast =
-                    Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)
-                zoomToast?.show()
+                // A drawer listing every mode by name, instead of a single tap cycling blind. Only
+                // Fit/Fill/Zoom are offered here: the other three rely on a surface scale that this
+                // player's own quality-switch-safe geometry reset always undoes, so they would look
+                // identical to Fit and the row would seem to do nothing.
+                AspectPicker.show(
+                    this@PlayerTvFragment,
+                    UserPreferences.playerResize,
+                    listOf(UserPreferences.PlayerResize.Fit, UserPreferences.PlayerResize.Fill, UserPreferences.PlayerResize.Zoom),
+                ) { newResize ->
+                    zoomToast?.cancel()
+                    zoomToast = Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)
+                    zoomToast?.show()
 
-                UserPreferences.playerResize = newResize
-                binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
-                updatePlayerScale()
+                    UserPreferences.playerResize = newResize
+                    binding.pvPlayer.controllerShowTimeoutMs = binding.pvPlayer.controllerShowTimeoutMs
+                    updatePlayerScale()
+                }
             }
 
             binding.pvPlayer.controller.binding.exoSettings.setOnClickListener {

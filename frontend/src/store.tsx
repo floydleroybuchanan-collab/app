@@ -1,5 +1,6 @@
+import type { PlayerScaleMode } from "@/src/components/StreamPlayer";
 import { activeGroupChannels } from "@/src/core/groupVisibility";
-import { applyDeviceLayoutChoice } from "@/src/utils/tvRuntime";
+import { applyDeviceLayoutChoice, currentDeviceLayoutMode } from "@/src/utils/tvRuntime";
 import { useGuideGroupTabPreferences } from "@/src/core/guideGroupTabPersistence";
 import { useGuideUiPreferences } from "@/src/core/guideUiPreferences";
 import React, { createContext, startTransition, useCallback, useContext, useEffect, useRef, useState, useMemo } from "react";
@@ -75,6 +76,7 @@ const CHANNEL_NUMBERS_KEY = "gs_channel_numbers";
 const CHANNEL_LOGOS_KEY = "gs_channel_logos";
 const DEVICE_LAYOUT_MODE_KEY = "gs_device_layout_mode";
 const PLAYER_TIMEOUT_KEY = "gs_player_timeout_ms";
+const PLAYER_ASPECT_KEY = "gs_player_aspect_mode";
 const PREFER_TVG_ID_ONLY_KEY = "gs_prefer_tvg_id_only";
 const POWER_PROFILE_KEY = "gs_power_profile";
 const LOGOS_OFF_SURF_KEY = "gs_logos_off_while_surfing";
@@ -220,6 +222,9 @@ export type Store = {
   setDeviceLayoutMode: (v: DeviceLayoutMode) => void;
   playerControlsTimeoutMs: PlayerControlsTimeoutMs;
   setPlayerControlsTimeoutMs: (v: PlayerControlsTimeoutMs) => void;
+  /** Live TV's remembered aspect mode: a new playback session starts on whatever was last chosen. */
+  playerAspectMode: PlayerScaleMode;
+  setPlayerAspectMode: (v: PlayerScaleMode) => void;
   preferTvgIdOnly: boolean;
   setPreferTvgIdOnly: (v: boolean) => void;
   powerProfile: PowerProfile;
@@ -303,8 +308,11 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const [safePreviewMode, setSafePreviewModeState] = useState<SafePreviewMode>("delayed");
   const [channelNumbers, setChannelNumbersState] = useState(false);
   const [channelLogos, setChannelLogosState] = useState(true);
-  const [deviceLayoutMode, setDeviceLayoutModeState] = useState<DeviceLayoutMode>("auto");
+  // Seeded from the exact native read `phoneUi` already froze on, so the first render already agrees
+  // with it; the bootstrap effect below only mirrors this into JS storage, never overrides it.
+  const [deviceLayoutMode, setDeviceLayoutModeState] = useState<DeviceLayoutMode>(() => currentDeviceLayoutMode());
   const [playerControlsTimeoutMs, setPlayerControlsTimeoutMsState] = useState<PlayerControlsTimeoutMs>(8000);
+  const [playerAspectMode, setPlayerAspectModeState] = useState<PlayerScaleMode>("fit");
   const [preferTvgIdOnly, setPreferTvgIdOnlyState] = useState(false);
   const [powerProfile, setPowerProfileState] = useState<PowerProfile>("normal");
   const [logosOffWhileSurfing, setLogosOffWhileSurfingState] = useState(getPowerProfileTuning("normal").logosOffWhileSurfingDefault);
@@ -408,6 +416,11 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     settingsTouchedRef.current.add(PLAYER_TIMEOUT_KEY);
     setPlayerControlsTimeoutMsState(v);
     storage.setItem(PLAYER_TIMEOUT_KEY, v);
+  }, []);
+  const setPlayerAspectMode = useCallback((v: PlayerScaleMode) => {
+    settingsTouchedRef.current.add(PLAYER_ASPECT_KEY);
+    setPlayerAspectModeState(v);
+    storage.setItem(PLAYER_ASPECT_KEY, v);
   }, []);
   const setPreferTvgIdOnly = useCallback((v: boolean) => {
     settingsTouchedRef.current.add(PREFER_TVG_ID_ONLY_KEY);
@@ -916,14 +929,21 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
       if (!settingsTouchedRef.current.has(CHANNEL_NUMBERS_KEY)) setChannelNumbersState(storedChannelNumbers);
       const storedChannelLogos = (await bootstrapSettings.getItem<boolean>(CHANNEL_LOGOS_KEY, true)) ?? true;
       if (!settingsTouchedRef.current.has(CHANNEL_LOGOS_KEY)) setChannelLogosState(storedChannelLogos);
-      // Nothing saved means Auto: phones and tablets get touch behaviour, TVs and boxes the remote one.
-      const storedDeviceLayout = (await bootstrapSettings.getItem<DeviceLayoutMode>(DEVICE_LAYOUT_MODE_KEY, "auto")) || "auto";
+      // The native module already decided this at process start (the same read `theme.ts`'s `phoneUi`
+      // constant froze on). Re-applying a separately stored JS copy here could flip the live
+      // Platform.isTV decision away from what `phoneUi` and every native-side prop already used,
+      // leaving the reactive shell (this value) and the frozen one disagreeing for the rest of the
+      // session — exactly the split that showed the TV Channels/VOD screens on a touch phone. So this
+      // JS key is kept only as a mirror for display; it is never applied over the native truth.
+      const nativeDeviceLayout = currentDeviceLayoutMode();
       if (!settingsTouchedRef.current.has(DEVICE_LAYOUT_MODE_KEY)) {
-        applyDeviceLayoutChoice(storedDeviceLayout);
-        setDeviceLayoutModeState(storedDeviceLayout);
+        setDeviceLayoutModeState(nativeDeviceLayout);
+        void storage.setItem(DEVICE_LAYOUT_MODE_KEY, nativeDeviceLayout);
       }
       const storedPlayerTimeout = (await bootstrapSettings.getItem<PlayerControlsTimeoutMs>(PLAYER_TIMEOUT_KEY, 8000)) || 8000;
       if (!settingsTouchedRef.current.has(PLAYER_TIMEOUT_KEY)) setPlayerControlsTimeoutMsState(storedPlayerTimeout);
+      const storedPlayerAspect = (await bootstrapSettings.getItem<PlayerScaleMode>(PLAYER_ASPECT_KEY, "fit")) || "fit";
+      if (!settingsTouchedRef.current.has(PLAYER_ASPECT_KEY)) setPlayerAspectModeState(storedPlayerAspect);
       const tvgOnly = (await bootstrapSettings.getItem<boolean>(PREFER_TVG_ID_ONLY_KEY, false)) || false;
       if (!settingsTouchedRef.current.has(PREFER_TVG_ID_ONLY_KEY)) {
         setPreferTvgIdOnlyState(tvgOnly);
@@ -1088,7 +1108,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     pointerMode, setPointerMode,
     guideLayout, setGuideLayout, guideDensity, setGuideDensity,
     safePreviewMode, setSafePreviewMode, channelNumbers, setChannelNumbers,
-    channelLogos, setChannelLogos, deviceLayoutMode, setDeviceLayoutMode,
+    channelLogos, setChannelLogos, deviceLayoutMode, setDeviceLayoutMode, playerAspectMode, setPlayerAspectMode,
     playerControlsTimeoutMs, setPlayerControlsTimeoutMs,
     preferTvgIdOnly, setPreferTvgIdOnly, powerProfile, setPowerProfile,
     logosOffWhileSurfing, setLogosOffWhileSurfing, instantGuide, setInstantGuide,
@@ -1108,7 +1128,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     activeProgram, openProgram, closeProgram,
     pointerMode, setPointerMode, guideLayout, setGuideLayout, guideDensity, setGuideDensity,
     safePreviewMode, setSafePreviewMode, channelNumbers, setChannelNumbers,
-    channelLogos, setChannelLogos, deviceLayoutMode, setDeviceLayoutMode,
+    channelLogos, setChannelLogos, deviceLayoutMode, setDeviceLayoutMode, playerAspectMode, setPlayerAspectMode,
     playerControlsTimeoutMs, setPlayerControlsTimeoutMs,
     preferTvgIdOnly, setPreferTvgIdOnly, powerProfile, setPowerProfile,
     logosOffWhileSurfing, setLogosOffWhileSurfing, instantGuide, setInstantGuide,

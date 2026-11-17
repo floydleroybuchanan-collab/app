@@ -48,7 +48,8 @@ test("Player Quick Actions dispatch into the mounted player instead of duplicati
   assert.match(overlay, /close\(\);[\s\S]{0,120}emitPlayerQuickCommand\(command\)/);
 
   assert.match(player, /addPlayerQuickCommandListener\(\(command\) =>/);
-  assert.match(player, /command === "CYCLE_ASPECT"[\s\S]{0,100}cycleScaleMode\(\)/);
+  // Aspect ratio opens the drawer of choices now, instead of silently cycling to the next one.
+  assert.match(player, /command === "CYCLE_ASPECT"[\s\S]{0,100}openAspectPicker\(\)/);
   assert.match(player, /command === "OPEN_TRACKS"[\s\S]{0,240}setTracksOpen\(true\)/);
   assert.doesNotMatch(player, /if \(key === "SELECT"\)/);
 });
