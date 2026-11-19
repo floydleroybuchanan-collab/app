@@ -1,12 +1,38 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, AppState, Easing, Image, StyleSheet, View, useWindowDimensions } from "react-native";
-import { Image as AnimatedImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { VideoView, useVideoPlayer } from "expo-video";
 
 const background = require("@/assets/login/space_bg.jpg");
 const angel = require("@/assets/login/angel_hero.png");
 // A 12 second seamless loop of the whole scene: wings, arms, hair, stars, shooting stars and the rings from the base.
-const sceneLoop = require("@/assets/login/scene_loop.webp");
+// A real H.264 encode (see the WebP-frame-sourced master this was built from) - about a fifth the
+// size of the equivalent-quality animated WebP for the same 1080p/20fps/12s loop.
+const sceneLoop = require("@/assets/login/scene_loop.mp4");
+
+/**
+ * The looping scene as a real video instead of an animated WebP. useVideoPlayer ties the
+ * player's lifecycle to this component: mounting it only while `useLoop` is true (below) means
+ * it is created, started and released exactly when the scene itself mounts and unmounts - nothing
+ * keeps decoding or holding a buffer once the static picture takes over or the screen is left.
+ */
+function LoopVideo({ width, height }: { width: number; height: number }) {
+  const player = useVideoPlayer(sceneLoop, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+    instance.play();
+  });
+  return (
+    <VideoView
+      player={player}
+      style={{ position: "absolute", left: 0, top: 0, width, height }}
+      contentFit="fill"
+      nativeControls={false}
+      allowsPictureInPicture={false}
+      pointerEvents="none"
+    />
+  );
+}
 
 // Everything is laid out on a 1920 x 1080 stage, exactly as in the approved sign-in design,
 // then scaled to cover the screen.
@@ -107,8 +133,7 @@ export function LoginScene({ animate = true, showAngel = true }: { animate?: boo
   return (
     <View pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants" style={StyleSheet.absoluteFill}>
       <View style={{ position: "absolute", left: (width - stageW) / 2, top: (height - stageH) / 2, width: stageW, height: stageH, overflow: "hidden" }}>
-        {useLoop ? <AnimatedImage source={sceneLoop} contentFit="fill" autoplay transition={0}
-          style={{ position: "absolute", left: 0, top: 0, width: stageW, height: stageH }} /> : <>
+        {useLoop ? <LoopVideo width={stageW} height={stageH} /> : <>
           <Image source={background} resizeMode="cover" style={{ position: "absolute", left: 0, top: 0, width: stageW, height: stageH }} />
           {stars.map((star, index) => <TwinklingStar key={index} star={star} scale={scale} run={run} />)}
           {run ? <>

@@ -22,11 +22,16 @@ test("sign-in uses the animated space scene, and the invitation button is called
   assert.match(scene, /const STAR_COUNT = 30/);
   // The animated loop is used only when motion is allowed; otherwise the still picture with its own stars.
   assert.match(scene, /const useLoop = run && angelVisible/);
-  assert.match(scene, /scene_loop\.webp/);
+  assert.match(scene, /scene_loop\.mp4/);
+  // A real video, not an animated WebP: useVideoPlayer's lifecycle is tied to this component, so
+  // the player is only ever created/started/released while the scene itself is mounted.
+  assert.match(scene, /useVideoPlayer\(sceneLoop, \(instance\) => \{/);
+  assert.match(scene, /instance\.loop = true;/);
+  assert.match(scene, /instance\.muted = true;/);
 });
 
 test("the sign-in artwork ships with the app", async () => {
-  for (const file of ["assets/login/space_bg.jpg", "assets/login/angel_hero.png", "assets/login/scene_loop.webp"]) assert.ok((await readFile(join(root, file))).length > 10_000, file);
+  for (const file of ["assets/login/space_bg.jpg", "assets/login/angel_hero.png", "assets/login/scene_loop.mp4"]) assert.ok((await readFile(join(root, file))).length > 10_000, file);
 });
 
 test("the loading screen keeps the approved live effects over the looping artwork", async () => {

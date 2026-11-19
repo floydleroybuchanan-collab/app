@@ -68,7 +68,8 @@
       "expo-screen-orientation",
       "./plugins/withAndroidTv",
       "./plugins/withTvRemote",
-      "./plugins/withLowMemoryAndroidBuild"
+      "./plugins/withLowMemoryAndroidBuild",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
