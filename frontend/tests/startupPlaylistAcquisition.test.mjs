@@ -28,4 +28,15 @@ assert.match(source, /setProgress\(\{ phase: "channels", ratio: 0\.06 \+ \(compl
 const startupScreen = fs.readFileSync(new URL("../src/components/StartupVersion4.tsx", import.meta.url), "utf8");
 assert.match(startupScreen, /targetRef\.current = Math\.min\(1, Math\.max\(milestoneRatio, Math\.min\(1, Math\.max\(0, epg\.ratio\)\) \* 0\.92\)\);/);
 
+// The fix above only reaches a FRESH fetch (refreshInternal/fetchPlaylist). A returning device
+// with an already-cached channel list takes ensureLoaded()'s separate cached-path branch instead -
+// which still has real, sometimes-slow work ahead of it for a large account (combining playlists,
+// syncing thousands of rows into the native database) - and that branch reported no progress at
+// all, so the startup bars still sat frozen on a warm cache even after the fetch-path fix above.
+assert.match(source, /setProgress\(\{ phase: "channels", ratio: 0\.25, etaSeconds: null, message: "Opening local cache" \}, true\);/);
+assert.match(source, /setProgress\(\{ phase: "channels", ratio: 0\.45, etaSeconds: null, message: `Syncing \$\{cached\.channels\.length\.toLocaleString\(\)\} channels` \}, true\);/);
+assert.match(source, /setProgress\(\{ phase: "matching", ratio: 0\.7, etaSeconds: null, message: "Matching guide data" \}, true\);/);
+assert.match(source, /setProgress\(\{ phase: "caching", ratio: 0\.9, etaSeconds: null, message: "Preparing guide" \}, true\);/);
+assert.match(source, /setProgress\(\{ phase: "ready", ratio: 1, etaSeconds: 0 \}, true\);\s*\n\s*void applyPersistedGuideOwnership/);
+
 console.log("startup playlist acquisition regression: ok");

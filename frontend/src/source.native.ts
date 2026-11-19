@@ -771,14 +771,25 @@ async function ensureLoaded(): Promise<NativeMeta> {
     if (cached.channels.length === 0 && (await listPlaylists()).some((source) => source.enabled)) {
       return refreshInternal(true);
     }
+    // This "already cached, no network needed" path still has real, sometimes slow work
+    // ahead of it for a large account (combining playlists, syncing thousands of rows
+    // into the native database) - it previously reported no progress at all for any of
+    // it, which is why the startup bars sat frozen even on a returning device with a
+    // warm cache; a fresh install hits refreshInternal/fetchPlaylist instead, which
+    // already reports progress of its own.
+    setProgress({ phase: "channels", ratio: 0.25, etaSeconds: null, message: "Opening local cache" }, true);
     await seedLegacyPlaylist(cached.channels);
     const combined = await readCombinedPlaylists();
     const old = new Map(cached.channels.map((channel) => [channel.id, channel]));
     cached.channels = combined.map((channel) => ({ ...channel, tvg_id: channel.id.startsWith("pl:") ? "" : old.get(channel.id)?.tvg_id || channel.tvg_id }));
     MEM = cached;
+    setProgress({ phase: "channels", ratio: 0.45, etaSeconds: null, message: `Syncing ${cached.channels.length.toLocaleString()} channels` }, true);
     await syncPlaylistToNative(cached.channels, cached.playlistEpoch || 0);
+    setProgress({ phase: "matching", ratio: 0.7, etaSeconds: null, message: "Matching guide data" }, true);
     await syncMatchesToNative(cached.channels, cached.guideEpoch || 0);
+    setProgress({ phase: "caching", ratio: 0.9, etaSeconds: null, message: "Preparing guide" }, true);
     await syncPlaylistEpg(cached.channels);
+    setProgress({ phase: "ready", ratio: 1, etaSeconds: 0 }, true);
     void applyPersistedGuideOwnership().catch(() => undefined);
     if (cached.epgError) {
       lastSourceError = cached.epgError;

@@ -22,11 +22,19 @@ frozen at its floor percentage. Neither change touches a URL, parser,
 request header or payload: refreshPlaylists()/previewPlaylist() themselves
 (frontend/src/core/playlistRegistry.ts) are untouched here, and the
 callback only ever calls setProgress with a UI ratio/label.
+Build 2552: the build-2550 fix only reached ensureLoaded()'s fresh-fetch
+branch (refreshInternal/fetchPlaylist). A returning device with an
+already-cached channel list takes ensureLoaded()'s separate cached-path
+branch instead, which still does real work for a large account (combining
+playlists, syncing thousands of rows into the native database) and
+reported no progress of its own - the startup bars still sat frozen on a
+warm cache. That branch now calls the same setProgress with a UI
+ratio/label at each step; still no URL, parser, header or payload change.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': 'fb6450318c0fd71316b76963c0e302e51dbe6c23cd86b5b44f62be96a47f475d',
+    'frontend/src/source.native.ts': 'f3826cb1c1198cc9459083c2c1c87f235eaaf2387d21f850b11a5b3c4297daaa',
     'frontend/src/nativeEpg.ts': 'dd9bae6d41e03939a979c86b8bcc8594b56216e8309a3dcfb5ce60422d9c4456',
     'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }
