@@ -275,6 +275,24 @@ test("the phone VOD has Genres, Platforms, platform pages and a platform row on 
   }
 });
 
+test("tapping Genres or Platforms on the phone used to crash the whole app (wrong nav graph auto-attached)", () => {
+  // activity_main_mobile.xml's own <fragment> tag hardcodes the standalone app's nav_main_graph_mobile,
+  // which has no genre_hub/platforms/platform_titles. That layout's inflation auto-attaches a
+  // NavHostFragment with THAT graph before VodRootMobileFragment's own code runs, so
+  // findFragmentById found it first and the "create with nav_main_graph_phone" fallback never fired -
+  // confirmed live via logcat: IllegalArgumentException, "destination ... genre_hub cannot be found
+  // from the current destination ... HomeMobileFragment", thrown from NavController.navigate, called
+  // from VodRootMobileFragment.openSection, called from the Genres/Platforms pill's onClick.
+  const layout = read("android/vod/app/src/main/res/layout/activity_main_mobile.xml");
+  assert.match(layout, /app:navGraph="@navigation\/nav_main_graph_mobile"/);
+  const mobileGraph = read("android/vod/app/src/main/res/navigation/nav_main_graph_mobile.xml");
+  for (const id of ["genre_hub", "platforms", "platform_titles"]) assert.doesNotMatch(mobileGraph, new RegExp(`android:id="@\\+id/${id}"`));
+  const phone = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/charm/VodRootMobileFragment.kt");
+  assert.match(phone, /if \(controller\.graph\.id != R\.id\.nav_main_graph_phone\) controller\.setGraph\(R\.navigation\.nav_main_graph_phone\)/);
+  const phoneGraph = read("android/vod/app/src/main/res/navigation/nav_main_graph_phone.xml");
+  assert.match(phoneGraph, /android:id="@\+id\/nav_main_graph_phone"/);
+});
+
 test("phone Live TV is Cards only with pop-down pickers; the Guide is TV only; the TV list stays", () => {
   const hub = read("src/components/PhoneLiveHub.tsx");
   for (const id of ["phone-live-playlist", "phone-live-group", "phone-live-search", "phone-live-manage", "phone-live-add"]) assert.ok(hub.includes(id), id);

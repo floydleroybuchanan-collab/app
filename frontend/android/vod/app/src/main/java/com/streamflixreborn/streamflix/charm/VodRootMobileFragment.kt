@@ -106,6 +106,12 @@ class VodRootMobileFragment : Fragment() {
                 childFragmentManager.beginTransaction().replace(b.navMainFragment.id, it).commitNowAllowingStateLoss()
             }
         val controller = navHost.navController
+        // activity_main_mobile.xml's own <fragment> tag hardcodes app:navGraph="@navigation/nav_main_graph_mobile"
+        // (the standalone app's own graph, which has no genre_hub/platforms/platform_titles). That layout's
+        // inflation above already attaches a NavHostFragment with THAT graph before this code runs, so
+        // findFragmentById finds it and the "create with nav_main_graph_phone" fallback never actually
+        // fires - every Genres/Platforms tap crashed with "destination cannot be found" as a result.
+        if (controller.graph.id != R.id.nav_main_graph_phone) controller.setGraph(R.navigation.nav_main_graph_phone)
         navigation = controller
         // The phone graph starts at Home (VOD always has its provider), so there is nothing to navigate away from.
         controller.addOnDestinationChangedListener { _, destination, _ ->
