@@ -764,6 +764,16 @@ export function PurpleTvShell({
           setDrawerPreferredRoute(null);
         }}>
 
+          <View style={styles.brand} pointerEvents="none">
+            <View style={styles.brandMark}>
+              <Image accessible={false} source={RAIL_CROWN} fadeDuration={0} resizeMode="contain" style={{ width: 20, height: 20 }} />
+            </View>
+            <View>
+              <Text style={styles.brandTop}>CHARMING</Text>
+              <Text style={styles.brandBottom}>MEDIALAB</Text>
+            </View>
+          </View>
+
           {contextActions?.length ? (
             <View style={styles.contextActions}>
               {contextActions.map((action) => (

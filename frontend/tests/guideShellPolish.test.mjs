@@ -526,3 +526,19 @@ test("native guide live-follow advances programme cells with wall clock without 
   assert.match(nativeGuide, /KEYCODE_DPAD_LEFT -> \{\s*liveFollowEnabled = false/);
   assert.match(nativeGuide, /KEYCODE_DPAD_RIGHT -> \{\s*liveFollowEnabled = false/);
 });
+
+test("the open TV/remote drawer shows the Charming MediaLab brand header, not an empty top", async () => {
+  // styles.brand/brandMark/brandTop/brandBottom were defined back when this file
+  // was first split out (baseline commit) but nothing ever rendered them - the
+  // collapsed icon rail got its own crown, and the expanded drawer opened to
+  // nothing above the nav rows. That's what made the drawer look like its logo
+  // was missing/misplaced whenever it was opened.
+  const shell = await source("src/components/PurpleTvShell.tsx");
+  const drawerStart = shell.indexOf('testID="purple-main-drawer"');
+  const drawerBody = shell.slice(drawerStart, shell.indexOf("{contextActions?.length", drawerStart));
+  assert.match(drawerBody, /<View style=\{styles\.brand\} pointerEvents="none">/);
+  assert.match(drawerBody, /<View style=\{styles\.brandMark\}>/);
+  assert.match(drawerBody, /source=\{RAIL_CROWN\}/);
+  assert.match(drawerBody, /<Text style=\{styles\.brandTop\}>CHARMING<\/Text>/);
+  assert.match(drawerBody, /<Text style=\{styles\.brandBottom\}>MEDIALAB<\/Text>/);
+});
