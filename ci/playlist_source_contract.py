@@ -14,11 +14,19 @@ Regression coverage: stability166Regression.test.mjs and EpgImportCoordinatorTes
 RC9 changes display/log brand strings only; transport is unchanged.
 Any later edit must be reviewed again; the remaining player checks still run.
 See docs/multiple-playlists-test-1.md and the behavioral/database tests.
+Build 2550: setProgress is now exported (unused across process boundaries;
+still the same private module state, just visible to playlistRegistry.ts),
+and fetchPlaylist() passes a 4th onProgress callback into the existing
+refreshPlaylists() call so a large catalog's startup screen stops sitting
+frozen at its floor percentage. Neither change touches a URL, parser,
+request header or payload: refreshPlaylists()/previewPlaylist() themselves
+(frontend/src/core/playlistRegistry.ts) are untouched here, and the
+callback only ever calls setProgress with a UI ratio/label.
 """
 import hashlib
 
 REVIEWED_PLAYLIST_TRANSPORT = {
-    'frontend/src/source.native.ts': '46cda3e8fde5ad80158c6c9accf8ca45620415d45168b9eaa0754c8a912fa7f4',
+    'frontend/src/source.native.ts': 'fb6450318c0fd71316b76963c0e302e51dbe6c23cd86b5b44f62be96a47f475d',
     'frontend/src/nativeEpg.ts': 'dd9bae6d41e03939a979c86b8bcc8594b56216e8309a3dcfb5ce60422d9c4456',
     'frontend/android/app/src/main/java/com/charmiptv/app/EpgNativeModule.kt': '171d02004c211d9310a8d2ead7ccaaf7d4fe93b1876b4e19b84b83bc3f0a3daa',
 }
