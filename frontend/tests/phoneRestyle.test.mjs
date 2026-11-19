@@ -211,8 +211,11 @@ test("Aspect ratio opens a drawer of choices (on any device) instead of silently
   const player = read("app/player.tsx");
   assert.match(player, /command === "CYCLE_ASPECT"[\s\S]{0,60}return openAspectPicker\(\)/);
   assert.match(player, /const ASPECT_OPTIONS: \{ mode: PlayerViewMode; label: string; help: string \}\[\] = \[/);
-  for (const mode of ["fit", "fill", "zoom", "stretch"]) assert.ok(player.includes(`{ mode: "${mode}"`), mode);
+  for (const mode of ["fit", "fill", "zoom", "zoomWidth", "zoomHeight"]) assert.ok(player.includes(`{ mode: "${mode}"`), mode);
   assert.match(player, /testID="player-aspect-picker"/);
+  // A floating card over the video, not an in-flow panel that pushes the transport controls.
+  assert.match(player, /aspectOverlay: \{ \.\.\.StyleSheet\.absoluteFillObject, alignItems: "center", justifyContent: "center"/);
+  assert.doesNotMatch(player, /\{aspectOpen \? \(\s*<View style=\{styles\.tracksPanel\}/);
   assert.match(player, /setPlayerAspectMode\(mode\);/);
   assert.match(player, /playerAspectMode,\s*setPlayerAspectMode,/);
   const store = read("src/store.tsx");
@@ -345,19 +348,24 @@ test("Settings has a Default aspect ratio row for the Live TV player, matching t
   assert.match(settings, /label="Default aspect ratio"/);
   assert.match(settings, /value=\{playerAspectMode\}/);
   assert.match(settings, /onChange=\{setPlayerAspectMode\}/);
-  for (const mode of ["fit", "fill", "zoom", "stretch"]) assert.ok(settings.includes(`value: "${mode}"`), mode);
+  for (const mode of ["fit", "fill", "zoom", "zoomWidth", "zoomHeight"]) assert.ok(settings.includes(`value: "${mode}"`), mode);
 });
 
-test("the embedded VOD player's Aspect ratio button opens a drawer of named choices too, on TV and on phone", () => {
+test("the embedded VOD player's Aspect ratio button opens the same named-choices window on TV and on phone, with the same five modes the Live TV player offers", () => {
   const picker = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/vod/AspectPicker.kt");
   assert.match(picker, /object AspectPicker/);
   assert.match(picker, /fun show\(/);
+  // A fixed, generous floating-card width instead of the AlertDialog's unreliable OEM-theme default.
+  assert.match(picker, /setLayout\(cardWidth, ViewGroup\.LayoutParams\.WRAP_CONTENT\)/);
+  const prefs = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/utils/UserPreferences.kt");
+  assert.match(prefs, /val PLAYER_RESIZE_CHOICES: List<PlayerResize> = listOf\(\s*PlayerResize\.Fit, PlayerResize\.Fill, PlayerResize\.Zoom, PlayerResize\.ZoomWidth, PlayerResize\.ZoomHeight,/);
+  // The getter must never fall back to resizeMode-alone matching when a name was saved: three
+  // deprecated modes all reuse RESIZE_MODE_FIT, and that fallback always resolved to Fit first.
+  assert.match(prefs, /get\(\) = Key\.PLAYER_RESIZE_NAME\.getString\(\)\?\.let \{ saved -> PlayerResize\.entries\.find \{ it\.name == saved \} \}/);
   const tv = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerTvFragment.kt");
-  assert.match(tv, /AspectPicker\.show\(\s*this@PlayerTvFragment,\s*UserPreferences\.playerResize,\s*listOf\(UserPreferences\.PlayerResize\.Fit, UserPreferences\.PlayerResize\.Fill, UserPreferences\.PlayerResize\.Zoom\),/);
+  assert.match(tv, /AspectPicker\.show\(\s*this@PlayerTvFragment,\s*UserPreferences\.playerResize,\s*UserPreferences\.PLAYER_RESIZE_CHOICES,/);
   const mobile = read("android/vod/app/src/main/java/com/streamflixreborn/streamflix/fragments/player/PlayerMobileFragment.kt");
-  assert.match(mobile, /AspectPicker\.show\(this@PlayerMobileFragment, UserPreferences\.playerResize, UserPreferences\.PlayerResize\.entries\)/);
-  // The TV fragment's own quality-switch-safe scale reset still only lets Fit/Fill/Zoom change the picture there.
-  assert.doesNotMatch(tv, /AspectPicker\.show\([^)]*PlayerResize\.entries/);
+  assert.match(mobile, /AspectPicker\.show\(this@PlayerMobileFragment, UserPreferences\.playerResize, UserPreferences\.PLAYER_RESIZE_CHOICES\)/);
 });
 
 test("VOD Settings keeps its phone-appropriate row styling now that phones reuse the TV settings screen", () => {
@@ -471,4 +479,24 @@ test("a second, independent frozen isTV flag cannot re-split TV and phone chrome
   assert.match(calibration, /const phoneUi = usePhoneUi\(\);/);
   assert.match(calibration, /if \(phoneUi\) \{/);
   assert.doesNotMatch(calibration, /Platform\.isTV/);
+});
+
+test("a connected remote/keyboard's D-pad can control the player on a phone too, not just on TV", () => {
+  // These used to bail out with `if (!isTV) return;`, so a phone (BlueStacks, an Android TV box
+  // forced into Mobile layout, a Bluetooth remote) had no focus to land on and no listener for a
+  // bare D-pad press: the player looked like it ignored the remote entirely.
+  const player = read("app/player.tsx");
+  assert.match(player, /\/\/ Not isTV-gated: a touch phone can still have a connected remote\/keyboard/);
+  assert.match(player, /const claimControlsFocus = useCallback\(\(\) => \{\s*cancelFocusRef\.current\?\.\(\);\s*\/\/ Not isTV-gated: without this, a connected remote\/keyboard had nowhere to land/);
+  assert.match(player, /\/\/ Not isTV-gated: without this, a connected remote\/keyboard's D-pad press in the player did\s*\/\/ nothing at all on a phone - there was no listener here to reveal the hidden controls\.\s*return addTvKeyListener/);
+  assert.match(player, /if \(!aspectOpen\) return;/);
+  assert.match(player, /if \(!tracksOpen\) return;/);
+  assert.match(player, /<FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style=\{styles\.aspectCard\}/);
+});
+
+test("the phone Live TV / Channels screen (PhoneLiveHub) gives a connected remote's D-pad an initial focus target", () => {
+  // Without an initial hasTVPreferredFocus, Android's D-pad focus search had nothing to start
+  // from on this screen, so nothing ever appeared focused and the remote seemed dead.
+  const hub = read("src/components/PhoneLiveHub.tsx");
+  assert.match(hub, /onPress=\{\(\) => setPanel\(panel === "playlists" \? null : "playlists"\)\}\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*hasTVPreferredFocus\s*\n/);
 });

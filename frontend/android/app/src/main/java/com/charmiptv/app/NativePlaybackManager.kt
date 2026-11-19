@@ -360,9 +360,13 @@ object NativePlaybackManager {
     }
   }
   fun setResizeMode(mode: String?) = runOnMain {
+    // "fill" and "zoom" used to both map to RESIZE_MODE_ZOOM, so Fill looked
+    // identical to Zoom and picking it appeared to do nothing.
     fullscreenResizeMode = when (mode) {
-      "zoom", "fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-      "stretch" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+      "fill" -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+      "zoom" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+      "zoomWidth" -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+      "zoomHeight" -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
       else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     }
     fullscreenPlayerView?.resizeMode = fullscreenResizeMode

@@ -144,6 +144,8 @@
     <string name="player_aspect_ratio_zoom_4_3">Zoom for 4:3</string>
     <string name="player_aspect_ratio_stretch_vertical">Stretch vertically</string>
     <string name="player_aspect_ratio_super_zoom">Super Zoom</string>
+    <string name="player_aspect_ratio_zoom_width">Zoom to width</string>
+    <string name="player_aspect_ratio_zoom_height">Zoom to height</string>
     <string name="player_settings_title">Settings</string>
     <string name="player_settings_quality_title">Quality for current video</string>
     <string name="player_settings_quality_label">Quality</string>

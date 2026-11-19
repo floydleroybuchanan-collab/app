@@ -766,7 +766,8 @@ function SettingsScreenContent() {
                     { label: "Fit (source)", value: "fit" },
                     { label: "Fill", value: "fill" },
                     { label: "Zoom", value: "zoom" },
-                    { label: "Stretch", value: "stretch" },
+                    { label: "Zoom width", value: "zoomWidth" },
+                    { label: "Zoom height", value: "zoomHeight" },
                   ]}
                   onChange={setPlayerAspectMode}
                 />

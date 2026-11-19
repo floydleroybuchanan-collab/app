@@ -68,9 +68,15 @@ export function mapXtreamChannels(login: XtreamLogin, streams: any, categories: 
 }
 export async function previewXtream(raw: XtreamLogin, userAgent?: string): Promise<XtreamPreview> {
   const login = normalizeXtream(raw);
+  // The account check gates everything else (an inactive/expired account should fail fast
+  // rather than also wait on a large categories+streams download), but once it passes,
+  // categories and streams have no data dependency on each other - fetching them together
+  // instead of one after the other roughly halves this step's network wait.
   const account = accountInfo(await json(login, undefined, userAgent));
-  const categories = await json(login, "get_live_categories", userAgent);
-  const streams = await json(login, "get_live_streams", userAgent);
+  const [categories, streams] = await Promise.all([
+    json(login, "get_live_categories", userAgent),
+    json(login, "get_live_streams", userAgent),
+  ]);
   const channels = mapXtreamChannels(login, streams, categories);
   if (!channels.length) throw new Error("No playable live channels are available for this account.");
   return Object.assign(channels, { account, epgUrls: [endpoint(login, "xmltv.php")] });

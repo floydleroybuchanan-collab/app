@@ -619,7 +619,7 @@ class PlayerMobileFragment : Fragment() {
                 currentServer ?: return@setOnSoftwareDecoderSelectedListener
             )
         }
-        binding.pvPlayer.resizeMode = UserPreferences.playerResize.resizeMode
+        updatePlayerScale()
         binding.pvPlayer.subtitleView?.apply {
             setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * UserPreferences.captionTextSize)
             setStyle(UserPreferences.captionStyle)
@@ -668,8 +668,9 @@ class PlayerMobileFragment : Fragment() {
         }
 
         binding.pvPlayer.controller.binding.btnExoAspectRatio.setOnClickListener {
-            // A drawer listing every mode by name, instead of a single tap cycling blind.
-            AspectPicker.show(this@PlayerMobileFragment, UserPreferences.playerResize, UserPreferences.PlayerResize.entries) { newResize ->
+            // A drawer listing every mode by name, instead of a single tap cycling blind. The same
+            // choices the TV player offers: every one of them is a real resizeMode, so every one works.
+            AspectPicker.show(this@PlayerMobileFragment, UserPreferences.playerResize, UserPreferences.PLAYER_RESIZE_CHOICES) { newResize ->
                 zoomToast?.cancel()
                 zoomToast = Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)
                 zoomToast?.show()
@@ -742,30 +743,15 @@ class PlayerMobileFragment : Fragment() {
         }
     }
 
- private fun updatePlayerScale() {
-        val videoSurfaceView = binding.pvPlayer.videoSurfaceView
-        val playerResize = UserPreferences.playerResize 
-
-        binding.pvPlayer.resizeMode = playerResize.resizeMode 
-
-        when (playerResize) { 
-            UserPreferences.PlayerResize.Stretch43 -> {
-                val scale = 1.33f 
-                videoSurfaceView?.scaleX = scale
-                videoSurfaceView?.scaleY = 1f
-            }
-            UserPreferences.PlayerResize.StretchVertical -> {
-                videoSurfaceView?.scaleX = 1f
-                videoSurfaceView?.scaleY = 1.25f
-            }
-            UserPreferences.PlayerResize.SuperZoom -> {
-                videoSurfaceView?.scaleX = 1.5f
-                videoSurfaceView?.scaleY = 1.5f
-            }
-            else -> {
-                videoSurfaceView?.scaleX = 1f
-                videoSurfaceView?.scaleY = 1f
-            }
+    // Every offered mode (PLAYER_RESIZE_CHOICES) is a real AspectRatioFrameLayout resizeMode now,
+    // so PlayerView handles it entirely on its own; no manual surface scale is needed or applied,
+    // which is also what keeps this safe across a quality switch (see PlayerTvFragment's own
+    // updatePlayerScale for why a manual scale used to go stale there).
+    private fun updatePlayerScale() {
+        binding.pvPlayer.resizeMode = UserPreferences.playerResize.resizeMode
+        binding.pvPlayer.videoSurfaceView?.apply {
+            scaleX = 1f
+            scaleY = 1f
         }
     }
 

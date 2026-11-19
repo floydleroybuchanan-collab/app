@@ -59,16 +59,19 @@ import { useAppPolicy } from "@/src/core/useAppPolicy";
 
 const SWITCH_NOTICE_MS = 1800;
 const STABLE_HISTORY_DELAY_MS = 5000;
-type PlayerViewMode = "fit" | "fill" | "zoom" | "stretch";
+// Same five modes, same order, as the VOD player's AspectPicker: every one is a real native
+// resizeMode (no manual surface scale), so every one actually changes the picture.
+type PlayerViewMode = "fit" | "fill" | "zoom" | "zoomWidth" | "zoomHeight";
 const ASPECT_LABELS: Record<PlayerViewMode, string> = {
-  fit: "Aspect: Fit", fill: "Aspect: Fill", zoom: "Aspect: Zoom", stretch: "Aspect: Stretch",
+  fit: "Aspect: Fit", fill: "Aspect: Fill", zoom: "Aspect: Zoom", zoomWidth: "Aspect: Zoom width", zoomHeight: "Aspect: Zoom height",
 };
-/** The drawer's rows, in the order shown: the source's own shape first, then the ones that crop or distort it. */
+/** The picker's rows, in the order shown: the source's own shape first, then the ones that crop or distort it. */
 const ASPECT_OPTIONS: { mode: PlayerViewMode; label: string; help: string }[] = [
-  { mode: "fit", label: "Fit", help: "Shows the whole picture at the source's own aspect ratio (letterboxed if needed)." },
+  { mode: "fit", label: "Fit", help: "Shows the whole picture at the source's own aspect ratio (original)." },
   { mode: "fill", label: "Fill", help: "Stretches the picture to fill the screen; may distort it." },
-  { mode: "zoom", label: "Zoom", help: "Crops the picture's edges to fill the screen without distorting it." },
-  { mode: "stretch", label: "Stretch", help: "Stretches only the thin bars at the edges." },
+  { mode: "zoom", label: "Zoom", help: "Crops the picture's edges evenly to fill the screen without distorting it." },
+  { mode: "zoomWidth", label: "Zoom width", help: "Fills the width edge to edge, cropping the top and bottom if needed." },
+  { mode: "zoomHeight", label: "Zoom height", help: "Fills the height edge to edge, cropping the sides if needed." },
 ];
 
 const FAIL_REASON_LABEL: Record<SessionFailReason, string> = {
@@ -208,7 +211,9 @@ export default function PlayerScreen() {
   const phoneUi = usePhoneUi();
   const isTV = !phoneUi;
   useEffect(() => {
-    if (!isTV) return;
+    // Not isTV-gated: a touch phone can still have a connected remote/keyboard (BlueStacks,
+    // an Android TV box forced into Mobile layout, a Bluetooth remote), which needs the same
+    // ownership handoff the TV player already gets, or its D-pad has nothing to act on here.
     setRemoteContext("player");
     return () => { resetRemoteContextIfOwned("player", "default"); };
   }, [isTV]);
@@ -299,12 +304,14 @@ export default function PlayerScreen() {
 
   const claimControlsFocus = useCallback(() => {
     cancelFocusRef.current?.();
-    if (!isTV || overlayOpenRef.current || quickActionsOpenRef.current) return;
+    // Not isTV-gated: without this, a connected remote/keyboard had nowhere to land on a phone
+    // and D-pad presses in the player appeared to do nothing at all.
+    if (overlayOpenRef.current || quickActionsOpenRef.current) return;
     cancelFocusRef.current = requestNativeFocusWithRetry(
       () => errorButtonRef.current || channelsButtonRef.current, [0, 32, 96, 200, 400],
       () => controlsFocusedRef.current || !controlsRef.current || exitInFlightRef.current,
     );
-  }, [isTV]);
+  }, []);
 
   const revealControls = useCallback((opts?: { claimChannelsFocus?: boolean }) => {
     controlsRef.current = true; setControls(true);
@@ -332,20 +339,20 @@ export default function PlayerScreen() {
   }, [claimControlsFocus, controls, playerOverlay, scheduleHide, status]);
 
   useEffect(() => {
-    // On TV there is no on-screen Aspect button (Quick Actions is the only opener), so there is no
-    // button ref for the drawer to return focus to; drop it straight onto the first row instead.
-    if (!isTV || !aspectOpen) return;
+    // Not isTV-gated: a connected remote/keyboard needs somewhere to land here on a phone too
+    // (via Quick Actions, which both platforms share), or the card opens with nothing focused in it.
+    if (!aspectOpen) return;
     controlsFocusedRef.current = false;
     return requestNativeFocusWithRetry(() => aspectFirstRowRef.current, [0, 32, 96, 200],
       () => controlsFocusedRef.current || exitInFlightRef.current);
-  }, [aspectOpen, isTV]);
+  }, [aspectOpen]);
 
   useEffect(() => {
-    if (!isTV || !tracksOpen) return;
+    if (!tracksOpen) return;
     controlsFocusedRef.current = false;
     return requestNativeFocusWithRetry(() => subtitlesOffRef.current, [0, 32, 96, 200],
       () => controlsFocusedRef.current || exitInFlightRef.current);
-  }, [isTV, tracksOpen]);
+  }, [tracksOpen]);
 
   const restartInFlightRef = useRef(false);
   const restartThisChannel = useCallback(async () => {
@@ -481,13 +488,14 @@ export default function PlayerScreen() {
   }, [hasStream, status]);
 
   useEffect(() => {
-    if (!isTV) return;
+    // Not isTV-gated: without this, a connected remote/keyboard's D-pad press in the player did
+    // nothing at all on a phone - there was no listener here to reveal the hidden controls.
     return addTvKeyListener((key) => {
       if (key === "BACK" || exitInFlightRef.current || guideOverlayOpenRef.current) return;
       if (!controlsRef.current || !controlsFocusedRef.current) revealControls({ claimChannelsFocus: true });
       else scheduleHide();
     });
-  }, [isTV, revealControls, scheduleHide]);
+  }, [revealControls, scheduleHide]);
 
   useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
@@ -768,29 +776,6 @@ export default function PlayerScreen() {
               </View>
             ) : null}
 
-            {aspectOpen ? (
-              <View style={styles.tracksPanel} testID="player-aspect-picker">
-                <Text style={styles.controlLabel}>Aspect ratio</Text>
-                {ASPECT_OPTIONS.map((option, index) => (
-                  <Pressable
-                    key={option.mode}
-                    ref={index === 0 ? aspectFirstRowRef : undefined}
-                    onPress={() => chooseScaleMode(option.mode)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${option.label}. ${option.help}`}
-                    testID={`player-aspect-option-${option.mode}`}
-                    style={({ focused }: any) => [styles.trackRow, scaleMode === option.mode && styles.controlActive, focused && styles.focused]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.controlLabel}>{option.label}{scaleMode === option.mode ? " · current & default" : ""}</Text>
-                      <Text style={styles.errorText}>{option.help}</Text>
-                    </View>
-                    {scaleMode === option.mode ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-
             {channelsOpen ? (
               <View>
                 <Text style={styles.controlLabel}>Previous & recent channels</Text>
@@ -842,6 +827,38 @@ export default function PlayerScreen() {
             void patchProgramsForChannelIds(ids, priorityIds);
           }}
         />
+      ) : null}
+      {aspectOpen ? (
+        // A floating card over the video, not an in-flow panel: it must never resize or push the
+        // transport controls below it, and it must never stretch edge to edge.
+        <View style={styles.aspectOverlay} pointerEvents="box-none">
+          <Pressable
+            accessibilityLabel="Close aspect ratio"
+            onPress={() => setAspectOpen(false)}
+            style={styles.aspectScrim}
+          />
+          <FocusGuide autoFocus trapFocusUp trapFocusDown trapFocusLeft trapFocusRight style={styles.aspectCard} testID="player-aspect-picker">
+            <Text style={styles.aspectTitle}>Aspect ratio</Text>
+            <Text style={styles.aspectSubtitle}>Choosing one also makes it the default for the next channel.</Text>
+            {ASPECT_OPTIONS.map((option, index) => (
+              <Pressable
+                key={option.mode}
+                ref={index === 0 ? aspectFirstRowRef : undefined}
+                onPress={() => chooseScaleMode(option.mode)}
+                accessibilityRole="button"
+                accessibilityLabel={`${option.label}. ${option.help}`}
+                testID={`player-aspect-option-${option.mode}`}
+                style={({ focused }: any) => [styles.aspectRow, scaleMode === option.mode && styles.controlActive, focused && styles.focused]}
+              >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={styles.controlLabel}>{option.label}{scaleMode === option.mode ? " · current" : ""}</Text>
+                  <Text numberOfLines={2} style={styles.errorText}>{option.help}</Text>
+                </View>
+                {scaleMode === option.mode ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+              </Pressable>
+            ))}
+          </FocusGuide>
+        </View>
       ) : null}
     </View>
   );
@@ -897,4 +914,16 @@ const styles = StyleSheet.create({
   channelCardActive: { backgroundColor: "rgba(124,58,237,0.55)", borderColor: glass.selectedEdge },
   channelCardName: { color: "#fff", fontFamily: fonts.medium, fontSize: 7.5, textAlign: "center" },
   focused: { ...glassFocus, elevation: 16 },
+  // A floating card centered over the video (never full width, never pushes the controls below it) -
+  // the same shape as the embedded VOD player's own Aspect ratio window.
+  aspectOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: 20 },
+  aspectScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6,2,16,0.55)" },
+  aspectCard: {
+    width: 360, maxWidth: "100%", maxHeight: "100%",
+    borderRadius: 18, borderWidth: 1, borderColor: glass.edge, backgroundColor: "rgba(26,10,60,0.97)",
+    padding: 16, gap: 6, shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 20, elevation: 24,
+  },
+  aspectTitle: { color: "#fff", fontFamily: fonts.bold, fontSize: 16 },
+  aspectSubtitle: { color: "#D0BCD9", fontFamily: fonts.regular, fontSize: 10.5, marginBottom: 6 },
+  aspectRow: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 2, borderColor: glass.edgeSoft, backgroundColor: "rgba(40,18,78,0.60)" },
 });

@@ -102,10 +102,11 @@ class NativeGuideView(context: Context) : View(context) {
       }
       // Route attachment and the remote owner can arrive after the active prop.
       // Bound retries; a menu/preview owner must never lose focus to this view.
-      // Growing delays span about 1.8s, enough for a closing drawer to hand back
-      // the remote owner.
+      // Growing delays span about 1.2s - enough for a closing drawer to hand back the
+      // remote owner - but this ceiling is only ever hit in that rare slow-close case;
+      // a 1.8s version of it made every ordinary focus entry feel like it was "catching up".
       focusEntryAttempts += 1
-      if (focusEntryAttempts < 6) postDelayed(this, 120L * focusEntryAttempts)
+      if (focusEntryAttempts < 6) postDelayed(this, 80L * focusEntryAttempts)
     }
   }
 

@@ -286,16 +286,32 @@ object UserPreferences {
         val stringRes: Int,
         val resizeMode: Int,
     ) {
+        // Every mode here is a real AspectRatioFrameLayout constant: hardware-composited by the
+        // surface itself, so none of them needs a manual View scale transform that a later quality
+        // switch or channel change could leave stale (that is what made the three former
+        // stretch/zoom variants below unreliable - kept only so an old saved preference still resolves).
         Fit(R.string.player_aspect_ratio_fit, AspectRatioFrameLayout.RESIZE_MODE_FIT),
         Fill(R.string.player_aspect_ratio_fill, AspectRatioFrameLayout.RESIZE_MODE_FILL),
         Zoom(R.string.player_aspect_ratio_zoom, AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+        ZoomWidth(R.string.player_aspect_ratio_zoom_width, AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH),
+        ZoomHeight(R.string.player_aspect_ratio_zoom_height, AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT),
+        @Deprecated("Replaced by ZoomWidth/ZoomHeight: a manual surface scale quality switches could leave stale.")
         Stretch43(R.string.player_aspect_ratio_zoom_4_3, AspectRatioFrameLayout.RESIZE_MODE_FIT),
+        @Deprecated("Replaced by ZoomWidth/ZoomHeight: a manual surface scale quality switches could leave stale.")
         StretchVertical(R.string.player_aspect_ratio_stretch_vertical, AspectRatioFrameLayout.RESIZE_MODE_FIT),
+        @Deprecated("Replaced by ZoomWidth/ZoomHeight: a manual surface scale quality switches could leave stale.")
         SuperZoom(R.string.player_aspect_ratio_super_zoom, AspectRatioFrameLayout.RESIZE_MODE_FIT);
     }
 
+    /** The modes offered to the user: both players show the same list, and every one of them works reliably. */
+    val PLAYER_RESIZE_CHOICES: List<PlayerResize> = listOf(
+        PlayerResize.Fit, PlayerResize.Fill, PlayerResize.Zoom, PlayerResize.ZoomWidth, PlayerResize.ZoomHeight,
+    )
+
     var playerResize: PlayerResize
-        get() = PlayerResize.entries.find { it.resizeMode == Key.PLAYER_RESIZE.getInt() && it.name == Key.PLAYER_RESIZE_NAME.getString() }
+        // Matched by name alone: two modes sharing a resizeMode (the deprecated trio all reuse
+        // RESIZE_MODE_FIT) must never resolve to the wrong one, or worse always to Fit.
+        get() = Key.PLAYER_RESIZE_NAME.getString()?.let { saved -> PlayerResize.entries.find { it.name == saved } }
             ?: PlayerResize.entries.find { it.resizeMode == Key.PLAYER_RESIZE.getInt() }
             ?: PlayerResize.Fit
         set(value) {

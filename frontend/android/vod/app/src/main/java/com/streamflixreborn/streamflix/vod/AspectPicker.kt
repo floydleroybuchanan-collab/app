@@ -70,14 +70,15 @@ object AspectPicker {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(16), dp(14), dp(16), dp(14))
                     isFocusable = false
-                    addView(TextView(context).apply { textSize = 18f; isFocusable = false; setTextColor(Color.WHITE) })
+                    addView(TextView(context).apply { textSize = 17f; isFocusable = false; setTextColor(Color.WHITE); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
                     addView(TextView(context).apply {
-                        textSize = 13f; isFocusable = false; setTextColor(0xFFD5C7E0.toInt()); setPadding(0, dp(4), 0, 0)
+                        textSize = 13f; isFocusable = false; setTextColor(0xFFD5C7E0.toInt()); setPadding(0, dp(4), 0, 0); maxLines = 2
                     })
                 }
                 (item.getChildAt(0) as TextView).text =
                     (if (mode == current) "◉  " else "○  ") + context.getString(mode.stringRes) +
-                        (if (mode == current) "  ·  current & default" else "")
+                        (if (mode == current) "  ·  current" else "")
+                // (kept short on purpose: the subtitle above already explains "also the default")
                 (item.getChildAt(1) as TextView).text = helpFor(mode)
                 return item
             }
@@ -91,7 +92,12 @@ object AspectPicker {
         dialog.show()
         dialog.window?.apply {
             setBackgroundDrawable(surface(0xE61A0A3C.toInt(), 0xFFC64DFF.toInt()))
-            setDimAmount(.18f)
+            setDimAmount(.45f)
+            // A plain AlertDialog's default width varies by OEM theme and can come out too narrow to
+            // read the row text comfortably ("squished"). Give it a fixed, generous floating-card width instead.
+            val metrics = context.resources.displayMetrics
+            val cardWidth = minOf(dp(460), (metrics.widthPixels * 0.92f).toInt())
+            setLayout(cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
         list.requestFocus()
         val active = rows.indexOf(current)
@@ -99,11 +105,13 @@ object AspectPicker {
     }
 
     private fun helpFor(mode: UserPreferences.PlayerResize): String = when (mode) {
-        UserPreferences.PlayerResize.Fit -> "Shows the whole picture at the source's own aspect ratio."
+        UserPreferences.PlayerResize.Fit -> "Shows the whole picture at the source's own aspect ratio (original)."
         UserPreferences.PlayerResize.Fill -> "Stretches the picture to fill the screen; may distort it."
-        UserPreferences.PlayerResize.Zoom -> "Crops the picture's edges to fill the screen without distorting it."
-        UserPreferences.PlayerResize.Stretch43 -> "Stretches a 4:3 picture to fill a widescreen display."
-        UserPreferences.PlayerResize.StretchVertical -> "Stretches the picture taller, to fill more of the screen."
-        UserPreferences.PlayerResize.SuperZoom -> "Zooms in further than Zoom, cropping more of the edges."
+        UserPreferences.PlayerResize.Zoom -> "Crops the picture's edges evenly to fill the screen without distorting it."
+        UserPreferences.PlayerResize.ZoomWidth -> "Fills the width edge to edge, cropping the top and bottom if needed."
+        UserPreferences.PlayerResize.ZoomHeight -> "Fills the height edge to edge, cropping the sides if needed."
+        @Suppress("DEPRECATION") UserPreferences.PlayerResize.Stretch43 -> "Stretches a 4:3 picture to fill a widescreen display."
+        @Suppress("DEPRECATION") UserPreferences.PlayerResize.StretchVertical -> "Stretches the picture taller, to fill more of the screen."
+        @Suppress("DEPRECATION") UserPreferences.PlayerResize.SuperZoom -> "Zooms in further than Zoom, cropping more of the edges."
     }
 }

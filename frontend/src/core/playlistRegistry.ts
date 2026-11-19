@@ -12,6 +12,8 @@ import { managedContentSources, managedPlaylistUrl } from "@/src/auth/managedCon
 import { combinePlaylistCatalogs, MANAGED_PLAYLISTS, PRIMARY_PLAYLIST,
   managedPlaylistDefinition, scopePlaylistChannels, validatePlaylistImport, type PlaylistRecord } from "./playlistCatalog";
 
+export type PlaylistRefreshProgress = { completed: number; total: number; label: string };
+
 export type PlaylistPreview = Channel[] & { epgUrls?: string[]; account?: XtreamAccount; skipped?: number };
 
 const KEY = "charm_playlist_registry_v1";
@@ -181,9 +183,22 @@ export function readCombinedPlaylists(): Promise<Channel[]> {
   return exclusive(async () => { const rows = await load(); return combinePlaylistCatalogs(rows, await allCatalogs(rows)); });
 }
 
-export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext: () => boolean = () => true): Promise<Channel[]> {
+export function refreshPlaylists(
+  onlyId?: string,
+  dueOnly = false,
+  canStartNext: () => boolean = () => true,
+  onProgress?: (progress: PlaylistRefreshProgress) => void,
+): Promise<Channel[]> {
   return exclusive(async () => {
     let rows = await load(); const catalogs = await allCatalogs(rows);
+    const due = (list: PlaylistRecord[]) => list.filter((row) =>
+      row.enabled && !(onlyId && row.id !== onlyId) &&
+      !(dueOnly && row.revision && (!row.refreshHours || Date.now() - row.refreshedAt < row.refreshHours * 3_600_000)));
+    // Every playlist here can be a whole Xtream catalog of thousands of channels with no byte-level
+    // progress of its own, so without this the startup screen sat frozen at its floor percentage for
+    // the entire fetch, then jumped straight to done. Report real movement at each playlist boundary.
+    const total = due(rows).length;
+    let completed = 0;
     for (const row of [...rows]) {
       if (!canStartNext()) break;
       if (!row.enabled || (onlyId && row.id !== onlyId)) continue;
@@ -191,6 +206,7 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
       const previous = catalogs.get(row.id) || [];
       const previousRows = rows;
       const jobId = await startNativeUpdateJob(row.id, "playlist", dueOnly ? "schedule" : "manual").catch(() => 0);
+      onProgress?.({ completed, total, label: `Loading ${row.name}…` });
       try {
         const fresh = await previewPlaylist(await getPlaylistUrl(row), row.managed ? undefined : row.userAgent ?? "");
         catalogs.set(row.id, scopePlaylistChannels(row, fresh));
@@ -199,6 +215,8 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
         rows = rows.map((item) => item.id === row.id ? next : item);
         await commit(rows);
         await finishNativeUpdateJob(jobId, "succeeded", fresh.length).catch(() => undefined);
+        completed += 1;
+        onProgress?.({ completed, total, label: `Loaded ${row.name}` });
       } catch (error) {
         catalogs.set(row.id, previous);
         const safeReason = error instanceof Error && /^(Enabled playlists exceed|Playlist contains|Playlist exceeds|No playable|Your provider account|The provider rejected|Could not contact the Xtream provider)/.test(error.message)
@@ -206,6 +224,8 @@ export function refreshPlaylists(onlyId?: string, dueOnly = false, canStartNext:
         rows = previousRows.map((item) => item.id === row.id ? { ...item, status: safeReason } : item);
         await commit(rows);
         await finishNativeUpdateJob(jobId, "failed", 0, safeReason).catch(() => undefined);
+        completed += 1;
+        onProgress?.({ completed, total, label: safeReason });
       }
     }
     const combined = combinePlaylistCatalogs(rows, catalogs);

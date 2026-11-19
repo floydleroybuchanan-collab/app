@@ -1,7 +1,8 @@
 import { GlassPageTitle } from "@/src/components/GlassPageTitle";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FocusedTabMount } from "@/src/components/FocusedTabMount";
-import { findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
 import { loadVodRecent, sameVodRecent, vodTitleSection, type VodRecentItem } from "@/src/core/vodRecent";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
@@ -85,8 +86,9 @@ const VodRecentCard = React.memo(function VodRecentCard({ item, onOpen }: { item
     >
       <View style={styles.vodArt}>
         {item.image ? (
-          // Decoded at the card's size (resizeMethod), never full resolution.
-          <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} resizeMode="cover" resizeMethod="resize" />
+          // Cached memory+disk and GPU-decoded (expo-image), same as ChannelLogo: these used to
+          // re-download and re-decode on every Home mount with the plain RN Image component.
+          <Image source={{ uri: item.image }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" priority="low" allowDownscaling />
         ) : (
           <Ionicons name={item.kind === "movie" ? "film-outline" : "tv-outline"} size={30} color={tvColors.purpleSoft} />
         )}

@@ -40,3 +40,29 @@ test("Xtream authentication precedes imports and produces an EPG association", a
     assert.equal(new URL(result.epgUrls[0]).pathname, "/xmltv.php");
   } finally { globalThis.fetch = original; }
 });
+
+test("Xtream fetches categories and streams together, not one after the other, once the account check passes", async () => {
+  // An 18,000-channel account spent 3 full round-trips in series before this; categories and
+  // streams have no data dependency on each other, so they should overlap instead.
+  const original = globalThis.fetch; const started = []; const resolvers = [];
+  globalThis.fetch = (url) => {
+    const action = new URL(url).searchParams.get("action");
+    started.push(action);
+    return new Promise((resolve) => resolvers.push(() => resolve(new Response(JSON.stringify(
+      action === null ? { user_info: { auth: 1, status: "Active" } }
+        : action === "get_live_categories" ? [{ category_id: "1", category_name: "Live" }]
+        : [{ stream_id: 1, name: "One", category_id: "1" }],
+    )))));
+  };
+  try {
+    const run = previewXtream(login);
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(started, [null], "the account check must resolve before categories/streams start");
+    resolvers[0]();
+    await new Promise((r) => setTimeout(r, 0));
+    // Both in-flight together: neither waited for the other to finish first.
+    assert.deepEqual(started.sort(), [null, "get_live_categories", "get_live_streams"].sort());
+    resolvers[1](); resolvers[2]();
+    await run;
+  } finally { globalThis.fetch = original; }
+});

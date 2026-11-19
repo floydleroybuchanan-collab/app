@@ -877,14 +877,13 @@ class PlayerTvFragment : Fragment() {
             binding.pvPlayer.controller.binding.exoProgress.setKeyTimeIncrement(10_000)
 
             binding.pvPlayer.controller.binding.btnExoAspectRatio.setOnClickListener {
-                // A drawer listing every mode by name, instead of a single tap cycling blind. Only
-                // Fit/Fill/Zoom are offered here: the other three rely on a surface scale that this
-                // player's own quality-switch-safe geometry reset always undoes, so they would look
-                // identical to Fit and the row would seem to do nothing.
+                // A drawer listing every mode by name, instead of a single tap cycling blind. The same
+                // choices the mobile player offers: every one is a real resizeMode (no manual surface
+                // scale), so a quality switch's geometry reset below can never leave one stale.
                 AspectPicker.show(
                     this@PlayerTvFragment,
                     UserPreferences.playerResize,
-                    listOf(UserPreferences.PlayerResize.Fit, UserPreferences.PlayerResize.Fill, UserPreferences.PlayerResize.Zoom),
+                    UserPreferences.PLAYER_RESIZE_CHOICES,
                 ) { newResize ->
                     zoomToast?.cancel()
                     zoomToast = Toast.makeText(requireContext(), newResize.stringRes, Toast.LENGTH_SHORT)

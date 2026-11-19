@@ -943,7 +943,10 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
       const storedPlayerTimeout = (await bootstrapSettings.getItem<PlayerControlsTimeoutMs>(PLAYER_TIMEOUT_KEY, 8000)) || 8000;
       if (!settingsTouchedRef.current.has(PLAYER_TIMEOUT_KEY)) setPlayerControlsTimeoutMsState(storedPlayerTimeout);
       const storedPlayerAspect = (await bootstrapSettings.getItem<PlayerScaleMode>(PLAYER_ASPECT_KEY, "fit")) || "fit";
-      if (!settingsTouchedRef.current.has(PLAYER_ASPECT_KEY)) setPlayerAspectModeState(storedPlayerAspect);
+      // A build before the "stretch" mode was replaced by zoomWidth/zoomHeight may have left that value saved.
+      const validPlayerAspect: PlayerScaleMode = ["fit", "fill", "zoom", "zoomWidth", "zoomHeight"].includes(storedPlayerAspect)
+        ? storedPlayerAspect : "fit";
+      if (!settingsTouchedRef.current.has(PLAYER_ASPECT_KEY)) setPlayerAspectModeState(validPlayerAspect);
       const tvgOnly = (await bootstrapSettings.getItem<boolean>(PREFER_TVG_ID_ONLY_KEY, false)) || false;
       if (!settingsTouchedRef.current.has(PREFER_TVG_ID_ONLY_KEY)) {
         setPreferTvgIdOnlyState(tvgOnly);

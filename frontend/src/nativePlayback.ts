@@ -91,7 +91,7 @@ export function nativePlaybackAvailable(): boolean { return !!native; }
 export function prepareNativeFullscreen(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.prepareFullscreen(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function prepareNativePreview(generation: number, channelKey: string, uri: string, headers: Record<string, string>, contentType?: string | null, bufferProfile?: string | null): void { native?.preparePreview(generation, channelKey, uri, headers, contentType ?? null, bufferProfile ?? null); }
 export function resolveNativePlaybackFreshSource(requestId: number, uri?: string | null, headers: Record<string, string> = {}, contentType?: string | null, failureReason?: string | null): void { native?.resolveFreshSource(requestId, uri ?? null, headers, contentType ?? null, failureReason ?? null); }
-export function setNativePlaybackResizeMode(mode: "fit" | "fill" | "zoom" | "stretch"): void { native?.setResizeMode(mode); }
+export function setNativePlaybackResizeMode(mode: "fit" | "fill" | "zoom" | "zoomWidth" | "zoomHeight"): void { native?.setResizeMode(mode); }
 export function pauseNativePlayback(): void { native?.pause(); }
 export function resumeNativePlayback(): void { native?.resume(); }
 export function setNativePlaybackMuted(muted: boolean): void { native?.setMuted(muted); }

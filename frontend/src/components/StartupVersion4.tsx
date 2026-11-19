@@ -56,7 +56,13 @@ export function StartupVersion4() {
     { label: channelsReady ? `Loaded ${channels.length.toLocaleString()} channels from your playlists` : "Loading channels from your playlists", ready: channelsReady && !loading },
     { label: epgStarted ? `Guide ${epg.phase}` : guideReady ? "Guide is up to date" : "Starting guide in background", ready: guideReady },
   ], [cacheReady, channels.length, channelsReady, databaseReady, epg.phase, epgStarted, guideReady, loading]);
-  targetRef.current = milestones.filter((item) => item.ready).length / milestones.length;
+  const milestoneRatio = milestones.filter((item) => item.ready).length / milestones.length;
+  // The 4 milestones are coarse (each is a single all-or-nothing flip), so a large playlist - an
+  // Xtream catalog of thousands of channels, say - could spend the whole startup window with this bar
+  // frozen at its floor percentage, then jump straight to done. epg.ratio is continuous across the
+  // whole EPG step and now actually moves (playlistRegistry.ts reports it per playlist); blending it
+  // in, scaled down so it cannot claim "done" before the milestones agree, keeps this bar honest and moving.
+  targetRef.current = Math.min(1, Math.max(milestoneRatio, Math.min(1, Math.max(0, epg.ratio)) * 0.92));
   // Fades in from black, and fades out once the real work is done.
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: FADE_IN_MS, easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }).start();

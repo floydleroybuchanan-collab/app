@@ -567,7 +567,10 @@ export function subscribeProgress(fn: (p: EpgProgress) => void): () => void {
   };
 }
 let lastProgressEmit = 0;
-function setProgress(p: Partial<EpgProgress>, force = false) {
+/** Exported so the multi-playlist loop (playlistRegistry.ts) can report its own progress: it has
+ * no setProgress calls of its own, which is why the startup screen used to sit frozen at the
+ * floor percentage for the whole fetch when a provider's catalog is this large. */
+export function setProgress(p: Partial<EpgProgress>, force = false) {
   progress = { ...progress, ...p };
   const now = Date.now();
   if (!force && now - lastProgressEmit < 150) return;

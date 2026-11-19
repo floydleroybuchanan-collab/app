@@ -41,7 +41,10 @@ test("Live TV lists recently watched VOD titles and opens them in VOD", () => {
   const home = read("app/(tabs)/index.tsx");
   assert.match(home, /Recently Watched On Demand/);
   assert.match(home, /useFocusEffect\([\s\S]{0,120}loadVodRecent\(\)/);
-  assert.match(home, /resizeMethod="resize"/);
+  // expo-image (cached memory+disk, GPU-decoded), not the plain RN Image that re-downloaded
+  // and re-decoded these posters uncached on every Home mount.
+  assert.match(home, /import \{ Image \} from "expo-image";/);
+  assert.match(home, /cachePolicy="memory-disk"/);
   assert.match(home, /pathname: "\/vod", params: \{ section: vodTitleSection\(item\) \}/);
   const vod = read("app/(tabs)/vod.tsx");
   assert.match(vod, /const VOD_TITLE_LINK = \/\^\(movie\|tv_show\):/);

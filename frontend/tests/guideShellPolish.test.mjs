@@ -476,6 +476,10 @@ test("fullscreen guide return clears retained focus blockers and drawer focus re
   assert.match(drawer, /setRemoteContext\("main_drawer"\)/);
   const retry = native.slice(native.indexOf('private val focusEntryRunnable'), native.indexOf('private fun requestEntryFocus'));
   for (const guard of ['!focusEntryPending', '!enabled', 'disposed', 'isAttachedToWindow', 'isShown', 'hasWindowFocus()', 'remoteContext == "guide"', 'guideNavigationActive', 'focusEntryAttempts < 6']) assert.ok(retry.includes(guard), guard);
+  // The 120ms-step/~1.8s ceiling made every ordinary Guide focus entry feel like a multi-second
+  // stall; only a genuinely slow drawer close ever needed the full ceiling, so it was tightened.
+  assert.match(retry, /postDelayed\(this, 80L \* focusEntryAttempts\)/);
+  assert.doesNotMatch(retry, /120L \* focusEntryAttempts/);
   for (const method of ['setActive', 'onDetachedFromWindow', 'dispose']) {
     const body = native.slice(native.indexOf(`fun ${method}(`));
     assert.ok(body.slice(0, body.indexOf('\n  }')).includes('removeCallbacks(focusEntryRunnable)'), method);

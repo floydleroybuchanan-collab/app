@@ -222,6 +222,9 @@ export function PhoneLiveHub() {
           accessibilityRole="button"
           accessibilityLabel={`Playlist ${playlistName}. Change playlist`}
           onPress={() => setPanel(panel === "playlists" ? null : "playlists")}
+          // A touch-first screen still has to give a connected remote/keyboard's D-pad
+          // somewhere to land: without this, nothing was ever focused here to move from.
+          hasTVPreferredFocus
           style={({ focused }: any) => [styles.pill, styles.playlistPill, focused && styles.focusRing]}
           testID="phone-live-playlist"
         >

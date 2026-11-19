@@ -58,7 +58,7 @@ import { refreshPlaybackChannel } from "@/src/source";
 import { fingerprintStreamUri, recordAudioDiagnostics } from "@/src/core/audioDiagnostics";
 
 export type StreamStatus = "loading" | "playing" | "error";
-export type PlayerScaleMode = "fit" | "fill" | "zoom" | "stretch";
+export type PlayerScaleMode = "fit" | "fill" | "zoom" | "zoomWidth" | "zoomHeight";
 export type StreamTrack = { id: string | number; name: string; mimeType?: string | null; isSupported?: boolean };
 
 type NativePlaybackSurfaceProps = ViewProps & { owner: "preview" | "fullscreen" };

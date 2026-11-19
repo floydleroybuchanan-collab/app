@@ -564,7 +564,8 @@ function onProgressStalled(): void {
   setProgress({ message: "Guide update is taking longer; still working. Saved guide remains available." }, true);
 }
 
-function setProgress(next: Partial<EpgProgress>, force = false): void {
+/** Exported so the multi-playlist loop (playlistRegistry.ts) can report its own progress through it. */
+export function setProgress(next: Partial<EpgProgress>, force = false): void {
   const previousPhase = progress.phase;
   progress = {
     ...progress,
@@ -750,7 +751,11 @@ async function persistMeta(meta: NativeMeta): Promise<void> {
 async function fetchPlaylist(): Promise<Channel[]> {
   setProgress({ phase: "channels", ratio: 0.06, etaSeconds: null });
   await seedLegacyPlaylist(MEM?.channels || (await readChannelCache())?.channels || []);
-  const channels = await refreshPlaylists();
+  // A large catalog (an Xtream playlist of thousands of channels, say) can spend this whole step with
+  // no progress of its own to show; report real movement across this range as each playlist finishes.
+  const channels = await refreshPlaylists(undefined, false, () => true, ({ completed, total, label }) => {
+    if (total > 0) setProgress({ phase: "channels", ratio: 0.06 + (completed / total) * 0.11, etaSeconds: null, message: label });
+  });
   setProgress({ phase: "channels", ratio: 0.17, etaSeconds: null });
   return channels;
 }
