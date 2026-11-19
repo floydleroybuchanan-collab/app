@@ -527,6 +527,37 @@ test("native guide live-follow advances programme cells with wall clock without 
   assert.match(nativeGuide, /KEYCODE_DPAD_RIGHT -> \{\s*liveFollowEnabled = false/);
 });
 
+test("native Guide requests the current row window's logos as soon as it has something to show", async () => {
+  // emitRunway used to fire only from a scroll/D-pad move, so the screen a user
+  // sees on first opening the Guide (or right after a group/filter switch, or
+  // regaining focus back from the player) never told JS which rows were on
+  // screen - every channel fell back to the plain TV icon until the first
+  // cursor move. Both places that can show the Guide with rows already loaded
+  // must also ask for that window's logos immediately.
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  const setChannels = native.match(/fun setChannels\(value: ReadableArray\?\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(setChannels, /if \(wasEmpty\) requestEntryFocus\(\)/);
+  assert.ok(setChannels.indexOf("emitSelection(true)") < setChannels.indexOf("emitRunway(0)"));
+  const setActive = native.match(/fun setActive\(value: Boolean\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.ok(setActive.indexOf("emitSelection(true)") < setActive.indexOf("emitRunway(0)"));
+});
+
+test("native Guide logo tile falls back to the TV icon (and later retries) instead of staying blank forever on a failed load", async () => {
+  // A channel logo CDN that 404s, times out or serves a bad URL used to leave
+  // the row's tile as a blank white box for the rest of the session - no TV
+  // icon fallback and no retry - which is what made "most logos missing"
+  // indistinguishable from "most logos still loading".
+  const native = await source("android/app/src/main/java/com/charmiptv/app/NativeGuideView.kt");
+  assert.match(native, /var failed: Boolean = false/);
+  assert.match(native, /onLoadFailed\(errorDrawable: Drawable\?\) \{ bitmap = null; failed = true; failedAtMs = SystemClock\.uptimeMillis\(\); invalidate\(\) \}/);
+  assert.match(native, /private fun logoFailed\(url: String\): Boolean/);
+  const drawRowLogo = native.match(/private fun drawRowLogo\([\s\S]*?\n  \}/)?.[0] || "";
+  assert.match(drawRowLogo, /val bitmap = logoFor\(url\)/);
+  assert.match(drawRowLogo, /if \(bitmap == null && logoFailed\(url\)\) \{/);
+  assert.ok(drawRowLogo.indexOf("val bitmap = logoFor(url)") < drawRowLogo.indexOf("if (bitmap == null && logoFailed(url))"));
+  assert.match(native, /LOGO_RETRY_COOLDOWN_MS = 120_000L/);
+});
+
 test("the open TV/remote drawer shows the Charming MediaLab brand header, not an empty top", async () => {
   // styles.brand/brandMark/brandTop/brandBottom were defined back when this file
   // was first split out (baseline commit) but nothing ever rendered them - the

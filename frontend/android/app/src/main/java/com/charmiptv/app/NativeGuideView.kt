@@ -201,9 +201,11 @@ class NativeGuideView(context: Context) : View(context) {
   private val logoRect = RectF()
   private inner class LogoTarget : CustomTarget<Bitmap>(logoPx, logoPx) {
     var bitmap: Bitmap? = null
-    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) { bitmap = resource; invalidate() }
+    var failed: Boolean = false
+    var failedAtMs: Long = 0L
+    override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) { bitmap = resource; failed = false; invalidate() }
     override fun onLoadCleared(placeholder: Drawable?) { bitmap = null }
-    override fun onLoadFailed(errorDrawable: Drawable?) { bitmap = null }
+    override fun onLoadFailed(errorDrawable: Drawable?) { bitmap = null; failed = true; failedAtMs = SystemClock.uptimeMillis(); invalidate() }
   }
   private val logoTargets = object : LinkedHashMap<String, LogoTarget>(32, 0.75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LogoTarget>): Boolean {
@@ -238,7 +240,19 @@ class NativeGuideView(context: Context) : View(context) {
   }
 
   private fun logoFor(url: String): Bitmap? {
-    logoTargets[url]?.let { return it.bitmap }
+    val existing = logoTargets[url]
+    if (existing != null) {
+      // A failed load used to sit at `null` forever with no retry, which is why a
+      // provider's flaky/slow logo CDN left a blank tile (not even the TV-icon
+      // fallback) for the rest of the session. Retry once the cooldown passes;
+      // drawRowLogo treats "failed and still cooling down" as if there were no
+      // logo at all, so the tile falls back to the TV icon in the meantime.
+      if (!existing.failed || SystemClock.uptimeMillis() - existing.failedAtMs < LOGO_RETRY_COOLDOWN_MS) {
+        return existing.bitmap
+      }
+      releaseLogo(existing)
+      logoTargets.remove(url)
+    }
     if (disposed) return null
     val target = LogoTarget()
     logoTargets[url] = target
@@ -246,6 +260,11 @@ class NativeGuideView(context: Context) : View(context) {
       Glide.with(context.applicationContext).asBitmap().load(url).fitCenter().into(target)
     } catch (_: Throwable) {}
     return null
+  }
+
+  private fun logoFailed(url: String): Boolean {
+    val target = logoTargets[url] ?: return false
+    return target.failed && SystemClock.uptimeMillis() - target.failedAtMs < LOGO_RETRY_COOLDOWN_MS
   }
 
   private val tvStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -310,9 +329,15 @@ class NativeGuideView(context: Context) : View(context) {
       drawTvIcon(canvas, left, boxTop, size)
       return size + pad
     }
+    val bitmap = logoFor(url)
+    if (bitmap == null && logoFailed(url)) {
+      // Load failed (bad URL, dead CDN, timeout) and hasn't cooled down for a
+      // retry yet: match the "no logo" tile instead of leaving a blank box.
+      drawTvIcon(canvas, left, boxTop, size)
+      return size + pad
+    }
     logoRect.set(left, boxTop, left + size, boxTop + size)
     canvas.drawRoundRect(logoRect, 6f * density, 6f * density, logoBacking)
-    val bitmap = logoFor(url)
     if (bitmap != null && !bitmap.isRecycled && bitmap.width > 0 && bitmap.height > 0) {
       val inset = 3f * density
       val maxW = size - 2f * inset
@@ -421,6 +446,12 @@ class NativeGuideView(context: Context) : View(context) {
       // becomes focusable; later EPG/channel updates never steal focus.
       if (wasEmpty) requestEntryFocus()
       emitSelection(true)
+      // emitRunway only ever fired from a scroll/D-pad move, so the screen the
+      // user sees on first open (or right after a group/filter switch) never
+      // told JS which rows were visible - every row's logo request was empty
+      // until the first cursor move. Emit the window around the current
+      // selection here too so the very first paint already has logos queued.
+      emitRunway(0)
     }
   }
 
@@ -479,6 +510,11 @@ class NativeGuideView(context: Context) : View(context) {
     if (!wasEnabled && rows.isNotEmpty()) {
       requestEntryFocus()
       emitSelection(true)
+      // Regaining focus (e.g. back from the player/preview) can follow a stretch
+      // where logos were suppressed or the channel list changed while inactive;
+      // re-request the current window so the visible rows aren't left on stale
+      // or empty logo state until the user moves the cursor again.
+      emitRunway(0)
     }
   }
 
@@ -1167,6 +1203,7 @@ class NativeGuideView(context: Context) : View(context) {
 
   companion object {
     private const val MAX_LOGO_BITMAPS = 28
+    private const val LOGO_RETRY_COOLDOWN_MS = 120_000L
     private val CHANNEL_COLOR = Color.rgb(34, 16, 68)
     private val SELECTED_COLOR = Color.rgb(160, 72, 245)
     private const val LIVE_CLOCK_TICK_MS = 30_000L
