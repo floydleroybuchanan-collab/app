@@ -518,3 +518,32 @@ test("the phone Live TV / Channels screen (PhoneLiveHub) gives a connected remot
   const hub = read("src/components/PhoneLiveHub.tsx");
   assert.match(hub, /onPress=\{\(\) => setPanel\(panel === "playlists" \? null : "playlists"\)\}\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*hasTVPreferredFocus\s*\n/);
 });
+
+test("the player's aspect-ratio/tracks/channels overlays give a connected remote's D-pad an initial focus target", () => {
+  // Reported live on video: opening the aspect-ratio picker left the Channels tab behind it still
+  // showing the focus ring, and nothing in the card ever did - the D-pad had nowhere to go. The
+  // imperative requestNativeFocusWithRetry(aspectFirstRowRef...) effect alone wasn't enough (see
+  // the tvFocus.ts test below for why); hasTVPreferredFocus is the pattern already proven to work
+  // elsewhere in this app (PhoneLiveHub, PhoneMoreSheet), so every overlay opened on top of
+  // already-focused controls gets it too.
+  const player = read("app/player.tsx");
+  const aspectRows = player.slice(player.indexOf("{ASPECT_OPTIONS.map((option, index)"), player.indexOf("</FocusGuide>", player.indexOf("{ASPECT_OPTIONS.map((option, index)")));
+  assert.match(aspectRows, /ref=\{index === 0 \? aspectFirstRowRef : undefined\}\s*\n\s*hasTVPreferredFocus=\{index === 0\}/);
+  assert.match(player, /<Pressable ref=\{subtitlesOffRef\} hasTVPreferredFocus onPress=\{\(\) => setTextTrackId\(undefined\)\}/);
+  assert.match(player, /renderItem=\{\(\{ item, index \}\) => \(\s*\n\s*<Pressable hasTVPreferredFocus=\{index === 0\}/);
+});
+
+test("requestNativeFocus also tries the TV ViewManager command off an actual TV-flagged build", () => {
+  // app.json's native TV build flag is false for this whole app (one APK serves both the phone and
+  // TV screen layouts, chosen at runtime, not at the native/build level), so react-native-tvos's
+  // Platform.isTV is false everywhere - the dispatchViewManagerCommand branch used to never run at
+  // all, anywhere, in production: every call silently fell through to the generic `.focus()`, a
+  // documented no-op for a Pressable. That's the real root cause behind the test above.
+  const tvFocus = read("src/utils/tvFocus.ts");
+  const fn = tvFocus.slice(tvFocus.indexOf("export function requestNativeFocus"), tvFocus.indexOf("export function requestNativeFocusWithRetry"));
+  assert.match(fn, /if \(Platform\.isTV\) \{/);
+  // Off that (always-true-in-production) branch, the command is tried again before `.focus()`.
+  assert.equal((fn.match(/UIManager\.dispatchViewManagerCommand\(handle, "requestTVFocus" as any, \[\]\);/g) || []).length, 2);
+  assert.match(fn, /focus\.call\(node\);/);
+  assert.ok(fn.lastIndexOf("dispatchViewManagerCommand") < fn.indexOf("focus.call(node)"));
+});

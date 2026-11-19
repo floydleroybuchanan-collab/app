@@ -1,10 +1,26 @@
 import { findNodeHandle, Platform, UIManager } from "react-native";
 
-/** Request native TV focus on a React node (Pressable ref, View ref, etc.). */
+/**
+ * Request native TV focus on a React node (Pressable ref, View ref, etc.).
+ *
+ * On an actual TV build (Platform.isTV true), the installed TV ViewManager
+ * command is authoritative - React's generic HostComponent.focus() calls
+ * TextInputState, which is a no-op for a Pressable, so it is never tried there.
+ *
+ * This app ships one APK for both phone and TV screens, chosen at runtime
+ * (player.tsx's own `isTV`/`phoneUi`), but app.json's native TV build flag
+ * ("isTV") is false for the whole build - so react-native-tvos's global
+ * `Platform.isTV` is false everywhere, on a TV screen layout and a phone
+ * layout alike, and the branch above never actually runs on this app. Every
+ * call used to fall straight through to the generic (no-op) `.focus()`,
+ * which is exactly why a newly-opened overlay here (e.g. the player's
+ * aspect-ratio picker) left nothing focused in it. So off an actual TV
+ * build, also try the TV ViewManager command first - it can still work on
+ * this device even though the build wasn't flagged as TV - before falling
+ * back to `.focus()`; a failed attempt is always just a no-op.
+ */
 export function requestNativeFocus(node: unknown): boolean {
   if (!node) return false;
-  // React's generic HostComponent.focus() calls TextInputState, which is a
-  // no-op for a Pressable. TV ViewManager owns requestTVFocus instead.
   if (Platform.isTV) {
     try {
       const handle = findNodeHandle(node as any);
@@ -13,14 +29,22 @@ export function requestNativeFocus(node: unknown): boolean {
       return true;
     } catch { return false; }
   }
+  let invoked = false;
+  try {
+    const handle = findNodeHandle(node as any);
+    if (handle) {
+      UIManager.dispatchViewManagerCommand(handle, "requestTVFocus" as any, []);
+      invoked = true;
+    }
+  } catch { /* command unavailable on this build/device - fall through */ }
   const focus = (node as { focus?: () => void }).focus;
   if (typeof focus === "function") {
     try {
       focus.call(node);
-      return true;
-    } catch {}
+      invoked = true;
+    } catch { /* also a no-op on some host components - fine, we tried the other path too */ }
   }
-  return false;
+  return invoked;
 }
 
 /**

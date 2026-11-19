@@ -771,7 +771,7 @@ export default function PlayerScreen() {
                   </Pressable>
                 )) : <Text style={styles.errorText}>No audio tracks reported</Text>}
                 <Text style={[styles.controlLabel, { marginTop: 8 }]}>Subtitles</Text>
-                <Pressable ref={subtitlesOffRef} onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
+                <Pressable ref={subtitlesOffRef} hasTVPreferredFocus onPress={() => setTextTrackId(undefined)} style={({ focused }: any) => [styles.trackRow, textTrackId == null && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>Off</Text></Pressable>
                 {textTracks.map((track) => <Pressable key={`t-${track.id}`} onPress={() => setTextTrackId(track.id)} style={({ focused }: any) => [styles.trackRow, textTrackId === track.id && styles.controlActive, focused && styles.focused]}><Text style={styles.controlLabel}>{track.name}</Text></Pressable>)}
               </View>
             ) : null}
@@ -779,8 +779,8 @@ export default function PlayerScreen() {
             {channelsOpen ? (
               <View>
                 <Text style={styles.controlLabel}>Previous & recent channels</Text>
-                <FlatList data={historyChannels} horizontal keyExtractor={(item) => item.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={4} removeClippedSubviews={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.channelStrip} renderItem={({ item }) => (
-                  <Pressable onPress={() => changeChannel(item.id, true)} onFocus={() => previewChannel(item.id)} style={({ focused }: any) => [styles.channelCard, item.id === channelId && styles.channelCardActive, focused && styles.focused]}>
+                <FlatList data={historyChannels} horizontal keyExtractor={(item) => item.id} initialNumToRender={8} maxToRenderPerBatch={6} windowSize={4} removeClippedSubviews={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.channelStrip} renderItem={({ item, index }) => (
+                  <Pressable hasTVPreferredFocus={index === 0} onPress={() => changeChannel(item.id, true)} onFocus={() => previewChannel(item.id)} style={({ focused }: any) => [styles.channelCard, item.id === channelId && styles.channelCardActive, focused && styles.focused]}>
                     <ChannelLogo name={item.name} logo={item.logo} disabled={!channelLogos} size={30} /><Text numberOfLines={1} style={styles.channelCardName}>{item.name}</Text>
                   </Pressable>
                 )} />
@@ -844,6 +844,7 @@ export default function PlayerScreen() {
               <Pressable
                 key={option.mode}
                 ref={index === 0 ? aspectFirstRowRef : undefined}
+                hasTVPreferredFocus={index === 0}
                 onPress={() => chooseScaleMode(option.mode)}
                 accessibilityRole="button"
                 accessibilityLabel={`${option.label}. ${option.help}`}
