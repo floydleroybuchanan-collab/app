@@ -419,7 +419,9 @@ const styles = StyleSheet.create({
   cardCompact: { paddingHorizontal: 24, paddingVertical: 24 },
   screenWide: {flexDirection:"row",justifyContent:"space-between",gap:44,paddingHorizontal:44,paddingVertical:32},
   loginBrand: {alignItems:"center",justifyContent:"center"},
-  loginForm: {width:396,maxWidth:"100%"},
+  // alignSelf pins the card to its own content height, so the translucent panel ends
+  // just under the Telegram row instead of stretching to the full column height.
+  loginForm: {width:396,maxWidth:"100%",alignSelf:"center"},
   loginGlass: {paddingHorizontal:26,paddingVertical:24,borderRadius:24,borderWidth:1,borderColor:"rgba(226,190,255,.30)",backgroundColor:"rgba(30,12,62,.34)"},
   tagline: {color:"#EEE6FF",fontFamily:fonts.medium,fontSize:23,letterSpacing:-.6,marginTop:22},
   brandSubtitle: {color:"#B3A5C2",fontFamily:fonts.regular,fontSize:13,marginTop:10},
