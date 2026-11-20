@@ -19,18 +19,19 @@ test("sign-in uses the animated space scene, and the invitation button is called
   assert.match(scene, /isReduceMotionEnabled/);
   assert.match(scene, /AppState/);
   assert.match(scene, /useNativeDriver: true/);
-  // A still crown-in-the-clouds background (wordmark baked in) with the crown as its own
-  // transparent layer, so the meteors below can pass behind it; shown only on wide screens.
+  // A still crown-in-the-clouds background (wordmark baked in) with the same shapes
+  // repeated as a transparent foreground cutout, so the meteors below can genuinely
+  // pass behind the crown/logo; shown only on wide screens.
   assert.match(scene, /scene_bg\.webp/);
-  assert.match(scene, /scene_crown\.webp/);
-  assert.match(scene, /const crownVisible = showAngel && width > height/);
+  assert.match(scene, /scene_foreground\.webp/);
+  assert.match(scene, /const sceneVisible = showAngel && width > height/);
   assert.match(scene, /const METEORS: Meteor\[\] = \[/);
   assert.match(scene, /const PULSE_STARS: PulseStar\[\] = \[/);
   assert.match(scene, /function JewelPulse/);
 });
 
 test("the sign-in artwork ships with the app", async () => {
-  for (const file of ["assets/login/scene_bg.webp", "assets/login/scene_crown.webp"]) assert.ok((await readFile(join(root, file))).length > 10_000, file);
+  for (const file of ["assets/login/scene_bg.webp", "assets/login/scene_foreground.webp"]) assert.ok((await readFile(join(root, file))).length > 10_000, file);
 });
 
 test("the loading screen keeps the approved live effects over the looping artwork", async () => {

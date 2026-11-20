@@ -1359,8 +1359,12 @@ function SettingsScreenContent() {
                 <Text style={styles.help}>Questions, announcements, and community help:</Text>
                 <Action label="Open Charming MediaLab Telegram" icon="paper-plane-outline" onPress={() => void Linking.openURL(TELEGRAM_COMMUNITY_URL)} />
                 <View style={styles.divider} />
-                <Text style={styles.settingLabel}>Account privacy</Text>
-                <Text style={styles.help}>Charming MediaLab keeps the username, email, password hash, account timer, and session records needed to operate your account. Canceling or reaching the account expiration time permanently removes that account data. A referring user may retain only an anonymous Invite number, status, and dates—never your username, email, or password.</Text>
+                <Text style={styles.settingLabel}>Privacy Policy</Text>
+                <Text style={styles.help}>Account data. Charming MediaLab keeps the username, email, password hash, account timer, and session records needed to operate your account. Canceling the account, or reaching its expiration time, permanently removes that data. A referring user may retain only an anonymous Invite number, status, and dates—never your username, email, or password.</Text>
+                <Text style={styles.help}>Your streaming source. The IPTV/VOD provider login you enter (host, username, password) is stored only on this device and sent directly to that provider's own server when loading channels or content. Charming MediaLab's servers never see or store it.</Text>
+                <Text style={styles.help}>On-device storage. A saved "remember login" credential is kept in the device's secure, encrypted keystore. The backup/restore feature writes a file only to storage you choose on this device—nothing is uploaded anywhere.</Text>
+                <Text style={styles.help}>No ads, no analytics. This app contains no advertising, analytics, or third-party tracking of any kind.</Text>
+                <Text style={styles.help}>Questions about this policy can be sent through the Telegram community above.</Text>
               </SettingsCard>
             ) : null}
           </ScrollView>

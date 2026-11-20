@@ -88,12 +88,13 @@ test("the loading and sign-in scenes animate on first launch and use 1080p loops
     assert.match(read(f), /AppState\.currentState !== "background"/, f);
   }
   const size = (f) => readFileSync(new URL(`../assets/login/${f}`, import.meta.url)).length;
-  // The sign-in scene is a still background + a separate crown layer now (both WebP, lossy at
-  // near-lossless quality), not a video or an animated-loop file - see loginScene.test.mjs.
+  // The sign-in scene is a still background + a transparent foreground cutout layer now
+  // (both WebP, lossy at near-lossless quality), not a video or an animated-loop file -
+  // see loginScene.test.mjs.
   assert.ok(size("scene_bg.webp") > 50_000);
   assert.ok(size("scene_bg.webp") < 2_000_000);
-  assert.ok(size("scene_crown.webp") > 50_000);
-  assert.ok(size("scene_crown.webp") < 2_000_000);
+  assert.ok(size("scene_foreground.webp") > 50_000);
+  assert.ok(size("scene_foreground.webp") < 2_000_000);
   assert.ok(size("startup_move.webp") > 5_000_000);
   // The WebP header carries the canvas size: width-1 and height-1 as 24-bit little-endian at bytes 24 and 27.
   const dims = (f) => { const b = readFileSync(new URL(`../assets/login/${f}`, import.meta.url)).subarray(0, 40); return [(b[24] | (b[25] << 8) | (b[26] << 16)) + 1, (b[27] | (b[28] << 8) | (b[29] << 16)) + 1]; };
