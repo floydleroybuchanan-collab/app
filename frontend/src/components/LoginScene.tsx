@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 // frame, instead of merely being positioned to avoid them.
 const background = require("@/assets/login/scene_bg.webp");
 const foreground = require("@/assets/login/scene_foreground.webp");
+const glowSprite = require("@/assets/login/star_glow.png");
 
 // Everything is laid out on the scene's own native resolution, then scaled to cover the screen.
 const STAGE_W = 3840;
@@ -39,8 +40,8 @@ const PULSE_STARS: PulseStar[] = [
 // A couple of extra "distant moons" - static, no animation needed - purely to give
 // the open black area more of a real outer-space feel.
 const PLANETS = [
-  { x: 2993, y: 91, size: 150, color: "rgba(150,180,255,0.55)" },
-  { x: 3230, y: 1793, size: 110, color: "rgba(255,190,230,0.45)" },
+  { x: 2993, y: 91, size: 150, color: "#8FA8E8" },
+  { x: 3230, y: 1793, size: 110, color: "#D99CC2" },
 ];
 
 // A denser scatter of small plain stars across the whole stage (static, not just the
@@ -73,10 +74,11 @@ type Meteor = { x: number; y: number; angle: string; duration: number; delay: nu
 // clear of the sign-in card on the right. Different screen region AND a different
 // timing band, so the two groups never overlap or fire together.
 const METEORS: Meteor[] = [
-  { x: 165, y: 562, angle: "14deg", duration: 7000, delay: 0, tint: "gold" },
-  { x: 1147, y: 50, angle: "20deg", duration: 8200, delay: 4000, tint: "gold" },
-  { x: 54, y: 1310, angle: "-10deg", duration: 6800, delay: 2000, tint: "ice" },
-  { x: 1600, y: 900, angle: "-16deg", duration: 9200, delay: 6000, tint: "ice" },
+  { x: 165, y: 562, angle: "14deg", duration: 4200, delay: 0, tint: "gold" },
+  { x: 1147, y: 50, angle: "20deg", duration: 5000, delay: 1500, tint: "gold" },
+  { x: 54, y: 1310, angle: "-10deg", duration: 4600, delay: 2600, tint: "ice" },
+  { x: 1600, y: 900, angle: "-16deg", duration: 5400, delay: 3800, tint: "ice" },
+  { x: 472, y: 946, angle: "17deg", duration: 4800, delay: 5200, tint: "ice" },
 ];
 
 /** A slow, natural opacity+size breathing loop - used for both the ambient pulsing stars and the crown's jewel. */
@@ -97,18 +99,22 @@ function usePulse(run: boolean, delayMs: number, periodMs: number): Animated.Val
 }
 
 /**
- * A soft point-light glow built from plain layered circles (decreasing size,
- * increasing opacity toward the center) instead of shadowRadius/elevation - those
- * two render very differently (or not at all without extra elevation) on Android, so
- * this is the one glow technique guaranteed to look the same on every device.
+ * A soft point-light glow. Stacked flat circles leave visible hard edges, and
+ * shadowRadius/elevation renders differently (or not at all) on Android - so this
+ * uses a real radial-gradient sprite, tinted, which falls off smoothly and looks
+ * identical on every device.
  */
-function Glow({ size, color, core }: { size: number; color: string; core: string }) {
+function Glow({ size, color }: { size: number; color: string }) {
   return (
-    <>
-      <View style={{ position: "absolute", left: -size, top: -size, width: size * 2, height: size * 2, borderRadius: size, backgroundColor: color, opacity: 0.22 }} />
-      <View style={{ position: "absolute", left: -size * 0.55, top: -size * 0.55, width: size * 1.1, height: size * 1.1, borderRadius: size * 0.55, backgroundColor: color, opacity: 0.5 }} />
-      <View style={{ position: "absolute", left: -size * 0.18, top: -size * 0.18, width: size * 0.36, height: size * 0.36, borderRadius: size * 0.18, backgroundColor: core }} />
-    </>
+    // The blend lives on the wrapper: additive light, so the glow reads as emitted
+    // rather than as a translucent disc painted over the sky. Needs RN >= 0.76 on the
+    // New Architecture, which this app runs.
+    <View
+      pointerEvents="none"
+      style={{ position: "absolute", left: -size, top: -size, width: size * 2, height: size * 2, mixBlendMode: "screen" }}
+    >
+      <Image source={glowSprite} resizeMode="contain" style={{ width: size * 2, height: size * 2, tintColor: color }} />
+    </View>
   );
 }
 
@@ -124,7 +130,7 @@ function PulsingStar({ star, scale, run }: { star: PulseStar; scale: number; run
         transform: [{ scale: value.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.25] }) }],
       }}
     >
-      <Glow size={size} color="rgba(190,210,255,0.9)" core="#fff" />
+      <Glow size={size} color="#DCEBFF" />
     </Animated.View>
   );
 }
@@ -142,7 +148,7 @@ function JewelPulse({ scale, run }: { scale: number; run: boolean }) {
         transform: [{ scale: value.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.3] }) }],
       }}
     >
-      <Glow size={size} color="rgba(190,225,255,0.85)" core="#EAF6FF" />
+      <Glow size={size} color="#D6ECFF" />
     </Animated.View>
   );
 }
@@ -151,7 +157,7 @@ function JewelPulse({ scale, run }: { scale: number; run: boolean }) {
 function Planet({ x, y, size, color, scale }: { x: number; y: number; size: number; color: string; scale: number }) {
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: x * scale, top: y * scale, width: 1, height: 1 }}>
-      <Glow size={size * scale} color={color} core={color.replace(/[\d.]+\)$/, "0.9)")} />
+      <Glow size={size * scale} color={color} />
     </View>
   );
 }
@@ -174,13 +180,13 @@ function ShootingMeteor({ meteor, scale, run }: { meteor: Meteor; scale: number;
     animation.start();
     return () => animation.stop();
   }, [meteor.delay, meteor.duration, run, value]);
-  const travel = 840 * scale;
+  const travel = 1150 * scale;
   const tint = METEOR_TINTS[meteor.tint];
   return (
     <Animated.View
       pointerEvents="none"
       style={{
-        position: "absolute", left: meteor.x * scale, top: meteor.y * scale, width: 320 * scale, height: 5 * scale,
+        position: "absolute", left: meteor.x * scale, top: meteor.y * scale, width: 460 * scale, height: 11 * scale,
         transform: [
           { rotate: meteor.angle },
           { translateX: value.interpolate({ inputRange: [0, 0.03, 0.22, 0.34, 1], outputRange: [0, travel * 0.02, travel * 0.7, travel, travel] }) },
@@ -188,9 +194,10 @@ function ShootingMeteor({ meteor, scale, run }: { meteor: Meteor; scale: number;
         opacity: value.interpolate({ inputRange: [0, 0.03, 0.22, 0.34, 1], outputRange: [0, 1, 1, 0, 0] }),
       }}
     >
-      <LinearGradient colors={tint.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-      <View style={{ position: "absolute", right: 0, top: 2.5 * scale, width: 1, height: 1 }}>
-        <Glow size={26 * scale} color={tint.glow} core={tint.head} />
+      <LinearGradient colors={tint.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={[StyleSheet.absoluteFill, { mixBlendMode: "screen", borderRadius: 6 * scale }]} />
+      <View style={{ position: "absolute", right: 0, top: 5.5 * scale, width: 1, height: 1 }}>
+        <Glow size={34 * scale} color={tint.head} />
       </View>
     </Animated.View>
   );
@@ -230,6 +237,7 @@ export function LoginScene({ animate = true, showAngel = true }: { animate?: boo
           <View key={index} pointerEvents="none" style={{
             position: "absolute", left: star.x * scale - star.r * scale, top: star.y * scale - star.r * scale,
             width: star.r * 2 * scale, height: star.r * 2 * scale, borderRadius: star.r * scale, backgroundColor: "#fff",
+            mixBlendMode: "screen",
           }} />
         )) : null}
         {sceneVisible ? PLANETS.map((planet, index) => <Planet key={index} x={planet.x} y={planet.y} size={planet.size} color={planet.color} scale={scale} />) : null}
