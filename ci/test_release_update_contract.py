@@ -86,6 +86,36 @@ class ReleaseUpdateContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "RC25 requires versionCode"):
             self.verify()
 
+    def _make_stable(self, version="2.6.0", code=2600):
+        self.config["expo"]["version"] = version
+        self.config["expo"]["android"]["versionCode"] = code
+        self.app = self.app.replace("versionCode 2500", f"versionCode {code}")
+        self.app = self.app.replace('versionName "2.2.1-rc.25"', f'versionName "{version}"')
+        self.vod = self.vod.replace("'VERSION_CODE', '2500'", f"'VERSION_CODE', '{code}'")
+        self.vod = self.vod.replace("'VERSION_NAME', '\"2.2.1-rc.25\"'", f"'VERSION_NAME', '\"{version}\"'")
+
+    def test_stable_release_without_rc_suffix_is_accepted(self):
+        self._make_stable()
+        result = self.verify()
+        self.assertEqual(result["versionCode"], 2600)
+        self.assertEqual(result["versionName"], "2.6.0-sideload")
+
+    def test_stable_release_outranks_every_rc_of_the_same_version(self):
+        self.assertGreater(contract._version_tuple("2.6.0"), contract._version_tuple("2.6.0-rc.99"))
+        self.assertGreater(contract._version_tuple("2.6.0"), contract._version_tuple("2.2.0-rc.24-sideload"))
+
+    def test_stable_version_code_must_match_major_minor_family(self):
+        # 2.6.x belongs in 2600-2699; an RC-era code must not slip through.
+        self._make_stable(version="2.6.0", code=2555)
+        with self.assertRaisesRegex(ValueError, r"stable 2\.6\.0 requires versionCode"):
+            self.verify()
+
+    def test_stable_release_still_cannot_downgrade(self):
+        self._make_stable(version="2.6.0", code=2600)
+        self.baseline["lastConfirmedInstallableRelease"]["versionCode"] = 2700
+        with self.assertRaisesRegex(ValueError, "must exceed installed Build"):
+            self.verify()
+
 
 if __name__ == "__main__":
     unittest.main()

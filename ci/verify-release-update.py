@@ -20,10 +20,16 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError("Release update contract violated: " + message)
 
 
+# A stable (production / GA) release carries no -rc.N suffix, and outranks every
+# release candidate of the same X.Y.Z, so it sorts above them.
+STABLE_RANK = 1000
+
+
 def _version_tuple(version: str) -> tuple[int, int, int, int]:
-    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)-rc\.(\d+)(?:-sideload)?", version, flags=re.I)
-    _require(match is not None, f"version name must be X.Y.Z-rc.N: {version}")
-    return tuple(int(value) for value in match.groups())
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?(?:-sideload)?", version, flags=re.I)
+    _require(match is not None, f"version name must be X.Y.Z or X.Y.Z-rc.N: {version}")
+    major, minor, patch, rc = match.groups()
+    return (int(major), int(minor), int(patch), STABLE_RANK if rc is None else int(rc))
 
 
 def _git_blob_sha1(payload: bytes) -> str:
@@ -50,8 +56,16 @@ def validate_release(config: dict, baseline: dict, app_gradle: str, vod_gradle: 
     _require(version_tuple > previous_version,
              f"versionName {version} must advance past {previous['versionName']}")
     rc = version_tuple[3]
-    _require(rc * 100 <= code < (rc + 1) * 100,
-             f"RC{rc} requires versionCode in the range {rc*100}–{rc*100+99}; got {code}")
+    if rc == STABLE_RANK:
+        # Stable releases tie the code band to major.minor instead of an RC number,
+        # so 2.6.x lives in 2600-2699 exactly as RC25 lived in 2500-2599.
+        floor = version_tuple[0] * 1000 + version_tuple[1] * 100
+        _require(floor <= code < floor + 100,
+                 f"stable {version} requires versionCode in the range "
+                 f"{floor}–{floor+99}; got {code}")
+    else:
+        _require(rc * 100 <= code < (rc + 1) * 100,
+                 f"RC{rc} requires versionCode in the range {rc*100}–{rc*100+99}; got {code}")
     base_id = re.escape(android["package"])
     _require(re.search(r"(?m)^\s*applicationId\s+'" + base_id + r"'\s*$", app_gradle) is not None,
              "host Gradle applicationId disagrees with app.json")

@@ -7,6 +7,6 @@
     "githubRunId": 42671064289
   },
   "ownerEncryptionPublicKeyGitBlobSha1": "08f1f9e2ee8f84ca7b7f2733a05b6971a8562c6c",
-  "versioningPolicy": "Every new update must increase the actual Android versionCode. RC25 code 2500 was released; 2.2.2-RC25 uses 2501. CI verifies package, owner RSA encryption key and APK signer certificate against published Build 284.",
+  "versioningPolicy": "Every new update must increase the actual Android versionCode. The product left the RC stage at 2.6.0 (code 2600): stable releases drop the -rc.N suffix and tie their code band to major.minor, so 2.6.x uses 2600-2699 exactly as RC25 used 2500-2599, and a stable X.Y.Z always outranks X.Y.Z-rc.N. The package id never changes - it is the app's identity, and changing it would install a second app instead of updating the one people already have. CI verifies package, owner RSA encryption key and APK signer certificate against published Build 284.",
   "androidSignerCertificateSha256": "106b3a5591effe179597fc0bfee400e2634eeb669e3f47e1fb1143e85ca623c4"
 }
