@@ -19,19 +19,18 @@ test("sign-in uses the animated space scene, and the invitation button is called
   assert.match(scene, /isReduceMotionEnabled/);
   assert.match(scene, /AppState/);
   assert.match(scene, /useNativeDriver: true/);
-  assert.match(scene, /const STAR_COUNT = 30/);
-  // The animated loop is used only when motion is allowed; otherwise the still picture with its own stars.
-  assert.match(scene, /const useLoop = run && angelVisible/);
-  assert.match(scene, /scene_loop\.mp4/);
-  // A real video, not an animated WebP: useVideoPlayer's lifecycle is tied to this component, so
-  // the player is only ever created/started/released while the scene itself is mounted.
-  assert.match(scene, /useVideoPlayer\(sceneLoop, \(instance\) => \{/);
-  assert.match(scene, /instance\.loop = true;/);
-  assert.match(scene, /instance\.muted = true;/);
+  // A still crown-in-the-clouds background (wordmark baked in) with the crown as its own
+  // transparent layer, so the meteors below can pass behind it; shown only on wide screens.
+  assert.match(scene, /scene_bg\.webp/);
+  assert.match(scene, /scene_crown\.webp/);
+  assert.match(scene, /const crownVisible = showAngel && width > height/);
+  assert.match(scene, /const METEORS: Meteor\[\] = \[/);
+  assert.match(scene, /const PULSE_STARS: PulseStar\[\] = \[/);
+  assert.match(scene, /function JewelPulse/);
 });
 
 test("the sign-in artwork ships with the app", async () => {
-  for (const file of ["assets/login/space_bg.jpg", "assets/login/angel_hero.png", "assets/login/scene_loop.mp4"]) assert.ok((await readFile(join(root, file))).length > 10_000, file);
+  for (const file of ["assets/login/scene_bg.webp", "assets/login/scene_crown.webp"]) assert.ok((await readFile(join(root, file))).length > 10_000, file);
 });
 
 test("the loading screen keeps the approved live effects over the looping artwork", async () => {

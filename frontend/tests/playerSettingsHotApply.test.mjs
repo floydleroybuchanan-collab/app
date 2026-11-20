@@ -37,10 +37,5 @@ test("live-TV defaults retain Media3 while settings explain optional Nova for VO
   assert.match(settings, /Live TV and multiview use Media3\/ExoPlayer/); assert.match(settings, /VOD also offers optional Nova playback/); assert.doesNotMatch(settings, /Player engine|VLC|useVlcPlaybackPreferences/);
   assert.match(preference, /return "media3"/); assert.match(preference, /migrateMedia3OnlyPreferences/);
   assert.doesNotMatch(player, /tryAutomaticVlcFallback|NativeVlc/); assert.match(player, /activateNativePlaybackEngine/); assert.match(coordinator, /await native\.stop\(active\.engine, active\.role, active\.engine !== engine\)/); assert.match(coordinator, /await native\.stop\(active\.engine, active\.role, true\)/); assert.doesNotMatch(coordinator, /Promise\.all|Promise\.allSettled/);
-  assert.doesNotMatch(quickActions, /Player engine|ENGINE_ORDER|usePlayerEnginePreference/); assert.doesNotMatch(packageJson, /react-native-vlc-media-player|patch-package/); assert.doesNotMatch(appJson, /react-native-vlc-media-player/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
-  // expo-video is a real dependency now, but only for the decorative login-screen loop
-  // (LoginScene.tsx) - it must never become an alternate stream-playback engine here.
-  assert.doesNotMatch(player, /expo-video|VideoView|useVideoPlayer/);
-  assert.doesNotMatch(coordinator, /expo-video|VideoView|useVideoPlayer/);
-  assert.doesNotMatch(preference, /expo-video/);
+  assert.doesNotMatch(quickActions, /Player engine|ENGINE_ORDER|usePlayerEnginePreference/); assert.doesNotMatch(packageJson, /react-native-vlc-media-player|expo-video|patch-package/); assert.doesNotMatch(appJson, /react-native-vlc-media-player|expo-video/); assert.doesNotMatch(player, /alternateEngine|fallbackUsed|setEngine\(/);
 });
