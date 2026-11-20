@@ -215,12 +215,14 @@ jobs:
           fi
           mkdir -p artifacts
           python3 ../ci/verify-android-apk.py "$APK" --output artifacts/APK_VERIFICATION.json
-          # Name the artifacts after the real app version, so they never go stale
-          # when the version moves on.
+          # Name the artifacts after the real app version and release codename, both
+          # read from app.json, so they never go stale when the version moves on.
           APP_VERSION="$(node -p "require('./app.json').expo.version")"
-          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
-          cp "$APK" "artifacts/Charming-MediaLab-${APP_VERSION}.apk"
-          sha256sum "artifacts/Charming-MediaLab-${APP_VERSION}.apk" > artifacts/SHA256SUMS.txt
+          CODENAME="$(node -p "require('./app.json').expo.extra.releaseCodename")"
+          RELEASE_NAME="Charming.MediaLab.v${APP_VERSION}-${CODENAME// /.}"
+          echo "RELEASE_NAME=${RELEASE_NAME}" >> "$GITHUB_ENV"
+          cp "$APK" "artifacts/${RELEASE_NAME}.apk"
+          sha256sum "artifacts/${RELEASE_NAME}.apk" > artifacts/SHA256SUMS.txt
           printf 'source_commit=%s\nvalidation_run=%s\n' "${{ github.event.pull_request.head.sha || github.sha }}" "${GITHUB_RUN_ID}" > artifacts/BUILD_INFO.txt
 
       - name: Protect provider-bearing artifact for the owner
@@ -232,7 +234,7 @@ jobs:
       - name: Upload encrypted sideload artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: Charming-MediaLab-${{ env.APP_VERSION }}-Encrypted-${{ github.run_number }}
+          name: ${{ env.RELEASE_NAME }}
           path: |
             frontend/protected-artifacts/sideload.zip.enc
             frontend/protected-artifacts/sideload.zip.enc.json

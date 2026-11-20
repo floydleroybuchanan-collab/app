@@ -76,6 +76,9 @@
     "platforms": [
       "android",
       "web"
-    ]
+    ],
+    "extra": {
+      "releaseCodename": "The Rebirth"
+    }
   }
 }
