@@ -19,6 +19,11 @@ const STAGE_H = 2298;
 // where the soft "jewel" glow pulse is centered, same trick as before: a translucent
 // glow blended on TOP of the art so it reads as the gem itself pulsing.
 const JEWEL = { x: 1022, y: 163 };
+// The neon frame around the "Charming MediaLab" lockup, measured off the artwork.
+// Two lights chase round it half a lap apart.
+const LOGO_FRAME = { x: 365, y: 290, w: 1275, h: 380 };
+// The diamond gem above the wordmark: a square path, rotated 45 degrees to trace it.
+const GEM_FRAME = { x: -75, y: -75, w: 150, h: 150 };
 
 // Every coordinate below was picked against the actual foreground cutout's alpha
 // channel (fully transparent = open sky), and kept left of where the real sign-in
@@ -115,6 +120,67 @@ function Glow({ size, color }: { size: number; color: string }) {
     >
       <Image source={glowSprite} resizeMode="contain" style={{ width: size * 2, height: size * 2, tintColor: color }} />
     </View>
+  );
+}
+
+/**
+ * A light that RUNS AROUND the logo frame's border, like a neon tube chasing its own
+ * outline. There is no conic gradient in React Native, so the light is a glow sprite
+ * driven around the rectangle's perimeter: one Animated value, interpolated into x
+ * and y with the four corners as breakpoints, which keeps the speed constant along
+ * every edge and stays on the native driver.
+ *
+ * It also changes colour as it travels, to match the part of the frame it is crossing
+ * - the lockup runs cyan down the left and magenta across the right. Two tinted
+ * sprites sit on the same path and cross-fade, because an animated tintColor cannot
+ * run on the native driver but opacity can.
+ */
+function BorderRunner({ rect, scale, run, duration, delay }: {
+  rect: { x: number; y: number; w: number; h: number };
+  scale: number; run: boolean; duration: number; delay: number;
+}) {
+  const value = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    value.setValue(0);
+    if (!run) return;
+    const animation = Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(value, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true, isInteraction: false }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [delay, duration, run, value]);
+
+  const { x, y, w, h } = rect;
+  const perimeter = 2 * (w + h);
+  // corner breakpoints, as a fraction of the lap
+  const topEnd = w / perimeter;
+  const rightEnd = (w + h) / perimeter;
+  const bottomEnd = (2 * w + h) / perimeter;
+  const stops = [0, topEnd, rightEnd, bottomEnd, 1];
+  const xs = [x, x + w, x + w, x, x].map(v => v * scale);
+  const ys = [y, y, y + h, y + h, y].map(v => v * scale);
+  const size = 46 * scale;
+
+  const translateX = value.interpolate({ inputRange: stops, outputRange: xs });
+  const translateY = value.interpolate({ inputRange: stops, outputRange: ys });
+  // cyan owns the left half of the lap, magenta the right half
+  const cyan = value.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0.25, 0, 0.25, 1, 0.25] });
+  const magenta = value.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0.75, 1, 0.75, 0, 0.75] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, transform: [{ translateX }, { translateY }] }}
+    >
+      <Animated.View style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, opacity: cyan }}>
+        <Glow size={size} color="#49E8FF" />
+      </Animated.View>
+      <Animated.View style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, opacity: magenta }}>
+        <Glow size={size} color="#FF55D4" />
+      </Animated.View>
+      <Glow size={size * 0.42} color="#FFFFFF" />
+    </Animated.View>
   );
 }
 
@@ -243,6 +309,16 @@ export function LoginScene({ animate = true, showAngel = true }: { animate?: boo
         {sceneVisible ? PLANETS.map((planet, index) => <Planet key={index} x={planet.x} y={planet.y} size={planet.size} color={planet.color} scale={scale} />) : null}
         {sceneVisible && run ? METEORS.map((meteor, index) => <ShootingMeteor key={index} meteor={meteor} scale={scale} run={run} />) : null}
         {sceneVisible ? <Image source={foreground} resizeMode="cover" style={{ position: "absolute", left: 0, top: 0, width: stageW, height: stageH }} /> : null}
+        {sceneVisible && run ? <BorderRunner rect={LOGO_FRAME} scale={scale} run={run} duration={3400} delay={0} /> : null}
+        {sceneVisible && run ? <BorderRunner rect={LOGO_FRAME} scale={scale} run={run} duration={3400} delay={1700} /> : null}
+        {sceneVisible && run ? (
+          <View pointerEvents="none" style={{
+            position: "absolute", left: JEWEL.x * scale, top: (JEWEL.y + 92) * scale,
+            width: 1, height: 1, transform: [{ rotate: "45deg" }],
+          }}>
+            <BorderRunner rect={GEM_FRAME} scale={scale} run={run} duration={2600} delay={600} />
+          </View>
+        ) : null}
         {sceneVisible && run ? PULSE_STARS.map((star, index) => <PulsingStar key={index} star={star} scale={scale} run={run} />) : null}
         {sceneVisible && run ? <JewelPulse scale={scale} run={run} /> : null}
       </View>
