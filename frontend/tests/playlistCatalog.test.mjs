@@ -30,10 +30,14 @@ test("an unavailable source favorite cannot migrate to another provider by match
   assert.equal(noCross.ids[0], "station");
 });
 
-test("empty, partially invalid and truncated imports are rejected before activation", () => {
-  for (const parsed of [{ channels: [], rejected: 0, truncated: false }, { channels: [channel()], rejected: 1, truncated: false }, { channels: [channel()], rejected: 0, truncated: true }]) {
+test("empty and truncated imports are rejected before activation", () => {
+  for (const parsed of [{ channels: [], rejected: 0, truncated: false }, { channels: [], rejected: 42, truncated: false }, { channels: [channel()], rejected: 0, truncated: true }]) {
     assert.throws(() => catalog.validatePlaylistImport(parsed));
   }
+});
+
+test("completed imports retain valid channels when malformed provider entries were skipped", () => {
+  assert.doesNotThrow(() => catalog.validatePlaylistImport({ channels: [channel()], rejected: 42, truncated: false }));
 });
 
 test("recovery shares one request per provider without waiting for an unrelated provider", async () => {
@@ -79,6 +83,18 @@ function registryHarness() {
   vm.runInNewContext(code, { exports, require: name => { assert.ok(mocks[name], name); return mocks[name]; }, process: { env: { EXPO_PUBLIC_M3U_URL: "https://primary.invalid/list", EXPO_PUBLIC_M3U_URL_2: "https://second.invalid/list" } }, URL, console });
   return { api: exports, files, prefs, secrets, configure: rows => { configured = rows; }, fetch: fn => { fetcher = fn; }, failCommit: value => { failCommit = value; } };
 }
+
+test("mixed-validity refresh publishes valid channels and reports skipped entries", async () => {
+  const h = registryHarness();
+  h.fetch(async () => ({ channels: [channel("valid")], rejected: 42, truncated: false }));
+  const combined = await h.api.refreshPlaylists();
+  assert.equal(combined.length, 2);
+  const rows = await h.api.listPlaylists();
+  assert.ok(rows.every(row => row.count === 1 && /42 invalid entries skipped/.test(row.status)));
+  const before = JSON.stringify(await h.api.readCombinedPlaylists());
+  h.fetch(async () => ({ channels: [], rejected: 42, truncated: false }));
+  assert.equal(JSON.stringify(await h.api.refreshPlaylists()), before);
+});
 
 test("migration seeds existing channels; refreshing source 2 cannot replace source 1", async () => {
   const h = registryHarness(); await h.api.seedLegacyPlaylist([channel("existing")]);
