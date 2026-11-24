@@ -1,0 +1,127 @@
+status=PASS
+refresh_run_id=32841082168
+conclusion=success
+verified_at=2026-08-25T11:12:26Z
+run_url=https://github.com/floydleroybuchanan-collab/app/actions/runs/32841082168
+
+--- refresh log tail ---
+refresh	Checkout	2026-08-25T11:12:13.1691301Z ##[endgroup]
+refresh	Checkout	2026-08-25T11:12:13.1692164Z ##[group]Setting up auth
+refresh	Checkout	2026-08-25T11:12:13.1700122Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+refresh	Checkout	2026-08-25T11:12:13.1739017Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+refresh	Checkout	2026-08-25T11:12:13.2146015Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+refresh	Checkout	2026-08-25T11:12:13.2186064Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+refresh	Checkout	2026-08-25T11:12:13.2419172Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+refresh	Checkout	2026-08-25T11:12:13.2456593Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+refresh	Checkout	2026-08-25T11:12:13.2688205Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+refresh	Checkout	2026-08-25T11:12:13.2735012Z ##[endgroup]
+refresh	Checkout	2026-08-25T11:12:13.2736668Z ##[group]Fetching the repository
+refresh	Checkout	2026-08-25T11:12:13.2746582Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +1d935e431b36f2c0ab58e1943e2155822fea5b9e:refs/remotes/origin/main
+refresh	Checkout	2026-08-25T11:12:14.0816086Z From https://github.com/floydleroybuchanan-collab/app
+refresh	Checkout	2026-08-25T11:12:14.0819725Z  * [new ref]         1d935e431b36f2c0ab58e1943e2155822fea5b9e -> origin/main
+refresh	Checkout	2026-08-25T11:12:14.0826493Z ##[endgroup]
+refresh	Checkout	2026-08-25T11:12:14.0829501Z ##[group]Determining the checkout info
+refresh	Checkout	2026-08-25T11:12:14.0832881Z ##[endgroup]
+refresh	Checkout	2026-08-25T11:12:14.0834996Z [command]/usr/bin/git sparse-checkout disable
+refresh	Checkout	2026-08-25T11:12:14.0887088Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+refresh	Checkout	2026-08-25T11:12:14.0923355Z ##[group]Checking out the ref
+refresh	Checkout	2026-08-25T11:12:14.0926819Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+refresh	Checkout	2026-08-25T11:12:14.1486657Z Switched to a new branch 'main'
+refresh	Checkout	2026-08-25T11:12:14.1489743Z branch 'main' set up to track 'origin/main'.
+refresh	Checkout	2026-08-25T11:12:14.1501968Z ##[endgroup]
+refresh	Checkout	2026-08-25T11:12:14.1546495Z [command]/usr/bin/git log -1 --format=%H
+refresh	Checkout	2026-08-25T11:12:14.1573437Z 1d935e431b36f2c0ab58e1943e2155822fea5b9e
+refresh	Setup Node	﻿2026-08-25T11:12:14.1971881Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+refresh	Setup Node	2026-08-25T11:12:14.1979136Z ##[group]Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+refresh	Setup Node	2026-08-25T11:12:14.1980967Z with:
+refresh	Setup Node	2026-08-25T11:12:14.1981935Z   node-version: 24
+refresh	Setup Node	2026-08-25T11:12:14.1982985Z   always-auth: false
+refresh	Setup Node	2026-08-25T11:12:14.1984100Z   check-latest: false
+refresh	Setup Node	2026-08-25T11:12:14.1994250Z   token: ***
+refresh	Setup Node	2026-08-25T11:12:14.1995257Z ##[endgroup]
+refresh	Setup Node	2026-08-25T11:12:14.3412665Z Found in cache @ /opt/hostedtoolcache/node/24.19.0/x64
+refresh	Setup Node	2026-08-25T11:12:14.3417523Z (node:2189) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+refresh	Setup Node	2026-08-25T11:12:14.3422826Z (Use `node --trace-deprecation ...` to show where the warning was created)
+refresh	Setup Node	2026-08-25T11:12:14.3427341Z ##[group]Environment details
+refresh	Setup Node	2026-08-25T11:12:14.7445638Z node: v24.19.0
+refresh	Setup Node	2026-08-25T11:12:14.7446403Z npm: 11.17.0
+refresh	Setup Node	2026-08-25T11:12:14.7446846Z yarn: 1.22.22
+refresh	Setup Node	2026-08-25T11:12:14.7448066Z ##[endgroup]
+refresh	Verify required secrets	﻿2026-08-25T11:12:14.7648903Z ##[group]Run missing=0
+refresh	Verify required secrets	2026-08-25T11:12:14.7649376Z ^[[36;1mmissing=0^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7649871Z ^[[36;1mfor name in CF_ACCOUNT_ID CF_KV_NAMESPACE_ID CF_API_TOKEN M3U_URL EPG_URL; do^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7650493Z ^[[36;1m  # Values are injected below; empty means secret not configured.^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7650963Z ^[[36;1m  eval "val=\$$name"^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7651296Z ^[[36;1m  if [ -z "$val" ]; then^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7651686Z ^[[36;1m    echo "::warning::Missing secret/env: $name"^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7652069Z ^[[36;1m    missing=1^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7652366Z ^[[36;1m  fi^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7652640Z ^[[36;1mdone^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7652933Z ^[[36;1mif [ "$missing" -ne 0 ]; then^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7653327Z ^[[36;1m  echo "ready=false" >> "$GITHUB_OUTPUT"^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7653853Z ^[[36;1m  echo "Cloudflare/guide secrets are not configured; skipping refresh."^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7654321Z ^[[36;1m  exit 0^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7654588Z ^[[36;1mfi^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7654936Z ^[[36;1mecho "ready=true" >> "$GITHUB_OUTPUT"^[[0m
+refresh	Verify required secrets	2026-08-25T11:12:14.7705597Z shell: /usr/bin/bash -e {0}
+refresh	Verify required secrets	2026-08-25T11:12:14.7705972Z env:
+refresh	Verify required secrets	2026-08-25T11:12:14.7706445Z   CF_ACCOUNT_ID: ***
+refresh	Verify required secrets	2026-08-25T11:12:14.7706826Z   CF_KV_NAMESPACE_ID: ***
+refresh	Verify required secrets	2026-08-25T11:12:14.7707284Z   CF_API_TOKEN: ***
+refresh	Verify required secrets	2026-08-25T11:12:14.7707665Z   M3U_URL: ***
+refresh	Verify required secrets	2026-08-25T11:12:14.7708022Z   EPG_URL: ***
+refresh	Verify required secrets	2026-08-25T11:12:14.7708300Z ##[endgroup]
+refresh	Build data & upload to Cloudflare KV	﻿2026-08-25T11:12:14.7863469Z ##[group]Run node cloudflare-backend/scripts/build-and-upload.mjs
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7864111Z ^[[36;1mnode cloudflare-backend/scripts/build-and-upload.mjs^[[0m
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7902828Z shell: /usr/bin/bash -e {0}
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7903204Z env:
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7903610Z   CF_ACCOUNT_ID: ***
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7904012Z   CF_KV_NAMESPACE_ID: ***
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7904478Z   CF_API_TOKEN: ***
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7904853Z   M3U_URL: ***
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7905212Z   EPG_URL: ***
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7905493Z   GUIDE_WINDOW_HOURS: 12
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7905800Z   APP_VERSION: 2.0.0-beta.1
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7906112Z   MAINTENANCE: false
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.7906389Z ##[endgroup]
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.8254333Z Charm IPTV builder starting...
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:14.8255088Z Guide window hours: 12
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:16.8061531Z Parsed 294 channels
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:16.8062207Z Found 1 embedded EPG URL(s) in playlist
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:16.8066484Z Playlist samples: WORLD FISHING NETWORK [id=WFNUS.us (m3u4u) tvgId=WFNUS.us (m3u4u)] | WORLD TOUR POKER [id=WPTAMA.us (m3u4u) tvgId=WPTAMA.us (m3u4u)] | CBS SPORTS [id=CBSSN.us (m3u4u) tvgId=CBSSN.us (m3u4u)] | Marquee Sports Network [id=MSNNF.us (m3u4u) tvgId=MSNNF.us (m3u4u)] | NESN [id=NESNST.us (m3u4u) tvgId=NESNST.us (m3u4u)] | SPORTSNET PITTSBURGH [id=SNPT.us (m3u4u) tvgId=SNPT.us (m3u4u)] | STADIUM STREAM [id=STADSTR.us (m3u4u) tvgId=STADSTR.us (m3u4u)] | YES NETWORK [id=YESNATD.us (m3u4u) tvgId=YESNATD.us (m3u4u)]
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1130742Z Parsed EPG (playlist embedded #1): 5610 programmes across 278 channels
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1133207Z EPG parser stats (playlist embedded #1): declaredChannels=278 rawProgrammes=21202 kept=5610 outsideWindow=15592 recoveredStale=0 staleShiftDays=0 badStart=0 missingChannel=0
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1135161Z EPG raw time range (playlist embedded #1): 2026-08-23T20:30:00.000Z -> 2026-08-27T05:00:00.000Z
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1136783Z EPG first programme head (playlist embedded #1): channel="AMC.us (m3u4u)" start="20260823224500 +0000" stop="20260824010000 +0000"
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1150353Z EPG program time range (playlist embedded #1): 2026-08-25T01:00:00.000Z -> 2026-08-26T03:00:00.000Z
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1154133Z EPG channel samples (playlist embedded #1): AMC.us (m3u4u) [names=AMC] | AMCRSH.us (m3u4u) [names=AMC THRILLERS] | BIGTEN.us (m3u4u) [names=ESPN BIG TEN] | BOUNCE.us (m3u4u) [names=BOUNCE TV] | CINEHHD.us (m3u4u) [names=CINEMAX HITS] | DOVESTR.us (m3u4u) [names=Dove Channel / DOVE CHANNEL (2)] | FNC.us (m3u4u) [names=FOX NEWS] | FS1PRIC.us (m3u4u) [names=FOX SPORTS 1]
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.1156907Z Using EPG source: playlist embedded #1
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.5461149Z KV wrote "channels_gz" (9923 bytes)
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.5494941Z Matched EPG: 290/294 channels with programs
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:19.5496309Z Unmatched channel samples: FanDuel Sports Network Ohio, Catchy Comedy, Haunt TV, GAC Adventures
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:20.2149153Z KV wrote "guide_gz" (362754 bytes)
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:20.2245698Z Windows payload: 365437 bytes plain -> 56083 bytes gzip
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:20.5171064Z KV wrote "windows_gz" (56083 bytes)
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:20.8399331Z KV wrote "config" (193 bytes)
+refresh	Build data & upload to Cloudflare KV	2026-08-25T11:12:20.8400373Z Charm IPTV builder finished
+refresh	Post Setup Node	﻿2026-08-25T11:12:20.8619855Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+refresh	Post Setup Node	2026-08-25T11:12:20.8621173Z Post job cleanup.
+refresh	Post Setup Node	2026-08-25T11:12:20.9820911Z (node:2236) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+refresh	Post Setup Node	2026-08-25T11:12:20.9822141Z (Use `node --trace-deprecation ...` to show where the warning was created)
+refresh	Post Checkout	﻿2026-08-25T11:12:21.0021620Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+refresh	Post Checkout	2026-08-25T11:12:21.0022930Z Post job cleanup.
+refresh	Post Checkout	2026-08-25T11:12:21.0901811Z [command]/usr/bin/git version
+refresh	Post Checkout	2026-08-25T11:12:21.0944670Z git version 2.55.0
+refresh	Post Checkout	2026-08-25T11:12:21.0985091Z Temporarily overriding HOME='/home/runner/work/_temp/8a83e50c-c12e-442b-b7a5-38aa172d7a5f' before making global git config changes
+refresh	Post Checkout	2026-08-25T11:12:21.0986811Z Adding repository directory to the temporary git global config as a safe directory
+refresh	Post Checkout	2026-08-25T11:12:21.0991310Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/app/app
+refresh	Post Checkout	2026-08-25T11:12:21.1035601Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+refresh	Post Checkout	2026-08-25T11:12:21.1073622Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+refresh	Post Checkout	2026-08-25T11:12:21.1383620Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+refresh	Post Checkout	2026-08-25T11:12:21.1416225Z http.https://github.com/.extraheader
+refresh	Post Checkout	2026-08-25T11:12:21.1428348Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+refresh	Post Checkout	2026-08-25T11:12:21.1469309Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+refresh	Post Checkout	2026-08-25T11:12:21.1737760Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+refresh	Post Checkout	2026-08-25T11:12:21.1786791Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+refresh	Complete job	﻿2026-08-25T11:12:21.2177563Z Cleaning up orphan processes
+refresh	Complete job	2026-08-25T11:12:21.2500360Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11d5960a326750d5838078e36cf38b85af677262, actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

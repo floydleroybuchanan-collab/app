@@ -1,0 +1,3 @@
+Trigger APK validation/build for native Guide timeline correction.
+
+Verify real duration-based program widths, shared header/program time scale, future EPG runway coverage, native compile, regression tests, and universal sideload APK.
