@@ -1,3 +1,0 @@
-Trigger workflow rerun for perf/opt-fix branch.
-
-Created by GitHub Copilot Chat Assistant to re-enqueue workflows.

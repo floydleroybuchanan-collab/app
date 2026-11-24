@@ -95,11 +95,16 @@ test("the loading and sign-in scenes animate on first launch and use 1080p loops
   assert.ok(size("scene_bg.webp") < 2_000_000);
   assert.ok(size("scene_foreground.webp") > 50_000);
   assert.ok(size("scene_foreground.webp") < 2_000_000);
-  assert.ok(size("startup_move.webp") > 5_000_000);
+  // The loading loops are deliberately half resolution. Animated WebP is decoded frame
+  // by frame during playback, and two 1080p-class loops running together saturated the
+  // CPU on a TV box - that was the stutter and the hitched loop. A quarter of the pixels
+  // is a quarter of the decode work, and the loops are drawn scaled down anyway.
+  assert.ok(size("startup_move.webp") > 3_000_000);
+  assert.ok(size("startup_move.webp") < 6_000_000);
   // The WebP header carries the canvas size: width-1 and height-1 as 24-bit little-endian at bytes 24 and 27.
   const dims = (f) => { const b = readFileSync(new URL(`../assets/login/${f}`, import.meta.url)).subarray(0, 40); return [(b[24] | (b[25] << 8) | (b[26] << 16)) + 1, (b[27] | (b[28] << 8) | (b[29] << 16)) + 1]; };
-  assert.deepEqual(dims("startup_back.webp"), [1920, 1080]);
-  assert.deepEqual(dims("startup_move.webp"), [1440, 810]);
+  assert.deepEqual(dims("startup_back.webp"), [1280, 720]);
+  assert.deepEqual(dims("startup_move.webp"), [960, 540]);
 });
 
 test("embedded VOD gets the crown background and the glass bottom bar", () => {

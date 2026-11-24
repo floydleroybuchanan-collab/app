@@ -1,5 +1,0 @@
-CharmIPTV preview/player lifecycle scan
-critical_findings=0
-
-CRITICAL
-none

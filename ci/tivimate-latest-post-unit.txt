@@ -1,4 +1,0 @@
-typecheck=skipped
-lint=skipped
-native_config=skipped
-native_compile=skipped

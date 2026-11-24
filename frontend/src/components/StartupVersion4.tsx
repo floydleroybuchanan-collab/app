@@ -2,6 +2,7 @@ import { ProgressBar, TypedTask } from "@/src/components/StartupEffects";
 import { StartupScene, useMotionAllowed, useStartupStage } from "@/src/components/StartupScene";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { subscribeProgress, type EpgProgress } from "@/src/source";
 import { useStore } from "@/src/store";
 
@@ -70,7 +71,14 @@ export function StartupVersion4() {
   useEffect(() => {
     if (!mayEnter) return;
     Animated.timing(fade, { toValue: 0, duration: FADE_OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true, isInteraction: false }).start(({ finished }) => {
-      if (finished) { completedForSession = true; setDone(true); }
+      if (finished) {
+        completedForSession = true;
+        setDone(true);
+        // The two loading loops are animated WebPs: every decoded frame stays in the
+        // image memory cache long after this screen is gone. Unmounting stops the
+        // animation but does not hand that memory back, so release it explicitly.
+        void (ExpoImage as any).clearMemoryCache?.()?.catch?.(() => undefined);
+      }
     });
   }, [mayEnter, fade]);
   if (completedForSession) return null;

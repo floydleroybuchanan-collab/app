@@ -1,5 +1,0 @@
-CharmIPTV repair idempotence / one-owner scan
-critical_findings=0
-
-CRITICAL
-none

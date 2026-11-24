@@ -1,5 +1,0 @@
-CharmIPTV EPG schedule/cache lifecycle scan
-critical_findings=0
-
-CRITICAL
-none
