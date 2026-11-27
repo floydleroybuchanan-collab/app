@@ -263,7 +263,6 @@ export function PurpleTvShell({
   guideGroups,
   watchingChannelId,
   secondaryDrawer,
-  secondaryDrawerWidth = 232,
   immersiveContent = false,
   onIconRailNavigate,
   onIconRailOpenMainDrawer,
@@ -277,8 +276,6 @@ export function PurpleTvShell({
   guideGroups?: PurpleGuideGroup[];
   watchingChannelId?: string | null;
   secondaryDrawer?: React.ReactNode;
-  /** Laid-out width of `secondaryDrawer`, used to inset the page beneath it. */
-  secondaryDrawerWidth?: number;
   /** Native VOD player temporarily occupies the full 10-foot canvas. */
   immersiveContent?: boolean;
   onIconRailNavigate?: () => void;
@@ -321,12 +318,11 @@ export function PurpleTvShell({
     const safe = getTvSafeInsets(width, height, deviceLayoutMode);
     return combineTvEdgeInsets(safe, calibration);
   }, [calibration, deviceLayoutMode, height, width]);
-  // The groups drawer is a floating panel beside the rail, not a flush
-  // continuation of it: it starts clear of the rail's own 6 dp margin, and the
-  // page is inset by its width so nothing it covers is lost.
+  // The groups drawer takes a column of its own in the shell row, beside the
+  // rail. The page is laid out in the width that is left, so opening the drawer
+  // moves the preview, description and grid over rather than covering them.
   const secondaryDrawerVisible = !phone && isFocused && !drawerOpen && !!secondaryDrawer;
-  const secondaryDrawerLeft = edges.padding.left + (showIconRail ? PURPLE_ICON_RAIL_WIDTH + 12 : 0);
-  const secondaryDrawerInset = secondaryDrawerVisible ? secondaryDrawerWidth + 12 : 0;
+
 
   const navRefs = useRef(new Map<Route, unknown>());
   const iconRailRefs = useRef(new Map<Route, unknown>());
@@ -932,7 +928,7 @@ export function PurpleTvShell({
       ) : null}
       {!phone && showIconRail ? (
         <FocusGuide
-          style={[styles.iconRail, active === "/guide" && [styles.guideDrawerLayer, { left: edges.padding.left, top: edges.padding.top, bottom: edges.padding.bottom }]]}
+          style={[styles.iconRail, active === "/guide" && !secondaryDrawerVisible && [styles.guideDrawerLayer, { left: edges.padding.left, top: edges.padding.top, bottom: edges.padding.bottom }]]}
           trapFocusUp
           trapFocusDown
           trapFocusLeft
@@ -987,17 +983,17 @@ export function PurpleTvShell({
           </Pressable>
         </FocusGuide>
       ) : null}
-      {isFocused && !drawerOpen && secondaryDrawer ? (
-        <View style={[styles.guideDrawerLayer, { left: secondaryDrawerLeft, top: edges.padding.top, bottom: edges.padding.bottom }]}>
+      {secondaryDrawerVisible ? (
+        <View style={styles.secondaryDrawerColumn}>{secondaryDrawer}</View>
+      ) : null}
+      {phone && isFocused && !drawerOpen && secondaryDrawer ? (
+        <View style={[styles.guideDrawerLayer, { left: edges.padding.left, top: edges.padding.top, bottom: edges.padding.bottom }]}>
           {secondaryDrawer}
         </View>
       ) : null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
-        // The secondary drawer floats over the page, so the page is inset by its
-        // width while it is open: the preview, description and grid slide right
-        // and stay fully readable instead of sitting underneath the drawer.
-        style={[styles.content, phone && styles.contentPhone, contentStyle, secondaryDrawerInset ? { paddingLeft: secondaryDrawerInset } : null]}
+        style={[styles.content, phone && styles.contentPhone, contentStyle]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         // Held upright on a phone the bottom bar is below the page, so Down must be allowed to reach it.
@@ -1025,6 +1021,8 @@ const styles = StyleSheet.create({
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
   railPlaceholder: { width: PURPLE_ICON_RAIL_WIDTH + 6, height: "100%", flexShrink: 0 },
   guideDrawerLayer: { position: "absolute", zIndex: 15 },
+  // In flow beside the rail: its width comes out of the page, not over it.
+  secondaryDrawerColumn: { flexShrink: 0, alignSelf: "stretch", justifyContent: "center", marginLeft: 6, marginVertical: 6 },
   // A floating rounded violet glass bar with a lit edge (as in the approved design), not a flat near-black strip.
   iconRail: {
     width: PURPLE_ICON_RAIL_WIDTH,

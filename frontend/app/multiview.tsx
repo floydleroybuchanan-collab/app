@@ -56,6 +56,7 @@ function ChooserList({ rows, current, focusRef, onPick, onFocus }: { rows: Choos
   const [preferEntry, setPreferEntry] = useState(true);
   const takeFocus = useCallback(() => { setPreferEntry(false); onFocus(); }, [onFocus]);
   return <FlatList data={rows} keyExtractor={row => row.key} style={styles.chooserList}
+    removeClippedSubviews={false}
     getItemLayout={chooserRowLayout} initialScrollIndex={selectedIndex > 2 ? selectedIndex - 2 : undefined}
     onScrollToIndexFailed={() => undefined}
     initialNumToRender={14} maxToRenderPerBatch={10} windowSize={5}
@@ -400,7 +401,7 @@ export default function MultiviewScreen() {
       })}
     </View>
     {labels && !overlay && <Text pointerEvents="none" numberOfLines={2} style={styles.hint}>{swapFrom != null ? "Select another pane to swap. Back cancels." : notice || "Press OK on a pane for options. Back returns to the guide."}</Text>}
-    {menu && picker == null && <FocusGuide key="pane-menu" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.menu}>
+    {menu && picker == null && <FocusGuide key="pane-menu" testID="charm-overlay-root" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.menu}>
       <Text style={styles.title}>{panes[selected]?.channel.name || "Multiview"}</Text>
       <ScrollView>
       {action(panes[selected] ? "Change channel" : "Add channel", () => openPicker(selected), !ready)}
@@ -416,7 +417,7 @@ export default function MultiviewScreen() {
       {action("Return to TV Guide", () => void exit())}
       </ScrollView>
     </FocusGuide>}
-    {picker != null && !chooser && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
+    {picker != null && !chooser && <FocusGuide key="channel-picker" testID="charm-overlay-root" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
       <Text style={styles.title}>Channel for screen {picker+1}</Text>
       <TextInput focusable accessibilityLabel="Search channels" value={query} onChangeText={setQuery} returnKeyType="search" blurOnSubmit
         onFocus={() => { setSearchFocused(true); confirmOverlayFocus(); }} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
@@ -436,6 +437,7 @@ export default function MultiviewScreen() {
       {/* Bounded list (flex:1 inside the panel): the last channel ends at the
           panel bottom, and only the visible rows plus a small window mount. */}
       <FlatList data={results} keyExtractor={channel => channel.id} keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={false}
         style={styles.pickerList} getItemLayout={channelRowLayout}
         initialNumToRender={9} maxToRenderPerBatch={8} updateCellsBatchingPeriod={40} windowSize={5}
         ListEmptyComponent={<Text style={styles.text}>No matching channels. Try All or another playlist.</Text>}
@@ -443,7 +445,7 @@ export default function MultiviewScreen() {
       {!!notice && <Text numberOfLines={1} style={styles.notice}>{notice}</Text>}
       {action("Cancel", () => {setPicker(null);setQuery("");setMenu(true);})}
     </FocusGuide>}
-    {picker != null && chooser && <FocusGuide key={`chooser-${chooser}`} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.chooser}>
+    {picker != null && chooser && <FocusGuide key={`chooser-${chooser}`} testID="charm-overlay-root" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.chooser}>
       <Text style={styles.title}>{chooser === "playlist" ? "Choose a playlist" : `${playlistLabel} · Channel groups`}</Text>
       <ChooserList rows={chooser === "playlist" ? playlistRows : groupRows} current={chooser === "playlist" ? sourceFilter : groupFilter}
         focusRef={chooserFocus} onPick={pickChooser} onFocus={confirmOverlayFocus} />

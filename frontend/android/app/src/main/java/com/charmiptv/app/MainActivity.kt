@@ -128,12 +128,19 @@ class MainActivity : ReactActivity() {
       android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> Unit
       else -> return false
     }
-    val shell = findTagged(window?.decorView ?: return false, "purple-tv-shell") ?: return false
-    // An open drawer owns the remote; it exists only while open or sliding shut.
-    val containers = listOfNotNull(
+    val decor = window?.decorView ?: return false
+    val shell = findTagged(decor, "purple-tv-shell")
+    // Multiview renders its own full-screen canvas instead of the shell, so it
+    // never had this safety net: once a recycled picker row took focus with it,
+    // every key was dead and nothing could recover. Its overlays opt in with
+    // the tag below and are tried before the page beneath them.
+    val containers = if (shell == null) {
+      listOfNotNull(findTagged(decor, "charm-overlay-root"))
+    } else listOfNotNull(
       findTagged(shell, "purple-main-drawer"),
       findTagged(shell, "purple-tv-guide-page") ?: findTagged(shell, "purple-tv-page"),
     )
+    if (containers.isEmpty()) return false
     for (container in containers) {
       // Same physical walk as focusContentFromRail: never ask a focus guide to
       // restore a remembered row that may be clipped behind the viewport.
