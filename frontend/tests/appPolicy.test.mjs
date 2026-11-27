@@ -8,6 +8,9 @@ test('old servers remain compatible, admin limits clamp, and logout clears notic
  assert.equal(getAppPolicy().multiview_max,2);assert.equal(getAppPolicy().provider_limits['charm-primary'],1);
  configureAppPolicy({multiview_max:99});assert.equal(getAppPolicy().multiview_max,4);
  configureAppPolicy({multiview_max:'4'});assert.equal(getAppPolicy().multiview_max,0);
+ // A policy that only carries an update notice must not disable multiview.
+ configureAppPolicy({update:{version_code:15,message:'Update',url:'https://example.test/releases'}});
+ assert.equal(getAppPolicy().multiview_max,4);
  configureAppPolicy();assert.equal(getAppPolicy().update.version_code,0);
 });
 test('update notices reject executable and credential-bearing links',()=>{

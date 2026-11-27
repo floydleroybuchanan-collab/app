@@ -14,7 +14,12 @@ export function configureAppPolicy(raw?: Partial<AppPolicy> | null) {
   const update=raw?.update;
   let validUrl=false;
   try { const url=new URL(update?.url||""); validUrl=url.protocol==="https:"&&!url.username&&!url.password&&!url.hash; } catch {}
-  current={multiview_max:raw==null?4:typeof cap==="number"&&Number.isInteger(cap)?Math.max(0,Math.min(4,cap)):0,provider_limits:limits,
+  // A policy document that simply does not mention multiview keeps the default
+  // allowance. Only an explicitly supplied, invalid value disables it; treating
+  // an absent key as 0 silently switched multiview off for everyone.
+  const multiviewMax=raw==null||cap==null?DEFAULT.multiview_max
+    :typeof cap==="number"&&Number.isInteger(cap)?Math.max(0,Math.min(4,cap)):0;
+  current={multiview_max:multiviewMax,provider_limits:limits,
     update:validUrl&&update&&Number.isInteger(update.version_code)&&typeof update.message==="string"?{version_code:update.version_code,message:update.message.slice(0,500),url:update.url}:DEFAULT.update};
   listeners.forEach(fn=>fn());
 }

@@ -147,6 +147,7 @@ export function PurpleGuideGroupDrawer({
   return (
     <View style={styles.overlay} testID="phase9-guide-groups-drawer">
       <FocusGuide style={styles.drawer} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight>
+        <Text style={styles.header}>TV Guide · Playlists</Text>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
           {!groups.length && <Pressable ref={emptyRef as any} hasTVPreferredFocus={preferActiveFocus}
             onFocus={() => { focusConfirmedRef.current = true; setPreferActiveFocus(false); setRemoteContext("guide_groups"); }}
@@ -207,15 +208,29 @@ const styles = StyleSheet.create({
     width: GUIDE_GROUP_DRAWER_WIDTH,
     height: "100%",
     flexShrink: 0,
-    backgroundColor: glass.drawer,
+    // A raised panel, not the rail's own colour. It used to be exactly
+    // glass.drawer (#2F1770) — the same fill as the icon rail it sits against —
+    // so the two read as one dark slab with no boundary between them.
+    backgroundColor: "#3D2090",
     borderWidth: 2,
-    borderLeftWidth: 0,
-    borderColor: "rgba(235,205,255,0.45)",
+    borderLeftWidth: 2,
+    borderColor: "rgba(235,205,255,0.55)",
     borderTopRightRadius: 28,
     borderBottomRightRadius: 28,
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
     overflow: "hidden",
   },
   drawer: { flex: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  header: {
+    color: "#F3E8FF",
+    fontFamily: fonts.semibold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
   list: { gap: 3, paddingBottom: 18 },
   row: {
     minHeight: 34,

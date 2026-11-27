@@ -109,6 +109,11 @@ export const PURPLE_DRAWER_ANIMATION_MS = 180;
 // Native forwards only the first press of a held key, so this guards a double
 // event and nothing else; quick intentional presses must get through.
 const GUIDE_DRAWER_TRANSFER_GUARD_MS = 90;
+// Focus resting on the icon rail opens the labelled drawer after this long.
+const RAIL_AUTO_OPEN_MS = 420;
+// After the drawer hands focus back to the rail, the rail must not immediately
+// reopen it; this is long enough for the viewer to step away with Right.
+const RAIL_AUTO_OPEN_SUPPRESS_MS = 1400;
 
 export type OpenDrawerOptions = {
   focusTop?: boolean;
@@ -258,6 +263,7 @@ export function PurpleTvShell({
   guideGroups,
   watchingChannelId,
   secondaryDrawer,
+  secondaryDrawerWidth = 232,
   immersiveContent = false,
   onIconRailNavigate,
   onIconRailOpenMainDrawer,
@@ -271,6 +277,8 @@ export function PurpleTvShell({
   guideGroups?: PurpleGuideGroup[];
   watchingChannelId?: string | null;
   secondaryDrawer?: React.ReactNode;
+  /** Laid-out width of `secondaryDrawer`, used to inset the page beneath it. */
+  secondaryDrawerWidth?: number;
   /** Native VOD player temporarily occupies the full 10-foot canvas. */
   immersiveContent?: boolean;
   onIconRailNavigate?: () => void;
@@ -313,10 +321,18 @@ export function PurpleTvShell({
     const safe = getTvSafeInsets(width, height, deviceLayoutMode);
     return combineTvEdgeInsets(safe, calibration);
   }, [calibration, deviceLayoutMode, height, width]);
+  // The groups drawer is a floating panel beside the rail, not a flush
+  // continuation of it: it starts clear of the rail's own 6 dp margin, and the
+  // page is inset by its width so nothing it covers is lost.
+  const secondaryDrawerVisible = !phone && isFocused && !drawerOpen && !!secondaryDrawer;
+  const secondaryDrawerLeft = edges.padding.left + (showIconRail ? PURPLE_ICON_RAIL_WIDTH + 12 : 0);
+  const secondaryDrawerInset = secondaryDrawerVisible ? secondaryDrawerWidth + 12 : 0;
 
   const navRefs = useRef(new Map<Route, unknown>());
   const iconRailRefs = useRef(new Map<Route, unknown>());
   const iconRailFocusOwnerRef = useRef<Route | "power" | null>(null);
+  const railAutoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressRailAutoOpenUntilRef = useRef(0);
   const shellRef = useRef<View | null>(null);
   const iconRailPublisher = useRef<object>({}).current;
   const [contentReturnTag, setContentReturnTag] = useState<number | undefined>();
@@ -474,6 +490,9 @@ export function PurpleTvShell({
         // The Guide has no rail here, and closing onto nothing would strand focus.
         if (!railCanTakeFocusRef.current) return;
         // The rail returns as soon as the drawer closes, so it can take focus.
+        // This is a deliberate exit from the drawer: hold off the rail's own
+        // auto-open, or the drawer would spring straight back.
+        suppressRailAutoOpenUntilRef.current = Date.now() + RAIL_AUTO_OPEN_SUPPRESS_MS;
         closeDrawer({ force: true });
         requestAnimationFrame(() => focusIconRail());
         return;
@@ -662,19 +681,43 @@ export function PurpleTvShell({
 
   const drawerTranslateX = drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-PURPLE_SIDEBAR_WIDTH, 0] });
 
+  // The icons alone do not tell a new viewer what each destination is, so
+  // arriving on the rail opens the labelled main drawer by itself. The short
+  // delay keeps a deliberate Right straight back into the page working, and the
+  // suppression window stops the drawer's own Left-to-rail exit from bouncing
+  // the drawer open again.
+  const cancelRailAutoOpen = useCallback(() => {
+    if (railAutoOpenTimerRef.current) clearTimeout(railAutoOpenTimerRef.current);
+    railAutoOpenTimerRef.current = null;
+  }, []);
+  useEffect(() => cancelRailAutoOpen, [cancelRailAutoOpen]);
+
   const claimIconRail = useCallback((owner: Route | "power") => {
     iconRailFocusOwnerRef.current = owner;
     setRemoteContext("icon_rail");
     if (active === "/guide") setGuideNavigationActive(false);
-  }, [active]);
+    cancelRailAutoOpen();
+    if (Date.now() < suppressRailAutoOpenUntilRef.current) return;
+    railAutoOpenTimerRef.current = setTimeout(() => {
+      railAutoOpenTimerRef.current = null;
+      if (!iconRailFocusOwnerRef.current) return;
+      iconRailFocusOwnerRef.current = null;
+      resetRemoteContextIfOwned("icon_rail", "default");
+      onIconRailOpenMainDrawerRef.current?.();
+      openDrawer();
+    }, RAIL_AUTO_OPEN_MS);
+  }, [active, cancelRailAutoOpen, openDrawer]);
 
   const releaseIconRail = useCallback((owner: Route | "power") => {
+    // Moving between rail items can report the new focus before the old blur,
+    // so only the item that still owns the rail may cancel the pending open.
     if (iconRailFocusOwnerRef.current !== owner) return;
+    cancelRailAutoOpen();
     iconRailFocusOwnerRef.current = null;
     if (resetRemoteContextIfOwned("icon_rail", active === "/guide" ? "guide" : "default") && active === "/guide") {
       setGuideNavigationActive(true);
     }
-  }, [active]);
+  }, [active, cancelRailAutoOpen]);
 
   const renderNavItem = (item: NavItem) => {
     const selected = item.route === active;
@@ -945,13 +988,16 @@ export function PurpleTvShell({
         </FocusGuide>
       ) : null}
       {isFocused && !drawerOpen && secondaryDrawer ? (
-        <View style={[styles.guideDrawerLayer, { left: edges.padding.left + (showIconRail ? PURPLE_ICON_RAIL_WIDTH : 0), top: edges.padding.top, bottom: edges.padding.bottom }]}>
+        <View style={[styles.guideDrawerLayer, { left: secondaryDrawerLeft, top: edges.padding.top, bottom: edges.padding.bottom }]}>
           {secondaryDrawer}
         </View>
       ) : null}
       <FocusGuide
         testID={active === "/guide" ? "purple-tv-guide-page" : "purple-tv-page"}
-        style={[styles.content, phone && styles.contentPhone, contentStyle]}
+        // The secondary drawer floats over the page, so the page is inset by its
+        // width while it is open: the preview, description and grid slide right
+        // and stay fully readable instead of sitting underneath the drawer.
+        style={[styles.content, phone && styles.contentPhone, contentStyle, secondaryDrawerInset ? { paddingLeft: secondaryDrawerInset } : null]}
         autoFocus={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         trapFocusUp={!drawerOpen && !secondaryDrawer && active !== "/guide" && active !== "/vod" && !immersiveContent}
         // Held upright on a phone the bottom bar is below the page, so Down must be allowed to reach it.

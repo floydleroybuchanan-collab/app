@@ -37,20 +37,30 @@ const CHOOSER_ROW_GAP = 4;
 const channelRowLayout = (_: unknown, index: number) => ({ length: PICKER_ROW_HEIGHT + PICKER_ROW_GAP, offset: (PICKER_ROW_HEIGHT + PICKER_ROW_GAP) * index, index });
 const chooserRowLayout = (_: unknown, index: number) => ({ length: CHOOSER_ROW_HEIGHT + CHOOSER_ROW_GAP, offset: (CHOOSER_ROW_HEIGHT + CHOOSER_ROW_GAP) * index, index });
 
-const PickerChannelRow = React.memo(function PickerChannelRow({ channel, onChoose }: { channel: Channel; onChoose: (channel: Channel) => void }) {
-  return <Pressable onPress={() => onChoose(channel)} style={({ focused }: any) => [styles.row, focused && styles.focus]}>
+const PickerChannelRow = React.memo(function PickerChannelRow({ channel, onChoose, onFocus }: { channel: Channel; onChoose: (channel: Channel) => void; onFocus: () => void }) {
+  // focusable is explicit: an Android TV row that only carries onPress is not a
+  // reliable D-pad focus target, and onFocus is what stops the panel's focus
+  // retry loop from pulling the cursor back to the filter chips.
+  return <Pressable focusable onFocus={onFocus} onPress={() => onChoose(channel)} style={({ focused }: any) => [styles.row, focused && styles.focus]}>
     <Text numberOfLines={1} style={styles.rowName}>{channel.name}</Text>
     <Text numberOfLines={1} style={styles.rowMeta}>{channel.playlist_name} · {channel.source_group || channel.group}</Text>
   </Pressable>;
 });
 
 /** Scrollable playlist / group list for the pop-up box; opens on the current entry. */
-function ChooserList({ rows, current, focusRef, onPick }: { rows: ChooserRow[]; current: string; focusRef: React.MutableRefObject<any>; onPick: (key: string) => void }) {
+function ChooserList({ rows, current, focusRef, onPick, onFocus }: { rows: ChooserRow[]; current: string; focusRef: React.MutableRefObject<any>; onPick: (key: string) => void; onFocus: () => void }) {
   const selectedIndex = Math.max(0, rows.findIndex(row => row.key === current));
+  // The entry row asks for focus once. Leaving hasTVPreferredFocus set on every
+  // render made Android pull the cursor back to it after each Down press, so the
+  // list looked frozen and no other playlist or group could be selected.
+  const [preferEntry, setPreferEntry] = useState(true);
+  const takeFocus = useCallback(() => { setPreferEntry(false); onFocus(); }, [onFocus]);
   return <FlatList data={rows} keyExtractor={row => row.key} style={styles.chooserList}
     getItemLayout={chooserRowLayout} initialScrollIndex={selectedIndex > 2 ? selectedIndex - 2 : undefined}
+    onScrollToIndexFailed={() => undefined}
     initialNumToRender={14} maxToRenderPerBatch={10} windowSize={5}
-    renderItem={({ item, index }) => <Pressable ref={index === selectedIndex ? focusRef : undefined} hasTVPreferredFocus={index === selectedIndex}
+    renderItem={({ item, index }) => <Pressable focusable ref={index === selectedIndex ? focusRef : undefined} hasTVPreferredFocus={preferEntry && index === selectedIndex}
+      onFocus={takeFocus}
       onPress={() => onPick(item.key)} style={({ focused }: any) => [styles.chooserRow, item.key === current && styles.chooserCurrent, focused && styles.focus]}>
       <Text numberOfLines={1} style={styles.chooserText}>{item.key === current ? "✓ " : ""}{item.label}</Text>
       <Text style={styles.chooserCount}>{item.count}</Text>
@@ -297,7 +307,9 @@ export default function MultiviewScreen() {
     const slot = pickerRef.current;
     if (slot != null) void choose(slot, item);
   }, [choose]);
-  const confirmOverlayFocus = () => { focusConfirmed.current = true; setPreferOverlayFocus(false); };
+  // Stable identity: the picker rows are memoised, and a new callback on every
+  // render would re-render the whole channel list on each keypress.
+  const confirmOverlayFocus = useCallback(() => { focusConfirmed.current = true; setPreferOverlayFocus(false); }, []);
   useEffect(() => {
     setLabels(true);
     if (overlay || !preferences.hideLabels) return;
@@ -363,7 +375,7 @@ export default function MultiviewScreen() {
     const menuEntry = label === "Change channel" || label === "Add channel";
     return <Pressable key={pickerEntry ? "picker-entry" : controlKey} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
       focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && ((pickerEntry && !chooserReturn) || (picker == null && menuEntry))}
-      disabled={disabled} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
+      disabled={disabled} onFocus={confirmOverlayFocus} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
   };
   return <View style={styles.page}>
     <View style={styles.grid}>
@@ -406,15 +418,16 @@ export default function MultiviewScreen() {
     </FocusGuide>}
     {picker != null && !chooser && <FocusGuide key="channel-picker" trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.picker}>
       <Text style={styles.title}>Channel for screen {picker+1}</Text>
-      <TextInput accessibilityLabel="Search channels" value={query} onChangeText={setQuery} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
+      <TextInput focusable accessibilityLabel="Search channels" value={query} onChangeText={setQuery} returnKeyType="search" blurOnSubmit
+        onFocus={() => { setSearchFocused(true); confirmOverlayFocus(); }} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
       <View style={styles.filterRow}>{["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All",name))}</View>
       {/* Drop-down buttons: OK opens a scrollable list instead of cycling. */}
       <View style={styles.dropRow}>
-        <Pressable ref={playlistButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "playlist"} onPress={() => openChooser("playlist")}
+        <Pressable focusable ref={playlistButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "playlist"} onFocus={confirmOverlayFocus} onPress={() => openChooser("playlist")}
           style={({ focused }: any) => [styles.button, styles.dropPlaylist, focused && styles.focus]} testID="multiview-playlist-dropdown">
           <Text numberOfLines={1} style={styles.dropText}>▤ {playlistLabel} ▾</Text>
         </Pressable>
-        <Pressable ref={groupButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "group"} onPress={() => openChooser("group")}
+        <Pressable focusable ref={groupButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "group"} onFocus={confirmOverlayFocus} onPress={() => openChooser("group")}
           style={({ focused }: any) => [styles.button, styles.dropGroup, focused && styles.focus]} testID="multiview-group-dropdown">
           <Text numberOfLines={1} style={styles.dropText}>☰ {groupLabel} ▾</Text>
         </Pressable>
@@ -426,14 +439,14 @@ export default function MultiviewScreen() {
         style={styles.pickerList} getItemLayout={channelRowLayout}
         initialNumToRender={9} maxToRenderPerBatch={8} updateCellsBatchingPeriod={40} windowSize={5}
         ListEmptyComponent={<Text style={styles.text}>No matching channels. Try All or another playlist.</Text>}
-        renderItem={({item}) => <PickerChannelRow channel={item} onChoose={chooseRow} />} />
+        renderItem={({item}) => <PickerChannelRow channel={item} onChoose={chooseRow} onFocus={confirmOverlayFocus} />} />
       {!!notice && <Text numberOfLines={1} style={styles.notice}>{notice}</Text>}
       {action("Cancel", () => {setPicker(null);setQuery("");setMenu(true);})}
     </FocusGuide>}
     {picker != null && chooser && <FocusGuide key={`chooser-${chooser}`} trapFocusUp trapFocusDown trapFocusLeft trapFocusRight onFocusCapture={confirmOverlayFocus} style={styles.chooser}>
       <Text style={styles.title}>{chooser === "playlist" ? "Choose a playlist" : `${playlistLabel} · Channel groups`}</Text>
       <ChooserList rows={chooser === "playlist" ? playlistRows : groupRows} current={chooser === "playlist" ? sourceFilter : groupFilter}
-        focusRef={chooserFocus} onPick={pickChooser} />
+        focusRef={chooserFocus} onPick={pickChooser} onFocus={confirmOverlayFocus} />
       <Text style={styles.notice}>Back returns to the channel list</Text>
     </FocusGuide>}
   </View>;

@@ -27,7 +27,7 @@ import {
   type PurpleGuideGroup,
 } from "@/src/components/PurpleTvShell";
 import { NativeGuideCanvas } from "@/src/components/NativeGuideCanvas";
-import { PurpleGuideGroupDrawer } from "@/src/components/PurpleGuideGroupDrawer";
+import { GUIDE_GROUP_DRAWER_WIDTH, PurpleGuideGroupDrawer } from "@/src/components/PurpleGuideGroupDrawer";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { GuidePreviewRail } from "@/src/components/GuidePreviewRail";
 import { EpgProgressBar } from "@/src/components/EpgProgressBar";
@@ -1060,6 +1060,7 @@ function PurpleGuideScreenContent() {
     <PurpleTvShell
       active="/guide"
       watchingChannelId={lastChannelId}
+      secondaryDrawerWidth={GUIDE_GROUP_DRAWER_WIDTH}
       secondaryDrawer={groupDrawerOpen ? (
         <PurpleGuideGroupDrawer
           open
