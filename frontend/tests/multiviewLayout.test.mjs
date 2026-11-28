@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {multiviewLayout} from '../src/core/multiviewLayout.ts';
-test('adaptive layouts cover the canvas with no overlap or missing area',()=>{
+test('every tile keeps the 16:9 screen shape, stays on screen and never overlaps',()=>{
  for(let count=1;count<=4;count++) {
   const boxes=Object.values(multiviewLayout([0,1,2,3].slice(0,count),null));
-  assert.ok(Math.abs(boxes.reduce((sum,b)=>sum+b.width*b.height,0)-10000)<.1);
+  for(const b of boxes){
+   assert.ok(Math.abs(b.width-b.height)<.001,`count ${count}: tile ${b.width}x${b.height} would stretch video`);
+   assert.ok(b.left>=0&&b.top>=0&&b.left+b.width<=100.001&&b.top+b.height<=100.001);
+  }
   for(let i=0;i<count;i++)for(let j=i+1;j<count;j++) {
    const a=boxes[i],b=boxes[j];
-   assert.ok(a.left+a.width<=b.left+.001 || b.left+b.width<=a.left+.001 || a.top+a.height<=b.top || b.top+b.height<=a.top);
+   assert.ok(a.left+a.width<=b.left+.001 || b.left+b.width<=a.left+.001 || a.top+a.height<=b.top+.001 || b.top+b.height<=a.top+.001);
   }
  }
 });
