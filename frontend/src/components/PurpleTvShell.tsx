@@ -18,6 +18,8 @@ import { goToTab } from "@/src/utils/goToTab";
 import { PhoneBackdrop, PhoneBottomBar, PhoneMoreSheet, PhoneSideRail, type PhoneMoreTarget } from "@/src/components/PhoneChrome";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { IDLE_FOR_ROUTE, RailChip, RailEnergy, RailGlassBase, RailGlassOverlay, RailIdle } from "@/src/components/PurpleIconRailGlass";
 import * as Haptics from "expo-haptics";
 import { FocusGuide } from "@/src/components/TVFocusGuideView";
 import { fonts, glass, glassFocus, radius, spacing, tvColors } from "@/src/theme";
@@ -27,6 +29,7 @@ import { requestNativeFocusWithRetry } from "@/src/utils/tvFocus";
 import { useStore } from "@/src/store";
 import { evaluateDrawerBack } from "@/src/core/drawerNavigationPolicy";
 import { requestGuideGroupsOnEntry } from "@/src/core/guideEntryIntent";
+import { useAuth } from "@/src/auth/AuthContext";
 import { isGuideScreenActive, isGuideSurfing } from "@/src/utils/guideSurfGate";
 import { useTvCalibration } from "@/src/tvCalibration";
 import { addTvKeyListener, prepareIconRailHide, resetRemoteContextIfOwned, setGuideNavigationActive, setRemoteContext } from "@/src/utils/tvRemote";
@@ -80,16 +83,16 @@ export type PurpleGuideGroup = {
 };
 
 const NAV: NavItem[] = [
-  { route: "/", label: "Live TV", art: require("../../assets/glass/nav_home.png") },
-  { route: "/guide", label: "TV Guide", art: require("../../assets/glass/nav_tv.png") },
-  { route: "/vod", label: "Video OnDemand", art: require("../../assets/glass/nav_vod.png") },
-  { route: "/favorites", label: "Favorites", art: require("../../assets/glass/nav_favorites.png") },
-  { route: "/reminders", label: "My Reminders", art: require("../../assets/glass/settings_notifications.png") },
-  { route: "/channels", label: "Channels", art: require("../../assets/glass/settings_provider.png") },
-  { route: "/movies", label: "Movies", art: require("../../assets/glass/vod_set_playback.webp") },
-  { route: "/series", label: "Series", art: require("../../assets/glass/nav_series.png") },
-  { route: "/search", label: "Search", art: require("../../assets/glass/nav_search.png") },
-  { route: "/settings", label: "Settings", art: require("../../assets/glass/settings_gear.png") },
+  { route: "/", label: "Live TV", art: require("../../assets/glass/rail_nav_home.png") },
+  { route: "/guide", label: "TV Guide", art: require("../../assets/glass/rail_nav_tv.png") },
+  { route: "/vod", label: "Video OnDemand", art: require("../../assets/glass/rail_nav_vod.png") },
+  { route: "/favorites", label: "Favorites", art: require("../../assets/glass/rail_nav_favorites.png") },
+  { route: "/reminders", label: "My Reminders", art: require("../../assets/glass/rail_settings_notifications.png") },
+  { route: "/channels", label: "Channels", art: require("../../assets/glass/rail_settings_provider.png") },
+  { route: "/movies", label: "Movies", art: require("../../assets/glass/rail_vod_set_playback.png") },
+  { route: "/series", label: "Series", art: require("../../assets/glass/rail_nav_series.png") },
+  { route: "/search", label: "Search", art: require("../../assets/glass/rail_nav_search.png") },
+  { route: "/settings", label: "Settings", art: require("../../assets/glass/rail_settings_gear.png") },
 ];
 const RAIL_CROWN = require("../../assets/medialab/medialab_crown.png");
 
@@ -104,7 +107,7 @@ let lastMainDrawerRoute: Route | null = null;
 let lastMainDrawerGroupName: string | null = null;
 
 export const PURPLE_SIDEBAR_WIDTH = 192;
-export const PURPLE_ICON_RAIL_WIDTH = 52;
+export const PURPLE_ICON_RAIL_WIDTH = 50;
 export const PURPLE_DRAWER_ANIMATION_MS = 180;
 // Native forwards only the first press of a held key, so this guards a double
 // event and nothing else; quick intentional presses must get through.
@@ -121,8 +124,12 @@ export type OpenDrawerOptions = {
   force?: boolean;
 };
 
+export type RailTransfer = { from: number; to: number; token: number };
+
 type DrawerContextValue = {
   drawerOpen: boolean;
+  railTransfer: RailTransfer;
+  requestRailTransfer: (from: number, to: number) => void;
   /** True while open or sliding closed; a closed drawer is not drawn at all. */
   drawerVisible: boolean;
   drawerProgress: Animated.Value;
@@ -164,6 +171,12 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
   const openedAtRef = useRef(0);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const drawerVisibleRef = useRef(false);
+  // Each route mounts its own shell, so a rail-owned animation would be torn
+  // down the instant navigation starts. The provider outlives that.
+  const [railTransfer, setRailTransfer] = useState<RailTransfer>({ from: -1, to: -1, token: 0 });
+  const requestRailTransfer = useCallback((from: number, to: number) => {
+    setRailTransfer((current) => ({ from, to, token: current.token + 1 }));
+  }, []);
 
   const openDrawer = useCallback((options?: OpenDrawerOptions) => {
     if (isGuideScreenActive() && isGuideSurfing() && !options?.force) return;
@@ -228,6 +241,8 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       drawerOpen,
       drawerVisible,
       drawerProgress,
+      railTransfer,
+      requestRailTransfer,
       openDrawer,
       closeDrawer,
       focusIconRail,
@@ -237,7 +252,7 @@ export function PurpleTvDrawerProvider({ children }: { children: React.ReactNode
       focusDrawerTop,
       consumeFocusDrawerTop,
     }),
-    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, drawerVisible, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag],
+    [closeDrawer, consumeFocusDrawerTop, drawerOpen, drawerProgress, drawerVisible, focusDrawerTop, focusIconRail, iconRailEntryTag, iconRailFocusRequest, openDrawer, publishIconRailEntryTag, railTransfer, requestRailTransfer],
   );
 
   return <DrawerContext.Provider value={value}>{children}</DrawerContext.Provider>;
@@ -283,6 +298,7 @@ export function PurpleTvShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useAuth();
   const isFocused = useIsFocused();
   const railPreferences = useIconRailPreferences();
   const [railTimedOut, setRailTimedOut] = useState(false);
@@ -300,6 +316,8 @@ export function PurpleTvShell({
     iconRailFocusRequest,
     focusDrawerTop,
     consumeFocusDrawerTop,
+    railTransfer,
+    requestRailTransfer,
   } = usePurpleTvDrawer();
   const { width, height } = useWindowDimensions();
   const { deviceLayoutMode, activeProgram } = useStore();
@@ -321,6 +339,7 @@ export function PurpleTvShell({
   // The groups drawer takes a column of its own in the shell row, beside the
   // rail. The page is laid out in the width that is left, so opening the drawer
   // moves the preview, description and grid over rather than covering them.
+  const railHeight = Math.max(240, height - edges.padding.top - edges.padding.bottom - 12);
   const secondaryDrawerVisible = !phone && isFocused && !drawerOpen && !!secondaryDrawer;
 
 
@@ -328,6 +347,8 @@ export function PurpleTvShell({
   const iconRailRefs = useRef(new Map<Route, unknown>());
   const iconRailFocusOwnerRef = useRef<Route | "power" | null>(null);
   const railAutoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [railPressToken, setRailPressToken] = useState(0);
+  const [railFocusedRoute, setRailFocusedRoute] = useState<Route | "power" | null>(null);
   const suppressRailAutoOpenUntilRef = useRef(0);
   const shellRef = useRef<View | null>(null);
   const iconRailPublisher = useRef<object>({}).current;
@@ -636,14 +657,24 @@ export function PurpleTvShell({
         }
         return;
       }
+      const fromIndex = NAV.findIndex((item) => item.route === active);
+      const toIndex = NAV.findIndex((item) => item.route === route);
+      if (fromIndex >= 0 && toIndex >= 0 && fromIndex !== toIndex) requestRailTransfer(fromIndex, toIndex);
       if (route === "/guide") requestGuideGroupsOnEntry();
 
       requestAnimationFrame(() => {
         if (route === "/settings") DeviceEventEmitter.emit("CharmShowAllSettings");
         goToTab(router, route);
+        // Guide opens onto its playlists so a group can be chosen before the
+        // grid loads. requestGuideGroupsOnEntry covers the usual path; this
+        // repeats the request once Guide is actually on screen, for the case
+        // where its first focus ran before it could consume the flag.
+        if (route === "/guide") {
+          requestAnimationFrame(() => DeviceEventEmitter.emit("CharmGuideGroupsRequestOpen"));
+        }
       });
     },
-    [active, closeDrawer, pathname, router],
+    [active, closeDrawer, pathname, requestRailTransfer, router],
   );
 
   useEffect(() => () => {
@@ -743,7 +774,7 @@ export function PurpleTvShell({
         testID={`purple-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <View style={styles.navIconWrap}>
-          <NavArt source={item.art} size={21} />
+          <NavArt source={item.art} size={26} />
           {showWatching ? <WatchingDot testID="purple-nav-live-watching" /> : null}
         </View>
         <Text numberOfLines={1} style={[styles.navText, selected && styles.navTextSelected]}>{item.label}</Text>
@@ -782,7 +813,8 @@ export function PurpleTvShell({
           <PhoneMoreSheet progress={drawerProgress} onClose={() => closeDrawer({ force: true })} onPick={pickPhoneMore} />
         </View>
       ) : null}
-      {!phone && isFocused && (drawerOpen || drawerVisible) ? <Animated.View
+      {!phone && isFocused && (drawerOpen || drawerVisible) ? <View style={styles.sidebarColumn}>
+      <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
       >
@@ -915,14 +947,18 @@ export function PurpleTvShell({
                 {exitHint ? "Hold Exit" : "Exit"}
               </Text>
             </Pressable>
+            {/* Who is signed in. Only in the labelled drawer: the icon rail has
+                no room for text and is meant to be glanceable. */}
+            {user?.username ? (
+              <View style={styles.signedInPill} testID="purple-nav-signed-in">
+                <View style={styles.onlineDot} />
+                <Text numberOfLines={1} style={styles.signedInName}>{user.username}</Text>
+              </View>
+            ) : null}
           </View>
         </FocusGuide>
-      </Animated.View> : null}
-
-      {/* Drawers float over the page. Resizing it re-lays out the whole Guide or VOD on every step. */}
-      {!phone && isFocused && drawerOpen && active !== "/guide" && railAllowed && !immersiveContent
-        ? <View style={styles.railPlaceholder} />
-        : null}
+      </Animated.View>
+      </View> : null}
       {phone && !bottomBar && isFocused && !immersiveContent ? (
         <PhoneSideRail active={active} moreOpen={drawerOpen} onNavigate={(route) => navigate(route)} onMore={() => openDrawer({ force: true })} />
       ) : null}
@@ -934,6 +970,10 @@ export function PurpleTvShell({
           trapFocusLeft
           testID="purple-icon-rail"
         >
+          <View style={styles.iconRailGlass} pointerEvents="none">
+            <LinearGradient colors={["#5A22D6", "#2A0E86"]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
+          </View>
+          <RailGlassBase width={PURPLE_ICON_RAIL_WIDTH} height={railHeight} running={showIconRail} />
           <View style={styles.iconRailBrand} pointerEvents="none">
             <Image accessible={false} accessibilityLabel="Charming MediaLab" source={RAIL_CROWN} fadeDuration={0} resizeMode="contain" style={styles.iconRailCrown} />
           </View>
@@ -951,9 +991,9 @@ export function PurpleTvShell({
                   accessibilityLabel={item.label}
                   nativeID={selected ? "purple-icon-rail-selected" : undefined}
                   nextFocusRight={active === "/vod" ? undefined : contentReturnTag}
-                  onFocus={() => claimIconRail(item.route)}
-                  onBlur={() => releaseIconRail(item.route)}
-                  onPress={() => navigate(item.route, "rail")}
+                  onFocus={() => { setRailFocusedRoute(item.route); claimIconRail(item.route); }}
+                  onBlur={() => { setRailFocusedRoute((current) => current === item.route ? null : current); releaseIconRail(item.route); }}
+                  onPress={() => { setRailPressToken((value) => value + 1); navigate(item.route, "rail"); }}
                   style={({ focused }: any) => [
                     styles.iconRailItem,
                     selected && styles.iconRailItemSelected,
@@ -961,7 +1001,20 @@ export function PurpleTvShell({
                   ]}
                   testID={`purple-icon-rail-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                 >
-                  <NavArt source={item.art} size={20} />
+                  <RailChip
+                    focused={railFocusedRoute === item.route}
+                    active={selected}
+                    pressToken={railPressToken}
+                    size={{ width: 42, height: 40 }}
+                  >
+                    <RailIdle
+                      kind={IDLE_FOR_ROUTE[item.route] ?? "none"}
+                      running={showIconRail}
+                      size={{ width: 42, height: 40 }}
+                    >
+                      <NavArt source={item.art} size={28} />
+                    </RailIdle>
+                  </RailChip>
                   {item.route === "/" && isWatching ? <WatchingDot /> : null}
                 </Pressable>
               );
@@ -979,8 +1032,17 @@ export function PurpleTvShell({
             style={({ focused }: any) => [styles.iconRailPower, focused && styles.iconRailItemFocused]}
             testID="purple-icon-rail-power"
           >
-            <Ionicons name="power-outline" size={17} color={tvColors.textMuted} />
+            <Ionicons name="power-outline" size={22} color={tvColors.textMuted} />
           </Pressable>
+          <RailEnergy
+            fromIndex={railTransfer.from}
+            toIndex={railTransfer.to}
+            token={railTransfer.token}
+            top={70}
+            step={43}
+            width={PURPLE_ICON_RAIL_WIDTH}
+          />
+          <RailGlassOverlay width={PURPLE_ICON_RAIL_WIDTH} height={railHeight} running={showIconRail} />
         </FocusGuide>
       ) : null}
       {secondaryDrawerVisible ? (
@@ -1018,8 +1080,10 @@ const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", backgroundColor: glass.page, overflow: "hidden" },
   rootPhone: { backgroundColor: "#0B0420" },
   phoneMoreLayer: { ...StyleSheet.absoluteFillObject, zIndex: 30 },
+  // The column reserves the drawer's width in the shell row, so the page moves
+  // over instead of being covered; the panel inside it slides on a transform.
+  sidebarColumn: { width: PURPLE_SIDEBAR_WIDTH, flexShrink: 0, alignSelf: "stretch" },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
-  railPlaceholder: { width: PURPLE_ICON_RAIL_WIDTH + 6, height: "100%", flexShrink: 0 },
   guideDrawerLayer: { position: "absolute", zIndex: 15 },
   // In flow beside the rail: its width comes out of the page, not over it.
   secondaryDrawerColumn: { flexShrink: 0, alignSelf: "stretch", justifyContent: "center", marginLeft: 6, marginVertical: 6 },
@@ -1033,6 +1097,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(235,205,255,0.45)",
     borderRadius: 28,
+    overflow: "hidden",
     marginVertical: 6,
     marginLeft: 6,
     paddingTop: 10,
@@ -1040,10 +1105,58 @@ const styles = StyleSheet.create({
     shadowColor: glass.glow,
     elevation: 0,
   },
-  iconRailCrown: { width: 44, height: 50 },
+  iconRailCrown: { width: 38, height: 43 },
+  // Treatment C: a gradient body, a lit line just inside the top edge and a
+  // rim light down the left side. Four static layers, no blur, no shadow.
+  iconRailGlass: { ...StyleSheet.absoluteFillObject, borderRadius: 26 },
+  // Everything below is painted ABOVE the icons: that is what makes them read
+  // as sitting behind the glass rather than printed on it.
+  iconRailSheen: { position: "absolute", left: 0, right: 0, top: 0, height: "52%" },
+  iconRailStreak: {
+    position: "absolute",
+    left: -40,
+    right: -40,
+    top: 120,
+    height: 44,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    transform: [{ rotate: "-18deg" }],
+  },
+  iconRailCap: {
+    position: "absolute",
+    left: 4,
+    right: 4,
+    top: 3,
+    height: 14,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  iconRailInnerEdge: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 26,
+    borderWidth: 3,
+    borderColor: "rgba(16,4,44,0.42)",
+  },
+  iconRailTopSheen: {
+    position: "absolute",
+    left: 11,
+    right: 11,
+    top: 5,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,245,255,0.55)",
+  },
+  iconRailRimLight: {
+    position: "absolute",
+    left: 1,
+    top: 46,
+    bottom: 46,
+    width: 2,
+    borderRadius: 2,
+    backgroundColor: "rgba(226,196,255,0.34)",
+  },
   iconRailBrand: {
-    width: 48,
-    height: 56,
+    width: 42,
+    height: 48,
     borderRadius: 0,
     alignItems: "center",
     justifyContent: "center",
@@ -1052,19 +1165,22 @@ const styles = StyleSheet.create({
   },
   iconRailItems: { flex: 1, minHeight: 0, alignItems: "center", gap: 3 },
   iconRailItem: {
-    width: 38,
-    minHeight: 32,
-    borderRadius: 10,
+    width: 42,
+    minHeight: 40,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+    // No fill and no border when unselected: the icons float in the glass
+    // instead of sitting in little purple boxes.
     borderWidth: 2,
     borderColor: "transparent",
+    backgroundColor: "transparent",
   },
-  iconRailItemSelected: { backgroundColor: "rgba(140,70,240,0.72)", borderColor: glass.selectedEdge, shadowColor: glass.glow, elevation: 0 },
+  iconRailItemSelected: { backgroundColor: "rgba(20,4,70,0.55)", borderColor: "rgba(255,255,255,0.95)" },
   iconRailItemFocused: glassFocus,
   iconRailPower: {
-    width: 38,
-    minHeight: 32,
+    width: 42,
+    minHeight: 40,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -1167,7 +1283,7 @@ const styles = StyleSheet.create({
   navRowSelected: { backgroundColor: glass.selected, borderColor: glass.selectedEdge },
   navRowActiveMark: { borderWidth: 1 },
   navRowFocused: glassFocus,
-  navIconWrap: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
+  navIconWrap: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   navCurrentDot: { width: 5, height: 5, borderRadius: 3, marginLeft: "auto", backgroundColor: glass.pink, shadowColor: glass.glow, elevation: 0 },
   watchingDot: {
     position: "absolute",
@@ -1201,6 +1317,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
   },
   powerText: { color: tvColors.textMuted, fontFamily: fonts.medium, fontSize: 9.5 },
+  // Same glass as the rest of the drawer: a translucent violet capsule with a
+  // lit edge, and a live dot so it reads as "signed in", not just a label.
+  signedInPill: {
+    marginTop: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: glass.edgeSoft,
+    backgroundColor: "rgba(190,140,255,0.13)",
+  },
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#34D399",
+    borderWidth: 1,
+    borderColor: "rgba(190,255,225,0.75)",
+  },
+  signedInName: { flex: 1, minWidth: 0, color: "#E9DCFF", fontFamily: fonts.medium, fontSize: 9.5 },
   footerCompact: {
     flex: 1,
     minWidth: 0,

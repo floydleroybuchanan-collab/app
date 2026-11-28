@@ -36,10 +36,16 @@ test('picker, menu and pane share one bounded focus handoff with late ref resolu
 });
 
 test('multiview channel and group lists are bounded and fixed-height', () => {
-  // flex:1 inside the absolute picker/pop-up: the last row ends on screen.
-  assert.match(screen, /pickerList:\{flex:1,minHeight:0\}/);
-  assert.match(screen, /chooserList:\{flex:1,minHeight:0/);
-  assert.match(screen, /style=\{styles\.pickerList\} getItemLayout=\{channelRowLayout\}/);
+  // A row floor, never minHeight:0: inside the focus guide a zero floor let
+  // both lists measure zero height and render no rows at all.
+  assert.match(screen, /pickerList:\{flexGrow:1,flexShrink:1,minHeight:PICKER_ROW_HEIGHT\*3\}/);
+  assert.match(screen, /chooserList:\{flexGrow:1,flexShrink:1,minHeight:CHOOSER_ROW_HEIGHT\*3/);
+  assert.doesNotMatch(screen, /(picker|chooser)List:\{flex:1,minHeight:0/);
+  // Tail padding, so the last row rests inside the panel and focus cannot
+  // walk off the bottom edge.
+  assert.match(screen, /pickerListContent:\{paddingBottom:PICKER_ROW_HEIGHT\+PICKER_ROW_GAP\}/);
+  assert.match(screen, /chooserListContent:\{paddingBottom:CHOOSER_ROW_HEIGHT\+CHOOSER_ROW_GAP\}/);
+  assert.match(screen, /style=\{styles\.pickerList\} contentContainerStyle=\{styles\.pickerListContent\} getItemLayout=\{channelRowLayout\}/);
   assert.match(screen, /getItemLayout=\{chooserRowLayout\}/);
   assert.match(screen, /row:\{height:PICKER_ROW_HEIGHT,marginBottom:PICKER_ROW_GAP/);
   // Pop-up box matches the glass theme at 70% opacity and stays inside the screen.

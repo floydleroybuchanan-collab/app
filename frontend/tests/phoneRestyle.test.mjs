@@ -122,9 +122,9 @@ test("the Guide and On Demand buttons use the new glass TV and VOD icons on the 
   assert.match(chrome, /guide: require\("\.\.\/\.\.\/assets\/glass\/nav_tv\.png"\)/);
   assert.match(chrome, /vod: require\("\.\.\/\.\.\/assets\/glass\/nav_vod\.png"\)/);
   const shell = read("src/components/PurpleTvShell.tsx");
-  assert.match(shell, /route: "\/guide", label: "TV Guide", art: require\("\.\.\/\.\.\/assets\/glass\/nav_tv\.png"\)/);
-  assert.match(shell, /route: "\/vod", label: "Video OnDemand", art: require\("\.\.\/\.\.\/assets\/glass\/nav_vod\.png"\)/);
-  for (const f of ["nav_tv.png", "nav_vod.png"]) {
+  assert.match(shell, /route: "\/guide", label: "TV Guide", art: require\("\.\.\/\.\.\/assets\/glass\/rail_nav_tv\.png"\)/);
+  assert.match(shell, /route: "\/vod", label: "Video OnDemand", art: require\("\.\.\/\.\.\/assets\/glass\/rail_nav_vod\.png"\)/);
+  for (const f of ["nav_tv.png", "nav_vod.png", "rail_nav_tv.png", "rail_nav_vod.png"]) {
     const png = readFileSync(new URL(`../assets/glass/${f}`, import.meta.url));
     // PNG colour type 6 = RGBA, so the background is transparent.
     assert.equal(png[25], 6, f);
@@ -143,7 +143,7 @@ test("the native Guide has genre-coloured glass cells, a TV icon for logo-less c
 
 test("the Series button has its own icon, and every new icon has a fully transparent background", () => {
   assert.match(read("src/components/PhoneChrome.tsx"), /shows: require\("\.\.\/\.\.\/assets\/glass\/nav_series\.png"\)/);
-  assert.match(read("src/components/PurpleTvShell.tsx"), /route: "\/series", label: "Series", art: require\("\.\.\/\.\.\/assets\/glass\/nav_series\.png"\)/);
+  assert.match(read("src/components/PurpleTvShell.tsx"), /route: "\/series", label: "Series", art: require\("\.\.\/\.\.\/assets\/glass\/rail_nav_series\.png"\)/);
   for (const f of ["nav_tv.png", "nav_vod.png", "nav_series.png", "player_back.png", "player_prev.png", "player_pause.png", "player_play.png", "player_next.png"]) {
     const png = readFileSync(new URL(`../assets/glass/${f}`, import.meta.url));
     assert.equal(png[25], 6, `${f} must be RGBA`);
@@ -163,7 +163,10 @@ test("pages no longer paint their own backdrop over the crown, and the TV icon r
   assert.match(read("src/components/GlassBackdrop.tsx"), /return null;/);
   const shell = read("src/components/PurpleTvShell.tsx");
   assert.match(shell, /backgroundColor: "#2F1770",\s*borderWidth: 2,/);
-  assert.match(shell, /railPlaceholder: \{ width: PURPLE_ICON_RAIL_WIDTH \+ 6/);
+  // The drawer takes a real column now, so the page is laid out beside it and
+  // no placeholder is needed to hold the rail's width open.
+  assert.match(shell, /sidebarColumn: \{ width: PURPLE_SIDEBAR_WIDTH, flexShrink: 0, alignSelf: "stretch" \}/);
+  assert.doesNotMatch(shell, /railPlaceholder/);
 });
 
 test("see-through glass has no elevation: Android draws it as a purple box behind the icon and label", () => {

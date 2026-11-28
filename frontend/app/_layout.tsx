@@ -21,6 +21,7 @@ import { TvQuickActionsOverlay } from "@/src/components/TvQuickActionsOverlay";
 import { TvCalibrationFrame, TvCalibrationProvider } from "@/src/tvCalibration";
 import { openFullscreenPlayer } from "@/src/utils/openFullscreenPlayer";
 import { StartupVersion4 } from "@/src/components/StartupVersion4";
+import { SignalIntro } from "@/src/components/SignalIntro";
 import { storage } from "@/src/utils/storage";
 import { AuthProvider } from "@/src/auth/AuthContext";
 import { AccountGate } from "@/src/components/AccountGate";
@@ -191,6 +192,7 @@ export default function RootLayout() {
                     </ErrorBoundary>
                     <PointerOverlay />
                     <StartupVersion4 />
+                    <SignalIntro />
                   </PurpleTvDrawerProvider>
                 </GuideProvider>
               </TvCalibrationFrame>

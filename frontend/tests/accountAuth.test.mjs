@@ -131,7 +131,7 @@ test("RC.6 drawer layout pushes content beside a main icon rail and playlist lis
     source("android/app/src/main/java/com/charmiptv/app/MainActivity.kt"),
   ]);
   assert.match(shell, /PURPLE_SIDEBAR_WIDTH = 192/);
-  assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 52/);
+  assert.match(shell, /PURPLE_ICON_RAIL_WIDTH = 50/);
   assert.match(shell, /showIconRail \? \(/);
   assert.match(shell, /!drawerOpen && !immersiveContent && \(active !== "\/guide" \|\| Boolean\(secondaryDrawer\)\)/);
   assert.match(guide, /secondaryDrawer=\{groupDrawerOpen \?/);

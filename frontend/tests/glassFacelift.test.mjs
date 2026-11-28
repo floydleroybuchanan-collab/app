@@ -6,14 +6,14 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("icon rail and drawer use the colorful glass icons, a gear for Settings and the crown", () => {
   const shell = read("src/components/PurpleTvShell.tsx");
-  assert.match(shell, /route: "\/settings", label: "Settings", art: require\("..\/..\/assets\/glass\/settings_gear.png"\)/);
+  assert.match(shell, /route: "\/settings", label: "Settings", art: require\("..\/..\/assets\/glass\/rail_settings_gear.png"\)/);
   assert.match(shell, /source=\{RAIL_CROWN\}/);
-  assert.match(shell, /<NavArt source=\{item.art\} size=\{20\} \/>/);
-  assert.match(shell, /<NavArt source=\{item.art\} size=\{21\} \/>/);
+  assert.match(shell, /<NavArt source=\{item.art\} size=\{28\} \/>/);
+  assert.match(shell, /<NavArt source=\{item.art\} size=\{26\} \/>/);
   // The drawer has no logo at all any more, and decorations are never remote stops.
   assert.doesNotMatch(shell, /SmallBrand|kind="wordmark"|kind="rail"/);
   assert.match(shell, /function NavArt[\s\S]*?<Image accessible=\{false\}/);
-  assert.ok(statSync(new URL("../assets/glass/settings_gear.png", import.meta.url)).size < 64 * 1024);
+  assert.ok(statSync(new URL("../assets/glass/rail_settings_gear.png", import.meta.url)).size < 64 * 1024);
   assert.ok(statSync(new URL("../assets/medialab/medialab_crown.png", import.meta.url)).size < 64 * 1024);
 });
 
