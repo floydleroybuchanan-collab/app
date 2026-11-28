@@ -47,7 +47,9 @@ test("LEFT to a same-row page neighbour is moved natively, never left to the win
 
 test("a closed drawer is not drawn, so it can never show open with unfocusable rows", async () => {
   const shell = await source("src/components/PurpleTvShell.tsx");
-  assert.match(shell, /\{!phone && isFocused && \(drawerOpen \|\| drawerVisible\) \? <View style=\{styles\.sidebarColumn\}>/);
+  assert.match(shell, /\{!phone && isFocused && \(drawerOpen \|\| drawerVisible\) \? <View style=\{\[styles\.sidebarColumn, !drawerOpen && styles\.sidebarColumnClosing\]\}>/);
+  // A closing drawer gives its width back at once, so the rail never waits beside an empty gap.
+  assert.match(shell, /sidebarColumnClosing: \{ width: 0, overflow: "visible"/);
   assert.doesNotMatch(shell, /active !== "\/vod" \|\| drawerOpen\) \? <Animated\.View/);
   assert.match(shell, /if \(!drawerVisibleRef\.current\) drawerProgress\.setValue\(0\);/);
   assert.match(shell, /if \(finished && !drawerOpenRef\.current\) \{\s*drawerVisibleRef\.current = false;\s*setDrawerVisible\(false\);/);

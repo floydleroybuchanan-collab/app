@@ -813,7 +813,10 @@ export function PurpleTvShell({
           <PhoneMoreSheet progress={drawerProgress} onClose={() => closeDrawer({ force: true })} onPick={pickPhoneMore} />
         </View>
       ) : null}
-      {!phone && isFocused && (drawerOpen || drawerVisible) ? <View style={styles.sidebarColumn}>
+      {/* The column only holds its width while the drawer is open. On close the
+          space is given back at once and the panel slides away over the rail, so
+          the rail never waits beside an empty gap while the next page loads. */}
+      {!phone && isFocused && (drawerOpen || drawerVisible) ? <View style={[styles.sidebarColumn, !drawerOpen && styles.sidebarColumnClosing]}>
       <Animated.View
         pointerEvents={drawerOpen ? "auto" : "none"}
         style={[styles.sidebarOverlay, { transform: [{ translateX: drawerTranslateX }] }]}
@@ -1083,6 +1086,7 @@ const styles = StyleSheet.create({
   // The column reserves the drawer's width in the shell row, so the page moves
   // over instead of being covered; the panel inside it slides on a transform.
   sidebarColumn: { width: PURPLE_SIDEBAR_WIDTH, flexShrink: 0, alignSelf: "stretch" },
+  sidebarColumnClosing: { width: 0, overflow: "visible", zIndex: 30, elevation: 30 },
   sidebarOverlay: { position: "absolute", left: 0, top: 0, bottom: 0, width: PURPLE_SIDEBAR_WIDTH, zIndex: 20 },
   guideDrawerLayer: { position: "absolute", zIndex: 15 },
   // In flow beside the rail: its width comes out of the page, not over it.

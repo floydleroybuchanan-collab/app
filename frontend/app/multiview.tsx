@@ -30,9 +30,9 @@ let sequence = 0;
 type ChooserRow = { key: string; label: string; count: number };
 // Fixed row heights let FlatList skip measuring thousands of rows while
 // scrolling with the D-pad (the old unbounded list measured every row).
-const PICKER_ROW_HEIGHT = 56;
+const PICKER_ROW_HEIGHT = 44;
 const PICKER_ROW_GAP = 4;
-const CHOOSER_ROW_HEIGHT = 44;
+const CHOOSER_ROW_HEIGHT = 38;
 const CHOOSER_ROW_GAP = 4;
 const channelRowLayout = (_: unknown, index: number) => ({ length: PICKER_ROW_HEIGHT + PICKER_ROW_GAP, offset: (PICKER_ROW_HEIGHT + PICKER_ROW_GAP) * index, index });
 const chooserRowLayout = (_: unknown, index: number) => ({ length: CHOOSER_ROW_HEIGHT + CHOOSER_ROW_GAP, offset: (CHOOSER_ROW_HEIGHT + CHOOSER_ROW_GAP) * index, index });
@@ -373,11 +373,11 @@ export default function MultiviewScreen() {
   // A pending destination is not the selected playback screen. Cancel keeps
   // the original pane's menu/actions; choose() selects the destination on success.
   const openPicker = (slot: number) => { setMenu(false); setQuery(""); setPicker(slot); };
-  const action = (label: string, run: () => void, disabled = false, pickerEntry = false, controlKey = label) => {
+  const action = (label: string, run: () => void, disabled = false, pickerEntry = false, controlKey = label, chip = false) => {
     const menuEntry = label === "Change channel" || label === "Add channel";
     return <Pressable key={pickerEntry ? "picker-entry" : controlKey} ref={pickerEntry ? firstPicker : menuEntry ? firstMenu : undefined}
       focusable={!disabled} hasTVPreferredFocus={preferOverlayFocus && ((pickerEntry && !chooserReturn) || (picker == null && menuEntry))}
-      disabled={disabled} onFocus={confirmOverlayFocus} onPress={run} style={({ focused }: any) => [styles.button, focused && styles.focus, disabled && styles.disabled]}><Text style={styles.text}>{label}</Text></Pressable>;
+      disabled={disabled} onFocus={confirmOverlayFocus} onPress={run} style={({ focused }: any) => [styles.button, chip && styles.chip, focused && styles.focus, disabled && styles.disabled]}><Text numberOfLines={1} style={chip ? styles.chipText : styles.text}>{label}</Text></Pressable>;
   };
   return <View style={styles.page}>
     <View style={styles.grid}>
@@ -422,10 +422,12 @@ export default function MultiviewScreen() {
       <Text style={styles.title}>Channel for screen {picker+1}</Text>
       <TextInput focusable accessibilityLabel="Search channels" value={query} onChangeText={setQuery} returnKeyType="search" blurOnSubmit
         onFocus={() => { setSearchFocused(true); confirmOverlayFocus(); }} onBlur={() => setSearchFocused(false)} placeholder="Search channels or groups" placeholderTextColor="#b8b8cc" style={[styles.search,searchFocused && styles.focus]} />
-      {/* Filters and both drop-downs share one row: the header used to take 55%
-          of the panel, leaving the channel list almost nothing. */}
+      {/* Filters on one row, the two drop-downs on the row under it, so each
+          drop-down is wide enough to read which playlist and group it holds. */}
       <View style={styles.dropRow}>
-        {["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All",name))}
+        {["All","Favorites","Recent"].map(name => action(`${filter===name?"✓ ":""}${name}`,()=>setFilter(name),false,name === "All",name,true))}
+      </View>
+      <View style={styles.dropRow}>
         <Pressable focusable ref={playlistButton} hasTVPreferredFocus={preferOverlayFocus && chooserReturn === "playlist"} onFocus={confirmOverlayFocus} onPress={() => openChooser("playlist")}
           style={({ focused }: any) => [styles.button, styles.dropPlaylist, focused && styles.focus]} testID="multiview-playlist-dropdown">
           <Text numberOfLines={1} style={styles.dropText}>▤ {playlistLabel} ▾</Text>
@@ -465,22 +467,23 @@ const styles = StyleSheet.create({
   menu:{position:"absolute",right:12,top:12,bottom:12,width:"40%",maxWidth:440,minWidth:260,padding:16,backgroundColor:"rgba(30,12,60,0.97)",borderRadius:18,borderColor:glass.edge,borderWidth:1},
   picker:{position:"absolute",right:0,top:0,bottom:0,width:"46%",minWidth:300,maxWidth:640,padding:16,gap:8,backgroundColor:"rgba(30,12,60,0.98)",borderTopLeftRadius:18,borderBottomLeftRadius:18,borderLeftWidth:1,borderColor:glass.edge},
   filterRow:{flexDirection:"row",flexWrap:"wrap",gap:4},
-  button:{paddingHorizontal:12,paddingVertical:10,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,marginBottom:4,backgroundColor:"rgba(40,18,78,0.70)"},
+  button:{paddingHorizontal:12,paddingVertical:6,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,marginBottom:4,backgroundColor:"rgba(40,18,78,0.70)"},
   focus:{borderColor:"#FFFFFF",backgroundColor:glass.focus,shadowColor:glass.glow,elevation:12},disabled:{opacity:.4},
   search:{backgroundColor:"rgba(20,8,42,0.80)",color:"#fff",padding:9,borderWidth:2,borderColor:glass.edge,borderRadius:12,fontSize:17},
-  row:{height:PICKER_ROW_HEIGHT,marginBottom:PICKER_ROW_GAP,paddingHorizontal:12,justifyContent:"center",borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,backgroundColor:"rgba(36,16,70,0.55)"},
-  rowName:{color:"#fff",fontSize:16,fontFamily:fonts.medium},rowMeta:{color:"#D9C8F5",fontSize:12,marginTop:2},
+  row:{height:PICKER_ROW_HEIGHT,marginBottom:PICKER_ROW_GAP,paddingHorizontal:12,justifyContent:"center",borderWidth:2,borderColor:glass.edgeSoft,borderRadius:10,backgroundColor:"rgba(36,16,70,0.55)"},
+  rowName:{color:"#fff",fontSize:15,fontFamily:fonts.medium},rowMeta:{color:"#D9C8F5",fontSize:11,marginTop:0},
   pickerList:{flexGrow:1,flexShrink:1,minHeight:PICKER_ROW_HEIGHT*3},
   pickerListContent:{paddingBottom:PICKER_ROW_HEIGHT+PICKER_ROW_GAP},
   chooserListContent:{paddingBottom:CHOOSER_ROW_HEIGHT+CHOOSER_ROW_GAP},
   dropRow:{flexDirection:"row",gap:6},
-  dropPlaylist:{flex:2,minWidth:0,marginBottom:0},dropGroup:{flex:3,minWidth:0,marginBottom:0},
+  dropPlaylist:{flex:1,minWidth:0,marginBottom:0},dropGroup:{flex:1,minWidth:0,marginBottom:0},
+  chip:{flex:1,minWidth:0,marginBottom:0,alignItems:"center"},chipText:{color:"#fff",fontSize:15,fontFamily:fonts.medium},
   dropText:{color:"#fff",fontSize:15,fontFamily:fonts.semibold},
   // Pop-up list box: glass panel at 70% opacity over the video, bounded top
   // and bottom so the last entry ends inside the box, never off-screen.
   chooser:{position:"absolute",left:"20%",right:"20%",top:"7%",bottom:"7%",padding:16,borderRadius:18,borderWidth:1,borderColor:glass.edge,backgroundColor:"rgba(30,12,60,0.70)"},
   chooserList:{flexGrow:1,flexShrink:1,minHeight:CHOOSER_ROW_HEIGHT*3,marginBottom:8},
-  chooserRow:{height:CHOOSER_ROW_HEIGHT,marginBottom:CHOOSER_ROW_GAP,flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingHorizontal:14,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:12,backgroundColor:"rgba(40,18,78,0.62)"},
+  chooserRow:{height:CHOOSER_ROW_HEIGHT,marginBottom:CHOOSER_ROW_GAP,flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingHorizontal:14,borderWidth:2,borderColor:glass.edgeSoft,borderRadius:10,backgroundColor:"rgba(40,18,78,0.62)"},
   chooserCurrent:{borderColor:glass.selectedEdge,backgroundColor:"rgba(140,70,240,0.55)"},
-  chooserText:{flex:1,minWidth:0,color:"#fff",fontSize:16,fontFamily:fonts.medium},chooserCount:{color:"#D9C8F5",fontSize:13,marginLeft:10},
+  chooserText:{flex:1,minWidth:0,color:"#fff",fontSize:15,fontFamily:fonts.medium},chooserCount:{color:"#D9C8F5",fontSize:13,marginLeft:10},
 });

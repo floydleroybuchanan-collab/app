@@ -192,13 +192,15 @@ export default function RootLayout() {
                     </ErrorBoundary>
                     <PointerOverlay />
                     <StartupVersion4 />
-                    <SignalIntro />
                   </PurpleTvDrawerProvider>
                 </GuideProvider>
               </TvCalibrationFrame>
             </TvCalibrationProvider>
           </AccountGate>
         </AuthProvider></DonationProvider>
+        {/* Outside the account gate, so it plays the moment the native splash
+            lifts instead of behind the account check. */}
+        <SignalIntro />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -149,10 +149,13 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
   if (status === "restoring") {
     return (
       <View style={[styles.screen, { backgroundColor: "#000" }]} testID="account-session-restoring">
-        {/* Same picture and black as the native start screen, so the hand-off from it is seamless. */}
-        <Image accessible={false} source={require("@/assets/medialab/medialab_launcher.png")} resizeMode="contain" fadeDuration={0} style={{ width: Math.min(200, width * 0.5), height: Math.min(200, width * 0.5) }} />
-        <ActivityIndicator color={tvColors.purpleBright} size="large" />
-        <Text style={styles.loadingText}>Checking your Charming MediaLab account…</Text>
+        {/* The alien banner in the exact spot the intro leaves it, so if the
+            account check outlasts the intro nothing jumps. */}
+        <Image accessible={false} source={require("@/assets/medialab/splash_banner.png")} resizeMode="contain" fadeDuration={0} style={{ position: "absolute", top: Math.round(height * 0.08), left: (width - Math.round(width * 0.58)) / 2, width: Math.round(width * 0.58), height: Math.round(Math.round(width * 0.58) * 829 / 1600) }} />
+        <View style={{ position: "absolute", left: 0, right: 0, top: Math.round(height * 0.08) + Math.round(Math.round(width * 0.58) * 829 / 1600) + 40, alignItems: "center", gap: 12 }}>
+          <ActivityIndicator color="#00FF88" size="large" />
+          <Text style={styles.loadingText}>Checking your Charming MediaLab account…</Text>
+        </View>
       </View>
     );
   }

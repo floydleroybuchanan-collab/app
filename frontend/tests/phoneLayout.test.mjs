@@ -51,10 +51,11 @@ test("the loading cover is solid from the first frame: only the picture fades in
   assert.match(scene, /portrait \? width \/ 760/);
 });
 
-test("the account check shows the new launcher picture on black, not the old circle logo", () => {
+test("the account check shows the alien banner on black, not the old crown", () => {
   const gate = read("src/components/AccountGate.tsx");
   assert.doesNotMatch(gate, /MediaLabArt/);
-  assert.match(gate, /account-session-restoring[\s\S]{0,400}medialab_launcher\.png/);
+  assert.match(gate, /account-session-restoring[\s\S]{0,600}splash_banner\.png/);
+  assert.doesNotMatch(gate, /medialab_launcher\.png/);
 });
 
 test("the video view is re-laid out after a turn so portrait video is not stretched", () => {

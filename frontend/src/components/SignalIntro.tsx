@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Image, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useMotionAllowed } from "@/src/components/StartupScene";
+import { AccessibilityInfo, Animated, Easing, Image, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { fonts } from "@/src/theme";
 
 /**
@@ -36,7 +35,10 @@ const PARTICLES = [
 
 export function SignalIntro({ onDone }: { onDone?: () => void }) {
   const { width, height } = useWindowDimensions();
-  const motion = useMotionAllowed();
+  // null until the reduce-motion setting has been read. Starting before then
+  // would treat the first frame as "reduce motion", jump to the end, and only
+  // the fade-out would ever play.
+  const [motion, setMotion] = useState<boolean | null>(null);
   const clock = useRef(new Animated.Value(0)).current;
   const [gone, setGone] = useState(false);
 
@@ -47,17 +49,30 @@ export function SignalIntro({ onDone }: { onDone?: () => void }) {
   }, [width, height]);
 
   useEffect(() => {
+    let live = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(reduce => { if (live) setMotion(!reduce); })
+      .catch(() => { if (live) setMotion(true); });
+    return () => { live = false; };
+  }, []);
+
+  useEffect(() => {
+    if (motion === null) return;
     if (!motion) {
       clock.setValue(at(1900));
       const timer = setTimeout(() => { setGone(true); onDone?.(); }, 650);
       return () => clearTimeout(timer);
     }
-    Animated.timing(clock, {
+    clock.setValue(0);
+    const run = Animated.timing(clock, {
       toValue: 1, duration: INTRO_MS, easing: Easing.linear, useNativeDriver: true, isInteraction: false,
-    }).start(({ finished }) => { if (finished) { setGone(true); onDone?.(); } });
+    });
+    run.start(({ finished }) => { if (finished) { setGone(true); onDone?.(); } });
+    return () => run.stop();
   }, [clock, motion, onDone]);
 
   if (gone) return null;
+  if (motion === null) return <View pointerEvents="none" style={styles.root} />;
 
   const band = (from: number, to: number, out: number[]) =>
     clock.interpolate({ inputRange: [0, at(from), at(to), 1], outputRange: [out[0], out[0], out[1], out[1]] });
